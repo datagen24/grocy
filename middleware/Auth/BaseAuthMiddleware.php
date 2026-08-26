@@ -3,6 +3,7 @@
 namespace Grocy\Middleware\Auth;
 
 use Grocy\Middleware\BaseMiddleware;
+use Grocy\Services\DatabaseService;
 use Grocy\Services\SessionService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -39,6 +40,7 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 			define('GROCY_AUTHENTICATED', true);
 			define('GROCY_USER_USERNAME', $user->username);
 			define('GROCY_USER_PICTURE_FILE_NAME', $user->picture_file_name);
+			self::SyncDatabaseUserContext();
 
 			return $handler->handle($request);
 		}
@@ -68,9 +70,23 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 				define('GROCY_USER_ID', $user->id);
 				define('GROCY_USER_USERNAME', $user->username);
 				define('GROCY_USER_PICTURE_FILE_NAME', $user->picture_file_name);
+				self::SyncDatabaseUserContext();
 
 				return $response = $handler->handle($request);
 			}
+		}
+	}
+
+	/**
+	 * Passes the acting user down to the database connection. Engines which resolve user
+	 * settings in SQL rather than via a PHP callback (PostgreSQL) need this to make
+	 * grocy_user_setting() work; on SQLite it does nothing.
+	 */
+	protected static function SyncDatabaseUserContext()
+	{
+		if (defined('GROCY_USER_ID'))
+		{
+			DatabaseService::GetInstance()->SetCurrentUserId(GROCY_USER_ID);
 		}
 	}
 

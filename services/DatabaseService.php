@@ -2,14 +2,16 @@
 
 namespace Grocy\Services;
 
-use Grocy\Services\UsersService;
+use Grocy\Services\Database\DatabaseDialect;
 use LessQL\Database;
 
 class DatabaseService
 {
 	private static $DbConnection = null;
 	private static $DbConnectionRaw = null;
+	private static $Dialect = null;
 	private static $instance = null;
+	private static $ShutdownHandlerRegistered = false;
 
 	public function ExecuteDbQuery(string $sql)
 	{
@@ -27,14 +29,7 @@ class DatabaseService
 	{
 		$pdo = $this->GetDbConnectionRaw();
 
-		if (GROCY_MODE === 'dev')
-		{
-			$logFilePath = GROCY_DATAPATH . '/sql.log';
-			if (file_exists($logFilePath))
-			{
-				file_put_contents($logFilePath, $sql . PHP_EOL, FILE_APPEND);
-			}
-		}
+		$this->LogQuery($sql, $params ?? []);
 
 		if ($params == null)
 		{
@@ -53,29 +48,51 @@ class DatabaseService
 			}
 		}
 
+		// Raw SQL bypasses LessQL, so the changed time has to be maintained here too
+		$dialect = $this->GetDialect();
+		if ($dialect->RequiresChangeTracking() && $dialect->IsWriteStatement($sql))
+		{
+			$dialect->MarkDbChanged($pdo);
+		}
+
 		return true;
 	}
 
 	public function GetDbChangedTime()
 	{
-		return date('Y-m-d H:i:s', filemtime($this->GetDbFilePath()));
+		return $this->GetDialect()->GetDbChangedTime($this->GetDbConnectionRaw());
+	}
+
+	public function GetDialect(): DatabaseDialect
+	{
+		if (self::$Dialect == null)
+		{
+			self::$Dialect = DatabaseDialect::Create();
+		}
+
+		return self::$Dialect;
 	}
 
 	public function GetDbConnection()
 	{
 		if (self::$DbConnection == null)
 		{
-			self::$DbConnection = new Database($this->GetDbConnectionRaw());
-		}
+			$pdo = $this->GetDbConnectionRaw();
+			self::$DbConnection = new Database($pdo);
 
-		if (GROCY_MODE === 'dev')
-		{
-			$logFilePath = GROCY_DATAPATH . '/sql.log';
-			if (file_exists($logFilePath))
+			$dialect = $this->GetDialect();
+			$trackChanges = $dialect->RequiresChangeTracking();
+
+			if ($trackChanges || $this->IsQueryLoggingEnabled())
 			{
-				self::$DbConnection->setQueryCallback(function ($query, $params) use ($logFilePath)
+				self::$DbConnection->setQueryCallback(function ($query, $params) use ($pdo, $dialect, $trackChanges)
 				{
-					file_put_contents($logFilePath, $query . ' #### ' . implode(';', $params) . PHP_EOL, FILE_APPEND);
+					$this->LogQuery($query, $params);
+
+					if ($trackChanges && $dialect->IsWriteStatement($query))
+					{
+						$dialect->MarkDbChanged($pdo);
+					}
 				});
 			}
 		}
@@ -87,39 +104,30 @@ class DatabaseService
 	{
 		if (self::$DbConnectionRaw == null)
 		{
-			$pdo = new \PDO\Sqlite('sqlite:' . $this->GetDbFilePath());
-			$pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-			$pdo->setAttribute(\PDO::ATTR_ORACLE_NULLS, \PDO::NULL_EMPTY_STRING);
+			$dialect = $this->GetDialect();
 
-			$pdo->createFunction('regexp', function ($pattern, $value)
-			{
-				mb_regex_encoding('UTF-8');
-				return (false !== mb_ereg($pattern, $value)) ? 1 : 0;
-			});
-
-			$pdo->createFunction('grocy_user_setting', function ($value)
-			{
-				$usersService = new UsersService();
-				return $usersService->GetUserSetting(GROCY_USER_ID, $value);
-			});
-
-
-			// Unfortunately not included by default
-			// https://www.sqlite.org/lang_mathfunc.html#ceil
-			$pdo->createFunction('ceil', function ($value)
-			{
-				return ceil($value);
-			});
+			$pdo = $dialect->CreateConnection();
+			$dialect->OnConnected($pdo);
 
 			self::$DbConnectionRaw = $pdo;
+			$this->RegisterShutdownHandler();
 		}
 
 		return self::$DbConnectionRaw;
 	}
 
+	/**
+	 * Tells the connection which user it acts for. Engines which resolve user settings in
+	 * SQL (PostgreSQL) need this; on SQLite it is a no-op.
+	 */
+	public function SetCurrentUserId($userId)
+	{
+		$this->GetDialect()->SetCurrentUserId($this->GetDbConnectionRaw(), $userId);
+	}
+
 	public function SetDbChangedTime($dateTime)
 	{
-		touch($this->GetDbFilePath(), strtotime($dateTime));
+		$this->GetDialect()->SetDbChangedTime($this->GetDbConnectionRaw(), $dateTime);
 	}
 
 	public static function GetInstance()
@@ -132,19 +140,52 @@ class DatabaseService
 		return self::$instance;
 	}
 
-	private function GetDbFilePath()
+	private function IsQueryLoggingEnabled(): bool
 	{
-		if (GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')
-		{
-			$dbSuffix = GROCY_DEFAULT_LOCALE;
-			if (defined('GROCY_DEMO_DB_SUFFIX'))
-			{
-				$dbSuffix = GROCY_DEMO_DB_SUFFIX;
-			}
+		return GROCY_MODE === 'dev' && file_exists(GROCY_DATAPATH . '/sql.log');
+	}
 
-			return GROCY_DATAPATH . '/grocy_' . $dbSuffix . '.db';
+	private function LogQuery(string $sql, array $params)
+	{
+		if (!$this->IsQueryLoggingEnabled())
+		{
+			return;
 		}
 
-		return GROCY_DATAPATH . '/grocy.db';
+		$logFilePath = GROCY_DATAPATH . '/sql.log';
+
+		$line = $sql;
+		if (!empty($params))
+		{
+			$line .= ' #### ' . implode(';', $params);
+		}
+
+		file_put_contents($logFilePath, $line . PHP_EOL, FILE_APPEND);
+	}
+
+	private function RegisterShutdownHandler()
+	{
+		if (self::$ShutdownHandlerRegistered)
+		{
+			return;
+		}
+
+		self::$ShutdownHandlerRegistered = true;
+
+		// Dialects which track the changed time in a table batch it into a single write
+		register_shutdown_function(function ()
+		{
+			try
+			{
+				if (self::$DbConnectionRaw !== null)
+				{
+					$this->GetDialect()->FlushDbChangedTime(self::$DbConnectionRaw);
+				}
+			}
+			catch (\Exception $ex)
+			{
+				// A failure here must never turn an otherwise successful request into an error
+			}
+		});
 	}
 }

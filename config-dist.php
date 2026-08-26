@@ -19,6 +19,22 @@
 // (pass the query parameter "nodemodata", e.g. https://grocy.example.com/?nodemodata to skip that)
 Setting('MODE', 'production');
 
+// The database engine to use, either "sqlite" or "pgsql"
+// "sqlite" is the default and needs no further configuration - the database is a single
+// file at /data/grocy.db
+// "pgsql" stores everything in a PostgreSQL server, which is worth it when you want
+// concurrent writers, pg_dump based backups or replication; it needs the settings below
+// and PostgreSQL 13 or newer
+Setting('DB_DRIVER', 'sqlite');
+
+// Connection settings, only used when DB_DRIVER is "pgsql"
+Setting('DB_HOST', 'localhost');
+Setting('DB_PORT', 5432);
+Setting('DB_NAME', 'grocy');
+Setting('DB_USER', 'grocy');
+Setting('DB_PASSWORD', '');
+Setting('DB_SSLMODE', ''); // One of disable, allow, prefer, require, verify-ca, verify-full - leave empty for the libpq default
+
 // The directory name of one of the available localization folders
 // in the "/localization" directory (e.g. "en" or "de")
 // Grocy uses the first available locale / setting in this order

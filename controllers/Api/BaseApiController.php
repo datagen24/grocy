@@ -3,6 +3,7 @@
 namespace Grocy\Controllers\Api;
 
 use Grocy\Controllers\BaseController;
+use Grocy\Services\DatabaseService;
 use LessQL\Result;
 use Psr\Http\Message\ResponseInterface as Response;
 use Slim\Exception\HttpException;
@@ -136,7 +137,9 @@ class BaseApiController extends BaseController
 					$data = $data->where($matches['field'] . ' <= ?', $matches['value']);
 					break;
 				case '§':
-					$data = $data->where($matches['field'] . ' REGEXP ?', $matches['value']);
+					// Spelled differently per engine (SQLite has a REGEXP operator backed by a
+					// user defined function, PostgreSQL has "~"), but the API contract is the same
+					$data = $data->where(DatabaseService::GetInstance()->GetDialect()->GetRegexpCondition($matches['field']), $matches['value']);
 					break;
 			}
 		}

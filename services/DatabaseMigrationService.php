@@ -38,7 +38,12 @@ class DatabaseMigrationService extends BaseService
 
 		if ($migrationCounter > 0)
 		{
-			DatabaseService::GetInstance()->ExecuteDbStatement('VACUUM');
+			$optimizeStatement = DatabaseService::GetInstance()->GetDialect()->GetOptimizeStatement();
+
+			if ($optimizeStatement !== null)
+			{
+				DatabaseService::GetInstance()->ExecuteDbStatement($optimizeStatement);
+			}
 		}
 	}
 

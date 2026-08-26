@@ -1,0 +1,135 @@
+<?php
+
+namespace Grocy\Services\Database;
+
+/**
+ * PostgreSQL storage engine.
+ *
+ * Unlike SQLite, PostgreSQL cannot call back into PHP, so the helper functions Grocy
+ * registers per connection on SQLite (regexp, grocy_user_setting, ceil) are instead
+ * provided natively: regexp maps onto the "~" operator, ceil already exists, and
+ * grocy_user_setting is an SQL function installed by the baseline schema which resolves
+ * the acting user from a session variable set by SetCurrentUserId().
+ */
+class PostgresDialect extends DatabaseDialect
+{
+	const CHANGED_TIME_TABLE = 'system_db_changed_time';
+
+	private $DbChangedPending = false;
+
+	public function GetName(): string
+	{
+		return 'pgsql';
+	}
+
+	public function CreateConnection(): \PDO
+	{
+		$pdo = new \PDO\Pgsql($this->GetDsn(), GROCY_DB_USER, GROCY_DB_PASSWORD);
+		$pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+		$pdo->setAttribute(\PDO::ATTR_ORACLE_NULLS, \PDO::NULL_EMPTY_STRING);
+
+		return $pdo;
+	}
+
+	public function OnConnected(\PDO $pdo): void
+	{
+		// SQLite's datetime('now', 'localtime') follows the process time zone - make
+		// LOCALTIMESTAMP agree with it so timestamps mean the same thing on both engines
+		$pdo->exec("SET TIME ZONE " . $pdo->quote(date_default_timezone_get()));
+
+		// Everything else this dialect needs is created by the baseline schema migration.
+		// The changed time table is the exception: it has no dependencies and has to exist
+		// before the first migration runs, because migrating is itself a data change.
+		$pdo->exec('CREATE TABLE IF NOT EXISTS ' . self::CHANGED_TIME_TABLE . ' ('
+			. 'id INTEGER NOT NULL PRIMARY KEY, '
+			. 'changed_time TIMESTAMP NOT NULL DEFAULT LOCALTIMESTAMP)');
+		$pdo->exec('INSERT INTO ' . self::CHANGED_TIME_TABLE . ' (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
+	}
+
+	public function GetRegexpCondition(string $field): string
+	{
+		// PostgreSQL has no REGEXP operator; "~" is the case sensitive equivalent and,
+		// like SQLite's REGEXP via mb_ereg, treats the pattern as a POSIX regular expression
+		return $field . ' ~ ?';
+	}
+
+	public function GetNowExpression(): string
+	{
+		// SQLite stores second precision, so truncate to match
+		return "date_trunc('second', LOCALTIMESTAMP)";
+	}
+
+	public function GetOptimizeStatement(): ?string
+	{
+		// VACUUM cannot run inside a transaction block and PostgreSQL reclaims space via
+		// autovacuum anyway; refreshing planner statistics is what actually matters after
+		// a schema migration
+		return 'ANALYZE';
+	}
+
+	public function QuoteIdentifier(string $name): string
+	{
+		return '"' . str_replace('"', '""', $name) . '"';
+	}
+
+	public function GetDbChangedTime(\PDO $pdo): string
+	{
+		$this->FlushDbChangedTime($pdo);
+
+		$value = $pdo->query('SELECT changed_time FROM ' . self::CHANGED_TIME_TABLE . ' WHERE id = 1')->fetchColumn();
+
+		if ($value === false || $value === null)
+		{
+			return date('Y-m-d H:i:s');
+		}
+
+		return date('Y-m-d H:i:s', strtotime($value));
+	}
+
+	public function SetDbChangedTime(\PDO $pdo, string $dateTime): void
+	{
+		// An explicit set overrides whatever change was pending - this is how the session
+		// and API key services keep their last-used bookkeeping from invalidating client caches
+		$this->DbChangedPending = false;
+
+		$statement = $pdo->prepare('UPDATE ' . self::CHANGED_TIME_TABLE . ' SET changed_time = ? WHERE id = 1');
+		$statement->execute([date('Y-m-d H:i:s', strtotime($dateTime))]);
+	}
+
+	public function MarkDbChanged(\PDO $pdo): void
+	{
+		// Deferred so that a request writing many rows still only costs one extra UPDATE
+		$this->DbChangedPending = true;
+	}
+
+	public function FlushDbChangedTime(\PDO $pdo): void
+	{
+		if (!$this->DbChangedPending)
+		{
+			return;
+		}
+
+		$this->DbChangedPending = false;
+		$pdo->exec('UPDATE ' . self::CHANGED_TIME_TABLE . ' SET changed_time = LOCALTIMESTAMP WHERE id = 1');
+	}
+
+	public function SetCurrentUserId(\PDO $pdo, $userId): void
+	{
+		$statement = $pdo->prepare("SELECT set_config('grocy.user_id', ?, false)");
+		$statement->execute([(string)intval($userId)]);
+	}
+
+	private function GetDsn(): string
+	{
+		$dsn = 'pgsql:host=' . GROCY_DB_HOST
+			. ';port=' . intval(GROCY_DB_PORT)
+			. ';dbname=' . GROCY_DB_NAME;
+
+		if (!empty(GROCY_DB_SSLMODE))
+		{
+			$dsn .= ';sslmode=' . GROCY_DB_SSLMODE;
+		}
+
+		return $dsn;
+	}
+}

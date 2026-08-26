@@ -11,6 +11,7 @@ class ConfigurationValidator
 	public function validateConfig()
 	{
 		self::checkMode();
+		self::checkDatabaseDriver();
 		self::checkDefaultLocale();
 		self::checkCurrencyFormat();
 		self::checkFirstDayOfWeek();
@@ -25,6 +26,36 @@ class ConfigurationValidator
 		if (!in_array(GROCY_MODE, $allowedModes))
 		{
 			throw new EInvalidConfig('Invalid mode "' . GROCY_MODE . '" set, only ' . implode(', ', $allowedModes) . ' allowed');
+		}
+	}
+
+	private function checkDatabaseDriver()
+	{
+		$allowedDrivers = ['sqlite', 'pgsql'];
+		$driver = strtolower(GROCY_DB_DRIVER);
+
+		if (!in_array($driver, $allowedDrivers))
+		{
+			throw new EInvalidConfig('Invalid database driver "' . GROCY_DB_DRIVER . '" set, only ' . implode(', ', $allowedDrivers) . ' allowed');
+		}
+
+		if (!in_array($driver, \PDO::getAvailableDrivers()))
+		{
+			throw new EInvalidConfig('The PDO driver for "' . $driver . '" is not installed in this PHP environment');
+		}
+
+		if ($driver === 'pgsql')
+		{
+			if (empty(GROCY_DB_NAME) || empty(GROCY_DB_HOST) || empty(GROCY_DB_USER))
+			{
+				throw new EInvalidConfig('DB_HOST, DB_NAME and DB_USER need to be set when DB_DRIVER is "pgsql"');
+			}
+
+			$allowedSslModes = ['', 'disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'];
+			if (!in_array(GROCY_DB_SSLMODE, $allowedSslModes))
+			{
+				throw new EInvalidConfig('Invalid DB_SSLMODE "' . GROCY_DB_SSLMODE . '" set, only ' . implode(', ', array_filter($allowedSslModes)) . ' allowed');
+			}
 		}
 	}
 
