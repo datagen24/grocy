@@ -1,9 +1,26 @@
 # 06. Location barcodes
 
-**Goal:** Print and scan barcodes for storage locations.
+**Goal:** Machine readable codes on storage locations, so a future camera based inventory
+system can tell *where* it is looking and keep stock by location current without anyone
+typing anything.
 **Depends on:** nothing. Pairs naturally with [08](08-nested-locations.md) but does not
 need it.
 **Status:** draft for review.
+
+## The use case drives the design
+
+This is not primarily "scan a shelf with your phone". The intent is a fixed or handheld
+camera that reads a marker on a shelf, knows which location it is looking at, and reports
+what it sees back into Grocy. That changes three things a phone-first design would get
+wrong, and they are worth deciding before any code:
+
+1. **Labels are physical and long lived; database ids are not.** A printed label stuck to a
+   shelf may outlive several restores, re-imports and migrations. `grcy:l:7` is only stable
+   as long as that row keeps id 7.
+2. **Optics matter.** A code read at distance and at an angle by a fixed camera has
+   different requirements from one held 10 cm from a phone.
+3. **The write path is the point.** Scanning to navigate a UI is incidental; an external
+   system needs an API to say "location 7 now contains these things".
 
 ## Today
 
@@ -32,10 +49,50 @@ This is the smallest item on the roadmap because the mechanism already exists.
 Add `public const LOCATION = 'l';` and include it in whatever validation list constrains
 the type character. Everything else — parsing, rendering, printing — is generic.
 
-### Scanning
+### Label stability
 
-The scan-input handler resolves a Grocycode to an entity and navigates accordingly. A
-location code should do something sensible; what exactly is Q1.
+`Grocycode` encodes the row id, so a location label reads `grcy:l:7`. That is fine while
+the database is continuous, and wrong the first time ids shift — a restore from a seed, a
+re-import, or a rebuild. Every printed label then points at the wrong shelf, silently.
+
+Two options:
+
+- **Accept id based codes.** Simplest, and ids are in practice stable for a database that
+  is only ever migrated rather than rebuilt. `bin/grocy-db-import` preserves ids exactly,
+  so the PostgreSQL move does not break labels.
+- **Add a stable opaque id.** `locations.code_uuid`, generated once, encoded in the label
+  instead of the row id. Survives anything. `ramsey/uuid` is already a dependency and
+  currently unused.
+
+For a camera system that may run for years against labels printed once, the second is
+cheap insurance. It only matters for entities that get physical labels, so it need not
+apply to products. See Q1.
+
+### Symbology
+
+`GROCYCODE_TYPE` currently offers `1D` (Code128) or `2D` (DataMatrix). DataMatrix is
+designed for small marks read close up — good for a product label, less good for a shelf
+marker read across a room at an angle. QR carries stronger error correction and is what
+most camera pipelines expect.
+
+Adding `QR` as a third `GROCYCODE_TYPE` value is a small change and probably the single
+most useful thing here for the camera use case. Worth checking whether the bundled
+`interficieis/php-barcode` can emit QR, or whether another dependency is needed.
+
+### Scanning and the write path
+
+Two separate concerns:
+
+- **Interactive scanning** — the existing scan-input handler resolves a Grocycode and acts
+  on it. A location code should preselect that location as the target for subsequent scans,
+  so you scan the shelf then scan items onto it. That implies a small "current location"
+  notion Grocy does not have today.
+- **Machine reporting** — an external system needs an endpoint that says "these products,
+  these amounts, are at this location". Grocy has `/stock/transfer` and inventory endpoints,
+  which mutate one product at a time and assume a human decided. A camera system reporting
+  observed contents is a different shape, and is closer to inventory reconciliation than to
+  a transfer. See Q2 — this is the part that needs real design, and it may be better as its
+  own plan once the camera side is more concrete.
 
 ### Label printing
 
@@ -54,24 +111,29 @@ A print action on the locations list and form, mirroring products.
 
 ## Open questions
 
-1. **What should scanning a location barcode actually do?** Candidates, not exclusive:
-   - filter the stock overview to that location ("what is in this cupboard")
-   - preselect it as the target in purchase / transfer / inventory, so you scan the shelf
-     then scan the items onto it
-   - open the location's edit form
-
-   The second is the one that makes barcoded shelves genuinely useful, and it implies a
-   small amount of state ("current location" for the next scans) that Grocy does not have
-   today. Worth deciding before building, since it is the difference between a
-   half-day change and a two-day one.
-2. **Should other master data get codes at the same time?** `shopping_locations` (stores),
-   `quantity_units`, `product_groups` are all the same one-line change. Adding them
-   together costs almost nothing; adding them later costs another round of the same work.
-3. **Does the label need the tree path** or just the name? Path is more useful physically
-   but longer on a small label.
+1. **Id based or stable opaque codes?** I lean to adding `locations.code_uuid` given labels
+   are printed once and expected to last. It is one column and one migration now, versus
+   reprinting every label later. Note it only needs to apply to physically labelled
+   entities.
+2. **What shape should the machine reporting endpoint take?** The interesting one. A camera
+   reporting "I see 3 of product X at location 7" is an *observation*, and Grocy has no
+   concept of one — it has authoritative stock that humans mutate. Options range from
+   mapping observations onto the existing inventory endpoint (simple, but an incorrect
+   observation silently corrupts stock) to recording observations separately and letting a
+   human accept them (safer, more work, and a new concept). Worth deciding once you know
+   what the camera side can actually report, and possibly worth splitting into its own plan.
+3. **Add `QR` to `GROCYCODE_TYPE`?** I think yes, specifically for this use case. Needs a
+   check that the bundled barcode library can produce it.
+4. **Should other master data get codes at the same time?** `shopping_locations`,
+   `quantity_units`, `product_groups` are the same one-line change. Cheap together,
+   another round of work later.
+5. **Does the label need the tree path** or just the name? Path is more useful physically
+   but longer on a small label. Interacts with [08](08-nested-locations.md).
 
 ## Effort
 
-Small — half a day for the code plus printing, if Q1 resolves to "open" or "filter".
-Closer to two days if it resolves to "preselect as target for subsequent scans", because
-that introduces a scan-context concept.
+The Grocycode and printing part is small — half a day, plus a little for QR and the UUID
+column. Q2 is unbounded until the camera side is specified, and should probably not be
+scoped as part of this. Recommend shipping codes, printing and interactive scanning first,
+so the physical labels exist and are stable, and treating the ingest API as separate work
+once there is something real to ingest from.

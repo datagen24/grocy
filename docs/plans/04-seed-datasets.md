@@ -62,14 +62,17 @@ surface with real authorisation questions, and is not needed for the goal.
 ## The barcode problem
 
 The issue asks for "common household staple barcodes", and that is the part to be careful
-about. Barcodes are regional — the same product has different EANs in different countries,
-and a shipped barcode list is wrong for most users. Worse, a *wrong* barcode is more
-harmful than no barcode, because scanning silently matches the wrong product.
+about. Barcodes are regional — the same product carries different codes in different
+markets, so a shipped list is wrong for most users. Worse, a *wrong* barcode is more harmful
+than none, because scanning silently matches the wrong product.
 
-Grocy already resolves barcodes at scan time through
-`STOCK_BARCODE_LOOKUP_PLUGIN` (Open Food Facts by default), which is regionally correct and
-always current. My recommendation is to ship **no** barcodes and let lookup populate them
-naturally — see Q2.
+Grocy resolves barcodes at scan time through `STOCK_BARCODE_LOOKUP_PLUGIN`, which is
+regionally correct and always current. That is the better place to invest — and it needs
+investment, because the default source is weak for US products. See
+[09 barcode lookup sources](09-barcode-lookup-sources.md), which exists largely because of
+this question.
+
+My recommendation is to ship **no** barcodes here and fix lookup instead — see Q2.
 
 ## Open questions
 

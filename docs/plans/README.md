@@ -17,6 +17,7 @@ individually.
 | 06 | [Location barcodes](06-location-barcodes.md) | — | — | small |
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium |
+| 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small |
 
 ## Ground rules these plans assume
 
@@ -38,8 +39,12 @@ engines unless the plan says otherwise and explains why.
 
 ## Suggested order
 
+0. **09 barcode lookup**, or at least its Q1 — twenty barcodes off things in the pantry,
+   run against each candidate source. Thirty minutes, and it decides both whether that plan
+   is worth doing and whether 04 should ship barcode data at all.
 1. **06 location barcodes** — smallest, self contained, and a useful warm up for writing
-   the first dual engine migrations.
+   the first dual engine migrations. Ship the codes and printing; the camera ingest API in
+   its Q2 is unbounded until the camera side is specified and should not be scoped with it.
 2. **03 category minimums** — one view change, one new column, no UI rework.
 3. **08 nested locations** — introduces the recursive-hierarchy pattern on the simpler of
    the two trees.
