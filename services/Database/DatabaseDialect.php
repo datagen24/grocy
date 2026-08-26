@@ -64,6 +64,12 @@ abstract class DatabaseDialect
 	abstract public function QuoteIdentifier(string $name): string;
 
 	/**
+	 * The character LessQL wraps table and column names in. LessQL defaults to the MySQL
+	 * backtick, which PostgreSQL rejects outright.
+	 */
+	abstract public function GetIdentifierDelimiter(): string;
+
+	/**
 	 * When the data last changed, as "Y-m-d H:i:s".
 	 *
 	 * Exposed publicly as GET /api/system/db-changed-time and used by the iOS app and the
@@ -84,6 +90,18 @@ abstract class DatabaseDialect
 	 * Persists a pending MarkDbChanged(). Called once at the end of a request.
 	 */
 	public function FlushDbChangedTime(\PDO $pdo): void
+	{
+	}
+
+	/**
+	 * Brings generated-id counters back in line with the data.
+	 *
+	 * SQLite's AUTOINCREMENT tracks the highest id ever used, so inserting an explicit id
+	 * implicitly moves the counter past it. Other engines do not necessarily do that, and
+	 * would then hand out ids which already exist. Anything that inserts explicit ids -
+	 * migrations, demo data, importing an existing database - has to call this afterwards.
+	 */
+	public function ResyncGeneratedIdCounters(\PDO $pdo): void
 	{
 	}
 

@@ -72,6 +72,12 @@ class SqliteDialect extends DatabaseDialect
 		return '"' . str_replace('"', '""', $name) . '"';
 	}
 
+	public function GetIdentifierDelimiter(): string
+	{
+		// SQLite accepts both; the backtick is what LessQL has always used here
+		return '`';
+	}
+
 	public function GetDbChangedTime(\PDO $pdo): string
 	{
 		clearstatcache(true, $this->GetDbFilePath());

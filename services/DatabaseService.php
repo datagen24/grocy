@@ -81,6 +81,8 @@ class DatabaseService
 			self::$DbConnection = new Database($pdo);
 
 			$dialect = $this->GetDialect();
+			self::$DbConnection->setIdentifierDelimiter($dialect->GetIdentifierDelimiter());
+
 			$trackChanges = $dialect->RequiresChangeTracking();
 
 			if ($trackChanges || $this->IsQueryLoggingEnabled())

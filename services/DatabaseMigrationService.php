@@ -46,6 +46,9 @@ class DatabaseMigrationService extends BaseService
 
 		if ($migrationCounter > 0)
 		{
+			// Migrations routinely insert rows with explicit ids
+			$dialect->ResyncGeneratedIdCounters(DatabaseService::GetInstance()->GetDbConnectionRaw());
+
 			$optimizeStatement = $dialect->GetOptimizeStatement();
 
 			if ($optimizeStatement !== null)
