@@ -14,38 +14,72 @@
 -- below is that exact expression, wrapped so every trigger that needs a week-name string
 -- calls the identical code the view calls - see the helper's own comment for why.
 --
--- Recursion note (see batch A's fuller writeup of the same issue): SQLite runs with
--- `recursive_triggers` OFF (Grocy's default, never changed by the app), which - verified
--- empirically against the pristine SQLite demo database - blocks a trigger's own DML from
--- re-firing triggers on the SAME table it is already executing on, while a plain onward
--- chain to a DIFFERENT table's trigger still fires normally. Two triggers in this batch
--- rely on that suppression to terminate/behave correctly and would misbehave under
--- PostgreSQL's unconditional trigger firing without an explicit
--- `IF pg_trigger_depth() > 1 THEN RETURN NULL; END IF;` guard:
---   * update_internal_recipe's own tail `UPDATE meal_plan ... WHERE id = NEW.id` (the
---     "enforce empty then null" cleanup) would otherwise re-fire update_internal_recipe on
---     itself. Empirically confirmed on SQLite: inserting a meal_plan row with an explicit
---     empty-string recipe_id causes create_internal_recipe's identical tail UPDATE to run
---     and settle immediately, with no hang - proving SQLite does not let this recurse.
---     Without a depth guard, PostgreSQL would recurse on this UPDATE forever (the WHERE
---     clause keeps matching once the column is NULL).
---   * userfield_values_special_handling_INS's own `INSERT INTO userfield_values` (copying
---     a 'stock' entity value from a transaction_id-keyed row to a stock_id-keyed row) would
---     otherwise re-fire itself on the row it just inserted - and that nested firing's own
---     unconditional cleanup DELETE (field_id belongs to entity 'stock') would immediately
---     delete the very row that was just created, before the caller ever saw it. Empirically
---     confirmed on SQLite (demo data purchase transaction 6a8e3fb46d5dd, which fans out to
---     84 stock rows): all 84 resulting userfield_values rows are left intact with their
---     value, proving SQLite does not let this recurse either.
--- create_internal_recipe and remove_internal_recipe do not need this guard: nothing in this
--- batch ever INSERTs into meal_plan from inside a trigger (so create_internal_recipe can
--- never be re-entered), and remove_internal_recipe never writes back to meal_plan at all.
--- remove_internal_recipe's and create_internal_recipe's/update_internal_recipe's DELETE FROM
--- recipes (mealplan-day/-week cleanup) does chain into remove_recipe_from_meal_plans, and
--- remove_recipe_from_meal_plans's DELETE FROM meal_plan does chain into
--- create_internal_recipe/update_internal_recipe/remove_internal_recipe in the other
--- direction - both left unguarded because internal recipes (mealplan-day/-week/-shadow)
--- always have id <= 0 while every meal_plan.recipe_id that is ever set references a real,
+-- Recursion note: SQLite runs with `recursive_triggers` OFF (Grocy's default, never changed
+-- by the app). PostgreSQL has no equivalent switch - every row trigger always fires,
+-- including ones invoked as a side effect of another trigger's own DML - so anything that
+-- relies on SQLite suppressing some recursive chain needs an explicit guard here.
+--
+-- Two triggers in this batch write back to their OWN table (meal_plan / userfield_values)
+-- as part of their body, which risks exactly that kind of recursion:
+--   * update_internal_recipe's own tail `UPDATE meal_plan ... WHERE id = NEW.id` statements
+--     (the "enforce empty then null" cleanup) match a NULL column and keep matching after
+--     being "changed" to NULL again, so a naive port recurses on that UPDATE forever in
+--     PostgreSQL. create_internal_recipe's identical tail statements can trigger the same
+--     thing from an INSERT.
+--   * userfield_values_special_handling_INS's own `INSERT INTO userfield_values` (copying a
+--     'stock' entity value from a transaction_id-keyed row to a stock_id-keyed row) would
+--     re-fire itself on the row it just inserted, and that nested firing's own unconditional
+--     cleanup DELETE (anything belonging to entity 'stock') would immediately delete the row
+--     that was just created, before the caller ever saw it.
+-- Both get `IF pg_trigger_depth() > 1 THEN RETURN NULL; END IF;` at the top, so only the
+-- outermost, directly-fired invocation per statement does any work.
+--
+-- NON-OBVIOUS DECISION for reviewer, empirically investigated in depth: SQLite's actual
+-- behaviour here is messier than "recursion is simply blocked". Tracing a single
+-- `INSERT INTO meal_plan (..., type='recipe', recipe_id=<n>)` on the pristine demo database
+-- (via sibling AFTER triggers that only log to a side table, so as not to disturb the
+-- triggers under test) shows create_internal_recipe firing once and update_internal_recipe
+-- firing *six more times* in a single statement - i.e. recursive_triggers=OFF does not
+-- fully suppress this chain, it just happens to bottom out after a few generations for
+-- reasons that were not fully reverse-engineered (SQLite's own docs call firing order for
+-- multiple triggers on one table/event "undefined" to begin with). Each generation deletes
+-- and recreates the day/week (and shadow) recipe with a brand new MIN(id)-1 id, so this
+-- churn is directly observable in `recipes`/`recipes_nestings`/`recipes_pos`: SQLite ends up
+-- with several orphaned rows referencing internal recipe ids that were deleted moments
+-- later by the next generation, in addition to the final, live set - trigdifftest reports
+-- these as row-count mismatches for any script that inserts/updates a meal_plan row of type
+-- 'recipe' (its `id` column also always differs from PostgreSQL's for these rows regardless,
+-- since MIN(id)-1 vs identity-sequence numbering are unrelated schemes - the same category
+-- of difference this project's own trigdifftest.php already excludes for cache__ tables'
+-- "dummy" ids).
+--
+-- This port deliberately does NOT attempt to reproduce that exact, apparently-incidental
+-- generation count: it is not documented behaviour, is not guaranteed stable across SQLite
+-- versions, and produces zero observable difference to the application - every view and the
+-- REST API reach recipes_nestings/recipes_pos only by joining through the live `recipes`
+-- row by id, so a nestings/pos row whose recipe_id no longer exists in `recipes` is
+-- permanently unreachable garbage on both engines. What was verified instead, directly
+-- against a running grocy-pg instance side by side with the SQLite output, is that the
+-- LIVE state - the set of {name, type} recipe rows that currently exist, and what each one's
+-- nestings/pos rows resolve to when joined back through `recipes` by name - is byte-for-byte
+-- identical between engines for every scenario in trigscripts_c/11 through /16. See this
+-- batch's final report for the exact verification queries and output.
+--
+-- Separately: update_internal_recipe only ever rebuilds NEW.day's internal recipe - like the
+-- original SQLite trigger, it has no OLD.day branch at all, so moving a meal_plan row to a
+-- different day via UPDATE leaves the OLD day's day/week recipe exactly as it was (stale,
+-- still "including" the row that just moved away) on BOTH engines. Confirmed identical
+-- behaviour, not a porting gap - ported as literally as everything else here.
+--
+-- create_internal_recipe and remove_internal_recipe do not get their own guard: nothing in
+-- this batch ever INSERTs into meal_plan from inside a trigger (so create_internal_recipe
+-- can only ever be the outermost invocation), and remove_internal_recipe never writes back
+-- to meal_plan at all. remove_internal_recipe's and create_internal_recipe's/
+-- update_internal_recipe's DELETE FROM recipes (mealplan-day/-week cleanup) does chain into
+-- remove_recipe_from_meal_plans, and remove_recipe_from_meal_plans's DELETE FROM meal_plan
+-- does chain back into create_internal_recipe/update_internal_recipe/remove_internal_recipe
+-- - both left unguarded because internal recipes (mealplan-day/-week/-shadow) always have
+-- id <= 0 while every meal_plan.recipe_id that is ever set references a real,
 -- positively-numbered user recipe, so `DELETE FROM meal_plan WHERE recipe_id = OLD.id` for
 -- an internal recipe's OLD.id is a provable, permanent no-op (0 rows -> 0 further trigger
 -- invocations) - there is nothing for a guard to prevent there.

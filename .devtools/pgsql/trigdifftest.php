@@ -29,9 +29,21 @@ $pristinePath = getenv('TRIGTEST_PRISTINE_PATH') ?: '/scratch/demodata/grocy_en.
 $dialect = new PostgresDialect();
 $failures = 0;
 
+if (empty($scripts))
+{
+	exit('Usage: php trigdifftest.php <script.sql> [<script.sql> ...]' . PHP_EOL);
+}
+
 foreach ($scripts as $script)
 {
 	echo PHP_EOL . '== ' . basename($script) . PHP_EOL;
+
+	// A script that cannot be read must not quietly pass. Reporting "identical state"
+	// for a file that was never opened is worse than reporting nothing at all.
+	if (!is_readable($script))
+	{
+		exit('  script not found or unreadable: ' . $script . PHP_EOL);
+	}
 
 	// Every script starts from the same pristine state on both sides
 	copy($pristinePath, $sqlitePath);
@@ -52,6 +64,12 @@ foreach ($scripts as $script)
 	$importer->Import(true);
 
 	$statements = ParseScript(file_get_contents($script));
+
+	if (empty($statements))
+	{
+		exit('  script contains no statements: ' . $script . PHP_EOL);
+	}
+
 	$scriptFailures = 0;
 
 	foreach ($statements as [$sql, $expectError])

@@ -336,3 +336,22 @@ which requires *both* engines to reject it with a message containing that substr
 is how `RAISE(ABORT, ...)` constraints are verified.
 
 `row_created_timestamp` is excluded from the comparison, since it comes from the clock.
+
+**Internal meal plan recipes accumulate fewer orphan rows.** Grocy generates hidden
+`recipes` rows of type `mealplan-day`, `mealplan-week` and `mealplan-shadow` from triggers
+on `meal_plan`. In SQLite a single `INSERT INTO meal_plan` re-fires `update_internal_recipe`
+several more times, minting a new internal recipe id on each pass and abandoning the
+previous one, so `recipes_nestings` and `recipes_pos` fill up with rows pointing at
+internal recipe ids that no longer exist. The port collapses that to one deterministic
+generation.
+
+This is not a difference in what the application can see. Measured after the same meal plan
+statements on both engines: the reachable state - rows whose `recipe_id` still resolves - is
+identical (27 recipes, 24 `recipes_pos`, 20 `recipes_nestings`, matching on name, type,
+servings, product and amount). Only the count of unreachable rows differs, and PostgreSQL
+has fewer.
+
+Worth knowing that this is pre-existing upstream behaviour rather than something the port
+introduced: Grocy's own demo dataset ships with 146 of its 166 `recipes_nestings` rows
+already dangling. A client listing `/objects/recipes_nestings` or `/objects/recipes_pos`
+therefore sees slightly fewer junk rows on PostgreSQL.
