@@ -37,6 +37,7 @@ PostgreSQL. That isolates view logic from trigger behaviour.
 
 ---
 
+# Porting rules
 
 Authoritative reference for porting Grocy's schema. Every rule below exists because
 breaking it changes what the REST API returns, which would break the iOS app and the
@@ -247,3 +248,25 @@ Rules:
 - Tabs for indentation, matching the existing migration files.
 - Preserve original column order, names, nullability and comments exactly.
 - Do not "improve" anything. A faithful port is the goal; behaviour changes are bugs.
+
+## Moving an existing installation
+
+    php bin/grocy-db-import [/path/to/grocy.db] [--force]
+
+Point `config.php` at the target database first (`DB_DRIVER`, `DB_HOST`, ...). The command
+creates the schema if it is not there yet, so an empty PostgreSQL database is a valid
+target, then copies every row across.
+
+It refuses to run when the target already holds data (pass `--force` to replace it) and
+when the two schemas are at different migration levels - start the old installation once
+so it migrates itself up to date first.
+
+Triggers are disabled for the duration of the copy. The rows being copied were already
+shaped by the source's triggers, so letting the target's fire again would cascade deletes
+and recompute derived values a second time.
+
+Two details that are easy to get wrong and are handled here: values are read with
+`PDO::NULL_NATURAL`, because the application's usual `NULL_EMPTY_STRING` would turn every
+empty string into NULL on the way through (Grocy stores an empty name for the internal
+meal plan section, which is enough to violate a NOT NULL column); and the generated id
+counters are resynced afterwards, since every row arrives with an explicit id.

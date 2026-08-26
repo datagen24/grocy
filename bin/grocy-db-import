@@ -1,0 +1,110 @@
+#!/usr/bin/env php
+<?php
+
+// Imports an existing SQLite database into the configured target database.
+//
+//   php bin/grocy-db-import [/path/to/grocy.db] [--force]
+//
+// The source defaults to grocy.db in the data path. The target is whatever config.php
+// selects, which has to be an engine other than SQLite.
+//
+// The target schema is created if it does not exist yet, so a fresh, empty PostgreSQL
+// database is a valid target.
+
+use Grocy\Services\Database\DatabaseImporter;
+use Grocy\Services\DatabaseMigrationService;
+use Grocy\Services\DatabaseService;
+
+if (PHP_SAPI !== 'cli')
+{
+	exit('This is a command line script');
+}
+
+$arguments = array_slice($argv, 1);
+$force = in_array('--force', $arguments, true);
+$positional = array_values(array_filter($arguments, fn($a) => !str_starts_with($a, '--')));
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/grocy-db-import [/path/to/grocy.db] [--force]\n\n";
+	echo "  Copies an existing SQLite database into the database configured in config.php.\n";
+	echo "  --force  Overwrite a target that already contains data.\n";
+	exit(0);
+}
+
+if (!defined('GROCY_DATAPATH'))
+{
+	define('GROCY_DATAPATH', getenv('GROCY_DATAPATH') ?: __DIR__ . '/../data');
+}
+
+require_once __DIR__ . '/../packages/autoload.php';
+require_once GROCY_DATAPATH . '/config.php';
+require_once __DIR__ . '/../config-dist.php';
+
+// Migrations and the demo location fixup expect a user context
+if (!defined('GROCY_USER_ID'))
+{
+	define('GROCY_USER_ID', 1);
+}
+
+try
+{
+	(new Grocy\Helpers\ConfigurationValidator())->validateConfig();
+}
+catch (\Grocy\Helpers\EInvalidConfig $ex)
+{
+	exit('Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+}
+
+$sourcePath = $positional[0] ?? (GROCY_DATAPATH . '/grocy.db');
+
+if (!file_exists($sourcePath))
+{
+	exit('Source database not found: ' . $sourcePath . PHP_EOL);
+}
+
+$targetDialect = DatabaseService::GetInstance()->GetDialect();
+
+if ($targetDialect->GetName() === 'sqlite')
+{
+	exit('The configured database is SQLite, so there is nothing to import into.' . PHP_EOL
+		. 'Set DB_DRIVER (and the DB_* connection settings) to the target engine first.' . PHP_EOL);
+}
+
+echo 'Source: ' . $sourcePath . ' (sqlite)' . PHP_EOL;
+echo 'Target: ' . GROCY_DB_NAME . ' on ' . GROCY_DB_HOST . ':' . GROCY_DB_PORT . ' (' . $targetDialect->GetName() . ')' . PHP_EOL;
+echo PHP_EOL;
+
+try
+{
+	echo 'Making sure the target schema is up to date...' . PHP_EOL;
+	DatabaseMigrationService::GetInstance()->MigrateDatabase();
+
+	$source = new \PDO('sqlite:' . $sourcePath);
+	$source->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+
+	// Deliberately NOT PDO::NULL_EMPTY_STRING, which the application sets on its own
+	// connections: it would turn every empty string in the database into NULL on the way
+	// through, which is both lossy and enough to violate a NOT NULL column. Grocy really
+	// does store empty strings - meal_plan_sections holds the internal section with an
+	// empty name.
+	$source->setAttribute(\PDO::ATTR_ORACLE_NULLS, \PDO::NULL_NATURAL);
+
+	$target = DatabaseService::GetInstance()->GetDbConnectionRaw();
+
+	echo 'Copying...' . PHP_EOL;
+	$importer = new DatabaseImporter($source, $target, $targetDialect, function ($message)
+	{
+		echo $message . PHP_EOL;
+	});
+
+	$report = $importer->Import($force);
+
+	echo PHP_EOL . 'Imported ' . array_sum($report) . ' rows across ' . count($report) . ' tables.' . PHP_EOL;
+	exit(0);
+}
+catch (\Exception $ex)
+{
+	echo PHP_EOL . 'Import failed: ' . $ex->getMessage() . PHP_EOL;
+	exit(1);
+}

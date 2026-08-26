@@ -21,51 +21,59 @@ $sqlite->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pg = new PDO(getenv('DIFFTEST_PGSQL_DSN') ?: 'pgsql:host=grocy-pg;port=5432;dbname=grocy_full', getenv('DIFFTEST_PGSQL_USER') ?: 'grocy', getenv('DIFFTEST_PGSQL_PASSWORD') ?: 'grocy');
 $pg->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+// Set DIFFTEST_SKIP_COPY=1 to compare against a PostgreSQL database that was populated
+// some other way - in particular one filled by bin/grocy-db-import, which verifies the
+// real migration command rather than this script's own copier.
+$skipCopy = (bool)getenv('DIFFTEST_SKIP_COPY');
+
 // 1. Seed SQLite, letting its triggers do whatever they do
-foreach (array_filter(array_map('trim', explode(";\n", file_get_contents($seedFile)))) as $statement)
+if (!$skipCopy)
 {
-	if ($statement !== '')
+	foreach (array_filter(array_map('trim', explode(";\n", file_get_contents($seedFile)))) as $statement)
 	{
-		$sqlite->exec($statement);
+		if ($statement !== '')
+		{
+			$sqlite->exec($statement);
+		}
 	}
+
+	// 2. Mirror every table into PostgreSQL
+	$pgTables = $pg->query("SELECT table_name FROM information_schema.tables
+		WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+		AND table_name <> 'user_settings_defaults' ORDER BY table_name")->fetchAll(PDO::FETCH_COLUMN);
+
+	$sqliteTables = $sqlite->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
+	$tables = array_values(array_intersect($pgTables, $sqliteTables));
+
+	$pg->exec('TRUNCATE TABLE ' . implode(', ', array_map(fn($t) => '"' . $t . '"', $tables)) . ' RESTART IDENTITY CASCADE');
+
+	$copied = 0;
+	foreach ($tables as $table)
+	{
+		$rows = $sqlite->query('SELECT * FROM "' . $table . '"')->fetchAll(PDO::FETCH_ASSOC);
+		if (empty($rows))
+		{
+			continue;
+		}
+
+		$pgColumns = $pg->query("SELECT column_name FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = " . $pg->quote($table))->fetchAll(PDO::FETCH_COLUMN);
+
+		$columns = array_values(array_intersect(array_keys($rows[0]), $pgColumns));
+		$sql = 'INSERT INTO "' . $table . '" (' . implode(', ', array_map(fn($c) => '"' . $c . '"', $columns)) . ')'
+			. ' VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+		$statement = $pg->prepare($sql);
+
+		foreach ($rows as $row)
+		{
+			$statement->execute(array_map(fn($c) => $row[$c], $columns));
+			$copied++;
+		}
+	}
+
+	(new Grocy\Services\Database\PostgresDialect())->ResyncGeneratedIdCounters($pg);
+	echo "  copied $copied rows across " . count($tables) . " tables into PostgreSQL\n\n";
 }
-
-// 2. Mirror every table into PostgreSQL
-$pgTables = $pg->query("SELECT table_name FROM information_schema.tables
-	WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-	AND table_name <> 'user_settings_defaults' ORDER BY table_name")->fetchAll(PDO::FETCH_COLUMN);
-
-$sqliteTables = $sqlite->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
-$tables = array_values(array_intersect($pgTables, $sqliteTables));
-
-$pg->exec('TRUNCATE TABLE ' . implode(', ', array_map(fn($t) => '"' . $t . '"', $tables)) . ' RESTART IDENTITY CASCADE');
-
-$copied = 0;
-foreach ($tables as $table)
-{
-	$rows = $sqlite->query('SELECT * FROM "' . $table . '"')->fetchAll(PDO::FETCH_ASSOC);
-	if (empty($rows))
-	{
-		continue;
-	}
-
-	$pgColumns = $pg->query("SELECT column_name FROM information_schema.columns
-		WHERE table_schema = 'public' AND table_name = " . $pg->quote($table))->fetchAll(PDO::FETCH_COLUMN);
-
-	$columns = array_values(array_intersect(array_keys($rows[0]), $pgColumns));
-	$sql = 'INSERT INTO "' . $table . '" (' . implode(', ', array_map(fn($c) => '"' . $c . '"', $columns)) . ')'
-		. ' VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
-	$statement = $pg->prepare($sql);
-
-	foreach ($rows as $row)
-	{
-		$statement->execute(array_map(fn($c) => $row[$c], $columns));
-		$copied++;
-	}
-}
-
-(new Grocy\Services\Database\PostgresDialect())->ResyncGeneratedIdCounters($pg);
-echo "  copied $copied rows across " . count($tables) . " tables into PostgreSQL\n\n";
 
 // 3. Compare the views
 function normalise($v)
