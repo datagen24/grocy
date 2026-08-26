@@ -1,0 +1,125 @@
+# 02. MCP endpoint
+
+**Goal:** An integrated MCP server that authenticates against Grocy's own user system, so
+an assistant can answer "what is expiring this week" or "add milk to the shopping list"
+without a separate bridge process.
+**Depends on:** nothing.
+**Status:** draft for review — the least settled plan here, and the one with the most
+design freedom.
+
+## Today
+
+Grocy already has everything needed underneath:
+
+- **API keys** — `services/ApiKeyService.php`, with a `key_type` column already used to
+  separate general keys from `special-purpose-calendar-ical`. Keys resolve to a user via
+  `GetUserByApiKey()`.
+- **Pluggable auth** — `middleware/Auth/`, selected by `GROCY_AUTH_CLASS`.
+  `DefaultAuthMiddleware` accepts a session cookie *or* a `GROCY-API-KEY` header, but only
+  for paths starting with `/api/`.
+- **Permissions** — 30 constants in `controllers/Users/User.php`, checked per route.
+- **Services** — `StockService`, `RecipesService`, `ChoresService` etc. already hold the
+  business logic the tools would call.
+
+So this is additive plumbing over existing capability, with no compatibility risk to
+anything that exists.
+
+## Proposed change
+
+### Mount point
+
+Mounting at **`/api/mcp`** rather than `/mcp` means the existing auth middleware already
+covers it — `IsApiRoute` is a `/api/` prefix test, so API key authentication works with no
+middleware change at all. MCP does not care what the path is.
+
+### Authentication
+
+Add `API_KEY_TYPE_MCP` alongside the existing types, so MCP access is granted and revoked
+independently of general API keys. Everything downstream — user resolution, permission
+checks — then works exactly as it does for the REST API, which is what "auths against the
+internal user system" should mean.
+
+**This is the part needing a decision.** The MCP authorization specification for HTTP
+transports is built on OAuth 2.1, with the server acting as an OAuth resource server. A
+bearer API key is not that. For a household instance behind your own network the practical
+question is only what your client will actually accept:
+
+- Some clients support custom headers or a bearer token directly.
+- Some expect a full OAuth flow and will not connect without one.
+- A local proxy (`mcp-remote` and similar) can bridge a header-authenticated server to a
+  client that wants something else.
+
+I would not design this from memory — the transport and auth revisions move, and my
+knowledge has a cutoff. **Before building, confirm against the current spec revision and
+against the specific client you intend to use.** See Q1.
+
+### Transport
+
+Streamable HTTP, which is what remote MCP servers use. Slim can serve it. Server-initiated
+messages are not needed for a request/response tool server, which keeps the implementation
+to ordinary POST handling.
+
+### Tools
+
+Start read-only. The compelling household cases are questions, not commands:
+
+| Tool | Backed by |
+|---|---|
+| `stock_overview` | `uihelper_stock_current_overview` |
+| `expiring_soon` | `products_volatile_status` |
+| `missing_products` | `stock_missing_products` |
+| `find_product` | `products_view` |
+| `shopping_list` | `uihelper_shopping_list` |
+| `recipes_i_can_cook` | `recipes_resolved.need_fulfilled` |
+
+Then a small, deliberately boring set of writes:
+
+| Tool | Notes |
+|---|---|
+| `add_to_shopping_list` | Lowest risk write — easy to undo, hard to get badly wrong |
+| `consume_product` | Mutates stock. Gate behind a permission |
+| `purchase_product` | Same, plus prices |
+
+Each tool checks the acting user's permissions exactly as the equivalent REST route does.
+A read-only user gets read-only tools.
+
+### Where the code goes
+
+`controllers/Api/McpController.php` for the protocol, `services/Mcp/` for the tool
+registry, so tools are declared in one place with their schema, permission and handler
+rather than scattered through a switch.
+
+### API
+
+Purely additive. New routes under `/api/mcp`, one new API key type, no change to any
+existing endpoint.
+
+## Open questions
+
+1. **Auth mechanism** — bearer API key, or full OAuth 2.1 as the MCP auth spec describes?
+   API key is a fraction of the work and fits a household instance; OAuth is what the spec
+   wants and what some clients require. This should be answered by testing the client you
+   actually plan to use, not by reading (or remembering) the spec. It is the one thing that
+   could invalidate the rest of the plan.
+2. **Read-only first, or writes from the start?** I strongly favour read-only for v1. The
+   read tools are where most of the value is, they cannot damage anything, and they let the
+   transport and auth get proven before an assistant is allowed to consume stock.
+3. **Should writes need a separate permission**, beyond the user's existing ones? A user
+   who may consume via the UI may not want an assistant doing it unprompted. A
+   `MCP_WRITE` permission is cheap and makes the boundary explicit.
+4. **Exposure.** Local network only, or reachable externally? That changes the auth answer
+   considerably, and interacts with how the k3s ingress is set up.
+5. **Tool granularity.** A few broad tools ("query stock") or many narrow ones? Narrow
+   tools are easier for a model to use correctly and easier to permission, at the cost of a
+   longer tool list.
+6. **Is a built-in server the right shape at all?** A standalone MCP server talking to the
+   existing REST API would need no Grocy changes and could be updated independently as the
+   spec moves. Building it in gets native permission handling and one less moving part.
+   Worth being explicit about the tradeoff, because "integrated" was the stated goal but
+   the spec churn is a real argument for keeping it separable.
+
+## Effort
+
+Medium, dominated by Q1 and Q6 rather than by the code. Read-only tools over the existing
+services are straightforward once the transport and auth are settled; the tool registry and
+permission wiring is a day or two beyond that.
