@@ -181,6 +181,42 @@ Already handled in the table DDL (`stock.opened_date`, `stock_log.opened_date` a
 test shows a `" 00:00:00"` suffix, that is this hazard - report it rather than papering
 over it with `to_char`, because the underlying column type is what needs to change.
 
+### Hazard 13: aggregates that return `NUMERIC`
+`AVG(integer)` and `EXTRACT(EPOCH FROM ...)` both return `NUMERIC` in PostgreSQL, and
+`NUMERIC` reaches PHP as a string. Anything built on them stays `NUMERIC` too, so
+`AVG(EXTRACT(EPOCH FROM ...) / 86400.0)` leaks a JSON string. Cast the expression to
+`double precision`.
+
+`COUNT()`, `ROW_NUMBER()` and friends return `bigint` - see hazard 8.
+
+### Hazard 14: `SELECT *` over a join with colliding column names
+`CREATE VIEW ... AS SELECT * FROM stock s JOIN products_view p ON ...` is rejected by
+PostgreSQL when both sides share a column name. SQLite accepts it and disambiguates the
+second occurrence by appending `:1`, so the view really does have columns literally named
+`id:1`, `location_id:1` and so on - verified against a live database.
+
+Reproduce them exactly with quoted aliases (`AS "id:1"`) and an explicit column list. Do
+not "clean this up": the names are part of what the view returns today.
+
+Affects `uihelper_stock_entries`, and `stock_missing_products` and
+`uihelper_stock_current_overview` are the same shape.
+
+## Accepted differences
+
+Two differences are known, deliberate and judged harmless. Do not try to "fix" them.
+
+**Float accumulation order.** `products_average_price.price` can come out as
+`4.124499999999999` on SQLite and `4.1245` on PostgreSQL. Summing floating point values in
+a different order gives a different last bit; the discrepancy is around 1e-15 and is not
+stable on SQLite either. Rounding would change the documented value, so it stands.
+
+**`qu_factor_*` in `products_view` and `uihelper_stock_entries`.**
+`cache__quantity_unit_conversions_resolved.factor` is `TEXT` upstream, so SQLite returns
+the JSON string `"1.0"` where PostgreSQL returns the number `1`. Neither view is in the
+`ExposedEntity` enum, `uihelper_stock_entries` is only read by a server rendered page, and
+the OpenAPI spec documents this field as `type: number` - so PostgreSQL is the conforming
+side. Nothing on an API surface changes.
+
 ## Triggers
 
 Each SQLite trigger becomes a PL/pgSQL function plus a `CREATE TRIGGER`. Naming: function

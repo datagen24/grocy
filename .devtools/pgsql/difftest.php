@@ -94,12 +94,55 @@ foreach ($views as $view)
 
 	$ja = array_map(fn($r) => json_encode(array_map('normalise', $r)), $a);
 	$jb = array_map(fn($r) => json_encode(array_map('normalise', $r)), $b);
-	sort($ja);
-	sort($jb);
+
+	// Views have no inherent row order, so sort both sides by their normalised form and
+	// keep the rows in step with it - the type comparison below is only meaningful when
+	// it is looking at the same logical row on each side.
+	array_multisort($ja, $a);
+	array_multisort($jb, $b);
+
+	// Compare what json_encode would actually emit, not just the numeric value. PDO hands
+	// back NUMERIC as a string and BOOLEAN as a bool, so a view can produce numerically
+	// equal output that serialises differently - "2.50" instead of 2.5, true instead of 1.
+	// Note json_encode(6.0) emits 6, so int-vs-float is NOT a difference on the wire.
+	$typeMismatches = [];
+
+	if ($ja === $jb && !empty($a))
+	{
+		foreach (array_keys($a[0]) as $column)
+		{
+			foreach ($a as $i => $rowA)
+			{
+				if (!isset($b[$i]) || !array_key_exists($column, $b[$i])) continue;
+				if ($rowA[$column] === null || $b[$i][$column] === null) continue;
+
+				$encodedA = json_encode($rowA[$column]);
+				$encodedB = json_encode($b[$i][$column]);
+
+				if ($encodedA !== $encodedB)
+				{
+					$typeMismatches[$column] = gettype($rowA[$column]) . ' ' . $encodedA
+						. '  vs  ' . gettype($b[$i][$column]) . ' ' . $encodedB;
+					break;
+				}
+			}
+		}
+	}
+
+	if ($ja === $jb && empty($typeMismatches))
+	{
+		echo "  ok   $view (" . count($a) . " rows identical)\n";
+		continue;
+	}
 
 	if ($ja === $jb)
 	{
-		echo "  ok   $view (" . count($a) . " rows identical)\n";
+		$failures++;
+		echo "  TYPE $view -- values match but JSON types differ:\n";
+		foreach ($typeMismatches as $column => $detail)
+		{
+			echo "         $column: SQLite $detail\n";
+		}
 		continue;
 	}
 
