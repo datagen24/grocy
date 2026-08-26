@@ -111,6 +111,10 @@ foreach ($scripts as $script)
 	$failures += $scriptFailures;
 }
 
+echo PHP_EOL . 'Excluded from comparison: row_created_timestamp everywhere (clock), '
+	. 'chores.start_date and chores.rescheduled_date, and the dummy id on cache__ tables '
+	. '(both accepted differences, see db/pgsql/README.md).' . PHP_EOL;
+
 echo PHP_EOL . ($failures === 0 ? 'TRIGGER BEHAVIOUR IDENTICAL' : "$failures problem(s)") . PHP_EOL;
 exit($failures === 0 ? 0 : 1);
 
@@ -193,8 +197,7 @@ function CompareAllTables(PDO $sqlite, PDO $pg): int
 				WHERE table_schema = current_schema() AND table_name = " . $pg->quote($table))->fetchAll(PDO::FETCH_COLUMN)
 		));
 
-		// row_created_timestamp is set from the clock, so it legitimately differs
-		$columns = array_values(array_diff($columns, ['row_created_timestamp']));
+		$columns = array_values(array_diff($columns, IgnoredColumns($table)));
 
 		if (empty($columns))
 		{
@@ -222,6 +225,38 @@ function CompareAllTables(PDO $sqlite, PDO $pg): int
 	}
 
 	return $problems;
+}
+
+/**
+ * Columns excluded from the comparison, and why. Everything here is either
+ * non-deterministic or a difference recorded in db/pgsql/README.md as accepted - never a
+ * convenient way to make a real failure disappear. The run prints what it skipped.
+ *
+ * @return string[]
+ */
+function IgnoredColumns(string $table): array
+{
+	// Set from the clock, so it legitimately differs between the two runs
+	$ignored = ['row_created_timestamp'];
+
+	// Accepted difference: SQLite returns the stored string verbatim, so a date-only
+	// value comes back without a time where PostgreSQL renders "00:00:00"
+	if ($table === 'chores')
+	{
+		$ignored[] = 'start_date';
+		$ignored[] = 'rescheduled_date';
+	}
+
+	// Accepted difference: SQLite's INSERT OR REPLACE deletes and reinserts, taking a new
+	// id, where PostgreSQL's ON CONFLICT DO UPDATE keeps the existing one. These ids are
+	// "dummy" columns that LessQL requires and nothing reads - no view selects them and no
+	// cache table is an exposed entity.
+	if (str_starts_with($table, 'cache__'))
+	{
+		$ignored[] = 'id';
+	}
+
+	return $ignored;
 }
 
 function NormaliseRow(array $row): string

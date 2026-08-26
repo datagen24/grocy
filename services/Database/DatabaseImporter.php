@@ -195,9 +195,17 @@ class DatabaseImporter
 		$sourceVersion = $this->Source->query('SELECT MAX(migration) FROM migrations')->fetchColumn();
 		$targetVersion = $this->Target->query('SELECT MAX(migration) FROM migrations')->fetchColumn();
 
-		if ($sourceVersion === false || $targetVersion === false)
+		if ($sourceVersion === false || $sourceVersion === null)
 		{
-			throw new \Exception('Could not determine the schema version of both databases');
+			throw new \Exception('The source database has no migrations recorded, so it is not a Grocy database');
+		}
+
+		if ($targetVersion === false || $targetVersion === null)
+		{
+			throw new \Exception(
+				'The target database has no schema yet. Run the migrations against it first '
+				. '(bin/grocy-db-import does that for you when it is the configured database).'
+			);
 		}
 
 		if (intval($sourceVersion) !== intval($targetVersion))
