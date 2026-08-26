@@ -37,42 +37,18 @@ if (!$skipCopy)
 		}
 	}
 
-	// 2. Mirror every table into PostgreSQL
-	$pgTables = $pg->query("SELECT table_name FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-		AND table_name <> 'user_settings_defaults' ORDER BY table_name")->fetchAll(PDO::FETCH_COLUMN);
+	// 2. Mirror every table into PostgreSQL using the real import command's logic, which
+	// disables triggers for the duration. Once triggers exist in the target, copying rows
+	// that the source's triggers already shaped would otherwise fire them a second time -
+	// cascading deletes and re-deriving values that are already correct.
+	$report = (new Grocy\Services\Database\DatabaseImporter(
+		$sqlite,
+		$pg,
+		new Grocy\Services\Database\PostgresDialect(),
+		fn($m) => null
+	))->Import(true);
 
-	$sqliteTables = $sqlite->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
-	$tables = array_values(array_intersect($pgTables, $sqliteTables));
-
-	$pg->exec('TRUNCATE TABLE ' . implode(', ', array_map(fn($t) => '"' . $t . '"', $tables)) . ' RESTART IDENTITY CASCADE');
-
-	$copied = 0;
-	foreach ($tables as $table)
-	{
-		$rows = $sqlite->query('SELECT * FROM "' . $table . '"')->fetchAll(PDO::FETCH_ASSOC);
-		if (empty($rows))
-		{
-			continue;
-		}
-
-		$pgColumns = $pg->query("SELECT column_name FROM information_schema.columns
-			WHERE table_schema = 'public' AND table_name = " . $pg->quote($table))->fetchAll(PDO::FETCH_COLUMN);
-
-		$columns = array_values(array_intersect(array_keys($rows[0]), $pgColumns));
-		$sql = 'INSERT INTO "' . $table . '" (' . implode(', ', array_map(fn($c) => '"' . $c . '"', $columns)) . ')'
-			. ' VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
-		$statement = $pg->prepare($sql);
-
-		foreach ($rows as $row)
-		{
-			$statement->execute(array_map(fn($c) => $row[$c], $columns));
-			$copied++;
-		}
-	}
-
-	(new Grocy\Services\Database\PostgresDialect())->ResyncGeneratedIdCounters($pg);
-	echo "  copied $copied rows across " . count($tables) . " tables into PostgreSQL\n\n";
+	echo '  copied ' . array_sum($report) . ' rows across ' . count($report) . " tables into PostgreSQL\n\n";
 }
 
 // 3. Compare the views
