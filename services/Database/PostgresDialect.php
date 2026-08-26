@@ -59,6 +59,16 @@ class PostgresDialect extends DatabaseDialect
 		return "date_trunc('second', LOCALTIMESTAMP)";
 	}
 
+	public function GetTimestampType(): string
+	{
+		return 'TIMESTAMP';
+	}
+
+	public function GetBaselineSchemaPath(): ?string
+	{
+		return __DIR__ . '/../../db/pgsql/baseline';
+	}
+
 	public function GetOptimizeStatement(): ?string
 	{
 		// VACUUM cannot run inside a transaction block and PostgreSQL reclaims space via

@@ -42,6 +42,20 @@ abstract class DatabaseDialect
 	abstract public function GetNowExpression(): string;
 
 	/**
+	 * The column type used for timestamps.
+	 */
+	abstract public function GetTimestampType(): string;
+
+	/**
+	 * Directory holding the squashed baseline schema for this engine, relative to the
+	 * application root, or null when the engine replays the migration history instead.
+	 */
+	public function GetBaselineSchemaPath(): ?string
+	{
+		return null;
+	}
+
+	/**
 	 * The statement to reclaim space / refresh planner statistics after migrations,
 	 * or null when the engine needs nothing.
 	 */

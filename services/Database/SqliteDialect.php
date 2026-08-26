@@ -57,6 +57,11 @@ class SqliteDialect extends DatabaseDialect
 		return "datetime('now', 'localtime')";
 	}
 
+	public function GetTimestampType(): string
+	{
+		return 'DATETIME';
+	}
+
 	public function GetOptimizeStatement(): ?string
 	{
 		return 'VACUUM';
