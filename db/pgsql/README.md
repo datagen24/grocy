@@ -211,6 +211,22 @@ Two differences are known, deliberate and judged harmless. Do not try to "fix" t
 a different order gives a different last bit; the discrepancy is around 1e-15 and is not
 stable on SQLite either. Rounding would change the documented value, so it stands.
 
+**`chores.start_date` where the stored value has no time.** SQLite returns exactly the
+string it stored, so a value written as `"2025-01-01"` comes back as `"2025-01-01"`;
+PostgreSQL's `TIMESTAMP` renders it `"2025-01-01 00:00:00"`. This one *is* on a public
+endpoint (`chores` is in the `ExposedEntity` enum), so it is worth being explicit about.
+
+`DATE` is not an option: the chore form is a datetimepicker with format
+`YYYY-MM-DD HH:mm:ss` and the `default_start_date_when_empty` triggers write
+`DATETIME('now', 'localtime')`, so real chores genuinely carry a time and `DATE` would
+discard it. Anything the UI creates therefore matches exactly on both engines. Only a
+date-only string - the demo data generator, or an API client posting one - differs, and
+`"2025-01-01 00:00:00"` is the more conformant rendering of the documented
+`format: date-time` anyway.
+
+Verified with `trigdifftest.php` that this is the *only* such column left across all 37
+tables.
+
 **`qu_factor_*` in `products_view` and `uihelper_stock_entries`.**
 `cache__quantity_unit_conversions_resolved.factor` is `TEXT` upstream, so SQLite returns
 the JSON string `"1.0"` where PostgreSQL returns the number `1`. Neither view is in the
@@ -270,3 +286,26 @@ Two details that are easy to get wrong and are handled here: values are read wit
 empty string into NULL on the way through (Grocy stores an empty name for the internal
 meal plan section, which is enough to violate a NOT NULL column); and the generated id
 counters are resynced afterwards, since every row arrives with an explicit id.
+
+## Testing triggers
+
+Views are checked by comparing what they return; triggers cannot be, because what they do
+is change *other* rows. `.devtools/pgsql/trigdifftest.php` starts both engines from an
+identical table state, applies the same statements to each, and then compares every table:
+
+    docker run --rm --network grocynet \
+      -v "$PWD":/app -v /path/to/scratch:/scratch -v /path/to/scratch/data:/data \
+      -e TRIGTEST_SQLITE_PATH=/data/trigtest.db \
+      -e TRIGTEST_PRISTINE_PATH=/scratch/demodata/grocy_en.db \
+      -e TRIGTEST_PGSQL_DSN='pgsql:host=grocy-pg;port=5432;dbname=grocy_trig' \
+      grocy-fork-dev php /app/.devtools/pgsql/trigdifftest.php script.sql [script.sql ...]
+
+A script is plain SQL, one statement per `;` at end of line. To check a constraint that a
+trigger is supposed to enforce, precede the statement with
+
+    -- @expect-error qu_id_stock can only be changed
+
+which requires *both* engines to reject it with a message containing that substring. That
+is how `RAISE(ABORT, ...)` constraints are verified.
+
+`row_created_timestamp` is excluded from the comparison, since it comes from the clock.
