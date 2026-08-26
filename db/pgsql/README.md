@@ -202,6 +202,21 @@ not "clean this up": the names are part of what the view returns today.
 Affects `uihelper_stock_entries`, and `stock_missing_products` and
 `uihelper_stock_current_overview` are the same shape.
 
+### Hazard 15: `COLLATE NOCASE` is written into the PHP, not just the schema
+Grocy sorts and compares names case insensitively using SQLite's built in `NOCASE`
+collation, spelled directly into its queries - 116 times across eleven PHP files. Almost
+all are `ORDER BY` on list pages and API responses; one is a barcode lookup in
+`StockService`. PostgreSQL has no such collation and rejects the query outright, so this
+breaks ordering nearly everywhere without touching the schema at all.
+
+Rather than rewriting 116 call sites, `03_functions.sql` creates a collation under that
+name, so the `COLLATE NOCASE` the PHP already emits resolves to it (identifiers fold to
+lower case). No PHP change is needed. Verified that both ordering and the equality
+comparison behave the same as SQLite.
+
+It needs a PostgreSQL built with ICU, which the official images are. Without ICU the
+migration fails at that statement, which is the right place to find out.
+
 ## Accepted differences
 
 Two differences are known, deliberate and judged harmless. Do not try to "fix" them.

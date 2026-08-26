@@ -9,6 +9,26 @@
 --
 -- That leaves grocy_user_setting(), which is used by the stock overview views.
 
+-- Grocy sorts and compares names case insensitively by writing SQLite's built in
+-- "COLLATE NOCASE" directly into its queries - 116 times across eleven PHP files, mostly
+-- ORDER BY on list pages and API responses, plus one barcode lookup in StockService.
+--
+-- PostgreSQL has no such collation built in and rejects the query outright, so rather than
+-- rewriting every call site we provide a collation under the same name. Identifiers fold
+-- to lower case, so the "COLLATE NOCASE" the PHP emits resolves to this.
+--
+-- "und-u-ks-level2" means compare at the secondary level: case is ignored, accents are
+-- not. It is not byte for byte identical to SQLite's NOCASE, which folds ASCII A-Z only,
+-- but it agrees on ASCII and is more correct beyond it.
+--
+-- This needs a PostgreSQL built with ICU (the official images are). Without it the
+-- migration fails here, which is the right place to find out.
+CREATE COLLATION nocase (
+	provider = icu,
+	locale = 'und-u-ks-level2',
+	deterministic = false
+);
+
 -- Default user settings, mirrored here from the PHP configuration by
 -- DatabaseMigrationService so that SQL can resolve a setting the user has never
 -- explicitly set. Kept in sync on every migration run.
