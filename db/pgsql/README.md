@@ -199,8 +199,14 @@ second occurrence by appending `:1`, so the view really does have columns litera
 Reproduce them exactly with quoted aliases (`AS "id:1"`) and an explicit column list. Do
 not "clean this up": the names are part of what the view returns today.
 
-Affects `uihelper_stock_entries`, and `stock_missing_products` and
-`uihelper_stock_current_overview` are the same shape.
+**Only `uihelper_stock_entries` is actually affected.** Establish that empirically before
+assuming a view has this problem - fetch a row on SQLite and look at the keys:
+
+    php -r '$p=new PDO("sqlite:grocy.db"); print_r(array_keys($p->query("SELECT * FROM <view> LIMIT 1")->fetch(PDO::FETCH_ASSOC)));'
+
+`stock_missing_products` and `uihelper_stock_current_overview` were both wrongly suspected
+of it during the port: the first is `SELECT *` over a *derived table* rather than over a
+join, and the second lists all 47 of its columns explicitly. Neither has duplicates.
 
 ### Hazard 15: `COLLATE NOCASE` is written into the PHP, not just the schema
 Grocy sorts and compares names case insensitively using SQLite's built in `NOCASE`
@@ -226,6 +232,11 @@ Two differences are known, deliberate and judged harmless. Do not try to "fix" t
 a different order gives a different last bit; the discrepancy is around 1e-15 and is not
 stable on SQLite either. Rounding would change the documented value, so it stands.
 
+The same artifact reaches `uihelper_product_details.average_price`,
+`uihelper_stock_current_overview.average_price` and `recipes_resolved.costs` /
+`costs_per_serving`, which are computed from it. Of these only `products_average_price` is
+in the `ExposedEntity` enum.
+
 **`chores.start_date` where the stored value has no time.** SQLite returns exactly the
 string it stored, so a value written as `"2025-01-01"` comes back as `"2025-01-01"`;
 PostgreSQL's `TIMESTAMP` renders it `"2025-01-01 00:00:00"`. This one *is* on a public
@@ -242,9 +253,10 @@ date-only string - the demo data generator, or an API client posting one - diffe
 Verified with `trigdifftest.php` that this is the *only* such column left across all 37
 tables.
 
-**`qu_factor_*` in `products_view` and `uihelper_stock_entries`.**
+**`qu_factor_*` in `products_view`, `uihelper_stock_entries` and
+`uihelper_stock_current_overview`.**
 `cache__quantity_unit_conversions_resolved.factor` is `TEXT` upstream, so SQLite returns
-the JSON string `"1.0"` where PostgreSQL returns the number `1`. Neither view is in the
+the JSON string `"1.0"` where PostgreSQL returns the number `1`. None of these views is in the
 `ExposedEntity` enum, `uihelper_stock_entries` is only read by a server rendered page, and
 the OpenAPI spec documents this field as `type: number` - so PostgreSQL is the conforming
 side. Nothing on an API surface changes.

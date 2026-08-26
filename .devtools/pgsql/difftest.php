@@ -15,8 +15,46 @@ require_once (getenv('GROCY_ROOT') ?: '/app') . '/packages/autoload.php';
 $seedFile = $argv[1];
 $views = array_slice($argv, 2);
 
-$sqlite = new PDO(getenv('DIFFTEST_SQLITE_DSN') ?: 'sqlite:/data/difftest.db');
+// PDO\Sqlite, not PDO: createFunction() is only on the driver specific subclass
+$sqlite = new PDO\Sqlite(getenv('DIFFTEST_SQLITE_DSN') ?: 'sqlite:/data/difftest.db');
 $sqlite->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// Grocy registers helper functions on its SQLite connections from PHP (see
+// SqliteDialect::OnConnected). Without them every view that uses one - anything built on
+// products_volatile_status, for instance - fails on the SQLite side before the two engines
+// are even compared, which would quietly exempt those views from being tested at all.
+$defaultUserSettings = [];
+$configDist = (getenv('GROCY_ROOT') ?: '/app') . '/config-dist.php';
+if (file_exists($configDist))
+{
+	// Only to pick up the default user settings; the constants are irrelevant here
+	if (!defined('GROCY_DATAPATH')) define('GROCY_DATAPATH', sys_get_temp_dir());
+	@include $configDist;
+	global $GROCY_DEFAULT_USER_SETTINGS;
+	$defaultUserSettings = $GROCY_DEFAULT_USER_SETTINGS ?? [];
+}
+
+$sqlite->createFunction('grocy_user_setting', function ($key) use ($sqlite, $defaultUserSettings)
+{
+	$statement = $sqlite->prepare('SELECT value FROM user_settings WHERE user_id = 1 AND key = ?');
+	$statement->execute([$key]);
+	$value = $statement->fetchColumn();
+
+	if ($value !== false && $value !== null)
+	{
+		return $value;
+	}
+
+	return $defaultUserSettings[$key] ?? null;
+});
+
+$sqlite->createFunction('regexp', function ($pattern, $value)
+{
+	mb_regex_encoding('UTF-8');
+	return (false !== mb_ereg($pattern, $value)) ? 1 : 0;
+});
+
+$sqlite->createFunction('ceil', fn($value) => ceil($value));
 
 $pg = new PDO(getenv('DIFFTEST_PGSQL_DSN') ?: 'pgsql:host=grocy-pg;port=5432;dbname=grocy_full', getenv('DIFFTEST_PGSQL_USER') ?: 'grocy', getenv('DIFFTEST_PGSQL_PASSWORD') ?: 'grocy');
 $pg->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -49,6 +87,19 @@ if (!$skipCopy)
 	))->Import(true);
 
 	echo '  copied ' . array_sum($report) . ' rows across ' . count($report) . " tables into PostgreSQL\n\n";
+}
+
+// PostgreSQL resolves grocy_user_setting() against this table, which DatabaseMigrationService
+// fills in a real deployment. Mirror it here so both engines fall back to the same defaults.
+if (!empty($defaultUserSettings))
+{
+	$upsert = $pg->prepare('INSERT INTO user_settings_defaults (key, value) VALUES (?, ?)
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value');
+
+	foreach ($defaultUserSettings as $key => $value)
+	{
+		$upsert->execute([$key, is_bool($value) ? ($value ? '1' : '0') : (string)$value]);
+	}
 }
 
 // 3. Compare the views
