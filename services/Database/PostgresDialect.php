@@ -147,8 +147,11 @@ class PostgresDialect extends DatabaseDialect
 					WHERE table_schema = current_schema()
 						AND is_identity = \'YES\'
 				LOOP
+					-- GREATEST because some tables hold rows with negative ids on purpose
+					-- (meal_plan_sections has the internal section at -1), and a sequence
+					-- cannot be set below 1
 					EXECUTE format(
-						\'SELECT setval(pg_get_serial_sequence(%L, %L), COALESCE((SELECT MAX(%I) FROM %I), 0) + 1, false)\',
+						\'SELECT setval(pg_get_serial_sequence(%L, %L), GREATEST(COALESCE((SELECT MAX(%I) FROM %I), 0) + 1, 1), false)\',
 						r.table_name, r.column_name, r.column_name, r.table_name
 					);
 				END LOOP;
