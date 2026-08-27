@@ -36,21 +36,64 @@ The review found no structural rot. What it found instead is:
 
 Concrete bugs found while reviewing, ordered by impact. None are large.
 
-| # | Defect | Where | Fix |
+**Status: all 13 fixed** in commit `36650cd`. The "Where" references below are the
+line numbers as of the review; the documentation pass shifted most of them, so the
+column names the file rather than a location to trust. The table is kept as a record
+of what was found and what was decided.
+
+| # | Defect | Where | Fix applied |
 |---|---|---|---|
-| 1 | `GET /api/batteries/{id}` always fails: committed debug `throw new \Exception('df')` | `controllers/Api/BatteriesApiController.php:18` | Delete the line |
-| 2 | `/api/system/config` leaks `DB_PASSWORD`, `DB_USER`, `DB_HOST`, `LDAP_BIND_PW` to any authenticated API key — the DB leak is fork-introduced (the new `DB_*` settings joined an endpoint that filters by blocklist) | `controllers/Api/SystemApiController.php:13-38` | Switch to an allowlist of frontend-needed settings |
-| 3 | Raw SQLite-only date SQL (`DATE('now', ...)`, `STRFTIME`) bypasses the dialect layer and crashes on PostgreSQL — five page routes **and** the due/expired-products API | `StockController.php:67,72`, `ChoresController.php:74,79`, `BatteriesController.php:87,92`, `StockReportsController.php:24`, `RecipesController.php:30,62`, `services/StockService.php:954,958,970` | Compute cutoff dates in PHP and bind as parameters; add a date-offset primitive to `DatabaseDialect` for the view-side cases |
-| 4 | Any authenticated user can delete any API key by ID (sequential IDs, no ownership check, `api_keys` not in `ExposedEntityNoDelete`) | `controllers/Api/GenericEntityApiController.php:96-99` | Restrict to own keys unless admin |
-| 5 | Session/API keys generated with non-crypto `rand()` | `helpers/extensions.php` (`RandomString`), used by `SessionService.php:79`, `ApiKeyService.php:152` | Use `random_int()` / `random_bytes()` |
-| 6 | `WebhookRunner` catches nonexistent `Grocy\Helpers\RequestException`, so a printer webhook failure 500s the user action instead of being handled | `helpers/WebhookRunner.php` | Import `GuzzleHttp\Exception\RequestException` |
-| 7 | `/recipes` 500s on a fresh install: unguarded `$selectedRecipe->id` when no recipes exist | `controllers/RecipesController.php:113` | Hoist the existing `if ($selectedRecipe)` guard |
-| 8 | LDAP filter injection: raw POST username interpolated into the search filter | `middleware/Auth/LdapAuthMiddleware.php:35` | `ldap_escape(..., LDAP_ESCAPE_FILTER)` |
-| 9 | Stack traces served in production: `addErrorMiddleware(true, ...)` hardcoded, so every 500 includes `error_details.stack_trace` | `app.php:115` | Gate on `GROCY_MODE === 'dev'` |
-| 10 | `FilesService.php:54` tests `$bestFitHeight !== null` twice (second was surely `$bestFitWidth`); `:70` catches an unimported `ImageResizeException` that can never match | `services/FilesService.php` | Fix the operand; import the Gumlet exception |
-| 11 | `LogMissingLocalization` returns `null` (→ 500) outside dev mode | `controllers/Api/SystemApiController.php:76-92` | Return `EmptyApiResponse` unconditionally |
-| 12 | `LocalizationService` per-locale instance cache never hits: `in_array($locale, self::$InstanceMap)` compares the locale string against the cached *objects*, so every call re-parses the `.po` files from disk | `services/LocalizationService.php:161-174` | `isset(self::$InstanceMap[$locale])` |
-| 13 | Demo/prerelease mode hard-fails on PostgreSQL: `DemoDataGeneratorService` is unconditionally SQLite-flavored (`sqlite_sequence`, `STRFTIME`, `datetime('now','localtime')`) but is invoked regardless of `DB_DRIVER` | `services/DemoDataGeneratorService.php`, called from `controllers/SystemController.php:51` | Gate on `DB_DRIVER === 'sqlite'` with a clear error, or port the SQL |
+| 1 | `GET /api/batteries/{id}` always fails: committed debug `throw new \Exception('df')` | `controllers/Api/BatteriesApiController.php:18` | ✅ Line deleted |
+| 2 | `/api/system/config` leaks `DB_PASSWORD`, `DB_USER`, `DB_HOST`, `LDAP_BIND_PW` to any authenticated API key — the DB leak is fork-introduced (the new `DB_*` settings joined an endpoint that filters by blocklist) | `controllers/Api/SystemApiController.php:13-38` | ✅ Allowlist of the settings the web UI itself is given (`MODE`, `CURRENCY`, `ENERGY_UNIT`, `DEFAULT_LOCALE`, the two calendar settings, `MEAL_PLAN_FIRST_DAY_OF_WEEK`, `ENTRY_PAGE`, `BASE_PATH`, `BASE_URL`, `DISABLE_URL_REWRITING`, `GROCYCODE_TYPE`, the four `LABEL_PRINTER_*`) plus every `FEATURE_FLAG_*` by prefix. OpenAPI summary no longer promises "all config settings" |
+| 3 | Raw SQLite-only date SQL (`DATE('now', ...)`, `STRFTIME`) bypasses the dialect layer and crashes on PostgreSQL — five page routes **and** the due/expired-products API | `StockController.php:67,72`, `ChoresController.php:74,79`, `BatteriesController.php:87,92`, `StockReportsController.php:24`, `RecipesController.php:30,62`, `services/StockService.php:954,958,970` | ✅ Cutoffs computed in PHP and bound as parameters. **No dialect primitive was added** — every site turned out to be a per-request constant, not a row-correlated expression, so there was nothing for a primitive to do (see the note below) |
+| 4 | Any authenticated user can delete any API key by ID (sequential IDs, no ownership check, `api_keys` not in `ExposedEntityNoDelete`) | `controllers/Api/GenericEntityApiController.php:96-99` | ✅ Own keys only unless admin; another user's key answers the same "Object not found" as a missing one, so IDs can't be enumerated. `ExposedEntityNoDelete` deliberately left alone — the manage-API-keys page deletes through this route |
+| 5 | Session/API keys generated with non-crypto `rand()` | `helpers/extensions.php` (`RandomString`), used by `SessionService.php:79`, `ApiKeyService.php:152` | ✅ `random_int()`. Signature and alphabet kept — API keys travel in the iCal `?secret=` query string and session keys are cookie values, so the alphanumeric alphabet is load-bearing and existing keys stay valid |
+| 6 | `WebhookRunner` catches nonexistent `Grocy\Helpers\RequestException`, so a printer webhook failure 500s the user action instead of being handled | `helpers/WebhookRunner.php` | ✅ Catches `GuzzleHttp\Exception\GuzzleException`, **not** `RequestException` as originally suggested: `ConnectException` extends `TransferException`, so timeouts and DNS failures — the likeliest printer failures given the 2 s timeout — would still have escaped |
+| 7 | `/recipes` 500s on a fresh install: unguarded `$selectedRecipe->id` when no recipes exist | `controllers/RecipesController.php:113` | ✅ `recipePositionsResolved` resolved inside the existing guard; the `FindObjectInArrayByPropertyValue` lookup, which can also return null, is guarded too |
+| 8 | LDAP filter injection: raw POST username interpolated into the search filter | `middleware/Auth/LdapAuthMiddleware.php:35` | ✅ `ldap_escape(..., LDAP_ESCAPE_FILTER)`, plus an exact-one-result check before `$result[0]` is dereferenced |
+| 9 | Stack traces served in production: `addErrorMiddleware(true, ...)` hardcoded, so every 500 includes `error_details.stack_trace` | `app.php:115` | ✅ Gated on `GROCY_MODE === 'dev'`. Error *logging* left off deliberately — tracked as its own piece of work |
+| 10 | `FilesService.php:54` tests `$bestFitHeight !== null` twice (second was surely `$bestFitWidth`); `:70` catches an unimported `ImageResizeException` that can never match | `services/FilesService.php` | ✅ Operand fixed (the height-only branch was dead code); `Gumlet\ImageResizeException` imported |
+| 11 | `LogMissingLocalization` returns `null` (→ 500) outside dev mode | `controllers/Api/SystemApiController.php:76-92` | ✅ Returns `EmptyApiResponse` unconditionally |
+| 12 | `LocalizationService` per-locale instance cache never hits: `in_array($locale, self::$InstanceMap)` compares the locale string against the cached *objects*, so every call re-parses the `.po` files from disk | `services/LocalizationService.php:161-174` | ✅ `isset(self::$InstanceMap[$locale])` |
+| 13 | Demo/prerelease mode hard-fails on PostgreSQL: `DemoDataGeneratorService` is unconditionally SQLite-flavored (`sqlite_sequence`, `STRFTIME`, `datetime('now','localtime')`) but is invoked regardless of `DB_DRIVER` | `services/DemoDataGeneratorService.php`, called from `controllers/SystemController.php:51` | ✅ Skipped (with a note on stderr) unless the dialect is SQLite, rather than hard-failing — `GROCY_MODE=dev` stays usable on PostgreSQL. The SQL was **not** ported |
+
+### What the fixing pass turned up beyond the table
+
+- **Defect 2 was leaking more than listed.** The blocklist also let through
+  `GROCY_USER_USERNAME`, `GROCY_USER_PICTURE_FILE_NAME`, `GROCY_LOCALE` and
+  `GROCY_EXTERNALLY_MANAGED_AUTHENTICATION`, alongside every `LDAP_*`, `AUTH_CLASS`,
+  `REVERSE_PROXY_AUTH_HEADER` and `TPRINTER_*` setting. That is the argument for the
+  allowlist over a longer blocklist: the endpoint fails open on every setting added
+  after it.
+- **Defect 3 had two sites the table missed:** `RecipesController`'s meal plan window
+  (`DATE('$start', '-$days days')`) and two *bare, zero-argument* `date()` calls in
+  `StockService::GetDueProducts`/`GetExpiredProducts` — easy to miss with a
+  `DATE('now'` grep, and PostgreSQL has no zero-argument `date()` at all. Those two
+  were also the only sites using UTC (SQLite's bare `date()`) while every sibling used
+  `'localtime'`; they are now local like everything else, a sub-day behaviour change
+  around midnight.
+- **The review's "add a date-offset primitive to `DatabaseDialect`" recommendation did
+  not survive contact.** Every offending cutoff is a per-request constant, so the
+  portable fix is to compute it in PHP. `DatabaseService::ExecuteDbQuery()` gained a
+  `$params` argument (it previously could not bind at all) and `GetCurrentStock()` /
+  `GetRecipesResolved()` thread parameters through to their callers. The dialect is
+  unchanged and still has exactly one date primitive, `GetNowExpression()`.
+- **SQLite's `%W` needed reimplementing in PHP**, not replacing with `date('W')`:
+  PHP's `W` is ISO-8601 and shifts dates across the year boundary. The meal plan
+  triggers write week recipe names with SQLite's definition, so
+  `RecipesService::GetMealPlanWeekRecipeName()` reproduces it exactly (verified
+  against SQLite for every day of 2015–2035). This is the PHP-side counterpart of
+  `grocy_sqlite_percent_w()` in the PostgreSQL baseline.
+- **Defect 13 has a second PostgreSQL hazard even if the SQL is ported one day.**
+  `DemoDataGeneratorService` inserts explicit `quantity_units` IDs and never calls
+  `DatabaseDialect::ResyncGeneratedIdCounters()`, so a ported generator would still
+  leave the identity sequence behind the data and throw duplicate-key errors on the
+  next user insert.
+- **Two defects could not be executed in the fixing environment** and rest on
+  inspection only: 8 (no `ldap` extension available) and the PostgreSQL half of 13
+  (no PostgreSQL instance). Everything else was verified against a running instance,
+  including an old-SQL-vs-new-SQL row-level equivalence check for defect 3 and a
+  two-user API-key test for defect 4.
 
 ## Statelessness / k3s readiness
 
@@ -185,13 +228,19 @@ enforced by copying, and the copies are drifting.**
 
 **Verdict: the dialect abstraction is well designed and cleanly honored by the core
 plumbing (`DatabaseService`, migrations, the API's `§` regex operator) — but not yet
-fully honored by its consumers.** `StockService` reaches for raw SQLite date SQL
-(defect 3), and `DemoDataGeneratorService` is SQLite-only yet runs whenever
-`GROCY_MODE` is dev/demo/prerelease (defect 13). Tellingly, no service ever calls the
-dialect's `GetNowExpression()`/`GetRegexpCondition()` primitives, and the primitive
-`StockService` actually needed — "today"/"N days from now" date arithmetic — does not
-exist in the dialect, which is why raw SQL crept in. Adding that primitive and
-sweeping `services/` closes the gap.
+fully honored by its consumers.** `StockService` reached for raw SQLite date SQL
+(defect 3), and `DemoDataGeneratorService` is SQLite-only yet ran whenever
+`GROCY_MODE` is dev/demo/prerelease (defect 13). Both are now fixed — but not the way
+this section proposed. The review assumed the missing piece was a dialect primitive
+for "today"/"N days from now"; in practice every consumer wanted a *per-request
+constant*, not a per-row expression, so the fix was to compute the cutoff in PHP and
+bind it. No primitive was added, and none is needed until something genuinely has to
+do date arithmetic per row inside a query.
+
+The observation underneath still holds: no service calls `GetNowExpression()` and only
+`BaseApiController` calls `GetRegexpCondition()`. The dialect's real consumers are the
+plumbing, not the services — which is the right shape, now that the services no longer
+have engine-specific SQL to hide.
 
 - **Transactions are applied inconsistently, and the highest-risk operations are the
   unwrapped ones.** `MergeProducts`, `CompactStockEntries`, `ChoresService::
@@ -253,8 +302,8 @@ AddNotFulfilledProductsToShoppingList` (no try/catch), `FilesApiController` (thr
 
 ## Suggested order of remedial work
 
-1. **Defects table** — one sitting; items 1–3 before anything else (3 blocks the
-   PostgreSQL story; 1 and 2 are one-liners with real impact).
+1. ~~**Defects table** — one sitting; items 1–3 before anything else (3 blocks the
+   PostgreSQL story; 1 and 2 are one-liners with real impact).~~ **Done** (`36650cd`).
 2. **Cold-start rework** (viewcache/route-cache into the image, migrations to an
    init step, advisory lock) — this is the scale-to-zero enabler and should precede
    serious k3s work.
@@ -287,4 +336,7 @@ comment-only pass):
   `purchase.js`; works only because the Blade view also pulls in `purchase.js`
   (see the frontend section's `purchase.js` finding).
 - `services/FilesService.php:54,70` — the double `$bestFitHeight` test and the
-  unimported `ImageResizeException` (defect 10 in the table above).
+  unimported `ImageResizeException` (defect 10 in the table above). **Fixed.**
+
+The other four items in this list are still open — they were not part of the defects
+table and remain untouched.
