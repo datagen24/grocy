@@ -42,6 +42,25 @@ judged against here, and they are stricter than they look:
 
 The [pull request template](PULL_REQUEST_TEMPLATE.md) asks for exactly those three.
 
+## API documentation
+
+The PHP side of the codebase carries PHPDoc throughout, and phpDocumentor turns it into
+a browsable reference:
+
+```
+docker run --rm -v "$(pwd):/data" phpdoc/phpdoc:3
+```
+
+That reads [phpdoc.dist.xml](../phpdoc.dist.xml) and writes `.phpdoc/build`; open
+`.phpdoc/build/index.html`. Both the output and the cache are gitignored — the
+documentation is a build artifact and is regenerated rather than committed.
+
+It covers the four PSR-4 roots (`controllers/`, `services/`, `middleware/`, `helpers/`),
+the barcode lookup plugins and the entry points at the repository root. Blade templates,
+migrations and `.devtools/` are left out. To change any of that, edit `phpdoc.dist.xml`;
+to change it only for yourself, drop a `phpdoc.xml` next to it, which phpDocumentor
+prefers and which is gitignored.
+
 ## Licensing
 
 Two layers, because this is a fork rather than an original work:

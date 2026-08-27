@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpdocumentor
+	configVersion="3"
+	xmlns="https://www.phpdoc.org"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="https://www.phpdoc.org https://docs.phpdoc.org/latest/phpdoc.xsd">
+
+	<!--
+		Shared phpDocumentor defaults, so that everyone with the repository generates the
+		same browsable API documentation. See "API documentation" in
+		.github/CONTRIBUTING.md for the command; output lands in .phpdoc/build.
+
+		This is the *dist* config. phpDocumentor prefers a phpdoc.xml in the working
+		directory when one exists, so anyone wanting different settings can drop one in
+		without touching this file - phpdoc.xml is gitignored for exactly that purpose.
+
+		Output and cache land in .phpdoc/ (gitignored): generated documentation is a
+		build artifact and is deliberately not committed.
+	-->
+
+	<title>grocy (datagen24 fork)</title>
+
+	<paths>
+		<output>.phpdoc/build</output>
+		<cache>.phpdoc/cache</cache>
+	</paths>
+
+	<!-- Mirrors version.json; bump both together on a release -->
+	<version number="4.6.0">
+		<api>
+			<!--
+				The four PSR-4 roots from composer.json (Grocy\Controllers, Grocy\Services,
+				Grocy\Middleware, Grocy\Helpers), the barcode lookup plugins, and the
+				procedural entry points at the repository root. helpers/extensions.php is a
+				file of global functions rather than a class, and is documented as such.
+
+				Deliberately left out:
+				- views/       96 Blade templates, no PHP classes
+				- packages/    Composer dependencies (this project's vendor dir)
+				- migrations/  numbered schema scripts rather than an API surface
+				- .devtools/   local data generation and difftest helpers
+				- data/        runtime state
+			-->
+			<source dsn=".">
+				<path>controllers</path>
+				<path>services</path>
+				<path>middleware</path>
+				<path>helpers</path>
+				<path>plugins</path>
+				<path>app.php</path>
+				<path>routes.php</path>
+				<path>config-dist.php</path>
+			</source>
+
+			<extensions>
+				<extension>php</extension>
+			</extensions>
+
+			<!-- Private members are documented too: this is an internal reference, not a
+			     published library API, and the service layer's private helpers matter -->
+			<visibility>public</visibility>
+			<visibility>protected</visibility>
+			<visibility>private</visibility>
+		</api>
+	</version>
+</phpdocumentor>

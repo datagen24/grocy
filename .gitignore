@@ -2,3 +2,5 @@ embedded.txt
 /.release
 /packages
 /public/packages
+/.phpdoc
+/phpdoc.xml
