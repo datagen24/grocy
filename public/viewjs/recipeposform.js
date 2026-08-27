@@ -5,6 +5,10 @@
 // saved quantity unit must be kept instead of resetting to the product's default
 Grocy.RecipePosFormInitialLoadDone = false;
 
+// Form submit: POSTs objects/recipes_pos (create) or PUTs objects/recipes_pos/{id} (edit, id from Grocy.EditObjectId;
+// the owning recipe comes from Grocy.EditObjectParentId). In the InplaceAddBarcodeToExistingProduct flow the scanned
+// barcode (from the URI) is additionally saved to objects/product_barcodes. On success the parent recipe form is
+// notified (IngredientsChanged) and the modal is closed
 $('#save-recipe-pos-button').on('click', function(e)
 {
 	e.preventDefault();
@@ -78,6 +82,9 @@ $('#save-recipe-pos-button').on('click', function(e)
 	}
 });
 
+// Product selection: loads stock/products/{id} to reload the amount/quantity unit picker for that product,
+// presets the "don't check stock fulfillment" checkbox from the product's setting (create mode) and
+// defaults the quantity unit to the product's stock unit (unless "only check single unit in stock" is on)
 Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 {
 	var productId = $(e.target).val();
@@ -120,6 +127,8 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 
 Grocy.FrontendHelpers.ValidateForm('recipe-pos-form');
 
+// Initial focus/prefill: trigger the product change handler when a product is preselected
+// (product URI parameter or edit mode / an active picker workflow), otherwise focus the product picker
 if (!Grocy.Components.ProductPicker.InAnyFlow())
 {
 	if (GetUriParam("product") !== undefined || Grocy.EditMode == "edit")
@@ -157,6 +166,7 @@ if (Grocy.EditMode == "create")
 	Grocy.RecipePosFormInitialLoadDone = true;
 }
 
+// Amount field focus: bounce back to the product picker while no product is selected, otherwise select-all
 $('#display_amount').on('focus', function(e)
 {
 	if (Grocy.Components.ProductPicker.GetValue().length === 0)
@@ -172,6 +182,7 @@ $('#display_amount').on('focus', function(e)
 	}
 });
 
+// Live validation while typing / on unit change
 $('#recipe-pos-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('recipe-pos-form');
@@ -182,6 +193,7 @@ $('#qu_id').change(function(event)
 	Grocy.FrontendHelpers.ValidateForm('recipe-pos-form');
 });
 
+// Enter submits the form (when valid)
 $('#recipe-pos-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -199,6 +211,8 @@ $('#recipe-pos-form input').keydown(function(event)
 	}
 });
 
+// "Only check if any amount is in stock": allows any quantity unit (no conversion to the stock unit needed)
+// and relaxes the minimum amount; unchecking restores the product's default unit
 $("#only_check_single_unit_in_stock").on("change", function()
 {
 	if (this.checked)

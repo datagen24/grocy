@@ -390,6 +390,9 @@ $(".calendar").each(function()
 	});
 });
 
+// "Add recipe" (day header button): open the add-recipe modal preset to that day
+// (the shared #day input and datetimepicker are moved into the corresponding form first,
+// since the modals share these elements)
 $(document).on("click", ".add-recipe-button", function(e)
 {
 	var day = $(this).parent().parent().data("date");
@@ -406,6 +409,7 @@ $(document).on("click", ".add-recipe-button", function(e)
 	Grocy.IsMealPlanEntryEditAction = false;
 });
 
+// "Add note" (day header menu): open the add-note modal preset to that day
 $(document).on("click", ".add-note-button", function(e)
 {
 	var day = $(this).parent().parent().parent().data("date");
@@ -422,6 +426,7 @@ $(document).on("click", ".add-note-button", function(e)
 	Grocy.IsMealPlanEntryEditAction = false;
 });
 
+// "Add product" (day header menu): open the add-product modal preset to that day
 $(document).on("click", ".add-product-button", function(e)
 {
 	var day = $(this).parent().parent().parent().data("date");
@@ -438,6 +443,9 @@ $(document).on("click", ".add-product-button", function(e)
 	Grocy.IsMealPlanEntryEditAction = false;
 });
 
+// Edit an entry: reuse the matching add-modal, prefilled from the entry JSON stored
+// on the calendar element (data-meal-plan-entry); switches to edit mode via
+// Grocy.IsMealPlanEntryEditAction / Grocy.MealPlanEntryEditObject
 $(document).on("click", ".edit-meal-plan-entry-button", function(e)
 {
 	var mealPlanEntry = JSON.parse($(this).parents(".fc-h-event:first").attr("data-meal-plan-entry"));
@@ -484,6 +492,8 @@ $(document).on("click", ".edit-meal-plan-entry-button", function(e)
 	Grocy.MealPlanEntryEditObject = mealPlanEntry;
 });
 
+// "Copy this day" (day header menu): open the copy-day modal (source day preset,
+// target day picked via DateTimePicker2)
 $(document).on("click", ".copy-day-button", function(e)
 {
 	var day = $(this).parent().parent().parent().data("date");
@@ -496,6 +506,7 @@ $(document).on("click", ".copy-day-button", function(e)
 	Grocy.IsMealPlanEntryEditAction = false;
 });
 
+// Focus (and camera barcode scanner) handling when the modals open
 $("#add-recipe-modal").on("shown.bs.modal", function(e)
 {
 	if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING)
@@ -526,6 +537,7 @@ $("#copy-day-modal").on("shown.bs.modal", function(e)
 	Grocy.Components.DateTimePicker2.GetInputElement().focus();
 });
 
+// Delete an entry of any type (DELETE /api/objects/meal_plan/{id}) and reload
 $(document).on("click", ".remove-recipe-button, .remove-note-button, .remove-product-button", function(e)
 {
 	var mealPlanEntry = JSON.parse($(this).parents(".fc-h-event:first").attr("data-meal-plan-entry"));

@@ -72,6 +72,7 @@ $(document).on('click', '.chore-delete-button', function(e)
 	});
 });
 
+// Toggle inclusion of disabled chores via page reload (server-side filter through the include_disabled URI parameter)
 $("#show-disabled").change(function()
 {
 	if (this.checked)
@@ -84,11 +85,13 @@ $("#show-disabled").change(function()
 	}
 });
 
+// Reflect the current include_disabled URI parameter in the checkbox state
 if (GetUriParam('include_disabled'))
 {
 	$("#show-disabled").prop('checked', true);
 }
 
+// Open the merge chores modal, prefilled with the clicked row's chore as the one to keep
 $(".merge-chores-button").on("click", function(e)
 {
 	var choreId = $(e.currentTarget).attr("data-chore-id");

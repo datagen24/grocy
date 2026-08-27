@@ -369,6 +369,14 @@ __n = function (number, singularForm, pluralForm, isQu = false)
 	}
 }
 
+/**
+ * Renders all <time class="timeago" datetime="..."> elements below rootSelector
+ * as relative time ("x days ago" via moment.fromNow()), "Today", or the special
+ * labels "Never"/"Unknown" for the sentinel dates 2999-12-31 / 2888-12-31;
+ * for elements with class "timeago-date-only" the preceding element's text is
+ * truncated to the date part (first 10 characters, YYYY-MM-DD).
+ * @param {string} [rootSelector="#page-content"] Selector to limit the processed subtree
+ */
 RefreshContextualTimeago = function (rootSelector = "#page-content")
 {
 	$(rootSelector + " time.timeago").each(function ()
@@ -427,6 +435,7 @@ RefreshContextualTimeago = function (rootSelector = "#page-content")
 }
 RefreshContextualTimeago();
 
+// Global defaults for toastr notifications (used for all success/error toasts)
 toastr.options = {
 	toastClass: 'alert',
 	closeButton: true,

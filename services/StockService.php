@@ -1295,6 +1295,7 @@ class StockService extends BaseService
 
 			if ($productDetails->product->enable_tare_weight_handling == 1)
 			{
+				// Pass the gross amount through unchanged - ConsumeProduct does the tare weight math itself
 				$bookingAmount = $newAmount;
 			}
 

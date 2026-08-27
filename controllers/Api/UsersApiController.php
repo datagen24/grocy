@@ -276,6 +276,10 @@ class UsersApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * PUT /api/user/settings/{settingKey} - stores the body field "value" as the given
+	 * setting of the current user. Returns 204 on success or a 400 error response.
+	 */
 	public function SetUserSetting(Request $request, Response $response, array $args)
 	{
 		try
@@ -291,6 +295,10 @@ class UsersApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * DELETE /api/user/settings/{settingKey} - deletes the given setting of the current
+	 * user. Returns 204 on success or a 400 error response.
+	 */
 	public function DeleteUserSetting(Request $request, Response $response, array $args)
 	{
 		try

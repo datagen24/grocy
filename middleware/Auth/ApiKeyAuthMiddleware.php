@@ -7,6 +7,14 @@ use Grocy\Services\ApiKeyService;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Authenticates API requests via an API key against the keys managed by
+ * ApiKeyService. Not selected directly via GROCY_AUTH_CLASS, but used as a
+ * building block by DefaultAuthMiddleware and ReverseProxyAuthMiddleware.
+ * The key is expected in the configured header (default GROCY-API-KEY), as
+ * a query parameter of the same name, or - for the calendar iCal route -
+ * as a special purpose key in the "secret" query parameter.
+ */
 class ApiKeyAuthMiddleware extends BaseAuthMiddleware
 {
 	public function __construct(Container $container, ResponseFactoryInterface $responseFactory)
