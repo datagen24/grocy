@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: If you've found something that does not work, please report it to help improve Grocy
+about: Something does not work
 title: 'Bug: '
 labels: bug
 assignees: ''
@@ -8,15 +8,19 @@ assignees: ''
 ---
 
 <!--
-Please make sure to:
+Please include:
 
-- Describe the bug as detailed as possible by providing the exact steps how to reproduce it
-- Attach screenshots where useful
-- Check if the problem was maybe already reported or fixed by searching open and also already closed requests here
-- Keep it to one topic per request
-- Exclude any AI generated content and only include what you truly understand yourself
+- The exact steps to reproduce it, and what you expected instead
+- Which database engine you are on - SQLite or PostgreSQL. This fork supports both and a
+  surprising number of bugs turn out to live on only one of them
+- Screenshots where they help
 
-Please also try to reproduce the problem on the pre-release demo: => https://demo-prerelease.grocy.info
-- Use a private demo instance to make your example persistent
-- If the problem is not reproducible there, it's most likely not a bug - please use the r/grocy subreddit for general help and usage questions: => https://www.reddit.com/r/grocy
+Is it a bug in this fork, or in grocy itself?
+
+- If it reproduces on the upstream demo (https://demo-prerelease.grocy.info), it belongs
+  upstream: https://github.com/grocy/grocy/issues/new/choose
+- Anything touching PostgreSQL, or anything from docs/plans/, is fork-only and will not
+  reproduce there - report it here
+
+Please search open and closed issues first, and keep it to one topic per report.
 -->

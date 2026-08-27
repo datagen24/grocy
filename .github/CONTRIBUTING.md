@@ -17,8 +17,13 @@ community project.
 
 ## Pull requests
 
-Not actively sought — this repository exists to serve one deployment — but not refused
-either. If you are running this fork and have a fix, open it.
+Reasonable contributions are welcome. This repository exists to serve one deployment, so
+the roadmap is driven by that — but if you are running this fork and have a fix or an
+improvement, open it.
+
+**AI-assisted contributions are fine.** What matters is whether the change is correct and
+whether you verified it, not how it was written. The verification bar below is the same
+either way, and it is the part that is not optional.
 
 The ground rules in [docs/plans/README.md](../docs/plans/README.md) are what a change is
 judged against here, and they are stricter than they look:
@@ -36,3 +41,16 @@ judged against here, and they are stricter than they look:
   engines unless there is a stated reason they cannot.
 
 The [pull request template](PULL_REQUEST_TEMPLATE.md) asks for exactly those three.
+
+## Licensing
+
+Two layers, because this is a fork rather than an original work:
+
+- **Everything inherited from upstream grocy stays MIT.** Upstream's copyright and
+  permission notice in [LICENSE.md](../LICENSE.md) is retained as MIT requires, and
+  nothing here changes the terms on code that came from there.
+- **Changes made in this fork are copyright their author and licensed under the BSD
+  4-clause license.** MIT permits sublicensing, so a derivative may carry different terms
+  provided the original notice travels with it.
+
+By opening a pull request you agree your contribution can be released under those terms.
