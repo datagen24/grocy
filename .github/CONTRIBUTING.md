@@ -49,8 +49,9 @@ Two layers, because this is a fork rather than an original work:
 - **Everything inherited from upstream grocy stays MIT.** Upstream's copyright and
   permission notice in [LICENSE.md](../LICENSE.md) is retained as MIT requires, and
   nothing here changes the terms on code that came from there.
-- **Changes made in this fork are copyright their author and licensed under the BSD
-  4-clause license.** MIT permits sublicensing, so a derivative may carry different terms
-  provided the original notice travels with it.
+- **Changes made in this fork are © Steven Peterson under the BSD 3-Clause license.** MIT
+  permits sublicensing, so a derivative may carry different terms provided the original
+  notice travels with it.
 
-By opening a pull request you agree your contribution can be released under those terms.
+Both texts are in [LICENSE.md](../LICENSE.md). By opening a pull request you agree your
+contribution can be released under those terms.
