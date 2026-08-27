@@ -269,3 +269,22 @@ AddNotFulfilledProductsToShoppingList` (no try/catch), `FilesApiController` (thr
 
 Items 3–6 are each a focused session; none block the roadmap plans, but 4–6
 specifically de-risk them.
+
+## Latent oddities surfaced by the documentation pass
+
+Found while documenting (annotated in-code, deliberately not fixed in a
+comment-only pass):
+
+- `public/viewjs/userform.js` — sets `Grocy.DeleteUserePictureOnSave` (typo, extra
+  "e") where the submit handler checks `DeleteUserPictureOnSave`: choosing a new
+  picture likely fails to cancel a pending "delete current picture" flag.
+- `public/viewjs/tasks.js` — the user-filter handler builds an anchored regex in an
+  if/else and never uses it; the filter silently falls back to substring search.
+- `controllers/Api/StockApiController.php` — `ConsumeProduct` reads
+  `transaction_type` in one place and `transactiontype` in another; one spelling can
+  never match a real request body.
+- `public/viewjs/stockoverview.js` — calls `UndoStockTransaction()` defined in
+  `purchase.js`; works only because the Blade view also pulls in `purchase.js`
+  (see the frontend section's `purchase.js` finding).
+- `services/FilesService.php:54,70` — the double `$bestFitHeight` test and the
+  unimported `ImageResizeException` (defect 10 in the table above).
