@@ -100,16 +100,41 @@ compared against a deliberate expectation rather than against whatever falls out
 
 1. **Do roll-ups aggregate the whole subtree or only direct children?** I propose whole
    subtree for stock aggregation and for `cumulate_min_stock_amount_of_sub_products`.
+
+   > **Response:** Whole subtree — a partial tree is worse than no tree.
 2. **Can a product with its own children also be a child?** Required for depth > 2. Any
    reason to forbid mixed nodes?
+
+   > **Response:** None — they must be allowed (depth > 2 requires them). The
+   > fixtures should include a middle node that itself holds stock, because that is
+   > where aggregation is most likely to double-count.
 3. **Cap the depth?** A cycle check is required for correctness; a depth cap is only
    guard-rail. I lean toward a cap of 5, configurable, mainly so a bad import cannot
    produce a 200 deep chain that makes every view slow.
+
+   > **Response:** Yes, cap ~5 — and prefer a plain hard-coded sane cap over a
+   > config knob if reaching config from the trigger is awkward: dual-engine
+   > trigger-pair simplicity wins. The cycle check is the correctness item; copy the
+   > recipe guards as planned.
 4. **Substitution at depth.** When a grandparent is out of stock, should
    `products_current_substitutions` reach past direct children into grandchildren?
+
+   > **Response:** Whole subtree, ordered by depth (nearest first).
+   > Direct-children-only would be the one roll-up that stops early, violating Q1's own answer.
 5. **Is there a real use case beyond two levels** for you specifically? If the answer is
    "brand > variant > size", that is three, and worth designing for concretely rather
    than in the abstract.
+
+   > **Response:** Write the concrete tree down before starting. This is the largest
+   > fixed cost on the roadmap and its value is proportional to how deep the real
+   > data goes — decide on data, not symmetry with 08.
+
+## Review notes
+
+- Middle-node semantics leak into the API: `stock_current` gaining aggregated rows for
+  intermediate parents changes what `/stock` returns for consumers like the Home
+  Assistant integration — technically additive (new rows, same shape), but it should
+  be a deliberate decision in this plan's API section, not a side effect.
 
 ## Effort
 

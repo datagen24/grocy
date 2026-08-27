@@ -115,6 +115,12 @@ A print action on the locations list and form, mirroring products.
    are printed once and expected to last. It is one column and one migration now, versus
    reprinting every label later. Note it only needs to apply to physically labelled
    entities.
+
+   > **Response:** Yes, `locations.code_uuid` — and decide the encoding explicitly:
+   > `grcy:l:{uuid}` with the uuid *as* the id (an indexed lookup, and a Grocycode
+   > parser that accepts non-numeric ids) is cleaner than appending the uuid as
+   > extra data while the row id stays authoritative. Labels carry only the stable
+   > identifier.
 2. **What shape should the machine reporting endpoint take?** The interesting one. A camera
    reporting "I see 3 of product X at location 7" is an *observation*, and Grocy has no
    concept of one — it has authoritative stock that humans mutate. Options range from
@@ -122,13 +128,29 @@ A print action on the locations list and form, mirroring products.
    observation silently corrupts stock) to recording observations separately and letting a
    human accept them (safer, more work, and a new concept). Worth deciding once you know
    what the camera side can actually report, and possibly worth splitting into its own plan.
+
+   > **Response:** Agreed — out of scope here, its own plan once the camera exists.
+   > When it comes, the observation-then-accept shape (a staging record a human
+   > confirms) is the one that cannot silently corrupt stock; a camera writing
+   > straight through the inventory endpoint is the trapdoor to avoid.
 3. **Add `QR` to `GROCYCODE_TYPE`?** I think yes, specifically for this use case. Needs a
    check that the bundled barcode library can produce it.
+
+   > **Response:** Yes — and expect a new dependency: the bundled generation is
+   > 1D/DataMatrix oriented, and a GD/SVG-capable QR library (e.g.
+   > chillerlan/php-qrcode) is the usual PHP answer. Verify before assuming.
 4. **Should other master data get codes at the same time?** `shopping_locations`,
    `quantity_units`, `product_groups` are the same one-line change. Cheap together,
    another round of work later.
+
+   > **Response:** Just locations now. `quantity_units` and `product_groups` never
+   > get physical labels; add `shopping_locations` only if a use appears.
 5. **Does the label need the tree path** or just the name? Path is more useful physically
    but longer on a small label. Interacts with [08](08-nested-locations.md).
+
+   > **Response:** The human-readable text line shows the path once 08 lands; the
+   > encoded payload stays the bare uuid. Never encode display strings into the
+   > machine side.
 
 ## Effort
 

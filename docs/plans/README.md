@@ -1,8 +1,8 @@
 # Fork roadmap
 
 Action plans for the work this fork exists to do. Each is a draft for review, not a
-commitment — the **Open questions** sections are numbered so they can be commented on
-individually.
+commitment — the **Open questions** sections are numbered, and each carries its review
+answer inline as a `> **Response:**` block, so question and answer read together.
 
 ## Status
 
@@ -133,7 +133,7 @@ as parallel sessions.
 
 - **14 piece 2** — the response-contract snapshot, now that 11 has stabilized the
   failure paths it records. This freezes the API surface 02 builds on.
-- **02 MCP, read-only v1** — separate container per the review comments, bearer key
+- **02 MCP, read-only v1** — separate container per its Q6 response, bearer key
   behind the credential→user seam per the IdP note.
 - **05 A + C** — store on lists, default list per product/recipe. B (store-layout
   ordering) waits for real shopping trips to prove it wanted.

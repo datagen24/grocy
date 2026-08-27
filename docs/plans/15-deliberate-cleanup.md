@@ -15,9 +15,9 @@ defer forever. They also share a property that makes batching them the right cal
 half of them are **breaking**, and breaking changes want to happen together, once, with a
 changelog entry, rather than dribbling out attached to unrelated features.
 
-[review-comments](review-comments.md) already established this for the
-`shopping_locations` → `stores` rename (05-Q4: *"Park it on an explicit 'breaking changes,
-batched' list for the fork rather than in any feature plan"*). This is that list.
+The review response to [05](05-store-shopping-lists.md) Q4 already established this for
+the `shopping_locations` → `stores` rename: park it on an explicit "breaking changes,
+batched" list for the fork rather than in any feature plan. This is that list.
 
 ## Today
 
@@ -57,10 +57,8 @@ HTTP status — and `GetParsedAndFilteredRequestBody` already throws a raw
 inspection only, because no `ldap` extension was available in the fixing environment. That
 is the argument for removal rather than maintenance: a security-relevant code path that
 cannot be exercised is a liability, and `ReverseProxyAuthMiddleware` plus an OAuth proxy
-at the ingress is both the deployment-appropriate answer and the direction
-[review-comments](review-comments.md) records for the IdP future state in
-[02](02-mcp-endpoint.md) (02-Q1: *"an OAuth proxy at the ingress (which grocy's
-`ReverseProxyAuthMiddleware` already knows how to trust) is the household-scale answer"*).
+at the ingress is both the deployment-appropriate answer and the direction the IdP
+future-state note in [02](02-mcp-endpoint.md) records.
 
 **B2's context.** The cookie is set by a bare `setcookie()` outside PSR-7
 (`BaseAuthMiddleware::SetSessionCookie`), with `PHP_INT_MAX` as the expiry and no flags at
@@ -259,7 +257,7 @@ than an afternoon.
 **Against the feature roadmap: blocks nothing, de-risks 02.** B3 interacts with
 [05 store shopping lists](05-store-shopping-lists.md), which is the plan that made the
 rename tempting; 05 should ship using the existing name and this list should decide the
-rename separately, exactly as [review-comments](review-comments.md) concluded.
+rename separately, exactly as the response to 05's Q4 concluded.
 
 ## Open questions
 
@@ -269,12 +267,24 @@ rename separately, exactly as [review-comments](review-comments.md) concluded.
    explanation. Against that, it keeps a dead file in `middleware/Auth/` forever. I lean
    to the stub for one release, then deletion — but that only works if there is a release
    cadence to hang it on, which for a personal fork there may not be.
+
+   > **Response:** Delete outright — and put the guard in `ConfigurationValidator`,
+   > not a stub. "`AUTH_CLASS` does not resolve to a class — valid values are …;
+   > LDAP support was removed in this fork" is ten lines that turns *every* future
+   > bad auth class into a clear startup failure, forever, with no dead file in
+   > `middleware/Auth/`. It also sidesteps the release-cadence problem the stub
+   > depends on.
 2. **`SameSite`: `Lax` or `Strict`?** `Lax` is the safe default and keeps normal
    navigation working. `Strict` is better and would break any flow where grocy is reached
    from another origin — the iCal feed does not use cookies, but embedded install mode
    (`GROCY_IS_EMBEDDED_INSTALL`) might. I lean `Lax` unless embedded mode is confirmed
    unused. `Secure` should be conditional on the request being HTTPS rather than
    unconditional, since local plain-HTTP access is a real use case here.
+
+   > **Response:** `Lax`, `Secure` conditional on HTTPS, `HttpOnly` unconditional —
+   > as leant. One data point: embedded install mode is the desktop packaging
+   > serving same-origin on localhost, so even `Strict` would likely survive it, but
+   > `Lax` costs nothing and tolerates deep links arriving cross-context.
 3. **Should the session cookie expire?** Today it is `PHP_INT_MAX` and session validity is
    enforced server-side by `SessionService`. That is defensible — the server is the
    authority — but it means a stolen cookie is valid until the server-side session
@@ -282,12 +292,26 @@ rename separately, exactly as [review-comments](review-comments.md) concluded.
    session lifetime is more consistent; making it a session cookie unless
    "stay logged in" was ticked is more conventional. The current behaviour is not wrong,
    just unexamined.
+
+   > **Response:** Mirror the server-side session record: a session cookie (no
+   > `Expires`) when "stay logged in" is unticked; when ticked, set the cookie
+   > expiry to the server-side session lifetime — and if that lifetime is currently
+   > infinite, give it a bound (90 days, configurable) as part of this change. The
+   > server stays the authority; the cookie stops being a forever-token if stolen.
 4. **Is the PHP floor 8.4 or 8.5?** The review says the code floor is 8.4 while both
    declarations say 8.5. Lowering to 8.4 widens compatibility for no benefit this fork
    needs; raising the *code* to genuinely require 8.5 makes the declarations honest and
    costs nothing on a container deployment where the runtime is chosen at build time. I
    lean to keeping 8.5 and treating it as a real requirement, since this fork controls its
    own image — but that should be a decision, not the current accident.
+
+   > **Response:** 8.4 — against the lean. The deciding evidence arrived during the
+   > defects verification: the pin had to be temporarily relaxed to boot on a real
+   > 8.4 box, and real-hardware verification is now part of this fork's methodology.
+   > The code floor *is* 8.4; declaring 8.5 buys nothing today and taxes exactly the
+   > workflow that just proved its worth. Pin 8.4 in both places, keep shipping 8.5
+   > in the image, and raise the pin in the commit that first uses an 8.5 feature —
+   > that is the honest place for the bump.
 5. **Is the `shopping_locations` → `stores` rename worth doing at all?** ~250 references
    across 63 files, an `ExposedEntity` name, a column name on four tables and several
    views, and a break for the two known external consumers. Against: "shopping location"
@@ -297,17 +321,35 @@ rename separately, exactly as [review-comments](review-comments.md) concluded.
    additive, at the cost of two names in the schema permanently. I lean to the middle path
    if it happens at all, and to not doing it until something else forces the file to be
    opened.
+
+   > **Response:** No — not even the compatibility-view middle path, yet. The middle
+   > path pays "two names in the schema forever" to resolve a naming niggle, and
+   > every future migration, view, seed and plan then chooses which name to use.
+   > Ship 05 with `shopping_locations`; record the rename as declined unless a
+   > breaking batch happens for other reasons, in which case it rides along via the
+   > compatibility view.
 6. **Does `GetSystemInfo`'s `sqlite_version` key change name, or gain a sibling?**
    Renaming it is honest and breaks `/api/system/info` consumers. Adding
    `database_version` alongside and leaving `sqlite_version` reporting whatever SQLite the
    PHP build has is additive and preserves a field that is now meaningless on half of
    deployments. I lean to adding the new key and marking the old one deprecated in the
    spec, then removing it with the rest of the breaking batch.
+
+   > **Response:** Agreed — add `database_version` (engine name + version from
+   > `PDO::ATTR_SERVER_VERSION` on the live connection, which also answers C3 in the
+   > same change), deprecate `sqlite_version`, remove it with the batch.
 7. **Do the non-breaking and breaking halves ship together?** They are one plan for
    planning purposes, but the non-breaking half can land any time and the breaking half
    wants a version bump, a changelog entry, and a moment when nothing else is in flight.
    I lean to landing C1–C9 opportunistically and treating B1–B4 as a single deliberate
    release.
+
+   > **Response:** Agreed, ship the halves separately — and note the breaking batch
+   > just shrank: with Q4 resolved to 8.4 (non-breaking), Q5 declined, and Q1 a
+   > config-validation change, "breaking" is down to B1 + B2. That no longer needs a
+   > ceremonial release; land C1–C9 opportunistically as planned, and B1+B2 together
+   > as one ordinary, clearly changelogged change whenever 11's auth-adjacent work
+   > has the files open.
 
 ## Effort
 

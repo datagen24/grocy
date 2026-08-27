@@ -74,16 +74,32 @@ a group is short. Reusing the existing "below minimum stock" styling is the chea
 
    I lean to the first for v1, with the third as a follow-up. It keeps the change to one
    view and one column.
+
+   > **Response:** Option 1 for v1 — and keep group shortfalls in a **new** view
+   > (`product_groups_missing` or similar) rather than a third branch of
+   > `stock_missing_products`: that removes the `/stock/volatile` question entirely
+   > instead of resolving it carefully. The note-only row is a good follow-up once
+   > the feature has proven itself.
 2. **Does a group minimum interact with per product minimums, or override them?** I
    propose independent: a product below its own minimum is short regardless of group stock,
    and a group below its minimum is short regardless of individual products. Overlap is
    possible and probably fine.
+
+   > **Response:** Agreed, independent.
 3. **Should group stock count sub products?** If a group contains a parent product,
    presumably its children's stock counts toward the group. That falls out naturally if the
    branch aggregates through `products_resolved` — and becomes a real question once
    [07](07-nested-products.md) makes that recursive.
+
+   > **Response:** Aggregate per product, not via `stock_current`'s aggregated rows.
+   > Concrete trap: if the group sum is built from rows that already aggregate
+   > children into parents *and* the children are themselves in the same group, the
+   > stock counts twice. Sum each product's own non-aggregated stock across the
+   > group's members; that stays correct when 07 makes the tree deep.
 4. **Do inactive products count?** Proposing no, matching the existing branches'
    `IFNULL(p.active, 0) = 1`.
+
+   > **Response:** Agreed, exclude.
 
 ## Effort
 

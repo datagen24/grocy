@@ -206,32 +206,66 @@ any of them.
    cache under one base path, serve under another, and diff the rendered HTML — not to
    reason about it. If they are genuinely irrelevant, the cache is a build artifact and
    this whole plan gets simpler.
+
+   > **Response:** Run exactly the empirical check proposed — compile under one base
+   > path, serve under another, diff the HTML. Expect "not load-bearing" (the
+   > `$U`-closure evidence is strong). If it somehow fails, the fallback is warming
+   > in the initContainer per deployment instead of the image — the plan survives,
+   > one layer moves.
 2. **Should the baked cache directory be read-only, or writable as a fallback?**
    Read-only turns a missed template into a 500 at exactly the moment someone opens that
    page, which is a bad time to find out. Writable hides the problem and quietly
    reintroduces a mutable path. I lean read-only *plus* a warmer that fails the build if
    it did not compile every file under `views/`, which moves the discovery to build time
    where it belongs.
+
+   > **Response:** Agreed — read-only, with a warmer that fails the build unless
+   > every file under `views/` compiled. One addition: the warmer must also
+   > pre-generate the **HTMLPurifier definition cache** (one dummy purify call at build
+   > time does it — definitions depend only on the library version and config).
+   > Otherwise the first JSON write request hits the read-only serializer path, and
+   > verification check 4 fails on the first POST rather than on a missed template.
 3. **Where does the SQLite lock file live?** `flock` needs a real file. Next to the
    database is the obvious answer and inherits its permissions, but it puts a second file
    in a directory that some deployments treat as "the database, nothing else". The
    alternative is locking the database file itself, which is safe with `flock` but
    surprising to read.
+
+   > **Response:** Sibling file (`<db>.migrate.lock`), not `flock` on the database
+   > file itself — SQLite holds its own locks on that file, and "safe but
+   > surprising" is the wrong property for locking code. The k3s target is
+   > PostgreSQL anyway; the SQLite path is a dev convenience, and plain beats
+   > clever.
 4. **Keep a web-triggered migration fallback?** Removing it entirely is cleanest and
    matches the deployment target. Keeping it behind a setting
    (`MIGRATE_ON_ROOT_REQUEST`, default off) costs almost nothing and keeps the fork
    usable in a stock container image with no init step. I lean to keeping the setting,
    defaulting off, precisely so the default is the immutable one.
+
+   > **Response:** Agreed — `MIGRATE_ON_ROOT_REQUEST`, default off. Refinement: the
+   > Q6 fail-fast message should name the setting and `bin/grocy-migrate`, so the
+   > failure is its own documentation.
 5. **Does the migration CLI also warm the cache?** They are different lifecycles — one is
    per image build, the other is per deployment — but a single `bin/grocy-init` that does
    both is one less thing to forget. I lean to keeping them separate commands and letting
    the image build and the initContainer each call the one they need.
+
+   > **Response:** Agreed, keep them separate. They run at different lifecycle
+   > moments (image build vs deployment); a combined `grocy-init` blurs exactly the
+   > distinction this plan exists to draw.
 6. **What happens when the app boots against a database that is behind the code?**
    Today it silently migrates. With migrations moved out, the options are: fail fast with
    a clear message, serve anyway and break unpredictably, or check the `migrations` table
    on boot and refuse. Failing fast is the only honest one, but it needs a cheap check —
    one `SELECT MAX(migration)` per request is probably acceptable, and probably wants to
    be behind the same setting as Q4.
+
+   > **Response:** Fail fast, unconditionally — do not tie the *check* to the Q4
+   > setting; only auto-migration is opt-in. One `SELECT MAX(migration)`, memoized
+   > per request, is noise at household scale. Two additions: also fail on a
+   > database *ahead* of the code (a rollback scenario that would otherwise break
+   > unpredictably), and if the per-request cost ever bothers anyone, APCu is the
+   > answer then — not now.
 
 ## Effort
 

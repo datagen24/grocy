@@ -118,11 +118,39 @@ No change. Same three routes, same headers, same 404 behaviour. `files` is delib
 
    I lean to **(a)** — a lingering filesystem fallback is a trapdoor back to needing a PVC,
    which is the thing this removes.
+
+   > **Response:** (a), and the k3s context strengthens it: run the import as a
+   > one-off Job against the PVC before flipping the Deployment to the volume-less spec.
+   > Make the importer idempotent (skip rows that already exist with identical size)
+   > so a crashed Job can simply re-run. A read-through fallback means the PVC can
+   > never be deleted with confidence.
 2. **Size cap.** Proposing `FILE_STORAGE_MAX_SIZE_MB`, default 64. Not about OOM on 16 GB,
    but `userfiles` and `equipmentmanuals` accept arbitrary uploads and a bound you can raise
    beats an unbounded read.
+
+   > **Response:** Yes — and validate it against PHP's own `upload_max_filesize` /
+   > `post_max_size` at startup: a `FILE_STORAGE_MAX_SIZE_MB` larger than what PHP
+   > accepts is a lie, and one smaller is the real bound. Report the effective
+   > value.
 3. **Reverse migration?** Proposing not to build one. `pg_dump` plus a script is a later
    problem if it ever comes up.
+
+   > **Response:** Agreed, don't build it. `COPY (SELECT content ...) TO` plus a
+   > shell loop covers the contingency.
+
+## Review notes
+
+- `Create` vs `Write` semantics: implement `Write` as `INSERT ... ON CONFLICT
+  (file_group, name) DO UPDATE` so overwrite is atomic; `Create` as a plain insert
+  letting the unique constraint signal "exists". Cheaper and more correct than
+  exists-then-write.
+- The `files` table will be the first engine-exclusive table. Check that
+  `.devtools/pgsql/difftest.php` and `DatabaseImporter` tolerate a table that exists on
+  one engine only, and note the exception in `db/pgsql/README.md` so the "every
+  migration works on both engines" rule has its documented exemption.
+- Thumbnails written on first request are a runtime DB write from a GET path. Harmless
+  here, but worth a one-line comment in the code, since "GETs don't write" is otherwise
+  a nice invariant.
 
 ## Effort
 

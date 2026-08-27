@@ -182,9 +182,9 @@ dependents.** Three separate things in the roadmap already assume it exists:
 
 - [07](07-nested-products.md)'s "Verification" section says to extend `.devtools/pgsql/`
   with a three-level-tree fixture *before touching anything*. That is this plan.
-- [review-comments](review-comments.md) makes the same point about
-  [08](08-nested-locations.md), and recommends the fixture suite before the
-  recursive-hierarchy work generally.
+- The review comments in [08](08-nested-locations.md) make the same point, and the
+  roadmap's order of operations puts the fixture suite before the recursive-hierarchy
+  work generally.
 - [02 MCP](02-mcp-endpoint.md) is the reason the response-contract snapshot is worth
   building at all: it puts a second consumer on an API whose wire format is an accident of
   the schema.
@@ -211,18 +211,32 @@ it worked.
    `difftest.php`'s normalisation logic and can parse the seed headers properly rather
    than with `grep`. I lean to a thin bash script that orchestrates and PHP that compares,
    which is roughly what exists already — the missing part is only the orchestration.
+
+   > **Response:** Agreed — thin bash orchestrator, PHP comparator; seed-header
+   > parsing belongs in PHP, not grep.
 2. **What is the fixture?** Committed `.sql` seeds are the most legible and match the
    existing `trigger-tests/` convention. A checked-in SQLite file is faster to load and
    harder to review. [04](04-seed-datasets.md)'s name-keyed importer would be the most
    reusable but does not exist yet, and building this plan on an unbuilt one is backwards.
    I lean to committed `.sql` seeds now, with the option to regenerate them from 04's
    importer later. Note that the demo data generator is *not* an option on PostgreSQL.
+
+   > **Response:** Committed `.sql` seeds, and agreed on not building this on 04's
+   > unbuilt importer. Regenerating seeds *from* 04 later stays attractive precisely
+   > because committed SQL keeps the current fixtures legible in the meantime.
 3. **Does CI get a PostgreSQL service container, and where does CI run?** There is no
    `.github/workflows/` directory today — the fork has never had CI. A service container
    is standard and free on GitHub Actions. The question is really whether CI runs there at
    all, given this is a personal fork deployed to a private k3s cluster; a git hook or a
    local `make check` may be the honest answer, in which case "minimal CI" means "one
    command a human runs" rather than a workflow file.
+
+   > **Response:** Firmer than the hedge: GitHub Actions, with a PostgreSQL service
+   > container. This fork's workflow is already PR-driven, and a suite that runs on
+   > every PR without local discipline is worth *more* to a solo maintainer — there
+   > is no second person to catch the skipped local run. Keep `make check` (or the
+   > runner directly) as the local entry point; the workflow file just calls it.
+   > Piece 2 stays local until stable, as planned.
 4. **Do the two accepted engine differences need an exemption at the type level?**
    `products_average_price.price` differs in the last bit, which is a value difference, not
    a type one — so probably not. `chores.start_date` differs in *rendering* of the same
@@ -231,21 +245,39 @@ it worked.
    a type difference and would fail a type-level snapshot. That view is not in
    `ExposedEntity` and may not be reachable from any route — worth confirming before
    designing an exemption mechanism nothing needs.
+
+   > **Response:** Confirm reachability, then refuse to build the mechanism. If
+   > `qu_factor_*` is unreachable, nothing needs it; and if a type difference
+   > surfaces on a reachable route later, the porting rules say that is a port bug —
+   > fix the view (a `CAST`), don't exempt it. An exemption mechanism is where
+   > wire-format bugs go to become permanent.
 5. **How much of the API does the contract snapshot cover?** All ~74 routes is the
    complete answer and is mostly mechanical, since 40-odd of them are the generic
    `/api/objects/{entity}` shape. The stock, recipes and chores endpoints are the ones
    with hand-built responses and the ones where a change is most likely — starting there
    and expanding is a reasonable staging, as long as the gap is recorded rather than
    forgotten.
+
+   > **Response:** All ~74 from the start. The generic 40-odd are one loop over the
+   > entity enum, so full coverage is nearly free; staging by hand-built-first is
+   > fine as implementation order within one sitting, not as a scope decision.
 6. **Are snapshots committed, or generated and compared in-place?** Committed golden files
    make the diff show up in code review, which is the whole point — a reviewer sees "this
    PR changes the shape of `/api/stock`" without running anything. They also add churn and
    invite blind regeneration. I lean to committed, with the regeneration command named in
    the failure message so at least the blind regeneration is deliberate.
+
+   > **Response:** Committed golden files — the diff appearing in the PR is the
+   > feature, and naming the regeneration command in the failure message is the
+   > right mitigation. There is no better one.
 7. **Where do the original difftest seeds live?** The PostgreSQL port was verified with
    seeds that are not in the repository. Recovering them from that work's history is much
    cheaper than rewriting, and they encode which views matter. If they are genuinely gone,
    the effort estimate below roughly doubles.
+
+   > **Response:** Timebox recovery to an hour. The eight trigger-tests plus the
+   > README's fifteen documented hazards are map enough to rewrite from — bounded
+   > work, not doubled. Don't let archaeology block piece 1.
 
 ## Effort
 

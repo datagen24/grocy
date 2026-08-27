@@ -7,7 +7,8 @@ ceremony, with the deployment target being immutable, scale-to-zero pods on k3s.
 
 A companion documentation pass added PHPDoc/JSDoc coverage across controllers,
 services, middleware, helpers, and the browser-side JS; see the commit history on this
-branch. Comments on the roadmap plans live in [docs/plans/review-comments.md](plans/review-comments.md).
+branch. Review responses to the roadmap plans are inlined under each plan's numbered
+open questions (`> **Response:**` blocks in `docs/plans/*.md`).
 
 ## Executive summary
 
