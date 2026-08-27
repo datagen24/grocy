@@ -465,6 +465,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 									}
 								}
 
+								// Barcode has a defined amount, so don't force it back to a single unit
 								ScanModeSubmit(false);
 							},
 							function (xhr)
@@ -475,6 +476,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 					}
 					else
 					{
+						// No matching barcode: purchase was triggered by manual product selection, default scan-mode amount to 1
 						$("#purchase-form").removeAttr("data-used-barcode");
 						ScanModeSubmit();
 					}
@@ -490,6 +492,13 @@ if (Grocy.Components.ProductPicker !== undefined)
 	});
 }
 
+/**
+ * Prefills the #best_before_date DateTimePicker with a suggested due date, based on the
+ * product's default_best_before_days (or default_best_before_days_after_freezing when the
+ * selected stock location is a freezer). Never overwrites a date the user entered themselves.
+ * @param {Object} product The product object (as returned by stock/products/{id}.product)
+ * @param {Object} location The currently selected stock location object (may be null/undefined)
+ */
 function PrefillBestBeforeDate(product, location)
 {
 	if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)

@@ -159,6 +159,8 @@ $('#save-consume-button').on('click', function(e)
 	);
 });
 
+// Marks stock as opened without consuming it: POST stock/products/{id}/open. Reads amount and
+// (optionally) the specific-stock-entry field the same way the consume handler does.
 $('#save-mark-as-open-button').on('click', function(e)
 {
 	e.preventDefault();
