@@ -1,6 +1,10 @@
+// Summernote WYSIWYG editor setup: initializes every <textarea class="wysiwyg-editor">
+// with the shared toolbar configuration and localization, plus workarounds to keep
+// inserted images and video embeds responsive. Loaded on every page as part of the shared layout.
+
 $("textarea.wysiwyg-editor").summernote({
 	minHeight: "300px",
-	lang: __t("summernote_locale"),
+	lang: __t("summernote_locale"), // Locale id provided via the localization strings, e.g. "de-DE"
 	callbacks: {
 		onImageLinkInsert: function(url)
 		{

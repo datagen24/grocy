@@ -1,4 +1,10 @@
-﻿$('#save-batterytracking-button').on('click', function (e)
+﻿// View script for the battery tracking page (views/batterytracking.blade.php):
+// battery combobox + tracked time picker, submit via POST /api/batteries/{id}/charge,
+// battery card refresh, barcode scanner / grocycode support
+
+// Form submit: fetch battery details (GET /api/batteries/{id}) for the success message,
+// track the charge cycle via POST /api/batteries/{id}/charge, save userfields and reset the form
+$('#save-batterytracking-button').on('click', function (e)
 {
 	e.preventDefault();
 
@@ -51,6 +57,7 @@
 	);
 });
 
+// When a battery is selected, refresh the battery info card and move focus to the tracked time input
 $('#battery_id').on('change', function (e)
 {
 	var input = $('#battery_id_text_input').val().toString();
@@ -71,6 +78,7 @@ $('#battery_id').on('change', function (e)
 	}
 });
 
+// Init the battery combobox and reset the form to a clean state with focus on the battery input
 $(".combobox").combobox(BootstrapComboboxDefaults);
 
 $('#battery_id').val('');
@@ -83,11 +91,13 @@ setTimeout(function ()
 	$('#battery_id_text_input').focus();
 }, Grocy.FormFocusDelay);
 
+// Live re-validation while typing
 $('#batterytracking-form input').keyup(function (event)
 {
 	Grocy.FrontendHelpers.ValidateForm('batterytracking-form');
 });
 
+// Enter submits the form (when valid) instead of the browser default
 $('#batterytracking-form input').keydown(function (event)
 {
 	if (event.keyCode === 13) // Enter
@@ -110,6 +120,8 @@ $('#tracked_time').find('input').on('keypress', function (e)
 	Grocy.FrontendHelpers.ValidateForm('batterytracking-form');
 });
 
+// Barcode scanner hook: put the scanned code into the battery text input and let the
+// blur handler below resolve it (e.g. a battery grocycode)
 $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
 {
 	if (!(target == "@batterypicker" || target == "undefined" || target == undefined)) // Default target
@@ -133,6 +145,11 @@ $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
 	}, Grocy.FormFocusDelay);
 });
 
+/**
+ * Undoes a tracked charge cycle via POST /api/batteries/charge-cycles/{id}/undo
+ * (called from the inline "Undo" link in the success toast).
+ * @param {number} chargeCycleId Id of the charge cycle log entry to undo
+ */
 function UndoChargeCycle(chargeCycleId)
 {
 	Grocy.Api.Post('batteries/charge-cycles/' + chargeCycleId.toString() + '/undo', {},
@@ -147,6 +164,7 @@ function UndoChargeCycle(chargeCycleId)
 	);
 };
 
+// On blur, resolve a battery grocycode ("grcy:b:{id}") entered/scanned into the text input to the matching battery option
 $('#battery_id_text_input').on('blur', function (e)
 {
 	if ($('#battery_id').hasClass("combobox-menu-visible"))
@@ -183,6 +201,7 @@ $('#battery_id_text_input').on('blur', function (e)
 	}
 });
 
+// Select the whole tracked time value on focus for quick overwriting
 $("#tracked_time").find("input").on("focus", function (e)
 {
 	$(this).select();

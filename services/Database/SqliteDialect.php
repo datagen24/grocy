@@ -16,6 +16,10 @@ class SqliteDialect extends DatabaseDialect
 		return 'sqlite';
 	}
 
+	/**
+	 * Opens the database file (creating it when missing, as SQLite does by default).
+	 * NULL_EMPTY_STRING matches upstream Grocy: empty strings come back as null.
+	 */
 	public function CreateConnection(): \PDO
 	{
 		$pdo = new \PDO\Sqlite('sqlite:' . $this->GetDbFilePath());
@@ -25,6 +29,12 @@ class SqliteDialect extends DatabaseDialect
 		return $pdo;
 	}
 
+	/**
+	 * Registers the PHP callbacks SQLite lacks natively and Grocy's SQL relies on:
+	 * REGEXP (UTF-8 aware via mb_ereg), grocy_user_setting() for user settings resolved
+	 * inside views, and ceil(). PostgreSQL provides native equivalents of all three
+	 * instead, since it cannot call back into PHP.
+	 */
 	public function OnConnected(\PDO $pdo): void
 	{
 		$pdo->createFunction('regexp', function ($pattern, $value)
@@ -47,11 +57,18 @@ class SqliteDialect extends DatabaseDialect
 		});
 	}
 
+	/**
+	 * SQLite's REGEXP operator, backed by the mb_ereg callback from OnConnected().
+	 */
 	public function GetRegexpCondition(string $field): string
 	{
 		return $field . ' REGEXP ?';
 	}
 
+	/**
+	 * Local (process time zone) timestamp with second precision - the reference
+	 * behaviour the PostgreSQL dialect mimics.
+	 */
 	public function GetNowExpression(): string
 	{
 		return "datetime('now', 'localtime')";
@@ -62,11 +79,18 @@ class SqliteDialect extends DatabaseDialect
 		return 'DATETIME';
 	}
 
+	/**
+	 * SQLite never returns free pages to the OS on its own, so VACUUM after
+	 * migrations keeps the single-file database compact.
+	 */
 	public function GetOptimizeStatement(): ?string
 	{
 		return 'VACUUM';
 	}
 
+	/**
+	 * Standard SQL double-quote quoting, which SQLite supports alongside backticks.
+	 */
 	public function QuoteIdentifier(string $name): string
 	{
 		return '"' . str_replace('"', '""', $name) . '"';
@@ -78,12 +102,20 @@ class SqliteDialect extends DatabaseDialect
 		return '`';
 	}
 
+	/**
+	 * The database file's modification time serves as the changed time - the OS
+	 * maintains it on every write, so no in-database bookkeeping is needed.
+	 */
 	public function GetDbChangedTime(\PDO $pdo): string
 	{
 		clearstatcache(true, $this->GetDbFilePath());
 		return date('Y-m-d H:i:s', filemtime($this->GetDbFilePath()));
 	}
 
+	/**
+	 * Rewinds the file modification time via touch() - how bookkeeping writes
+	 * (session/API key last-used stamps) are hidden from clients polling for changes.
+	 */
 	public function SetDbChangedTime(\PDO $pdo, string $dateTime): void
 	{
 		touch($this->GetDbFilePath(), strtotime($dateTime));
@@ -94,11 +126,18 @@ class SqliteDialect extends DatabaseDialect
 		// The file modification time SQLite maintains already is the changed time
 	}
 
+	/**
+	 * False: the file modification time makes per-statement change tracking unnecessary.
+	 */
 	public function RequiresChangeTracking(): bool
 	{
 		return false;
 	}
 
+	/**
+	 * Absolute path of the database file: grocy.db in the data directory, or a
+	 * per-locale grocy_<suffix>.db in demo/prerelease mode.
+	 */
 	public function GetDbFilePath(): string
 	{
 		if (GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')

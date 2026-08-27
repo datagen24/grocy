@@ -2,6 +2,10 @@
 
 namespace Grocy\Helpers;
 
+/**
+ * Thrown when a runtime prerequisite (PHP/SQLite version, PHP extension,
+ * config file, Composer packages) is missing.
+ */
 class ERequirementNotMet extends \Exception
 {
 }
@@ -15,8 +19,18 @@ const REQUIRED_PHP_EXTENSIONS = ['fileinfo', 'pdo_sqlite', 'gd', 'ctype', 'intl'
 const REQUIRED_PHP_VERSION = '8.5.0';
 const REQUIRED_SQLITE_VERSION = '3.40.0';
 
+/**
+ * Checks on application startup that the runtime environment meets all
+ * requirements: PHP and SQLite minimum versions, required PHP extensions,
+ * presence of config.php / config-dist.php and the Composer autoloader.
+ */
 class PrerequisiteChecker
 {
+	/**
+	 * Runs all prerequisite checks.
+	 *
+	 * @throws ERequirementNotMet On the first unmet requirement found
+	 */
 	public function checkRequirements()
 	{
 		self::checkForPhpVersion();

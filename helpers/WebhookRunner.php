@@ -4,6 +4,11 @@ namespace Grocy\Helpers;
 
 use GuzzleHttp\Client;
 
+/**
+ * Fires outgoing webhooks (HTTP POST requests with a 2 second timeout),
+ * e.g. for thermal printer / label printer integration; failures are only
+ * logged to stderr, never thrown.
+ */
 class WebhookRunner
 {
 	public function __construct()
@@ -13,6 +18,13 @@ class WebhookRunner
 
 	private $client;
 
+	/**
+	 * POSTs the given data to a webhook URL.
+	 *
+	 * @param string $url The webhook URL
+	 * @param array $args The data to send
+	 * @param bool $json True to send $args as a JSON body, false (default) as form parameters
+	 */
 	public function run($url, $args, $json = false)
 	{
 		$reqArgs = [];
@@ -36,6 +48,12 @@ class WebhookRunner
 		}
 	}
 
+	/**
+	 * POSTs the given data (as form parameters) to each of the given webhook URLs.
+	 *
+	 * @param string[] $urls The webhook URLs
+	 * @param array $args The data to send
+	 */
 	public function runAll($urls, $args)
 	{
 		foreach ($urls as $url)

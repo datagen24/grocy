@@ -9,8 +9,18 @@ use Grocy\Services\ChoresService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Serves the /api/chores endpoints: current chore overview, chore details,
+ * execution tracking/undo, next assignment calculation, label printing and merging.
+ */
 class ChoresApiController extends BaseApiController
 {
+	/**
+	 * POST /api/chores/executions/calculate-next-assignments - (re)calculates who is
+	 * assigned to the next execution, either for the chore given via the numeric body
+	 * field chore_id or for all chores when omitted.
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function CalculateNextExecutionAssignments(Request $request, Response $response, array $args)
 	{
 		try
@@ -44,6 +54,10 @@ class ChoresApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/chores/{choreId} - returns details of the given chore (200)
+	 * or a 400 error response (e.g. when the chore does not exist).
+	 */
 	public function ChoreDetails(Request $request, Response $response, array $args)
 	{
 		try
@@ -56,11 +70,23 @@ class ChoresApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/chores - returns all chores with their current execution status,
+	 * filterable via the generic query/limit/offset/order query parameters (200).
+	 */
 	public function Current(Request $request, Response $response, array $args)
 	{
 		return $this->FilteredApiResponse($response, ChoresService::GetInstance()->GetCurrent(), $request->getQueryParams());
 	}
 
+	/**
+	 * POST /api/chores/{choreId}/execute - tracks an execution of the given chore.
+	 * Optional body fields: tracked_time (ISO date or datetime, defaults to now),
+	 * skipped (boolean, defaults to false), done_by (user id, defaults to the current user).
+	 * Requires the CHORE_TRACK_EXECUTION permission; since the check runs inside the
+	 * try block, a missing permission is reported as a 400 error response.
+	 * Returns the created chores_log row (200) or a 400 error response.
+	 */
 	public function TrackChoreExecution(Request $request, Response $response, array $args)
 	{
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
@@ -101,6 +127,12 @@ class ChoresApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/chores/executions/{executionId}/undo - undoes a tracked chore execution.
+	 * Requires the CHORE_UNDO_EXECUTION permission (reported as a 400 error response
+	 * when missing, as the check runs inside the try block).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function UndoChoreExecution(Request $request, Response $response, array $args)
 	{
 		try
@@ -116,6 +148,12 @@ class ChoresApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/chores/{choreId}/printlabel - assembles the label printer webhook payload
+	 * (chore name, Grocycode, details plus GROCY_LABEL_PRINTER_PARAMS), runs the webhook
+	 * server-side when GROCY_LABEL_PRINTER_RUN_SERVER is enabled and returns the payload (200)
+	 * or a 400 error response.
+	 */
 	public function ChorePrintLabel(Request $request, Response $response, array $args)
 	{
 		try
@@ -141,6 +179,11 @@ class ChoresApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/chores/{choreIdToKeep}/merge/{choreIdToRemove} - merges two chores.
+	 * Requires the MASTER_DATA_EDIT permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response (e.g. non-integer route arguments).
+	 */
 	public function MergeChores(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_MASTER_DATA_EDIT);

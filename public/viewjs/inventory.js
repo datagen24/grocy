@@ -1,5 +1,15 @@
-﻿var CurrentProductDetails;
+﻿// View script for the inventory page (views/inventory.blade.php):
+// lets the user enter the counted total stock amount of a product - the difference to the
+// current stock amount is booked as an add or consume correction via the stock inventory API.
 
+// Details of the currently selected product (result of GET /api/stock/products/{id}),
+// cached for RefreshPriceHint (tare weight handling)
+var CurrentProductDetails;
+
+// Form submit: books the new total amount via POST /api/stock/products/{id}/inventory
+// (new_amount, best_before_date, price - converted to stock QU via the selected option's
+// data-qu-factor -, note and, feature flag dependent, shopping_location_id / location_id /
+// purchased_date); afterwards optionally adds a barcode, triggers label printing and resets the form
 $('#save-inventory-button').on('click', function (e)
 {
 	e.preventDefault();
@@ -53,6 +63,8 @@ $('#save-inventory-button').on('click', function (e)
 				{
 					bookingResponse = result;
 
+					// Barcode workflow (?flow=InplaceAddBarcodeToExistingProduct&barcode=...):
+					// additionally attach the scanned barcode to the product (POST /api/objects/product_barcodes)
 					if (GetUriParam("flow") === "InplaceAddBarcodeToExistingProduct")
 					{
 						var jsonDataBarcode = {};
@@ -77,6 +89,9 @@ $('#save-inventory-button').on('click', function (e)
 						);
 					}
 
+					// Label printing (only when stock was added): fires the "labelprinter" webhook
+					// (Grocy.Webhooks.labelprinter) once per booking or once per created stock entry,
+					// with the product name, Grocycode and due date as payload
 					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER && Number.parseFloat($("#amount").attr("data-estimated-booking-amount")) > 0)
 					{
 						if (Grocy.Webhooks.labelprinter !== undefined)
@@ -120,6 +135,9 @@ $('#save-inventory-button').on('click', function (e)
 						}
 					}
 
+					// Reload the product to build the success message (with undo link for the
+					// booked transaction), save userfields and reset the form for the next entry;
+					// when embedded (?embedded) the enclosing modal is closed via postMessage instead
 					Grocy.EditObjectId = result[0].transaction_id;
 					Grocy.Api.Get('stock/products/' + jsonForm.product_id,
 						function (result)
@@ -195,6 +213,12 @@ $('#save-inventory-button').on('click', function (e)
 	);
 });
 
+// Product selection: loads the product (GET /api/stock/products/{id}) and prefills the form -
+// amount picker QUs, current stock amount (with data-not-equal so a booking of 0 is invalid),
+// tare weight minimum, last price, last shopping location/default location and the due date
+// from the product's default_best_before_days (-1 = "never expires" shortcut); when the picker
+// was filled by barcode scan, amount/QU/note defaults from the matching product_barcodes_view
+// row are applied on top
 Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 {
 	var productId = $(e.target).val();
@@ -326,6 +350,12 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 	}
 });
 
+/**
+ * Updates the #price-hint text ("means X per <stock QU>") when the price is entered
+ * in a quantity unit other than the stock QU; converts the entered price using the
+ * selected #qu_id option's data-qu-factor and subtracts the tare weight if enabled.
+ * Clears the hint when amount/price are 0 or the units already match.
+ */
 function RefreshPriceHint()
 {
 	if ($('#amount').val() == 0 || $('#price').val() == 0)
@@ -351,10 +381,13 @@ function RefreshPriceHint()
 	}
 };
 
+// Initial state: empty amount, validate once
 $('#display_amount').val('');
 $(".input-group-productamountpicker").trigger("change");
 Grocy.FrontendHelpers.ValidateForm('inventory-form');
 
+// Focus handling: focus the product picker normally; in a picker workflow or embedded mode
+// the product is already known, so trigger its change handler to prefill the form
 if (Grocy.Components.ProductPicker.InAnyFlow() === false && GetUriParam("embedded") === undefined)
 {
 	setTimeout(function ()
@@ -377,6 +410,7 @@ else
 	}
 }
 
+// Redirect focus back to the product picker while no product is selected
 $('#display_amount').on('focus', function (e)
 {
 	if (Grocy.Components.ProductPicker.GetValue().length === 0)
@@ -393,6 +427,7 @@ $('#display_amount').on('focus', function (e)
 	}
 });
 
+// Live-validate on any input; Enter submits the form when valid
 $('#inventory-form input').keyup(function (event)
 {
 	Grocy.FrontendHelpers.ValidateForm('inventory-form');
@@ -416,6 +451,8 @@ $('#inventory-form input').keydown(function (event)
 });
 
 
+// Keep the "must differ from current stock amount" validation (data-not-equal)
+// in sync with the selected quantity unit's conversion factor
 $('#qu_id').on('change', function (e)
 {
 	$('#display_amount').attr('data-not-equal', Number.parseFloat($('#display_amount').attr('data-stock-amount')) * Number.parseFloat($("#qu_id option:selected").attr("data-qu-factor")));
@@ -437,6 +474,10 @@ $('#price').on('focus', function (e)
 	$(this).select();
 });
 
+// Recalculate the booking preview whenever amount or quantity unit changes:
+// shows "This means X will be added to/removed from stock" (#inventory-change-info),
+// stores the delta in #amount's data-estimated-booking-amount and makes due date and
+// location required only when stock will be added (respecting tare weight handling)
 $('#display_amount,#qu_id').on('keyup change', function (e)
 {
 	var productId = Grocy.Components.ProductPicker.GetValue();
@@ -508,6 +549,10 @@ $('#qu_id').on('change', function (e)
 	RefreshPriceHint();
 });
 
+/**
+ * Reverts a single stock booking (POST /api/stock/bookings/{id}/undo).
+ * @param {number|string} bookingId - Id of the stock booking to undo
+ */
 function UndoStockBooking(bookingId)
 {
 	Grocy.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
@@ -522,6 +567,11 @@ function UndoStockBooking(bookingId)
 	);
 };
 
+/**
+ * Reverts a whole stock transaction (POST /api/stock/transactions/{id}/undo);
+ * used by the undo link inside the success toast after booking.
+ * @param {string} transactionId - Id of the stock transaction to undo
+ */
 function UndoStockTransaction(transactionId)
 {
 	Grocy.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
@@ -538,6 +588,8 @@ function UndoStockTransaction(transactionId)
 
 $("#display_amount").attr("min", "0");
 
+// Label printer feature: when "label per unit" is selected, show how many labels
+// the estimated booking amount would print
 if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
 {
 	$("#stock_label_type, #amount").on("change", function (e)
@@ -561,4 +613,5 @@ if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
 	});
 }
 
+// Load userfield inputs for the stock entity
 Grocy.Components.UserfieldsForm.Load();

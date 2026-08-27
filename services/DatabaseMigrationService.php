@@ -4,12 +4,25 @@ namespace Grocy\Services;
 
 use Grocy\Services\Database\DatabaseDialect;
 
+/**
+ * Brings the database schema up to date on application start, for either engine.
+ *
+ * SQLite databases replay the numbered files in migrations/ from the beginning;
+ * PostgreSQL (added later) instead loads a squashed baseline schema from db/pgsql/baseline/
+ * equivalent to migrations 0001-0255, records those as applied and continues with the
+ * regular migration path from 0256 on. Applied migration numbers are tracked in the
+ * "migrations" table.
+ */
 class DatabaseMigrationService extends BaseService
 {
-	// This migration will be always executed, can be used to fix things manually (will never be shipped)
+	/**
+	 * This migration will be always executed, can be used to fix things manually (will never be shipped).
+	 */
 	const EMERGENCY_MIGRATION_ID = 9999;
 
-	// This migration will be always executed, is used for things which need to be checked always
+	/**
+	 * This migration will be always executed, is used for things which need to be checked always.
+	 */
 	const DOALWAYS_MIGRATION_ID = 8888;
 
 	/**
@@ -22,6 +35,13 @@ class DatabaseMigrationService extends BaseService
 	 */
 	const BASELINE_MIGRATION_ID = 255;
 
+	/**
+	 * Applies all pending migrations: ensures the migrations table exists, loads the
+	 * baseline schema when the engine uses one and the database is empty, then executes
+	 * every not-yet-applied migration file in ascending number order. When anything was
+	 * applied, generated-id counters are resynced (migrations insert explicit ids) and
+	 * the engine's optimize statement (e.g. VACUUM/ANALYZE) is run.
+	 */
 	public function MigrateDatabase()
 	{
 		$dialect = DatabaseService::GetInstance()->GetDialect();
@@ -96,6 +116,10 @@ class DatabaseMigrationService extends BaseService
 		return $migrationFiles;
 	}
 
+	/**
+	 * Creates the "migrations" bookkeeping table (applied migration number plus
+	 * execution timestamp) when it does not exist yet.
+	 */
 	private function EnsureMigrationsTable(DatabaseDialect $dialect)
 	{
 		DatabaseService::GetInstance()->ExecuteDbStatement(
@@ -182,6 +206,11 @@ class DatabaseMigrationService extends BaseService
 		}
 	}
 
+	/**
+	 * Includes the given PHP migration file unless it was already applied. The special
+	 * EMERGENCY/DOALWAYS ids run on every start and are never recorded as applied;
+	 * regular migrations are recorded and increment $migrationCounter.
+	 */
 	private function ExecutePhpMigrationWhenNeeded(int $migrationId, string $phpFile, int &$migrationCounter)
 	{
 		$rowCount = DatabaseService::GetInstance()->ExecuteDbQuery('SELECT COUNT(*) FROM migrations WHERE migration = ' . $migrationId)->fetchColumn();
@@ -197,6 +226,11 @@ class DatabaseMigrationService extends BaseService
 		}
 	}
 
+	/**
+	 * Executes the given SQL migration in a transaction unless it was already applied,
+	 * with the same special-id and bookkeeping rules as ExecutePhpMigrationWhenNeeded()
+	 * (PHP migrations, in contrast, manage their own transactions).
+	 */
 	private function ExecuteSqlMigrationWhenNeeded(int $migrationId, string $sql, int &$migrationCounter)
 	{
 		$rowCount = DatabaseService::GetInstance()->ExecuteDbQuery('SELECT COUNT(*) FROM migrations WHERE migration = ' . $migrationId)->fetchColumn();

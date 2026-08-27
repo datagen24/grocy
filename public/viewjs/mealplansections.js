@@ -1,4 +1,9 @@
-﻿var mealplanSectionsTable = $('#mealplansections-table').DataTable({
+﻿// View script for the meal plan sections list (views/mealplansections.blade.php):
+// DataTables listing of meal plan sections (e.g. breakfast/lunch/dinner) with search and delete.
+
+// DataTables setup - default sort by the sort_number column, first column (row menu)
+// is neither orderable nor searchable
+var mealplanSectionsTable = $('#mealplansections-table').DataTable({
 	'order': [[2, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +13,7 @@
 $('#mealplansections-table tbody').removeClass("d-none");
 mealplanSectionsTable.columns.adjust().draw();
 
+// Debounced free text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +31,8 @@ $("#clear-filter-button").on("click", function()
 	mealplanSectionsTable.search("").draw();
 });
 
+// Delete a section after confirmation (DELETE /api/objects/meal_plan_sections/{id});
+// the buttons carry data-mealplansection-id/-name from the Blade template
 $(document).on('click', '.mealplansection-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-mealplansection-name');

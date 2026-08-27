@@ -1,4 +1,10 @@
-﻿$('#save-mealplansection-button').on('click', function(e)
+﻿// View script for the meal plan section create/edit form (views/mealplansectionform.blade.php):
+// saves a meal plan section via the objects/meal_plan_sections API endpoints.
+
+// Form submit: POST /api/objects/meal_plan_sections on create or PUT .../{id} on edit
+// (mode/id from Grocy.EditMode / Grocy.EditObjectId); when embedded in a dialog iframe
+// (?embedded), the parent window is told to reload instead of navigating
+$('#save-mealplansection-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -54,6 +60,7 @@
 	}
 });
 
+// Live-validate on any input; Enter submits the form when valid
 $('#mealplansection-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('mealplansection-form');
@@ -76,6 +83,7 @@ $('#mealplansection-form input').keydown(function(event)
 	}
 });
 
+// Initial state: validate once and focus the name field
 Grocy.FrontendHelpers.ValidateForm('mealplansection-form');
 setTimeout(function()
 {

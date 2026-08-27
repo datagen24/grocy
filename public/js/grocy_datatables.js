@@ -1,5 +1,13 @@
+// Shared DataTables setup: global defaults for all tables (state saving via user
+// settings, localization, column reordering, row grouping incl. collapse/expand),
+// accent neutral searching/sorting and the "table options" dialog for column
+// visibility / grouping. Loaded on every page after grocy.js.
+//
+// Table state is persisted per table as the user settings
+// "datatables_state_<tableId>" and "datatables_rowGroup_<tableId>" (JSON strings).
+
 // Default DataTables initialisation settings
-var collapsedGroups = {};
+var collapsedGroups = {}; // Per group name (data-name) collapsed state of row groups (not persisted)
 $.extend(true, $.fn.dataTable.defaults, {
 	'paginate': false,
 	'deferRender': true,
@@ -11,6 +19,7 @@ $.extend(true, $.fn.dataTable.defaults, {
 	'stateDuration': 0,
 	'stateSaveParams': function (settings, data)
 	{
+		// Never persist search terms - a reloaded page should start unfiltered
 		data.search.search = "";
 
 		data.columns.forEach(column =>
@@ -20,6 +29,7 @@ $.extend(true, $.fn.dataTable.defaults, {
 	},
 	'stateSaveCallback': function (settings, data)
 	{
+		// Persists the table state as user setting "datatables_state_<tableId>"
 		var settingKey = 'datatables_state_' + settings.sTableId;
 
 		if ($.isEmptyObject(data))
@@ -51,6 +61,7 @@ $.extend(true, $.fn.dataTable.defaults, {
 	},
 	'stateLoadCallback': function (settings, data)
 	{
+		// Loads the table state from user setting "datatables_state_<tableId>"
 		var settingKey = 'datatables_state_' + settings.sTableId;
 
 		if (Grocy.UserSettings[settingKey] == undefined)
@@ -65,6 +76,7 @@ $.extend(true, $.fn.dataTable.defaults, {
 	'preDrawCallback': function (settings)
 	{
 		// Currently it is not possible to save the state of rowGroup via saveState events
+		// => Restore it here from user setting "datatables_rowGroup_<tableId>" before each draw
 		var api = new $.fn.dataTable.Api(settings);
 		if (typeof api.rowGroup === "function")
 		{
@@ -103,6 +115,8 @@ $.extend(true, $.fn.dataTable.defaults, {
 	],
 	'rowGroup': {
 		enable: false,
+		// Renders the group header row (with collapse caret) and hides the
+		// rows of collapsed groups (see collapsedGroups above)
 		startRender: function (rows, group)
 		{
 			var collapsed = !!collapsedGroups[group];
@@ -120,6 +134,7 @@ $.extend(true, $.fn.dataTable.defaults, {
 		}
 	}
 });
+// Toggle collapse/expand when a group header row is clicked
 $(document).on("click", "tr.dtrg-group", function ()
 {
 	var name = $(this).data('name');
@@ -139,6 +154,7 @@ $.fn.dataTable.ext.type.order["custom-sort-pre"] = function (data)
 	return (Number.parseFloat($(data).get(0).innerText));
 };
 
+// Search and sort accent neutral (and for HTML columns on the plain text), see String.prototype.accentNeutralise
 $.fn.dataTable.ext.type.search.string = function (s)
 {
 	return s.accentNeutralise();
@@ -156,6 +172,8 @@ $.fn.dataTable.ext.type.order["html-pre"] = function (s)
 	return s.stripHtml().accentNeutralise();
 };
 
+// Only allow the table body to overflow (for row dropdown menus) when the table
+// fits into the scroll container - otherwise the horizontal scrollbar would be lost
 $('.table').on('column-sizing.dt', function (e, settings)
 {
 	var dtScrollWidth = $('.dataTables_scroll').width();
@@ -172,6 +190,7 @@ $('.table').on('column-sizing.dt', function (e, settings)
 		$('.dataTables_scrollBody').addClass("force-overflow-visible");
 	}
 });
+// Temporarily allow overflow while a row dropdown menu is open (so it's not cut off)
 $(document).on("show.bs.dropdown", "td .dropdown", function (e)
 {
 	if ($('.dataTables_scrollBody').hasClass("no-force-overflow-visible"))
@@ -187,6 +206,9 @@ $(document).on("hide.bs.dropdown", "td .dropdown", function (e)
 	}
 });
 
+// "Table options" dialog: column visibility checkboxes and (when the table has
+// rowGroup) "group by" radio buttons; the target table is referenced by the
+// button's "data-table-selector" attribute
 $(".change-table-columns-visibility-button").on("click", function (e)
 {
 	e.preventDefault();
@@ -201,6 +223,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 
 	if (rowGroupDefined)
 	{
+		// "None" option (data-column-index="-1") to disable grouping
 		var rowGroupChecked = (dataTable.rowGroup().enabled()) ? "" : "checked";
 		rowGroupRadioBoxesHtml = ' \
 			<div class="custom-control custom-radio custom-control-inline"> \
@@ -217,6 +240,8 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 			</div>';
 	}
 
+	// Build one checkbox per visible-configurable column
+	// (columns without title, "Hidden*" titles or a "d-none" header are skipped)
 	dataTable.columns().every(function ()
 	{
 		var index = this.index();
@@ -230,6 +255,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 			return;
 		}
 
+		// A column can group by another (hidden) column via "data-shadow-rowgroup-column"
 		var shadowColumnIndex = headerCell.attr("data-shadow-rowgroup-column");
 		if (shadowColumnIndex)
 		{
@@ -255,6 +281,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 				</label> \
 			</div>';
 
+		// Grouping is only offered for columns with the header class "allow-grouping"
 		if (rowGroupDefined && headerCell.hasClass("allow-grouping"))
 		{
 			var rowGroupChecked = "";
@@ -311,6 +338,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 				className: 'btn-outline-danger float-left responsive-button',
 				callback: function ()
 				{
+					// "Reset" deletes the persisted state/rowGroup user settings after confirmation
 					bootbox.confirm({
 						message: __t("Are you sure you want to reset the table options?"),
 						closeButton: false,
@@ -354,6 +382,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 	});
 });
 
+// Column visibility checkbox in the table options dialog
 $(document).on("click", ".change-table-columns-visibility-toggle", function ()
 {
 	var dataTableSelector = $(this).attr("data-table-selector");
@@ -364,6 +393,9 @@ $(document).on("click", ".change-table-columns-visibility-toggle", function ()
 });
 
 
+// "Group by" radio button in the table options dialog: applies row grouping to the
+// selected column (or disables it for index -1) and persists the choice as
+// user setting "datatables_rowGroup_<tableId>"
 $(document).on("click", ".change-table-columns-rowgroup-toggle", function ()
 {
 	var dataTableSelector = $(this).attr("data-table-selector");

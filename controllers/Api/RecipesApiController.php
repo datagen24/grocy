@@ -9,8 +9,19 @@ use Grocy\Services\RecipesService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Serves the /api/recipes endpoints: stock fulfillment info, consuming a recipe,
+ * adding missing ingredients to the shopping list, copying and label printing.
+ */
 class RecipesApiController extends BaseApiController
 {
+	/**
+	 * POST /api/recipes/{recipeId}/add-not-fulfilled-products-to-shoppinglist - puts all
+	 * ingredients not currently in stock onto the shopping list; the optional body field
+	 * excludedProductIds (array of product ids) skips the given products.
+	 * Requires the SHOPPINGLIST_ITEMS_ADD permission (403 otherwise). Returns 204;
+	 * service errors are not caught here and surface via the Slim error handler.
+	 */
 	public function AddNotFulfilledProductsToShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
@@ -27,6 +38,11 @@ class RecipesApiController extends BaseApiController
 		return $this->EmptyApiResponse($response);
 	}
 
+	/**
+	 * POST /api/recipes/{recipeId}/consume - consumes all ingredients of the recipe
+	 * from stock. Requires the STOCK_CONSUME permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function ConsumeRecipe(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_CONSUME);
@@ -42,6 +58,12 @@ class RecipesApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/recipes/fulfillment and GET /api/recipes/{recipeId}/fulfillment - returns
+	 * stock fulfillment information for all recipes (filterable via the generic
+	 * query/limit/offset/order query parameters) or for a single recipe.
+	 * Returns a 400 error response when the given recipe does not exist.
+	 */
 	public function GetRecipeFulfillment(Request $request, Response $response, array $args)
 	{
 		try
@@ -68,6 +90,10 @@ class RecipesApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/recipes/{recipeId}/copy - copies the given recipe and returns
+	 * { "created_object_id": int } (200) or a 400 error response.
+	 */
 	public function CopyRecipe(Request $request, Response $response, array $args)
 	{
 		try
@@ -82,6 +108,12 @@ class RecipesApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/recipes/{recipeId}/printlabel - assembles the label printer webhook payload
+	 * (recipe name, Grocycode, recipe row plus GROCY_LABEL_PRINTER_PARAMS), runs the webhook
+	 * server-side when GROCY_LABEL_PRINTER_RUN_SERVER is enabled and returns the payload (200)
+	 * or a 400 error response.
+	 */
 	public function RecipePrintLabel(Request $request, Response $response, array $args)
 	{
 		try

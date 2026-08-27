@@ -1,4 +1,9 @@
-﻿var batteriesJournalTable = $('#batteries-journal-table').DataTable({
+﻿// View script for the batteries journal (views/batteriesjournal.blade.php):
+// charge cycle log table with battery/date range filters (server-side via URI params) and
+// undo of charge cycles via POST /api/batteries/charge-cycles/{id}/undo
+
+// DataTables setup for the charge cycle journal
+var batteriesJournalTable = $('#batteries-journal-table').DataTable({
 	'order': [[2, 'desc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +13,7 @@
 $('#batteries-journal-table tbody').removeClass("d-none");
 batteriesJournalTable.columns.adjust().draw();
 
+// Battery filter is applied server-side via the "battery" URI parameter (page reload)
 $("#battery-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -23,6 +29,7 @@ $("#battery-filter").on("change", function()
 	window.location.reload();
 });
 
+// Debounced free-text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -34,6 +41,7 @@ $("#search").on("keyup", Delay(function()
 	batteriesJournalTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Reset all filters (search, battery, date range) and reload
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");
@@ -45,12 +53,14 @@ $("#clear-filter-button").on("click", function()
 	window.location.reload();
 });
 
+// Date range filter is applied server-side via the "months" URI parameter (page reload)
 $("#daterange-filter").on("change", function()
 {
 	UpdateUriParam("months", $(this).val());
 	window.location.reload();
 });
 
+// Restore the filter dropdowns from the current URI parameters
 if (typeof GetUriParam("battery") !== "undefined")
 {
 	$("#battery-filter").val(GetUriParam("battery"));
@@ -61,6 +71,8 @@ if (typeof GetUriParam("months") !== "undefined")
 	$("#daterange-filter").val(GetUriParam("months"));
 }
 
+// Undo a charge cycle via POST /api/batteries/charge-cycles/{id}/undo and mark the row as undone in place
+// (expects a data-charge-cycle-id attribute from the Blade template)
 $(document).on('click', '.undo-battery-execution-button', function(e)
 {
 	e.preventDefault();

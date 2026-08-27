@@ -2,12 +2,25 @@
 
 namespace Grocy\Services;
 
+/**
+ * Business logic for chore tracking: execution journal, next-execution user assignment
+ * and merging of chores.
+ */
 class ChoresService extends BaseService
 {
+	/**
+	 * Values of chores.assignment_type: how the user for the next execution is picked.
+	 */
 	const CHORE_ASSIGNMENT_TYPE_IN_ALPHABETICAL_ORDER = 'in-alphabetical-order';
 	const CHORE_ASSIGNMENT_TYPE_NO_ASSIGNMENT = 'no-assignment';
 	const CHORE_ASSIGNMENT_TYPE_RANDOM = 'random';
 	const CHORE_ASSIGNMENT_TYPE_WHO_LEAST_DID_FIRST = 'who-least-did-first';
+
+	/**
+	 * Values of chores.period_type: the scheduling scheme, interpreted together with
+	 * period_interval and period_config ("manually" means no schedule at all,
+	 * "adaptive" derives the interval from past executions).
+	 */
 	const CHORE_PERIOD_TYPE_HOURLY = 'hourly';
 	const CHORE_PERIOD_TYPE_DAILY = 'daily';
 	const CHORE_PERIOD_TYPE_MANUALLY = 'manually';
@@ -16,6 +29,14 @@ class ChoresService extends BaseService
 	const CHORE_PERIOD_TYPE_YEARLY = 'yearly';
 	const CHORE_PERIOD_TYPE_ADAPTIVE = 'adaptive';
 
+	/**
+	 * Recalculates and stores which user the next execution of the given chore is
+	 * assigned to, honoring the chore's assignment type (a manual reschedule
+	 * assignment takes precedence over any strategy).
+	 *
+	 * @param int $choreId
+	 * @throws \Exception When the chore does not exist
+	 */
 	public function CalculateNextExecutionAssignment($choreId)
 	{
 		if (!$this->ChoreExists($choreId))
@@ -101,6 +122,12 @@ class ChoresService extends BaseService
 		]);
 	}
 
+	/**
+	 * Returns detail information for one chore.
+	 *
+	 * @return array {chore: \LessQL\Row, last_tracked: string|null, tracked_count: int, last_done_by: object|null, next_estimated_execution_time: string|null, next_execution_assigned_user: object|null, average_execution_frequency_hours: float|null}
+	 * @throws \Exception When the chore does not exist
+	 */
 	public function GetChoreDetails(int $choreId)
 	{
 		if (!$this->ChoreExists($choreId))
@@ -140,6 +167,12 @@ class ChoresService extends BaseService
 		];
 	}
 
+	/**
+	 * Returns the rows of the chores_current view (next estimated execution time per
+	 * chore), each enriched with the assigned user DTO as ->next_execution_assigned_user.
+	 *
+	 * @return \LessQL\Result
+	 */
 	public function GetCurrent()
 	{
 		$users = UsersService::GetInstance()->GetUsersAsDto();
@@ -160,6 +193,17 @@ class ChoresService extends BaseService
 		return $chores;
 	}
 
+	/**
+	 * Logs an execution (or skip) of the given chore and handles the follow-up work:
+	 * consuming the linked product where configured, clearing any manual reschedule
+	 * and recalculating the next execution assignment.
+	 *
+	 * @param string $trackedTime "Y-m-d H:i:s"; truncated to the day for chores which track the date only
+	 * @param int $doneBy User id of the executing user, defaults to the current user
+	 * @param bool $skipped True to record a skip instead of an execution (not possible for unscheduled chores)
+	 * @return int The id of the created log row
+	 * @throws \Exception When the chore or user does not exist, or a manually scheduled chore is skipped
+	 */
 	public function TrackChore(int $choreId, string $trackedTime, $doneBy = GROCY_USER_ID, $skipped = false)
 	{
 		if (!$this->ChoreExists($choreId))
@@ -223,6 +267,13 @@ class ChoresService extends BaseService
 		return $lastInsertId;
 	}
 
+	/**
+	 * Marks a chore execution log entry as undone (the row is kept, not deleted) and
+	 * recalculates the next execution assignment.
+	 *
+	 * @param int $executionId
+	 * @throws \Exception When the entry does not exist or was already undone
+	 */
 	public function UndoChoreExecution($executionId)
 	{
 		$logRow = $this->DB->chores_log()->where('id = :1 AND undone = 0', $executionId)->fetch();
@@ -240,6 +291,12 @@ class ChoresService extends BaseService
 		$this->CalculateNextExecutionAssignment($logRow->chore_id);
 	}
 
+	/**
+	 * Merges two chores in a transaction: reassigns the whole execution log of
+	 * $choreIdToRemove to $choreIdToKeep, then deletes the removed chore.
+	 *
+	 * @throws \Exception When either chore does not exist or both ids are equal
+	 */
 	public function MergeChores(int $choreIdToKeep, int $choreIdToRemove)
 	{
 		if (!$this->ChoreExists($choreIdToKeep))
@@ -274,6 +331,10 @@ class ChoresService extends BaseService
 		DatabaseService::GetInstance()->GetDbConnectionRaw()->commit();
 	}
 
+	/**
+	 * @param int $choreId
+	 * @return bool
+	 */
 	private function ChoreExists($choreId)
 	{
 		$choreRow = $this->DB->chores()->where('id = :1', $choreId)->fetch();

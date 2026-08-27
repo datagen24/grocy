@@ -2,8 +2,15 @@
 
 namespace Grocy\Helpers;
 
+/**
+ * Builds absolute application URLs, taking the configured base URL
+ * (GROCY_BASE_URL) and URL rewriting support into account.
+ */
 class UrlManager
 {
+	/**
+	 * @param string $basePath The configured base path/URL; the special value "/" means "autodetect from the current request"
+	 */
 	public function __construct(string $basePath)
 	{
 		if ($basePath === '/')
@@ -18,6 +25,17 @@ class UrlManager
 
 	protected $BasePath;
 
+	/**
+	 * Builds a full URL for the given relative path.
+	 *
+	 * When URL rewriting is disabled (GROCY_DISABLE_URL_REWRITING), "/index.php"
+	 * is inserted before the path - except for resources (static files), which
+	 * are always served directly.
+	 *
+	 * @param string $relativePath Path relative to the application root, must start with "/"
+	 * @param bool $isResource True when the path points to a static resource file
+	 * @return string The absolute URL
+	 */
 	public function ConstructUrl($relativePath, $isResource = false)
 	{
 		if (GROCY_DISABLE_URL_REWRITING === false || $isResource === true)
@@ -29,6 +47,12 @@ class UrlManager
 		}
 	}
 
+	/**
+	 * Autodetects the base URL (scheme + host) from the current request,
+	 * honoring the X-Forwarded-Proto header when running behind a reverse proxy.
+	 *
+	 * @return string e. g. "https://example.com"
+	 */
 	private function GetBaseUrl()
 	{
 		if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos($_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false)

@@ -1,4 +1,10 @@
-﻿$('#save-chore-button').on('click', function(e)
+﻿// View script for the chore create/edit form (views/choreform.blade.php):
+// period/assignment type dependent UI, saves via POST /api/objects/chores or PUT /api/objects/chores/{id}
+// followed by POST /api/chores/executions/calculate-next-assignments; optional product consumption on execution
+
+// Form submit: validate, then create or update depending on Grocy.EditMode; after saving
+// (incl. userfields) the next chore assignments are recalculated server-side
+$('#save-chore-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -79,11 +85,13 @@
 	}
 });
 
+// Live re-validation while typing
 $('#chore-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('chore-form');
 });
 
+// Enter submits the form (when valid) instead of the browser default
 $('#chore-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -101,6 +109,7 @@ $('#chore-form input').keydown(function(event)
 	}
 });
 
+// Restore the weekday checkboxes from the stored comma-separated period_config value
 var checkboxValues = $("#period_config").val().split(",");
 for (var i = 0; i < checkboxValues.length; i++)
 {
@@ -110,6 +119,7 @@ for (var i = 0; i < checkboxValues.length; i++)
 	}
 }
 
+// Initial setup: load userfield values, validate once and focus the name input
 Grocy.Components.UserfieldsForm.Load();
 Grocy.FrontendHelpers.ValidateForm('chore-form');
 setTimeout(function()
@@ -117,6 +127,8 @@ setTimeout(function()
 	$('#name').focus();
 }, Grocy.FormFocusDelay);
 
+// In edit mode the start date is locked once the chore has been executed at least once
+// (checked via GET /api/objects/chores_log)
 if (Grocy.EditMode == "edit")
 {
 	Grocy.Api.Get('objects/chores_log?limit=1&query[]=chore_id=' + Grocy.EditObjectId,
@@ -134,6 +146,7 @@ if (Grocy.EditMode == "edit")
 	);
 }
 
+// Trigger the dependent-UI handlers once so the form reflects the loaded chore's settings
 setTimeout(function()
 {
 	$(".input-group-chore-period-type").trigger("change");
@@ -146,6 +159,8 @@ setTimeout(function()
 	Grocy.Components.ProductPicker.GetPicker().trigger('change');
 }, Grocy.FormFocusDelay);
 
+// Period type handling: show/hide the matching period inputs, keep period_config in sync
+// (weekday list for weekly chores) and update the human-readable schedule explanation
 $('.input-group-chore-period-type').on('change keyup', function(e)
 {
 	var periodType = $('#period_type').val();
@@ -199,6 +214,8 @@ $('.input-group-chore-period-type').on('change keyup', function(e)
 	Grocy.FrontendHelpers.ValidateForm('chore-form');
 });
 
+// Assignment type handling: enable/require the user multi-select only for types that need it
+// and update the human-readable assignment explanation
 $('.input-group-chore-assignment-type').on('change', function(e)
 {
 	var assignmentType = $('#assignment_type').val();
@@ -233,6 +250,7 @@ $('.input-group-chore-assignment-type').on('change', function(e)
 	Grocy.FrontendHelpers.ValidateForm('chore-form');
 });
 
+// Toggle the product picker + amount inputs depending on "consume product on execution"
 $("#consume_product_on_execution").on("click", function()
 {
 	if (this.checked)
@@ -249,6 +267,7 @@ $("#consume_product_on_execution").on("click", function()
 	Grocy.FrontendHelpers.ValidateForm("chore-form");
 });
 
+// Show the stock quantity unit name next to the amount input for the selected product (GET /api/stock/products/{id})
 Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 {
 	var productId = $(e.target).val();
@@ -268,6 +287,7 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 	}
 });
 
+// Print a chore grocycode label: GET /api/chores/{id}/printlabel, then pass the label data to the configured label printer webhook
 $(document).on('click', '.chore-grocycode-label-print', function(e)
 {
 	e.preventDefault();

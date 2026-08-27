@@ -1,4 +1,10 @@
-﻿var equipmentTable = $('#equipment-table').DataTable({
+﻿// View script for the equipment overview (views/equipment.blade.php):
+// master/detail page - a DataTable of all equipment on the left, the selected item's
+// description and instruction manual PDF (plus file type userfields) on the right.
+
+// DataTables setup with single row selection; selecting a row loads its details,
+// the first row is selected initially
+var equipmentTable = $('#equipment-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -17,6 +23,7 @@
 $('#equipment-table tbody').removeClass("d-none");
 equipmentTable.columns.adjust().draw();
 
+// Row selection -> show that equipment item (rows carry data-equipment-id from the Blade template)
 equipmentTable.on('select', function (e, dt, type, indexes)
 {
 	if (type === 'row')
@@ -26,6 +33,14 @@ equipmentTable.on('select', function (e, dt, type, indexes)
 	}
 });
 
+/**
+ * Loads one equipment item (GET /api/objects/equipment/{id}) and fills the detail pane:
+ * name, HTML description, edit link and the instruction manual embed/download
+ * (PDF served via /api/files/equipmentmanuals/{base64 file name}).
+ * Also loads file type userfields of the equipment entity and toggles their
+ * embed/download/empty-hint elements accordingly (files served via /api/files/userfiles/).
+ * @param {number|string} id - The equipment object id
+ */
 function DisplayEquipment(id)
 {
 	Grocy.Api.Get('objects/equipment/' + id,
@@ -96,6 +111,7 @@ function DisplayEquipment(id)
 	);
 }
 
+// Debounced free text search over the table
 $("#search").on("keyup", Delay(function ()
 {
 	var value = $(this).val();
@@ -113,6 +129,8 @@ $("#clear-filter-button").on("click", function ()
 	equipmentTable.search("").draw();
 });
 
+// Delete an equipment item after confirmation (DELETE /api/objects/equipment/{id});
+// the buttons carry data-equipment-id/-name from the Blade template
 $(document).on('click', '.equipment-delete-button', function (e)
 {
 	var objectName = $(e.currentTarget).attr('data-equipment-name');
@@ -150,6 +168,7 @@ $(document).on('click', '.equipment-delete-button', function (e)
 	});
 });
 
+// Toggle fullscreen display of the instruction manual / userfield file card
 $(".selectedEquipmentInstructionManualToggleFullscreenButton").on('click', function (e)
 {
 	var button = $(e.currentTarget);
@@ -163,6 +182,7 @@ $(".selectedEquipmentInstructionManualToggleFullscreenButton").on('click', funct
 	ResizeResponsiveEmbeds();
 });
 
+// Toggle fullscreen display of the description card
 $("#selectedEquipmentDescriptionToggleFullscreenButton").on('click', function (e)
 {
 	$("#selectedEquipmentDescriptionCard").toggleClass("fullscreen");

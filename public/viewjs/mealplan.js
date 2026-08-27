@@ -1,6 +1,22 @@
-﻿var firstRender = true;
+﻿// View script for the meal plan (views/mealplan.blade.php): renders one FullCalendar (v3)
+// week/day view per meal plan section, provides add/edit/copy/delete of meal plan entries
+// (recipes, products, notes) and consume/"add missing to shopping list"/done actions.
+//
+// The Blade template provides these globals (inline <script> block):
+// - fullcalendarEventSources: event feed for all calendars (one event per meal plan entry)
+// - internalRecipes: the hidden shadow recipes grocy keeps per meal plan entry/day/week
+//   (named "<day>#<entry id>", "<day>" and "<year>-<week>" respectively)
+// - recipesResolved: recipes_resolved rows (costs, calories, stock fulfillment) for those
+// - weekRecipe: the shadow recipe of the currently displayed week (or null)
+// Each .calendar container carries data-section-id/-name, data-primary-section and
+// data-last-section attributes.
+
+// Tracks whether the visible modal edits an existing entry (true) or creates a new one;
+// on edit, Grocy.MealPlanEntryEditObject holds the entry being edited
+var firstRender = true;
 Grocy.IsMealPlanEntryEditAction = false;
 
+// First day of week: user/meal plan setting; a meal plan setting of -1 means "today"
 var firstDay = null;
 if (Grocy.CalendarFirstDayOfWeek)
 {
@@ -16,6 +32,9 @@ if (Grocy.MealPlanFirstDayOfWeek)
 	}
 }
 
+// FullCalendar setup - one calendar instance per meal plan section; only the primary
+// (first) section shows the header/navigation, all others render as bare all-day rows
+// (minTime/maxTime squeeze the time grid away so only the all-day row remains)
 $(".calendar").each(function()
 {
 	var container = $(this);
@@ -60,6 +79,9 @@ $(".calendar").each(function()
 		"firstDay": firstDay,
 		"height": "auto",
 		"defaultDate": GetUriParam("start"),
+		// Injects the per-day "add entry" button/menu into the primary calendar's day headers
+		// and builds the week summary (week costs plus order-missing/consume buttons for the
+		// week's shadow recipe) in the toolbar center
 		"viewRender": function(view)
 		{
 			if (!isPrimarySection)
@@ -108,6 +130,10 @@ $(".calendar").each(function()
 			}
 			$(".calendar[data-primary-section='true'] .fc-header-toolbar .fc-center").html("<h4>" + weekCostsHtml + weekRecipeOrderMissingButtonHtml + weekRecipeConsumeButtonHtml + "</h4>");
 		},
+		// Renders a single meal plan entry card; each event carries the raw meal_plan row
+		// (event.mealPlanEntry, JSON) plus type specific payload (event.recipe /
+		// event.productDetails). Returning false skips events belonging to other sections,
+		// so every calendar only shows its own section's entries.
 		"eventRender": function(event, element)
 		{
 			element.removeClass("fc-event");
@@ -130,6 +156,8 @@ $(".calendar").each(function()
 				doneButtonHtml = '<a class="ml-2 btn btn-outline-secondary btn-xs mealplan-entry-undone-button" href="#" data-toggle="tooltip" title="' + __t("Mark this item as undone") + '" data-mealplan-entry-id="' + mealPlanEntry.id.toString() + '"><i class="fa-solid fa-undo"></i></a>';
 			}
 
+			// Recipe entry: card with picture, name, servings, stock fulfillment (from the
+			// entry's resolved shadow recipe), costs/calories and action buttons
 			if (event.type == "recipe")
 			{
 				var recipe = JSON.parse(event.recipe);
@@ -200,6 +228,8 @@ $(".calendar").each(function()
 					element.prepend('<div class="mx-auto mb-1"><img src="' + U("/api/files/recipepictures/") + btoa(recipe.picture_file_name) + '?force_serve_as=picture&best_fit_width=400" class="img-fluid rounded-circle" loading="lazy"></div>')
 				}
 			}
+			// Product entry: card with picture, name, amount, stock fulfillment (based on the
+			// aggregated stock amount), costs/calories and action buttons
 			else if (event.type == "product")
 			{
 				var productDetails = JSON.parse(event.productDetails);
@@ -271,6 +301,7 @@ $(".calendar").each(function()
 					element.prepend('<div class="mx-auto mb-1"><img src="' + U("/api/files/productpictures/") + btoa(productDetails.product.picture_file_name) + '?force_serve_as=picture&best_fit_width=400" class="img-fluid rounded-circle" loading="lazy"></div>')
 				}
 			}
+			// Note entry: plain text with edit/delete/done buttons
 			else if (event.type == "note")
 			{
 				element.html('\
@@ -284,6 +315,8 @@ $(".calendar").each(function()
 				</div>');
 			}
 
+			// Append the per-day costs/calories summary (from the day's shadow recipe)
+			// to the day header of the primary calendar
 			var dayRecipeName = event.start.format("YYYY-MM-DD");
 			if (!$("#day-summary-" + dayRecipeName).length) // This runs for every event/recipe, so maybe multiple times per day, so only add the day summary once
 			{
@@ -306,6 +339,10 @@ $(".calendar").each(function()
 				}
 			}
 		},
+		// After all events rendered: sync the displayed range into the URI (?start / ?days)
+		// and reload the page on any navigation (server side data is range dependent);
+		// once the last section is done, apply final UI polish (locale numbers, tooltips,
+		// hiding stock related buttons when the stock feature is disabled)
 		"eventAfterAllRender": function(view)
 		{
 			if (isPrimarySection)

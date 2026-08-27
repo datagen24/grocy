@@ -1,4 +1,9 @@
-﻿$('#save-product-group-button').on('click', function(e)
+﻿// Powers the product group create/edit form (views/productgroupform.blade.php), usually shown embedded in a modal:
+// saves the product group via the objects/product_groups API and closes the modal.
+
+// Form submit: POSTs objects/product_groups (create) or PUTs objects/product_groups/{id} (edit, id from Grocy.EditObjectId),
+// then saves userfields and asks the parent window to close the modal
+$('#save-product-group-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -52,11 +57,13 @@
 	}
 });
 
+// Live validation while typing
 $('#product-group-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('product-group-form');
 });
 
+// Enter submits the form (when valid)
 $('#product-group-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -74,6 +81,7 @@ $('#product-group-form input').keydown(function(event)
 	}
 });
 
+// Initial setup: load userfields, focus the name field, validate once
 Grocy.Components.UserfieldsForm.Load();
 setTimeout(function()
 {

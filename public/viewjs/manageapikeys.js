@@ -1,4 +1,8 @@
-﻿var apiKeysTable = $('#apikeys-table').DataTable({
+﻿// View script for the API key management page (views/manageapikeys.blade.php):
+// lists API keys in a DataTable and supports creating, deleting and showing keys as QR code.
+
+// DataTables setup - first column (row menu) is neither orderable nor searchable
+var apiKeysTable = $('#apikeys-table').DataTable({
 	'order': [[6, 'desc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +12,7 @@
 $('#apikeys-table tbody').removeClass("d-none");
 apiKeysTable.columns.adjust().draw();
 
+// Debounced free text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +30,8 @@ $("#clear-filter-button").on("click", function()
 	apiKeysTable.search("").draw();
 });
 
+// Delete an API key after confirmation (DELETE /api/objects/api_keys/{id});
+// the buttons carry data-apikey-id/-key/-description from the Blade template
 $(document).on('click', '.apikey-delete-button', function(e)
 {
 	var button = $(e.currentTarget);
@@ -70,6 +77,8 @@ $(document).on('click', '.apikey-delete-button', function(e)
 	});
 });
 
+// Show the key as QR code - regular keys encode "<api url>|<key>",
+// iCal special purpose keys encode the ready-to-use calendar URL
 $(".apikey-show-qr-button").on("click", function()
 {
 	var button = $(this);
@@ -89,6 +98,8 @@ $(".apikey-show-qr-button").on("click", function()
 	});
 });
 
+// "Add" opens a modal asking for a description; the key itself is then
+// generated server side by navigating to /manageapikeys/new
 $("#add-api-key-button").on("click", function(e)
 {
 	$("#add-api-key-modal").modal("show");

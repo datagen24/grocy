@@ -1,4 +1,9 @@
-﻿var choresTable = $('#chores-table').DataTable({
+﻿// View script for the chores master data list (views/chores.blade.php):
+// DataTable setup, search filter, delete via DELETE /api/objects/chores/{id},
+// show/hide disabled chores and merging two chores via POST /api/chores/{keep}/merge/{remove}
+
+// DataTables setup for the chores list
+var choresTable = $('#chores-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +13,7 @@
 $('#chores-table tbody').removeClass("d-none");
 choresTable.columns.adjust().draw();
 
+// Debounced free-text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -19,6 +25,7 @@ $("#search").on("keyup", Delay(function()
 	choresTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Reset search and the "show disabled" checkbox
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");
@@ -26,6 +33,8 @@ $("#clear-filter-button").on("click", function()
 	$("#show-disabled").prop('checked', false);
 });
 
+// Delete button per row: confirm, then DELETE /api/objects/chores/{id}
+// (expects data-chore-name / data-chore-id attributes from the Blade template)
 $(document).on('click', '.chore-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-chore-name');

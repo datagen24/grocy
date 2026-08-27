@@ -6,8 +6,16 @@ use Gettext\Translation;
 use Gettext\Translations;
 use Gettext\Translator;
 
+/**
+ * Gettext-based translation of UI strings, plus a second translator dedicated to
+ * quantity unit names (whose singular/plural forms live in the database, not in .po files).
+ * One instance per locale, obtained via GetInstance().
+ */
 class LocalizationService extends BaseService
 {
+	/**
+	 * @param string $locale Locale directory name under localization/, e.g. "en", "de", "pt_BR"
+	 */
 	public function __construct(string $locale)
 	{
 		parent::__construct();
@@ -25,6 +33,11 @@ class LocalizationService extends BaseService
 	protected $Locale;
 	private static $InstanceMap = [];
 
+	/**
+	 * Dev mode only: appends $text to localization/strings.pot when it is not yet
+	 * known in any .pot file, so new source strings get collected while developing.
+	 * No-op in any other GROCY_MODE.
+	 */
 	public function CheckAndAddMissingTranslationToPot($text)
 	{
 		if (GROCY_MODE === 'dev')
@@ -38,6 +51,10 @@ class LocalizationService extends BaseService
 		}
 	}
 
+	/**
+	 * Number of plural forms the locale defines (from the .po "Plural-Forms" header),
+	 * defaulting to 2 when the header is absent.
+	 */
 	public function GetPluralCount()
 	{
 		if ($this->Po->getHeader(Translations::HEADER_PLURAL) !== null)
@@ -50,6 +67,10 @@ class LocalizationService extends BaseService
 		}
 	}
 
+	/**
+	 * The locale's plural selection formula as a C-like expression in n
+	 * (from the .po "Plural-Forms" header), defaulting to "(n != 1)".
+	 */
 	public function GetPluralDefinition()
 	{
 		if ($this->Po->getHeader(Translations::HEADER_PLURAL) !== null)
@@ -62,16 +83,30 @@ class LocalizationService extends BaseService
 		}
 	}
 
+	/**
+	 * All loaded UI translations as a JSON string, for the client side translator.
+	 */
 	public function GetPoAsJsonString()
 	{
 		return $this->Po->toJsonString();
 	}
 
+	/**
+	 * The quantity unit name translations as a JSON string, for the client side translator.
+	 */
 	public function GetPoAsJsonStringQu()
 	{
 		return $this->PoQu->toJsonString();
 	}
 
+	/**
+	 * Translates a singular/plural pair, choosing the form for $number and
+	 * sprintf-ing $number into the result (forms are expected to contain %s).
+	 *
+	 * @param int|float $number Quantity deciding the plural form (absolute value is used)
+	 * @param bool $isQu True to translate against quantity unit names instead of UI strings
+	 * @return string
+	 */
 	public function __n($number, $singularForm, $pluralForm, $isQu = false)
 	{
 		$this->CheckAndAddMissingTranslationToPot($singularForm);
@@ -91,6 +126,14 @@ class LocalizationService extends BaseService
 		}
 	}
 
+	/**
+	 * Translates $text, optionally filling sprintf placeholders.
+	 *
+	 * @param string $text The source (msgid) string, which may contain sprintf placeholders
+	 * @param mixed ...$placeholderValues Values for the placeholders; a single array argument
+	 * is spread over all placeholders (vsprintf), otherwise only the first value is used
+	 * @return string
+	 */
 	public function __t($text, ...$placeholderValues)
 	{
 		$this->CheckAndAddMissingTranslationToPot($text);
@@ -112,6 +155,9 @@ class LocalizationService extends BaseService
 		}
 	}
 
+	/**
+	 * Per-locale singleton; an empty $locale means the configured GROCY_LOCALE.
+	 */
 	public static function GetInstance(string $locale = '')
 	{
 		if (empty($locale))
@@ -127,6 +173,11 @@ class LocalizationService extends BaseService
 		return self::$InstanceMap[$locale];
 	}
 
+	/**
+	 * Loads and merges all .po files of the locale into one translation set, then builds
+	 * the separate quantity unit translation set from the active quantity_units rows
+	 * (skipped silently while the database is not yet initialised/migrated).
+	 */
 	private function LoadLocalizations()
 	{
 		$locale = $this->Locale;

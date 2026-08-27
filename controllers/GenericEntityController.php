@@ -6,8 +6,16 @@ use Grocy\Services\UserfieldsService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for the user-defined entity system views: userfields
+ * (custom fields on built-in entities), userentities (user-defined entity types)
+ * and userobjects (instances of those user-defined entities).
+ */
 class GenericEntityController extends BaseController
 {
+	/**
+	 * Serves the userentities list view (route GET /userentities).
+	 */
 	public function UserentitiesList(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'userentities', [
@@ -15,6 +23,11 @@ class GenericEntityController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the userentity create/edit form (route GET /userentity/{userentityId}).
+	 *
+	 * @param array $args Route arguments; userentityId is either a userentity id or the literal 'new' for create mode
+	 */
 	public function UserentityEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['userentityId'] == 'new')
@@ -32,6 +45,11 @@ class GenericEntityController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the userfield create/edit form (route GET /userfield/{userfieldId}).
+	 *
+	 * @param array $args Route arguments; userfieldId is either a userfield id or the literal 'new' for create mode
+	 */
 	public function UserfieldEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['userfieldId'] == 'new')
@@ -53,6 +71,9 @@ class GenericEntityController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the userfields list view (route GET /userfields).
+	 */
 	public function UserfieldsList(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'userfields', [
@@ -61,6 +82,12 @@ class GenericEntityController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the userobject create/edit form (route GET /userobject/{userentityName}/{userobjectId}).
+	 *
+	 * @param array $args Route arguments; userentityName selects the userentity,
+	 *                    userobjectId is either a userobject id or the literal 'new' for create mode
+	 */
 	public function UserobjectEditForm(Request $request, Response $response, array $args)
 	{
 		$userentity = $this->DB->userentities()->where('name = :1', $args['userentityName'])->fetch();
@@ -84,6 +111,9 @@ class GenericEntityController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the userobjects list view for one userentity (route GET /userobjects/{userentityName}).
+	 */
 	public function UserobjectsList(Request $request, Response $response, array $args)
 	{
 		$userentity = $this->DB->userentities()->where('name = :1', $args['userentityName'])->fetch();

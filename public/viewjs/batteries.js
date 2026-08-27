@@ -1,4 +1,8 @@
-﻿var batteriesTable = $('#batteries-table').DataTable({
+﻿// View script for the batteries master data list (views/batteries.blade.php):
+// DataTable setup, search filter, delete via DELETE /api/objects/batteries/{id}, show/hide disabled batteries
+
+// DataTables setup for the batteries list
+var batteriesTable = $('#batteries-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -9,6 +13,7 @@
 $('#batteries-table tbody').removeClass("d-none");
 batteriesTable.columns.adjust().draw();
 
+// Debounced free-text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -20,6 +25,7 @@ $("#search").on("keyup", Delay(function()
 	batteriesTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Reset search and the "show disabled" checkbox
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");
@@ -27,6 +33,8 @@ $("#clear-filter-button").on("click", function()
 	$("#show-disabled").prop('checked', false);
 });
 
+// Delete button per row: confirm, then DELETE /api/objects/batteries/{id}
+// (expects data-battery-name / data-battery-id attributes from the Blade template)
 $(document).on('click', '.battery-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-battery-name');
@@ -64,6 +72,7 @@ $(document).on('click', '.battery-delete-button', function(e)
 	});
 });
 
+// Toggle inclusion of disabled batteries via page reload (server-side filter through the include_disabled URI parameter)
 $("#show-disabled").change(function()
 {
 	if (this.checked)
@@ -76,6 +85,7 @@ $("#show-disabled").change(function()
 	}
 });
 
+// Reflect the current include_disabled URI parameter in the checkbox state
 if (GetUriParam('include_disabled'))
 {
 	$("#show-disabled").prop('checked', true);

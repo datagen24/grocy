@@ -2,11 +2,22 @@
 
 namespace Grocy\Helpers;
 
+/**
+ * Base class for external barcode lookup plugins (selected via the
+ * STOCK_BARCODE_LOOKUP_PLUGIN setting, see plugins/DemoBarcodeLookupPlugin.php
+ * for a documented example). Subclasses implement ExecuteLookup(); Lookup()
+ * wraps it and validates the returned product data.
+ */
 abstract class BaseBarcodeLookupPlugin
 {
 	// That's a "self-referencing constant" and forces the child class to define it
 	public const PLUGIN_NAME = self::PLUGIN_NAME;
 
+	/**
+	 * @param array $locations All existing location rows
+	 * @param array $quantityUnits All existing quantity unit rows
+	 * @param array $userSettings All settings (name => value) of the current user
+	 */
 	final public function __construct($locations, $quantityUnits, $userSettings)
 	{
 		$this->Locations = $locations;
@@ -18,6 +29,15 @@ abstract class BaseBarcodeLookupPlugin
 	protected $QuantityUnits;
 	protected $UserSettings;
 
+	/**
+	 * Looks up the given barcode via the plugin implementation and validates the result.
+	 *
+	 * @param string $barcode The barcode to look up
+	 * @return array|null The validated product data (associative array, see ExecuteLookup)
+	 *                    or null when nothing was found for the barcode
+	 * @throws \Exception When the plugin output is not an associative array, misses a
+	 *                    required property or references invalid location/quantity unit ids
+	 */
 	final public function Lookup($barcode)
 	{
 		$pluginOutput = $this->ExecuteLookup($barcode);
@@ -87,5 +107,14 @@ abstract class BaseBarcodeLookupPlugin
 		return $pluginOutput;
 	}
 
+	/**
+	 * Performs the actual lookup; to be implemented by the plugin.
+	 *
+	 * @param string $barcode The barcode to look up
+	 * @return array|null Associative array of the product model with at least the keys
+	 *                    name, location_id, qu_id_purchase, qu_id_stock,
+	 *                    __qu_factor_purchase_to_stock and __barcode (optionally
+	 *                    __image_url), or null when nothing was found
+	 */
 	abstract protected function ExecuteLookup($barcode);
 }

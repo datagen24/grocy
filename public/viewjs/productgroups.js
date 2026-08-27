@@ -1,4 +1,8 @@
-﻿var groupsTable = $('#productgroups-table').DataTable({
+﻿// Powers the product groups list view (views/productgroups.blade.php):
+// DataTable of all product groups with search, delete confirmation and a "show disabled" toggle.
+
+// DataTables setup for the product groups list (column 0 = row menu, not sortable/searchable)
+var groupsTable = $('#productgroups-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +12,7 @@
 $('#productgroups-table tbody').removeClass("d-none");
 groupsTable.columns.adjust().draw();
 
+// Debounced full-text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +30,8 @@ $("#clear-filter-button").on("click", function()
 	groupsTable.search("").draw();
 });
 
+// Delete button per row (expects data-group-name / data-group-id from the template);
+// confirms via bootbox, then DELETEs objects/product_groups/{id}
 $(document).on('click', '.product-group-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-group-name');
@@ -61,6 +68,7 @@ $(document).on('click', '.product-group-delete-button', function(e)
 		}
 	});
 });
+// Reload the list when an embedded edit modal (product group form) closes
 $(window).on("message", function(e)
 {
 	var data = e.originalEvent.data;
@@ -71,6 +79,7 @@ $(window).on("message", function(e)
 	}
 });
 
+// "Show disabled" toggle reloads the page with/without the include_disabled URI parameter (filtering happens server-side)
 $("#show-disabled").change(function()
 {
 	if (this.checked)

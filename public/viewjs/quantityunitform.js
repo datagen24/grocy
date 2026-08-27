@@ -1,4 +1,11 @@
-﻿$('.save-quantityunit-button').on('click', function(e)
+﻿// Powers the quantity unit create/edit form (views/quantityunitform.blade.php):
+// saves the unit via the objects/quantity_units API, lists its default conversions and offers plural form testing.
+
+// Form submit: POSTs objects/quantity_units (create) or PUTs objects/quantity_units/{id} (edit, id from Grocy.EditObjectId).
+// The redirect target depends on Grocy.QuantityUnitEditFormRedirectUri ("stay"/"reload"/URL, e.g. set by the plural
+// testing button below), the save button's data-location attribute ("continue" = stay on the edit page) and whether
+// the form is embedded (then the parent window is reloaded instead)
+$('.save-quantityunit-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -99,6 +106,8 @@
 	}
 });
 
+// Live validation while typing; also updates the conversions headline with the entered unit name
+// and disables the "add conversion" button while the form is invalid
 $('#quantityunit-form input').keyup(function(event)
 {
 	if ($("#name").val())
@@ -122,6 +131,7 @@ $('#quantityunit-form input').keyup(function(event)
 	Grocy.FrontendHelpers.ValidateForm('quantityunit-form');
 });
 
+// Enter submits the form (when valid)
 $('#quantityunit-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -139,6 +149,7 @@ $('#quantityunit-form input').keydown(function(event)
 	}
 });
 
+// DataTables setup for the unit's default conversions list (column 0 = row menu, not sortable/searchable)
 var quConversionsTable = $('#qu-conversions-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
@@ -149,6 +160,7 @@ var quConversionsTable = $('#qu-conversions-table').DataTable({
 $('#qu-conversions-table tbody').removeClass("d-none");
 quConversionsTable.columns.adjust().draw();
 
+// Initial setup: load userfields, sync the headline/validation state, focus the name field
 Grocy.Components.UserfieldsForm.Load();
 $("#name").trigger("keyup");
 Grocy.FrontendHelpers.ValidateForm('quantityunit-form');
@@ -157,6 +169,8 @@ setTimeout(function()
 	$('#name').focus();
 }, Grocy.FormFocusDelay);
 
+// Delete button per conversion row (expects data-qu-conversion-id from the template);
+// confirms via bootbox, then DELETEs objects/quantity_unit_conversions/{id} and reloads
 $(document).on('click', '.qu-conversion-delete-button', function(e)
 {
 	var objectId = $(e.currentTarget).attr('data-qu-conversion-id');
@@ -193,6 +207,8 @@ $(document).on('click', '.qu-conversion-delete-button', function(e)
 	});
 });
 
+// Plural form testing: saves the unit first (redirect suppressed via Grocy.QuantityUnitEditFormRedirectUri = "stay"),
+// then opens the quantityunitpluraltesting view in an embedded iframe dialog
 $("#test-quantityunit-plural-forms-button").on("click", function(e)
 {
 	e.preventDefault();

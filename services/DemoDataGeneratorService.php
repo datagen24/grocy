@@ -2,10 +2,27 @@
 
 namespace Grocy\Services;
 
+/**
+ * Fills an empty database with localized sample data (products, stock, chores,
+ * batteries, tasks, recipes, meal plan, ...) for the demo/prerelease instances.
+ * The raw SQL used here is SQLite flavored, matching the demo setup.
+ */
 class DemoDataGeneratorService extends BaseService
 {
 	private $LastSupermarketId = 1;
 
+	/**
+	 * Generates the demo data once: a row with the magic migration number -1 in the
+	 * migrations table records that this already ran (or was skipped) and makes any
+	 * further call a no-op.
+	 *
+	 * Reference data is inserted via raw SQL (translated through the localization
+	 * service), while stock/chore/battery journals go through the regular services so
+	 * the demo history is consistent. Demo pictures/manuals are downloaded into the
+	 * storage folder at the end.
+	 *
+	 * @param bool $skip When true, only writes the "already populated" marker without generating any data
+	 */
 	public function PopulateDemoData($skip = false)
 	{
 		$db = DatabaseService::GetInstance();
@@ -429,6 +446,13 @@ class DemoDataGeneratorService extends BaseService
 		}
 	}
 
+	/**
+	 * Downloads a demo resource file unless it is already present
+	 * (TLS peer verification is deliberately disabled for these fetches).
+	 *
+	 * @param string $sourceUrl
+	 * @param string $destinationPath
+	 */
 	private function DownloadFileIfNotAlreadyExists($sourceUrl, $destinationPath)
 	{
 		if (!file_exists($destinationPath))
@@ -442,6 +466,12 @@ class DemoDataGeneratorService extends BaseService
 		}
 	}
 
+	/**
+	 * Alternates between the two demo shopping location ids (1 and 2), so purchases
+	 * are spread over both supermarkets.
+	 *
+	 * @return int
+	 */
 	private function NextSupermarketId()
 	{
 		$returnValue = $this->LastSupermarketId;
@@ -458,17 +488,35 @@ class DemoDataGeneratorService extends BaseService
 		return $returnValue;
 	}
 
+	/**
+	 * A random price between 0.50 and 6.25, in steps of 0.0025.
+	 *
+	 * @return float
+	 */
 	private function RandomPrice()
 	{
 		return mt_rand(2 * 100, 25 * 100) / 100 / 4;
 	}
 
+	/**
+	 * Localizes a singular/plural text and escapes it for embedding into a
+	 * single-quoted SQL string literal.
+	 *
+	 * @param int $number Quantity deciding between singular and plural form
+	 * @return string
+	 */
 	private function __n_sql($number, string $singularForm, string $pluralForm)
 	{
 		$localizedText = LocalizationService::GetInstance()->__n($number, $singularForm, $pluralForm);
 		return str_replace("'", "''", $localizedText);
 	}
 
+	/**
+	 * Localizes a text and escapes it for embedding into a single-quoted SQL
+	 * string literal.
+	 *
+	 * @return string
+	 */
 	private function __t_sql(string $text)
 	{
 		$localizedText = LocalizationService::GetInstance()->__t($text, null);

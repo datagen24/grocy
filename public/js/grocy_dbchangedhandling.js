@@ -1,4 +1,11 @@
-﻿if (Grocy.UserId !== -1)
+// Database change polling: polls the API once a minute for the last database
+// change timestamp and auto-reloads the page when another session/device changed
+// something (opt-in via the user setting "auto_reload_on_db_change");
+// also maintains the global idle time counter (Grocy.IdleTime) used to avoid
+// reloading while the user is actively working. Loaded on every page.
+
+// Fetch the initial reference timestamp (GET /api/system/db-changed-time)
+if (Grocy.UserId !== -1)
 {
 	Grocy.Api.Get('system/db-changed-time',
 		function(result)
@@ -42,6 +49,7 @@ setInterval(function()
 }, 60000);
 
 Grocy.IdleTime = 0;
+/** Resets the idle time counter to 0 (bound to any user interaction below). */
 Grocy.ResetIdleTime = function()
 {
 	Grocy.IdleTime = 0;
@@ -59,6 +67,7 @@ setInterval(function()
 	Grocy.IdleTime += 1;
 }, 1000);
 
+// Reflect the current setting in the settings page checkbox (if present on this page)
 if (Grocy.UserId !== -1 && BoolVal(Grocy.UserSettings.auto_reload_on_db_change))
 {
 	$("#auto-reload-enabled").prop("checked", true);

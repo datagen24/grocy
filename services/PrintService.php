@@ -7,8 +7,20 @@ use Mike42\Escpos\PrintConnectors\FilePrintConnector;
 use Mike42\Escpos\PrintConnectors\NetworkPrintConnector;
 use Mike42\Escpos\Printer;
 
+/**
+ * Prints the shopping list on an ESC/POS thermal printer, reached over the network or
+ * a local device file depending on the GROCY_TPRINTER_* settings.
+ */
 class PrintService extends BaseService
 {
+	/**
+	 * Prints the given lines and cuts the paper.
+	 *
+	 * @param bool $printHeader Whether to print the "Grocy" banner and timestamp first
+	 * @param string[] $lines Pre-rendered text lines, one per shopping list item
+	 * @return array Always ['result' => 'OK']; failures throw instead
+	 * @throws \Exception When the printer cannot be reached
+	 */
 	public function printShoppingList(bool $printHeader, array $lines): array
 	{
 		$printer = self::getPrinterHandle();
@@ -36,6 +48,10 @@ class PrintService extends BaseService
 		];
 	}
 
+	/**
+	 * Connects to the configured printer: TCP (GROCY_TPRINTER_IP/PORT) when
+	 * GROCY_TPRINTER_IS_NETWORK_PRINTER, otherwise a device file (GROCY_TPRINTER_CONNECTOR).
+	 */
 	private static function getPrinterHandle()
 	{
 		if (GROCY_TPRINTER_IS_NETWORK_PRINTER)
@@ -49,6 +65,9 @@ class PrintService extends BaseService
 		return new Printer($connector);
 	}
 
+	/**
+	 * Prints the centered "Grocy" banner followed by the current date/time (d/m/Y H:i).
+	 */
 	private static function printHeader(Printer $printer)
 	{
 		$date = new DateTime();

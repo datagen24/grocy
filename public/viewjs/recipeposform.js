@@ -1,4 +1,9 @@
-﻿Grocy.RecipePosFormInitialLoadDone = false;
+﻿// Powers the recipe ingredient (recipe position) create/edit form (views/recipeposform.blade.php),
+// embedded in a modal from the recipe form: saves the ingredient via the objects/recipes_pos API.
+
+// Guards the product picker change handler: on the very first (programmatic) trigger in edit mode the
+// saved quantity unit must be kept instead of resetting to the product's default
+Grocy.RecipePosFormInitialLoadDone = false;
 
 $('#save-recipe-pos-button').on('click', function(e)
 {

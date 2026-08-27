@@ -7,6 +7,10 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 
+/**
+ * Determines the locale for the current request and defines it as the
+ * GROCY_LOCALE constant before the request is handled further.
+ */
 class LocaleMiddleware extends BaseMiddleware
 {
 	public function __invoke(Request $request, RequestHandler $handler): Response
@@ -16,6 +20,15 @@ class LocaleMiddleware extends BaseMiddleware
 		return $handler->handle($request);
 	}
 
+	/**
+	 * Resolves the locale to use, in order of precedence: fixed default locale
+	 * (demo/prerelease mode), the authenticated user's "locale" setting, the
+	 * browser's Accept-Language header (best q-weighted match against the
+	 * available locales, also trying 5 and 2 character prefixes), otherwise
+	 * GROCY_DEFAULT_LOCALE.
+	 *
+	 * @return string A locale folder name existing in /localization
+	 */
 	private function GetLocale(Request $request)
 	{
 		// Demo and Prerelease modes are fixed to the default locale

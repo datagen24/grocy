@@ -4,6 +4,11 @@ namespace Grocy\Services;
 
 use Grocy\Helpers\UrlManager;
 
+/**
+ * Aggregates upcoming due dates from all enabled feature areas (stock due dates, tasks,
+ * chores, batteries, meal plan) into one event list for the calendar page and the
+ * iCal export.
+ */
 class CalendarService extends BaseService
 {
 	public function __construct()
@@ -14,6 +19,14 @@ class CalendarService extends BaseService
 
 	private $UrlManager;
 
+	/**
+	 * Collects the calendar events of every feature area enabled by feature flags.
+	 *
+	 * Meal plan entries without a section time are all-day events ('date_format' =>
+	 * 'date'); a section time turns them into timed events ('datetime').
+	 *
+	 * @return array[] Each event: {title: string, start: string, date_format: 'date'|'datetime', link: string, color: string, description?: string, allDay?: bool}
+	 */
 	public function GetEvents()
 	{
 		$usersService = UsersService::GetInstance();

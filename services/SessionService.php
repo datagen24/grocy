@@ -2,10 +2,22 @@
 
 namespace Grocy\Services;
 
+/**
+ * Cookie-based login sessions: creation, validation and removal of rows in the
+ * sessions table. The session key doubles as the value of the grocy_session cookie.
+ */
 class SessionService extends BaseService
 {
 	const SESSION_COOKIE_NAME = 'grocy_session';
 
+	/**
+	 * Creates a session for the user and returns the new session key.
+	 *
+	 * @param int $userId
+	 * @param bool $stayLoggedInPermanently True makes the session effectively never expire,
+	 * false expires it 30 days from now
+	 * @return string The 50 character random session key
+	 */
 	public function CreateSession($userId, $stayLoggedInPermanently = false)
 	{
 		$newSessionKey = $this->GenerateKey();
@@ -27,11 +39,20 @@ class SessionService extends BaseService
 		return $newSessionKey;
 	}
 
+	/**
+	 * The user with the lowest id (normally the initially created admin), used as the
+	 * acting user in modes without authentication (dev/demo/prerelease, embedded
+	 * installs, GROCY_DISABLE_AUTH).
+	 */
 	public function GetDefaultUser()
 	{
 		return $this->DB->users()->orderBy('id')->limit(1)->fetch();
 	}
 
+	/**
+	 * The user row the session key belongs to, or null for an unknown key
+	 * (expiry is NOT checked here - use IsValidSession() for that).
+	 */
 	public function GetUserBySessionKey($sessionKey)
 	{
 		$sessionRow = $this->DB->sessions()->where('session_key', $sessionKey)->fetch();
@@ -43,6 +64,14 @@ class SessionService extends BaseService
 		return null;
 	}
 
+	/**
+	 * True when the key belongs to a session that has not expired. Also stamps the
+	 * session's last_used time, while restoring the database changed time afterwards
+	 * so this bookkeeping write does not make clients think data changed.
+	 *
+	 * @param string|null $sessionKey
+	 * @return bool
+	 */
 	public function IsValidSession($sessionKey)
 	{
 		if ($sessionKey === null || empty($sessionKey))
@@ -71,6 +100,9 @@ class SessionService extends BaseService
 		}
 	}
 
+	/**
+	 * Deletes the session (logout); unknown keys are a no-op.
+	 */
 	public function RemoveSession($sessionKey)
 	{
 		$this->DB->sessions()->where('session_key', $sessionKey)->delete();

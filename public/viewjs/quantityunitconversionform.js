@@ -1,4 +1,11 @@
-﻿$('#save-quconversion-button').on('click', function(e)
+﻿// Powers the quantity unit conversion create/edit form (views/quantityunitconversionform.blade.php),
+// used both for product-specific conversions (embedded from the product form) and default conversions of a unit
+// (opened with a "qu-unit" URI parameter from the quantity unit form): saves via the objects/quantity_unit_conversions API.
+
+// Form submit: POSTs objects/quantity_unit_conversions (create) or PUTs objects/quantity_unit_conversions/{id} (edit, id from Grocy.EditObjectId).
+// Afterwards: with a "qu-unit" URI parameter it returns to that quantity unit's edit page (or reloads the parent when embedded),
+// otherwise it notifies the parent product form (ProductQUConversionChanged) and closes the modal
+$('#save-quconversion-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -83,12 +90,14 @@
 	}
 });
 
+// Live validation + refresh of the conversion preview while typing
 $('#quconversion-form input').keyup(function(event)
 {
 	$('.input-group-qu').trigger('change');
 	Grocy.FrontendHelpers.ValidateForm('quconversion-form');
 });
 
+// Enter submits the form (when valid)
 $('#quconversion-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -106,6 +115,9 @@ $('#quconversion-form input').keydown(function(event)
 	}
 });
 
+// Unit conversion preview: rejects from == to, then renders both directions of the factor
+// ("1 <from> = <factor> <to>" and the inverse "1 <to> = 1/<factor> <from>"), pluralized via
+// __n() using the data-plural-form attribute of the selected unit options (provided by the template)
 $('.input-group-qu').on('change', function(e)
 {
 	var fromQuId = $("#from_qu_id").val();
@@ -139,6 +151,7 @@ $('.input-group-qu').on('change', function(e)
 	Grocy.FrontendHelpers.ValidateForm('quconversion-form');
 });
 
+// Initial setup: load userfields, render the preview once, validate and focus the "from" unit
 Grocy.Components.UserfieldsForm.Load();
 $('.input-group-qu').trigger('change');
 Grocy.FrontendHelpers.ValidateForm('quconversion-form');
@@ -147,6 +160,7 @@ setTimeout(function()
 	$('#from_qu_id').focus();
 }, Grocy.FormFocusDelay);
 
+// When editing a default conversion of a specific unit, the "from" unit is fixed
 if (GetUriParam("qu-unit") !== undefined)
 {
 	$("#from_qu_id").attr("disabled", "");

@@ -1,3 +1,12 @@
+// Generic helper extensions: String/jQuery prototype additions and small global
+// utility functions (URI parameter handling, array searching, debouncing, etc.)
+// used throughout the frontend; loaded on every page before all other Grocy scripts.
+
+/**
+ * Clears the text of the given element when it exactly equals the given text.
+ * @param {string} selector jQuery selector
+ * @param {string} text Text to compare against
+ */
 EmptyElementWhenMatches = function (selector, text)
 {
 	if ($(selector).text() === text)
@@ -6,16 +15,22 @@ EmptyElementWhenMatches = function (selector, text)
 	}
 };
 
+/** Case insensitive "contains" check. @returns {boolean} */
 String.prototype.contains = function (search)
 {
 	return this.toLowerCase().indexOf(search.toLowerCase()) !== -1;
 };
 
+/**
+ * Replaces all occurrences of search (treated as a RegExp pattern) with replacement.
+ * Note: This shadows the native String.replaceAll (regex semantics differ).
+ */
 String.prototype.replaceAll = function (search, replacement)
 {
 	return this.replace(new RegExp(search, "g"), replacement);
 };
 
+/** Escapes HTML special characters (&, <, >, ", ', /, `, =) as entities. */
 String.prototype.escapeHTML = function ()
 {
 	return this.replace(/[&<>"'`=\/]/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '/': '&#x2F;', '`': '&#x60;', '=': '&#x3D;' })[s]);;
@@ -33,6 +48,11 @@ String.prototype.stripHtml = function ()
 	return this.replace(/<.*?>/g, '');
 };
 
+/**
+ * Returns the value of the given query string parameter of the current URL.
+ * @param {string} key Parameter name
+ * @returns {string|boolean|undefined} Decoded value; true for a valueless parameter (?key); undefined when absent
+ */
 GetUriParam = function (key)
 {
 	var currentUri = window.location.search.substring(1);
@@ -49,6 +69,7 @@ GetUriParam = function (key)
 	}
 };
 
+/** Sets/replaces a query string parameter of the current URL (without reloading, via history.replaceState). */
 UpdateUriParam = function (key, value)
 {
 	var queryParameters = new URLSearchParams(location.search);
@@ -56,6 +77,7 @@ UpdateUriParam = function (key, value)
 	window.history.replaceState({}, "", decodeURIComponent(`${location.pathname}?${queryParameters}`));
 };
 
+/** Removes a query string parameter from the current URL (without reloading, via history.replaceState). */
 RemoveUriParam = function (key)
 {
 	var queryParameters = new URLSearchParams(location.search);
@@ -63,6 +85,12 @@ RemoveUriParam = function (key)
 	window.history.replaceState({}, "", decodeURIComponent(`${location.pathname}?${queryParameters}`));
 };
 
+/**
+ * Loose boolean conversion: true for true/"true"/"1"/"on" (case insensitive), false otherwise.
+ * Useful for user settings, which are often stored as "0"/"1" strings.
+ * @param {*} test Any value
+ * @returns {boolean}
+ */
 BoolVal = function (test)
 {
 	if (!test)
@@ -81,16 +109,19 @@ BoolVal = function (test)
 	}
 }
 
+/** Returns the file name portion of a path (handles both / and \ separators). */
 GetFileNameFromPath = function (path)
 {
 	return path.split("/").pop().split("\\").pop();
 }
 
+/** Returns the file extension (text after the last dot) of a path or file name. */
 GetFileExtension = function (pathOrFileName)
 {
 	return pathOrFileName.split(".").pop();
 }
 
+// Custom jQuery selector :contains_case_insensitive("text") - like :contains, but case insensitive
 $.extend($.expr[":"],
 	{
 		"contains_case_insensitive": function (elem, i, match, array)
@@ -99,6 +130,10 @@ $.extend($.expr[":"],
 		}
 	});
 
+/**
+ * Returns the first object in the array whose property matches (loose ==) the given value.
+ * @returns {Object|null} The found object or null
+ */
 FindObjectInArrayByPropertyValue = function (array, propertyName, propertyValue)
 {
 	for (var i = 0; i < array.length; i++)
@@ -112,6 +147,10 @@ FindObjectInArrayByPropertyValue = function (array, propertyName, propertyValue)
 	return null;
 }
 
+/**
+ * Returns all objects in the array whose property matches (loose ==) the given value.
+ * @returns {Object[]} Possibly empty array of matches
+ */
 FindAllObjectsInArrayByPropertyValue = function (array, propertyName, propertyValue)
 {
 	var returnArray = [];
@@ -127,11 +166,13 @@ FindAllObjectsInArrayByPropertyValue = function (array, propertyName, propertyVa
 	return returnArray;
 }
 
+/** jQuery plugin: whether the (first) element has the given attribute. @returns {boolean} */
 $.fn.hasAttr = function (name)
 {
 	return this.attr(name) !== undefined;
 };
 
+/** Whether the given text is parseable as JSON. @returns {boolean} */
 function IsJsonString(text)
 {
 	try
@@ -144,6 +185,13 @@ function IsJsonString(text)
 	return true;
 }
 
+/**
+ * Debounce: returns a wrapper which delays calling callable until
+ * delayMilliseconds passed without a new invocation (used e.g. for search inputs).
+ * @param {Function} callable Function to debounce
+ * @param {number} delayMilliseconds Delay in milliseconds
+ * @returns {Function} Debounced wrapper
+ */
 function Delay(callable, delayMilliseconds)
 {
 	var timer = 0;
@@ -160,6 +208,11 @@ function Delay(callable, delayMilliseconds)
 	};
 }
 
+/**
+ * jQuery plugin: whether the element is (partially) visible in the current viewport.
+ * @param {number} [extraHeightPadding=0] Extra top offset to tolerate (e.g. a fixed header height)
+ * @returns {boolean}
+ */
 $.fn.isVisibleInViewport = function (extraHeightPadding = 0)
 {
 	var elementTop = $(this).offset().top;
@@ -168,6 +221,13 @@ $.fn.isVisibleInViewport = function (extraHeightPadding = 0)
 	return elementTop + $(this).outerHeight() > viewportTop && elementTop < viewportTop + $(window).height();
 };
 
+/**
+ * Runs an Animate.css animation on the matched elements and cleans the classes up afterwards.
+ * @param {string} selector jQuery selector
+ * @param {string} animationName Animate.css animation class (e.g. "flash")
+ * @param {Function} [callback] Called once the animation finished
+ * @param {string} [speed="faster"] Animate.css speed class
+ */
 function animateCSS(selector, animationName, callback, speed = "faster")
 {
 	var nodes = $(selector);
@@ -187,11 +247,17 @@ function animateCSS(selector, animationName, callback, speed = "faster")
 	nodes.on('animationend', handleAnimationEnd);
 }
 
+/** Returns a random alphanumeric string (not cryptographically secure). */
 function RandomString()
 {
 	return Math.random().toString(36).substring(2, 100) + Math.random().toString(36).substring(2, 100);
 }
 
+/**
+ * Renders the given text as a QR code (via bwip-js) and returns it as <img> HTML.
+ * @param {string} text Text to encode
+ * @returns {string} HTML of an <img class="qr-code"> element with a data URI source
+ */
 function QrCodeImgHtml(text)
 {
 	var dummyCanvas = document.createElement("canvas");
@@ -209,6 +275,12 @@ function QrCodeImgHtml(text)
 	return img.outerHTML;
 }
 
+/**
+ * Sanitizes a file name for storage: transliterates German umlauts,
+ * strips whitespace and removes any non-ASCII character.
+ * @param {string} fileName Original file name
+ * @returns {string} Cleaned file name
+ */
 function CleanFileName(fileName)
 {
 	// Umlaute seem to cause problems on Linux...
@@ -223,6 +295,7 @@ function CleanFileName(fileName)
 	return fileName;
 }
 
+/** Converts line breaks in the given string to <br> tags (null/undefined become ""). */
 function nl2br(s)
 {
 	if (s == null || s === undefined)

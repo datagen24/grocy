@@ -6,18 +6,67 @@ use Grocy\Helpers\Grocycode;
 use Grocy\Helpers\WebhookRunner;
 use GuzzleHttp\Client;
 
+/**
+ * Core domain service for all stock operations (purchases, consumption, transfers,
+ * inventory corrections, open/freeze handling, shopping lists, barcode lookups and price history).
+ *
+ * Concepts:
+ * - Stock entries: rows in the `stock` table, one per batch/lot of a product currently in stock.
+ *   Each carries its own amount (always in the product's *stock* quantity unit), due/best before date,
+ *   purchased date, price (per stock quantity unit), location and open state. A batch is identified
+ *   by its `stock_id` (a uniqid string, not the row id) - splitting an entry (partial open/transfer)
+ *   creates additional rows sharing the same `stock_id`.
+ * - Stock log / bookings: every stock mutation additionally writes one row ("booking") to the
+ *   `stock_log` table, which is the append-only journal used for undo, price history and statistics.
+ *   Negative amounts represent stock removals, positive ones additions.
+ * - Transaction ids: one user-level operation (e.g. consuming an amount spread over multiple
+ *   stock entries) shares a single `transaction_id` across all its bookings, so it can be undone
+ *   as a whole via UndoTransaction. `correlation_id` additionally groups bookings which must be
+ *   undone together (e.g. the old/new pair of a stock edit or the from/to pair of a transfer).
+ * - Transaction types: the TRANSACTION_TYPE_* constants below classify each booking and determine
+ *   how UndoBooking reverses it.
+ */
 class StockService extends BaseService
 {
+	/** Stock removal by consuming (eating/using/spoiling) - negative amount booking */
 	const TRANSACTION_TYPE_CONSUME = 'consume';
+
+	/** Manual adjustment to a counted total via InventoryProduct - amount sign depends on the direction of the correction */
 	const TRANSACTION_TYPE_INVENTORY_CORRECTION = 'inventory-correction';
+
+	/** A stock entry (or part of it) was marked as opened - does not change the stock amount */
 	const TRANSACTION_TYPE_PRODUCT_OPENED = 'product-opened';
+
+	/** Stock addition through a purchase - positive amount booking */
 	const TRANSACTION_TYPE_PURCHASE = 'purchase';
+
+	/** Stock addition produced by a recipe/self production (booked like a purchase) */
 	const TRANSACTION_TYPE_SELF_PRODUCTION = 'self-production';
+
+	/** Snapshot of a stock entry *after* it was edited via EditStockEntry (correlated with the _OLD booking) */
 	const TRANSACTION_TYPE_STOCK_EDIT_NEW = 'stock-edit-new';
+
+	/** Snapshot of a stock entry *before* it was edited via EditStockEntry (used to restore it on undo) */
 	const TRANSACTION_TYPE_STOCK_EDIT_OLD = 'stock-edit-old';
+
+	/** Transfer between locations: removal side at the source location (negative amount, correlated with _TO) */
 	const TRANSACTION_TYPE_TRANSFER_FROM = 'transfer_from';
+
+	/** Transfer between locations: addition side at the destination location (positive amount, correlated with _FROM) */
 	const TRANSACTION_TYPE_TRANSFER_TO = 'transfer_to';
 
+	/**
+	 * Adds all products which are below their minimum stock amount to the given shopping list.
+	 *
+	 * Amounts are in the product's stock quantity unit (rounded to 2 decimals); an already existing
+	 * list entry for the product (regardless of which list it is on) is raised to the missing amount
+	 * (never lowered) and moved to $listId, otherwise a new entry with the product's purchase
+	 * quantity unit is created.
+	 *
+	 * @param int $listId Target shopping list id
+	 * @return void
+	 * @throws \Exception When the shopping list does not exist
+	 */
 	public function AddMissingProductsToShoppingList($listId = 1)
 	{
 		if (!$this->ShoppingListExists($listId))
@@ -57,6 +106,15 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Adds all currently overdue products (due date before today) to the given shopping list,
+	 * with a fixed amount of 1 in the product's purchase quantity unit.
+	 * Products which already have an entry on any shopping list are skipped.
+	 *
+	 * @param int $listId Target shopping list id
+	 * @return void
+	 * @throws \Exception When the shopping list does not exist
+	 */
 	public function AddOverdueProductsToShoppingList($listId = 1)
 	{
 		if (!$this->ShoppingListExists($listId))
@@ -83,6 +141,15 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Adds all currently expired products (due date before today and due type "expiration") to the
+	 * given shopping list, with a fixed amount of 1 in the product's purchase quantity unit.
+	 * Products which already have an entry on any shopping list are skipped.
+	 *
+	 * @param int $listId Target shopping list id
+	 * @return void
+	 * @throws \Exception When the shopping list does not exist
+	 */
 	public function AddExpiredProductsToShoppingList($listId = 1)
 	{
 		if (!$this->ShoppingListExists($listId))
@@ -109,6 +176,36 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Adds the given amount of a product to stock (purchase, positive inventory correction or self production).
+	 *
+	 * Writes one new stock entry plus one corresponding stock_log booking - or, with $stockLabelType = 2,
+	 * one entry/booking pair with amount 1 per unit (each with its own stock_id) so every unit gets its own label.
+	 * Depending on the label type and the label printer feature flags, label printing webhooks are triggered.
+	 * Afterwards CompactStockEntries() merges equal stock entries of this product.
+	 *
+	 * For tare weight handled products $amount is the new gross total (scale reading incl. container weight);
+	 * the actually booked amount is $amount - current stock amount - tare weight. With $addExactAmount = true
+	 * the given amount is booked as-is instead.
+	 *
+	 * @param int $productId
+	 * @param float $amount Amount in the product's stock quantity unit (gross total for tare weight handled products, see above)
+	 * @param string|null $bestBeforeDate Due date as Y-m-d; null derives it from the product's default due days
+	 *                                    (or the after-freezing default when added to a freezer location);
+	 *                                    -1 default days map to the "never expires" date 2999-12-31
+	 * @param string $transactionType One of TRANSACTION_TYPE_PURCHASE, _INVENTORY_CORRECTION or _SELF_PRODUCTION
+	 * @param string|null $purchasedDate Purchased date as Y-m-d
+	 * @param float|null $price Price per stock quantity unit
+	 * @param int|null $locationId Destination location; null means the product's default location
+	 * @param int|null $shoppingLocationId Store where the product was bought
+	 * @param string|null $transactionId By-reference; generated via uniqid() when null, shared across all bookings of this call
+	 * @param int $stockLabelType 0 = no label, 1 = one label for the whole booking, 2 = one label (and stock entry) per unit
+	 * @param bool $addExactAmount Only relevant for tare weight handled products, see above
+	 * @param string|null $note Free text note stored on the stock entry and booking
+	 * @return string The transaction id of the booking(s)
+	 * @throws \Exception When the product or location does not exist, $amount <= 0, the gross amount is
+	 *                    not above tare weight + current stock, or $transactionType is not valid here
+	 */
 	public function AddProduct(int $productId, float $amount, $bestBeforeDate, $transactionType, $purchasedDate, $price, $locationId = null, $shoppingLocationId = null, &$transactionId = null, $stockLabelType = 0, $addExactAmount = false, $note = null)
 	{
 		if (!$this->ProductExists($productId))
@@ -192,6 +289,8 @@ class StockService extends BaseService
 
 				for ($i = 1; $i <= $amount; $i++)
 				{
+					// The "x" prefix marks per-unit labeled entries - the stock_splits view excludes
+					// them, so CompactStockEntries() will never merge these entries back together
 					$stockId = uniqid('x');
 					$logRow = $this->DB->stock_log()->createRow([
 						'product_id' => $productId,
@@ -304,6 +403,18 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Adds a product to a shopping list, or increases the amount of the product's
+	 * already existing entry on that list (replacing its note).
+	 *
+	 * @param int $productId
+	 * @param float $amount Amount in the quantity unit given by $quId
+	 * @param int $quId Quantity unit id; -1 means the product's default purchase quantity unit
+	 * @param string|null $note
+	 * @param int $listId Target shopping list id
+	 * @return void
+	 * @throws \Exception When the shopping list or product does not exist
+	 */
 	public function AddProductToShoppingList($productId, $amount = 1, $quId = -1, $note = null, $listId = 1)
 	{
 		if (!$this->ShoppingListExists($listId))
@@ -345,6 +456,14 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Deletes all entries of a shopping list, or only the ones marked as done.
+	 *
+	 * @param int $listId
+	 * @param bool $doneOnly When true, only entries with done = 1 are removed
+	 * @return void
+	 * @throws \Exception When the shopping list does not exist
+	 */
 	public function ClearShoppingList($listId = 1, $doneOnly = false)
 	{
 		if (!$this->ShoppingListExists($listId))
@@ -362,6 +481,38 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Removes the given amount of a product from stock (consume or negative inventory correction).
+	 *
+	 * The amount is taken from the stock entries in default consume order (entries at the default
+	 * consume location first, then opened first, then first due first, then first in first out);
+	 * fully used entries are deleted, a partially used entry keeps the rest amount. One negative
+	 * stock_log booking is written per touched stock entry, all sharing the same transaction id.
+	 * When the user setting "shopping_list_auto_add_below_min_stock_amount" is enabled, missing
+	 * products are added to the configured shopping list afterwards.
+	 *
+	 * For tare weight handled products $amount is the new gross total (scale reading incl. container
+	 * weight); the actually booked amount is |$amount - stock amount - tare weight|. With
+	 * $consumeExactAmount = true the given amount is consumed as-is instead.
+	 *
+	 * With $allowSubproductSubstitution, stock of sub products (products_resolved) may be used;
+	 * amounts are then converted to the sub product's stock quantity unit via QU conversions and
+	 * back for any remainder.
+	 *
+	 * @param int $productId
+	 * @param float $amount Amount in the product's stock quantity unit (gross total for tare weight handled products, see above)
+	 * @param bool $spoiled Whether the consumed amount was spoiled (tracked in the booking for the spoil rate statistic)
+	 * @param string $transactionType One of TRANSACTION_TYPE_CONSUME or _INVENTORY_CORRECTION
+	 * @param string $specificStockEntryId 'default' consumes in default order; otherwise a stock_id restricting consumption to that single stock entry
+	 * @param int|null $recipeId When consuming due to a recipe, its id (stored in the bookings)
+	 * @param int|null $locationId When given, only stock at this location is consumed
+	 * @param string|null $transactionId By-reference; generated via uniqid() when null, shared across all bookings of this call
+	 * @param bool $allowSubproductSubstitution See above
+	 * @param bool $consumeExactAmount Only relevant for tare weight handled products, see above
+	 * @return string The transaction id of the booking(s)
+	 * @throws \Exception When the product or location does not exist, $amount <= 0, the amount exceeds
+	 *                    the current (aggregated) stock amount, or $transactionType is not valid here
+	 */
 	public function ConsumeProduct(int $productId, float $amount, bool $spoiled, $transactionType, $specificStockEntryId = 'default', $recipeId = null, $locationId = null, &$transactionId = null, $allowSubproductSubstitution = false, $consumeExactAmount = false)
 	{
 		if (!$this->ProductExists($productId))
@@ -525,6 +676,26 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Edits a single stock entry in place (amount, dates, price, location, open state, note).
+	 *
+	 * Writes a correlated pair of stock_log bookings: a TRANSACTION_TYPE_STOCK_EDIT_OLD snapshot of
+	 * the entry before the change and a TRANSACTION_TYPE_STOCK_EDIT_NEW snapshot after it (linked by
+	 * a shared correlation id, so an undo restores the old state). Afterwards CompactStockEntries()
+	 * merges equal stock entries of the product.
+	 *
+	 * @param int $stockRowId The `stock` table row id (not the stock_id)
+	 * @param float $amount New amount in the product's stock quantity unit
+	 * @param string|null $bestBeforeDate New due date as Y-m-d
+	 * @param int|null $locationId
+	 * @param int|null $shoppingLocationId
+	 * @param float|null $price Price per stock quantity unit
+	 * @param bool $open New open state; opening sets opened_date to today (kept when already opened), un-opening clears it
+	 * @param string|null $purchasedDate New purchased date as Y-m-d
+	 * @param string|null $note
+	 * @return string The transaction id of the booking pair
+	 * @throws \Exception When the stock entry does not exist
+	 */
 	public function EditStockEntry(int $stockRowId, float $amount, $bestBeforeDate, $locationId, $shoppingLocationId, $price, $open, $purchasedDate, $note = null)
 	{
 		$stockRow = $this->DB->stock()->where('id = :1', $stockRowId)->fetch();
@@ -600,12 +771,32 @@ class StockService extends BaseService
 		return $transactionId;
 	}
 
+	/**
+	 * Returns the PLUGIN_NAME of the configured external barcode lookup plugin.
+	 *
+	 * @return string
+	 * @throws \Exception When no plugin is configured or it cannot be loaded
+	 */
 	public function GetExternalBarcodeLookupPluginName()
 	{
 		$plugin = $this->LoadExternalBarcodeLookupPlugin();
 		return $plugin::PLUGIN_NAME;
 	}
 
+	/**
+	 * Looks up a barcode via the configured external barcode lookup plugin.
+	 *
+	 * With $addFoundProduct = true the found product is also created in the database, including
+	 * its barcode, an optional purchase-to-stock quantity unit conversion and an optionally
+	 * downloaded product picture (from a http(s) or data: image URL; download errors are ignored);
+	 * the new product id is then included in the returned data as 'id'.
+	 *
+	 * @param string $barcode
+	 * @param bool $addFoundProduct
+	 * @return array|null The plugin's product data array, or null when the lookup found nothing
+	 * @throws \Exception When no plugin is configured, it cannot be loaded, or (when adding)
+	 *                    a product with the found name already exists
+	 */
 	public function ExternalBarcodeLookup($barcode, $addFoundProduct)
 	{
 		$plugin = $this->LoadExternalBarcodeLookupPlugin();
@@ -691,6 +882,16 @@ class StockService extends BaseService
 		return $pluginOutput;
 	}
 
+	/**
+	 * Returns the current stock overview (one row per product in stock) from the
+	 * stock_current view, with the full product row attached as ->product.
+	 *
+	 * Amounts are in stock quantity units; aggregated columns (amount_aggregated etc.)
+	 * include the stock of resolved sub products.
+	 *
+	 * @param string $customWhere Optional raw SQL appended to the query (e.g. a WHERE clause) - must be trusted input
+	 * @return array Array of stock_current row objects
+	 */
 	public function GetCurrentStock($customWhere = '')
 	{
 		$sql = 'SELECT * FROM stock_current ' . $customWhere;
@@ -706,6 +907,14 @@ class StockService extends BaseService
 		return array_column($currentStockMapped, 0);
 	}
 
+	/**
+	 * Returns the per-location stock content (location_id, product_id, amount, amount_opened)
+	 * for all active products, ordered by product name. Amounts are in stock quantity units.
+	 *
+	 * @param bool $includeOutOfStockProductsAtTheDefaultLocation When true, products without any stock
+	 *             are also included with amount 0 at their default location (LEFT JOIN)
+	 * @return array Array of row objects
+	 */
 	public function GetCurrentStockLocationContent($includeOutOfStockProductsAtTheDefaultLocation = false)
 	{
 		$leftJoin = '';
@@ -718,12 +927,26 @@ class StockService extends BaseService
 		return DatabaseService::GetInstance()->ExecuteDbQuery($sql)->fetchAll(\PDO::FETCH_OBJ);
 	}
 
+	/**
+	 * Returns all product/location pairs which currently have stock
+	 * (rows of the stock_current_locations view).
+	 *
+	 * @return array Array of row objects
+	 */
 	public function GetCurrentStockLocations()
 	{
 		$sql = 'SELECT * FROM stock_current_locations';
 		return DatabaseService::GetInstance()->ExecuteDbQuery($sql)->fetchAll(\PDO::FETCH_OBJ);
 	}
 
+	/**
+	 * Returns all products in stock which are due within the next $days days.
+	 *
+	 * @param int $days Look-ahead window in days; negative values shift the cut-off into the past
+	 *                  (e.g. -1 = only products already overdue as of yesterday)
+	 * @param bool $excludeOverdue When true, products with a due date before today are excluded
+	 * @return array Array of stock_current row objects (see GetCurrentStock())
+	 */
 	public function GetDueProducts(int $days = 5, bool $excludeOverdue = false)
 	{
 		if ($excludeOverdue)
@@ -736,11 +959,24 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Returns all products in stock which are expired (due date before today
+	 * and due type 2 = "expiration date", as opposed to a mere best before date).
+	 *
+	 * @return array Array of stock_current row objects (see GetCurrentStock())
+	 */
 	public function GetExpiredProducts()
 	{
 		return $this->GetCurrentStock('WHERE best_before_date < date() AND due_type = 2');
 	}
 
+	/**
+	 * Returns all products which are below their minimum stock amount
+	 * (rows of the stock_missing_products view, amount_missing in stock quantity units),
+	 * with the full product row attached as ->product.
+	 *
+	 * @return array Array of row objects
+	 */
 	public function GetMissingProducts()
 	{
 		$missingProductsResponse = DatabaseService::GetInstance()->ExecuteDbQuery('SELECT * FROM stock_missing_products')->fetchAll(\PDO::FETCH_OBJ);
@@ -754,6 +990,17 @@ class StockService extends BaseService
 		return $missingProductsResponse;
 	}
 
+	/**
+	 * Returns an aggregated details array for a product: the product row itself, its barcodes,
+	 * current stock amounts/value (plain and aggregated incl. sub products, all in stock quantity
+	 * units), the involved quantity units, price figures (last/average/current, per stock quantity
+	 * unit), last purchased/used dates, next due date, locations, shelf life statistics and
+	 * QU conversion factors. Products without stock get zeroed stock figures.
+	 *
+	 * @param int $productId
+	 * @return array See the returned array keys for the exact shape
+	 * @throws \Exception When the product does not exist or is inactive
+	 */
 	public function GetProductDetails(int $productId)
 	{
 		if (!$this->ProductExists($productId))
@@ -820,6 +1067,14 @@ class StockService extends BaseService
 		];
 	}
 
+	/**
+	 * Resolves a scanned barcode to a product id - either a product Grocycode
+	 * or a regular barcode from product_barcodes (matched case-insensitively).
+	 *
+	 * @param string $barcode
+	 * @return int The product id
+	 * @throws \Exception When the barcode is a non-product Grocycode or no product with this barcode exists
+	 */
 	public function GetProductIdFromBarcode(string $barcode)
 	{
 		// first, try to parse this as a product Grocycode
@@ -842,6 +1097,14 @@ class StockService extends BaseService
 		return $potentialProduct->product_id;
 	}
 
+	/**
+	 * Returns the purchase price history of a product, newest first.
+	 *
+	 * @param int $productId
+	 * @return array Array of ['date' => Y-m-d purchased date, 'price' => price per stock quantity unit,
+	 *               'shopping_location' => shopping location row or null]
+	 * @throws \Exception When the product does not exist or is inactive
+	 */
 	public function GetProductPriceHistory(int $productId)
 	{
 		if (!$this->ProductExists($productId))
@@ -865,6 +1128,16 @@ class StockService extends BaseService
 		return $returnData;
 	}
 
+	/**
+	 * Returns the stock entries of a product in default consume order (stock_next_use view:
+	 * default consume location first, then opened first, then first due first, then first in first out) -
+	 * the first entry is the one to use next.
+	 *
+	 * @param int $productId
+	 * @param bool $excludeOpened When true, only unopened entries are returned
+	 * @param bool $allowSubproductSubstitution When true, entries of resolved sub products are included
+	 * @return \LessQL\Result Iterable stock entry rows (amounts in the entry's product's stock quantity unit)
+	 */
 	public function GetProductStockEntries(int $productId, $excludeOpened = false, $allowSubproductSubstitution = false)
 	{
 		$sqlWhereProductId = 'product_id = ' . $productId;
@@ -882,6 +1155,13 @@ class StockService extends BaseService
 		return $this->DB->stock_next_use()->where($sqlWhereProductId . ' ' . $sqlWhereAndOpen);
 	}
 
+	/**
+	 * Returns all stock entries at the given location.
+	 *
+	 * @param int $locationId
+	 * @return \LessQL\Result Iterable stock entry rows
+	 * @throws \Exception When the location does not exist
+	 */
 	public function GetLocationStockEntries($locationId)
 	{
 		if (!$this->LocationExists($locationId))
@@ -892,12 +1172,30 @@ class StockService extends BaseService
 		return $this->DB->stock()->where('location_id', $locationId);
 	}
 
+	/**
+	 * Returns the stock entries of a product at one specific location,
+	 * in default consume order (see GetProductStockEntries()).
+	 *
+	 * @param int $productId
+	 * @param int $locationId
+	 * @param bool $excludeOpened When true, only unopened entries are returned
+	 * @param bool $allowSubproductSubstitution When true, entries of resolved sub products are included
+	 * @return array Array of stock entry rows
+	 */
 	public function GetProductStockEntriesForLocation($productId, $locationId, $excludeOpened = false, $allowSubproductSubstitution = false)
 	{
 		$stockEntries = $this->GetProductStockEntries($productId, $excludeOpened, $allowSubproductSubstitution);
 		return FindAllObjectsInArrayByPropertyValue($stockEntries, 'location_id', $locationId);
 	}
 
+	/**
+	 * Returns the locations at which a product currently has stock
+	 * (rows of the stock_current_locations view).
+	 *
+	 * @param int $productId
+	 * @param bool $allowSubproductSubstitution When true, locations of resolved sub products are included
+	 * @return \LessQL\Result Iterable row objects
+	 */
 	public function GetProductStockLocations(int $productId, $allowSubproductSubstitution = false)
 	{
 		$sqlWhereProductId = 'product_id = ' . $productId;
@@ -909,11 +1207,38 @@ class StockService extends BaseService
 		return $this->DB->stock_current_locations()->where($sqlWhereProductId);
 	}
 
+	/**
+	 * Returns a single stock entry by its `stock` table row id (not the stock_id).
+	 *
+	 * @param int $entryId
+	 * @return \LessQL\Row|null The stock entry row, or null when not found
+	 */
 	public function GetStockEntry($entryId)
 	{
 		return $this->DB->stock()->where('id', $entryId)->fetch();
 	}
 
+	/**
+	 * Sets the stock amount of a product to a counted new total (inventory correction).
+	 *
+	 * The difference to the current stock amount is booked as a TRANSACTION_TYPE_INVENTORY_CORRECTION
+	 * via AddProduct() (new amount higher) or ConsumeProduct() (new amount lower), with all their
+	 * side effects (stock_log bookings, label printing, stock entry compacting etc.).
+	 * For tare weight handled products $newAmount is the gross scale reading (incl. container weight)
+	 * and is passed through unchanged, since AddProduct/ConsumeProduct do the tare weight math themselves.
+	 *
+	 * @param int $productId
+	 * @param float $newAmount New total amount in the product's stock quantity unit (gross for tare weight handled products)
+	 * @param string|null $bestBeforeDate Due date (Y-m-d) for newly added stock; null derives the product default (see AddProduct())
+	 * @param int|null $locationId Location for newly added stock; null means the product's default location
+	 * @param float|null $price Price per stock quantity unit for newly added stock; null uses the product's last price
+	 * @param int|null $shoppingLocationId null uses the product's last shopping location
+	 * @param string|null $purchasedDate Purchased date (Y-m-d) for newly added stock; null means today
+	 * @param int $stockLabelType Label printing mode for newly added stock (see AddProduct())
+	 * @param string|null $note Note for newly added stock
+	 * @return string|null The transaction id of the correction booking(s), or null (unreachable in practice)
+	 * @throws \Exception When the product does not exist or the new amount equals the current stock amount
+	 */
 	public function InventoryProduct(int $productId, float $newAmount, $bestBeforeDate, $locationId = null, $price = null, $shoppingLocationId = null, $purchasedDate = null, $stockLabelType = 0, $note = null)
 	{
 		if (!$this->ProductExists($productId))
@@ -958,6 +1283,7 @@ class StockService extends BaseService
 
 			if ($productDetails->product->enable_tare_weight_handling == 1)
 			{
+				// Pass the gross amount through unchanged - AddProduct does the tare weight math itself
 				$bookingAmount = $newAmount;
 			}
 
@@ -978,6 +1304,30 @@ class StockService extends BaseService
 		return null;
 	}
 
+	/**
+	 * Marks the given amount of a product as opened.
+	 *
+	 * Unopened stock entries are processed in default consume order; an entry covering more than the
+	 * remaining amount is split (the unopened rest gets a new stock entry with a new stock_id). Each
+	 * touched entry gets open = 1, opened_date = today and - when the product has "default due days
+	 * after opened" - a shortened due date (never later than the original one; a label reprint webhook
+	 * may be triggered on a date change). One TRANSACTION_TYPE_PRODUCT_OPENED booking is written per
+	 * touched entry; the stock amount itself is unchanged. When the product has "move on open" set,
+	 * the opened entry is additionally transferred to its default consume location. When the user
+	 * setting "shopping_list_auto_add_below_min_stock_amount" is enabled, missing products are added
+	 * to the configured shopping list afterwards.
+	 *
+	 * Sub product substitution works as in ConsumeProduct() (amounts converted via QU conversions).
+	 *
+	 * @param int $productId
+	 * @param float $amount Amount to open, in the product's stock quantity unit
+	 * @param string $specificStockEntryId 'default' opens in default order; otherwise a stock_id restricting opening to that single stock entry
+	 * @param string|null $transactionId By-reference; generated via uniqid() when null, shared across all bookings of this call
+	 * @param bool $allowSubproductSubstitution When true, unopened stock of resolved sub products may be opened
+	 * @return string The transaction id of the booking(s)
+	 * @throws \Exception When the product does not exist, has opening disabled, is tare weight handled,
+	 *                    or the amount exceeds the current unopened (aggregated) stock amount
+	 */
 	public function OpenProduct(int $productId, float $amount, $specificStockEntryId = 'default', &$transactionId = null, $allowSubproductSubstitution = false)
 	{
 		if (!$this->ProductExists($productId))
@@ -1155,6 +1505,17 @@ class StockService extends BaseService
 		return $transactionId;
 	}
 
+	/**
+	 * Decreases the amount of a product on the shopping list; the entry is deleted when the
+	 * remaining amount falls below the smallest displayable value for the user's configured
+	 * amount decimal places. Returns gracefully when the product has no list entry.
+	 *
+	 * @param int $productId
+	 * @param float $amount Amount to subtract (in the quantity unit of the list entry)
+	 * @param int $listId Shopping list id (only validated for existence)
+	 * @return void
+	 * @throws \Exception When the shopping list does not exist
+	 */
 	public function RemoveProductFromShoppingList($productId, $amount = 1, $listId = 1)
 	{
 		if (!$this->ShoppingListExists($listId))
@@ -1170,6 +1531,8 @@ class StockService extends BaseService
 			$decimals = UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'stock_decimal_places_amounts');
 			$newAmount = $productRow->amount - $amount;
 
+			// Delete the entry when the rest amount is below the smallest value representable
+			// with the user's configured amount decimal places (e.g. 0.01 for 2 decimals)
 			if ($newAmount < floatval('0.' . str_repeat('0', $decimals - ($decimals <= 0 ? 0 : 1)) . '1'))
 			{
 				$productRow->delete();
@@ -1181,6 +1544,17 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Renders a shopping list as plain text lines for thermal printer output, one entry per line
+	 * ("<amount> <product name>"), with amounts right-padded to a common width. Product amounts are
+	 * converted from stock quantity units to the entry's quantity unit and rounded; quantity unit
+	 * names and notes are appended depending on the GROCY_TPRINTER_* settings. Entries without a
+	 * product print their note instead.
+	 *
+	 * @param int $listId
+	 * @return array Array of printable strings
+	 * @throws \Exception When the shopping list does not exist
+	 */
 	public function GetShoppinglistInPrintableStrings($listId = 1): array
 	{
 		if (!$this->ShoppingListExists($listId))
@@ -1264,6 +1638,29 @@ class StockService extends BaseService
 		return $result;
 	}
 
+	/**
+	 * Transfers the given amount of a product from one location to another.
+	 *
+	 * Stock entries at the source location are processed in default consume order; a fully
+	 * transferred entry just gets its location updated, a partially transferred one is split
+	 * (the rest stays at the source, the transferred amount becomes a new stock row sharing the
+	 * same stock_id). Each touched entry writes a correlated pair of bookings:
+	 * TRANSACTION_TYPE_TRANSFER_FROM (negative amount, source location) and
+	 * TRANSACTION_TYPE_TRANSFER_TO (positive amount, destination location).
+	 * With the product freezing feature enabled, moving into a freezer re-dates the entry using
+	 * "default due days after freezing" (-1 = never expires) and moving out of a freezer using
+	 * "default due days after thawing"; a label reprint webhook may be triggered on a date change.
+	 *
+	 * @param int $productId
+	 * @param float $amount Amount in the product's stock quantity unit
+	 * @param int $locationIdFrom Source location id
+	 * @param int $locationIdTo Destination location id
+	 * @param string $specificStockEntryId 'default' transfers in default order; otherwise a stock_id restricting the transfer to that single stock entry
+	 * @param string|null $transactionId By-reference; generated via uniqid() when null, shared across all bookings of this call
+	 * @return string The transaction id of the booking(s)
+	 * @throws \Exception When the product or a location does not exist, the product is tare weight handled
+	 *                    (not supported), or the amount exceeds the stock amount at the source location
+	 */
 	public function TransferProduct(int $productId, float $amount, int $locationIdFrom, int $locationIdTo, $specificStockEntryId = 'default', &$transactionId = null)
 	{
 		if (!$this->ProductExists($productId))
@@ -1483,6 +1880,28 @@ class StockService extends BaseService
 		return $transactionId;
 	}
 
+	/**
+	 * Undoes a single stock_log booking by reversing its effect on the `stock` table,
+	 * then marks it undone = 1 with an undone_timestamp (bookings are never deleted).
+	 *
+	 * Reversal per transaction type:
+	 * - PURCHASE / positive INVENTORY_CORRECTION: the corresponding stock entry is deleted
+	 * - CONSUME / negative INVENTORY_CORRECTION: the consumed amount is re-added as a stock entry
+	 * - TRANSFER_TO / TRANSFER_FROM: the amount is moved back (entries re-created/deleted as needed)
+	 * - PRODUCT_OPENED: the open flag/opened date are cleared and the original due date restored
+	 * - STOCK_EDIT_OLD: the stock entry is restored to the logged pre-edit state
+	 * - STOCK_EDIT_NEW: only the booking is marked undone (the _OLD counterpart does the restore)
+	 *
+	 * When the booking has a correlation id (stock edits, transfers) and $skipCorrelatedBookings
+	 * is false, all not yet undone bookings of that correlation are undone instead, newest first,
+	 * and this call returns without further processing the given booking itself.
+	 *
+	 * @param int $bookingId stock_log row id
+	 * @param bool $skipCorrelatedBookings Internal flag used when recursing / undoing whole transactions
+	 * @return void
+	 * @throws \Exception When the booking does not exist or was already undone, has newer dependent
+	 *                    bookings on the same stock_id, or its transaction type cannot be undone
+	 */
 	public function UndoBooking($bookingId, $skipCorrelatedBookings = false)
 	{
 		$logRow = $this->DB->stock_log()->where('id = :1 AND undone = 0', $bookingId)->fetch();
@@ -1503,6 +1922,8 @@ class StockService extends BaseService
 			return;
 		}
 
+		// A booking can only be undone when it is the newest (not yet undone) one of its stock entry -
+		// otherwise later bookings would reference stock state this undo would remove
 		$hasSubsequentBookings = $this->DB->stock_log()->where('stock_id = :1 AND id != :2 AND (correlation_id IS NOT NULL OR correlation_id != :3) AND id > :2 AND undone = 0', $logRow->stock_id, $logRow->id, $logRow->correlation_id)->count() > 0;
 		if ($hasSubsequentBookings)
 		{
@@ -1532,7 +1953,7 @@ class StockService extends BaseService
 				'stock_id' => $logRow->stock_id,
 				'price' => $logRow->price,
 				'opened_date' => $logRow->opened_date,
-				'open' => $logRow->opened_date !== null,
+				'open' => $logRow->opened_date !== null, // The open flag itself is not logged, so it is derived from the logged opened date
 				'location_id' => $logRow->location_id,
 				'note' => $logRow->note,
 				'shopping_location_id' => $logRow->shopping_location_id
@@ -1668,6 +2089,15 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Undoes all not yet undone bookings of a transaction (see UndoBooking()),
+	 * newest booking first so dependent bookings are reversed in the right order.
+	 *
+	 * @param string $transactionId
+	 * @return void
+	 * @throws \Exception When no (not yet undone) booking with this transaction id exists,
+	 *                    or any contained booking cannot be undone
+	 */
 	public function UndoTransaction($transactionId)
 	{
 		$transactionBookings = $this->DB->stock_log()->where('undone = 0 AND transaction_id = :1', $transactionId)->orderBy('id', 'DESC')->fetchAll();
@@ -1683,6 +2113,21 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Merges one product into another and deletes the removed product.
+	 *
+	 * Re-assigns stock, stock_log, barcodes, QU conversions, recipe positions/recipes, meal plan
+	 * entries and shopping list entries to the kept product inside a single database transaction
+	 * (rolled back on any error). Amounts are multiplied by the stock QU conversion factor from
+	 * the removed product's stock unit to the kept product's stock unit (factor 1 when no
+	 * conversion is defined).
+	 *
+	 * @param int $productIdToKeep
+	 * @param int $productIdToRemove
+	 * @return void
+	 * @throws \Exception When either product does not exist / is inactive, both ids are equal,
+	 *                    or any of the update statements fails
+	 */
 	public function MergeProducts(int $productIdToKeep, int $productIdToRemove)
 	{
 		if (!$this->ProductExists($productIdToKeep))
@@ -1730,6 +2175,21 @@ class StockService extends BaseService
 		DatabaseService::GetInstance()->GetDbConnectionRaw()->commit();
 	}
 
+	/**
+	 * Merges stock entries which are equal in every relevant attribute (product, due date,
+	 * purchased date, price, open state/date, location, shopping location and note) into a
+	 * single entry holding the summed amount.
+	 *
+	 * Candidate groups come from the stock_splits view (which excludes entries with per-unit
+	 * labels - stock_id starting with "x" - and entries with userfield values). For each group,
+	 * inside its own database transaction, all stock and stock_log rows are rewritten to the
+	 * surviving stock_id, the redundant stock rows are deleted and the kept row is set to the
+	 * group's total amount.
+	 *
+	 * @param int|null $productId Limit compacting to this product; null compacts all products
+	 * @return void
+	 * @throws \Exception When one of the statements fails (that group's transaction is rolled back)
+	 */
 	public function CompactStockEntries($productId = null)
 	{
 		if ($productId == null)
@@ -1778,6 +2238,14 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Instantiates the barcode lookup plugin configured via GROCY_STOCK_BARCODE_LOOKUP_PLUGIN,
+	 * passing it the active locations, active quantity units and the current user's settings.
+	 * A plugin file in the data dir (user plugin) takes precedence over the bundled one.
+	 *
+	 * @return object The plugin instance
+	 * @throws \Exception When no plugin is configured or the plugin file was not found
+	 */
 	private function LoadExternalBarcodeLookupPlugin()
 	{
 		$pluginName = defined('GROCY_STOCK_BARCODE_LOOKUP_PLUGIN') ? GROCY_STOCK_BARCODE_LOOKUP_PLUGIN : '';
@@ -1805,18 +2273,36 @@ class StockService extends BaseService
 		}
 	}
 
+	/**
+	 * Checks whether an active location with the given id exists.
+	 *
+	 * @param int $locationId
+	 * @return bool
+	 */
 	private function LocationExists($locationId)
 	{
 		$locationRow = $this->DB->locations()->where('id = :1', $locationId)->where('active = 1')->fetch();
 		return $locationRow !== null;
 	}
 
+	/**
+	 * Checks whether an active product with the given id exists.
+	 *
+	 * @param int $productId
+	 * @return bool
+	 */
 	private function ProductExists($productId)
 	{
 		$productRow = $this->DB->products()->where('id = :1 and active = 1', $productId)->fetch();
 		return $productRow !== null;
 	}
 
+	/**
+	 * Checks whether a shopping list with the given id exists.
+	 *
+	 * @param int $listId
+	 * @return bool
+	 */
 	private function ShoppingListExists($listId)
 	{
 		$shoppingListRow = $this->DB->shopping_lists()->where('id = :1', $listId)->fetch();

@@ -1,4 +1,8 @@
-﻿var productsTable = $('#products-table').DataTable({
+﻿// Powers the products master data list view (views/products.blade.php):
+// DataTable of all products with search, product group/status filters, delete confirmation and a product merge dialog.
+
+// DataTables setup for the products list (column 0 = row menu; hidden columns 7-9 hold extra searchable/sortable data from the template)
+var productsTable = $('#products-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -12,6 +16,7 @@
 $('#products-table tbody').removeClass("d-none");
 productsTable.columns.adjust().draw();
 
+// Debounced full-text search over the table
 $("#search").on("keyup", Delay(function ()
 {
 	var value = $(this).val();
@@ -23,6 +28,7 @@ $("#search").on("keyup", Delay(function ()
 	productsTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Product group filter: exact-match regex search on the (possibly reordered) product group column
 $("#product-group-filter").on("change", function ()
 {
 	var value = $("#product-group-filter option:selected").text();
@@ -37,6 +43,7 @@ $("#product-group-filter").on("change", function ()
 
 });
 
+// Reset search, group/status filters and the "show disabled" toggle
 $("#clear-filter-button").on("click", function ()
 {
 	$("#search").val("");
@@ -65,6 +72,8 @@ if (typeof GetUriParam("product-group") !== "undefined")
 	$("#product-group-filter").trigger("change");
 }
 
+// Delete button per row (expects data-product-name / data-product-id from the template);
+// confirms via bootbox, then DELETEs objects/products/{id}
 $(document).on('click', '.product-delete-button', function (e)
 {
 	var objectName = $(e.currentTarget).attr('data-product-name');
@@ -104,6 +113,7 @@ $(document).on('click', '.product-delete-button', function (e)
 	});
 });
 
+// "Show disabled" toggle and status filter both reload the page with updated URI parameters (filtering happens server-side)
 $("#show-disabled").change(function ()
 {
 	if (this.checked)
@@ -144,6 +154,7 @@ if (GetUriParam("filter"))
 	$("#status-filter").val(GetUriParam("filter"));
 }
 
+// Merge products: opens the modal with the clicked row's product (data-product-id) preselected as the one to keep
 $(".merge-products-button").on("click", function (e)
 {
 	var productId = $(e.currentTarget).attr("data-product-id");
@@ -152,6 +163,7 @@ $(".merge-products-button").on("click", function (e)
 	$("#merge-products-modal").modal("show");
 });
 
+// Merge submit: POSTs stock/products/{idToKeep}/merge/{idToRemove} and returns to the products list
 $("#merge-products-save-button").on("click", function (e)
 {
 	e.preventDefault();

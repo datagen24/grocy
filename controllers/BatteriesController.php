@@ -9,10 +9,20 @@ use Grocy\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for the battery tracking views (overview, journal,
+ * master data list/edit form, charge cycle tracking and settings).
+ * Due date calculations are delegated to BatteriesService.
+ */
 class BatteriesController extends BaseController
 {
 	use GrocycodeTrait;
 
+	/**
+	 * Serves the battery master data list view (route GET /batteries).
+	 *
+	 * Query parameter include_disabled (presence only) also lists inactive batteries.
+	 */
 	public function BatteriesList(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
@@ -31,11 +41,19 @@ class BatteriesController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the batteries settings view (route GET /batteriessettings).
+	 */
 	public function BatteriesSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'batteriessettings');
 	}
 
+	/**
+	 * Serves the battery create/edit form (route GET /battery/{batteryId}).
+	 *
+	 * @param array $args Route arguments; batteryId is either a battery id or the literal 'new' for create mode
+	 */
 	public function BatteryEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['batteryId'] == 'new')
@@ -55,6 +73,12 @@ class BatteriesController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the battery charge cycle journal view (route GET /batteriesjournal).
+	 *
+	 * Optional query parameters: months (int, how far back to list; default 24)
+	 * and battery (int, filter by battery id).
+	 */
 	public function Journal(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['months']) && filter_var($request->getQueryParams()['months'], FILTER_VALIDATE_INT) !== false)
@@ -82,6 +106,11 @@ class BatteriesController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the batteries overview view (route GET /batteriesoverview); flags each
+	 * current battery as overdue/duetoday/duesoon based on its next estimated
+	 * charge time and the user's "due soon" days setting.
+	 */
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
@@ -117,6 +146,9 @@ class BatteriesController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the battery charge cycle tracking view (route GET /batterytracking).
+	 */
 	public function TrackChargeCycle(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'batterytracking', [
@@ -125,6 +157,9 @@ class BatteriesController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the Grocycode barcode PNG for a battery (route GET /battery/{batteryId}/grocycode).
+	 */
 	public function BatteryGrocycodeImage(Request $request, Response $response, array $args)
 	{
 		$gc = new Grocycode(Grocycode::BATTERY, $args['batteryId']);
