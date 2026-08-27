@@ -40,7 +40,7 @@ Concrete bugs found while reviewing, ordered by impact. None are large.
 |---|---|---|---|
 | 1 | `GET /api/batteries/{id}` always fails: committed debug `throw new \Exception('df')` | `controllers/Api/BatteriesApiController.php:18` | Delete the line |
 | 2 | `/api/system/config` leaks `DB_PASSWORD`, `DB_USER`, `DB_HOST`, `LDAP_BIND_PW` to any authenticated API key — the DB leak is fork-introduced (the new `DB_*` settings joined an endpoint that filters by blocklist) | `controllers/Api/SystemApiController.php:13-38` | Switch to an allowlist of frontend-needed settings |
-| 3 | Five page routes crash on PostgreSQL: raw `DATE('now','localtime', ...)` / `STRFTIME` in journal/report/mealplan queries | `StockController.php:67,72`, `ChoresController.php:74,79`, `BatteriesController.php:87,92`, `StockReportsController.php:24`, `RecipesController.php:30,62` | Compute cutoff dates in PHP and bind as parameters (portable, also removes string interpolation) |
+| 3 | Raw SQLite-only date SQL (`DATE('now', ...)`, `STRFTIME`) bypasses the dialect layer and crashes on PostgreSQL — five page routes **and** the due/expired-products API | `StockController.php:67,72`, `ChoresController.php:74,79`, `BatteriesController.php:87,92`, `StockReportsController.php:24`, `RecipesController.php:30,62`, `services/StockService.php:954,958,970` | Compute cutoff dates in PHP and bind as parameters; add a date-offset primitive to `DatabaseDialect` for the view-side cases |
 | 4 | Any authenticated user can delete any API key by ID (sequential IDs, no ownership check, `api_keys` not in `ExposedEntityNoDelete`) | `controllers/Api/GenericEntityApiController.php:96-99` | Restrict to own keys unless admin |
 | 5 | Session/API keys generated with non-crypto `rand()` | `helpers/extensions.php` (`RandomString`), used by `SessionService.php:79`, `ApiKeyService.php:152` | Use `random_int()` / `random_bytes()` |
 | 6 | `WebhookRunner` catches nonexistent `Grocy\Helpers\RequestException`, so a printer webhook failure 500s the user action instead of being handled | `helpers/WebhookRunner.php` | Import `GuzzleHttp\Exception\RequestException` |
@@ -49,6 +49,8 @@ Concrete bugs found while reviewing, ordered by impact. None are large.
 | 9 | Stack traces served in production: `addErrorMiddleware(true, ...)` hardcoded, so every 500 includes `error_details.stack_trace` | `app.php:115` | Gate on `GROCY_MODE === 'dev'` |
 | 10 | `FilesService.php:54` tests `$bestFitHeight !== null` twice (second was surely `$bestFitWidth`); `:70` catches an unimported `ImageResizeException` that can never match | `services/FilesService.php` | Fix the operand; import the Gumlet exception |
 | 11 | `LogMissingLocalization` returns `null` (→ 500) outside dev mode | `controllers/Api/SystemApiController.php:76-92` | Return `EmptyApiResponse` unconditionally |
+| 12 | `LocalizationService` per-locale instance cache never hits: `in_array($locale, self::$InstanceMap)` compares the locale string against the cached *objects*, so every call re-parses the `.po` files from disk | `services/LocalizationService.php:161-174` | `isset(self::$InstanceMap[$locale])` |
+| 13 | Demo/prerelease mode hard-fails on PostgreSQL: `DemoDataGeneratorService` is unconditionally SQLite-flavored (`sqlite_sequence`, `STRFTIME`, `datetime('now','localtime')`) but is invoked regardless of `DB_DRIVER` | `services/DemoDataGeneratorService.php`, called from `controllers/SystemController.php:51` | Gate on `DB_DRIVER === 'sqlite'` with a clear error, or port the SQL |
 
 ## Statelessness / k3s readiness
 
@@ -181,7 +183,60 @@ enforced by copying, and the copies are drifting.**
 
 ## Services and database layer
 
-_(section pending — being rewritten from the dedicated services/DB review)_
+**Verdict: the dialect abstraction is well designed and cleanly honored by the core
+plumbing (`DatabaseService`, migrations, the API's `§` regex operator) — but not yet
+fully honored by its consumers.** `StockService` reaches for raw SQLite date SQL
+(defect 3), and `DemoDataGeneratorService` is SQLite-only yet runs whenever
+`GROCY_MODE` is dev/demo/prerelease (defect 13). Tellingly, no service ever calls the
+dialect's `GetNowExpression()`/`GetRegexpCondition()` primitives, and the primitive
+`StockService` actually needed — "today"/"N days from now" date arithmetic — does not
+exist in the dialect, which is why raw SQL crept in. Adding that primitive and
+sweeping `services/` closes the gap.
+
+- **Transactions are applied inconsistently, and the highest-risk operations are the
+  unwrapped ones.** `MergeProducts`, `CompactStockEntries`, `ChoresService::
+  MergeChores`, and `RecipesService::ConsumeRecipe` correctly wrap their multi-row
+  writes in transactions — proof the pattern is known. But `ConsumeProduct` (a loop
+  of stock-entry deletes/updates plus `stock_log` inserts), `TransferProduct` (same,
+  with a synchronous webhook interleaved per entry), `UndoBooking` (recursive), and
+  `UndoTransaction` (iterates `UndoBooking`) run as sequences of autocommit
+  statements. A failure mid-loop leaves a half-consumed booking in an inventory
+  ledger. This is the single most valuable hardening in the services layer, and a
+  prerequisite for letting an assistant drive writes via the planned MCP endpoint
+  (plan 02). Wrapping the four entrypoints mirrors the existing pattern.
+- **The migration runner has no concurrency guard — a direct k3s concern.**
+  `MigrateDatabase()` runs on every hit to `/`, and both the baseline path and each
+  migration do check-then-apply with no lock. Two pods (or two tabs) racing through a
+  cold start roll back cleanly on the loser's primary-key violation — no corruption —
+  but produce a user-visible 500; the always-run `8888.php` migration has the same
+  race with no try/catch. Fix: `pg_advisory_lock` (pgsql) / `flock` (sqlite) around
+  `MigrateDatabase()`, and preferably move migration to an init step outside request
+  handling entirely (see Statelessness — same work item).
+- **`DatabaseImporter` (SQLite→PostgreSQL) truncates the target, then copies with no
+  surrounding transaction** — a failure partway leaves the target truncated and
+  half-repopulated. Its post-check compares row counts only, not values, despite the
+  porting rules documenting several type-coercion hazards that would pass a count
+  check. Wrap the import in a target-side transaction and add a value-level spot
+  check.
+- **StockService as god class:** large but cohesive; the debt is the 7× repeated
+  undo-bookkeeping block in `UndoBooking`'s switch and the mixed return conventions
+  (LessQL rows from most methods, plain `stdClass` from the raw-SQL ones — callers
+  must know which flavor they got). No correctness landmines found beyond the
+  transaction gap.
+- **Forward risk for plan 07 (nested products), confirmed at the SQL level:**
+  `products_resolved` is a flat one-level mapping on both engines, and
+  `StockService.php:1146,1204` embed that one-level assumption in raw SQL; the
+  `stock_current` aggregated columns build on it. The plan's audit table is accurate;
+  note the difftest tooling has never exercised a recursive CTE, so plan 08/07's
+  fixtures will be new ground for it too. Relatedly, the 0256+ dual-engine migration
+  mechanism (generic vs per-engine file precedence) reads correctly but has never run
+  real content — the first shipped migration should be a small one (plan 06 is ideal).
+- **Cosmetics:** `GetSystemInfo`/`GetSystemTime` report `sqlite_version` diagnostics
+  from a throwaway in-memory connection even on pgsql installs (misleading in the
+  About dialog); `DemoDataGeneratorService` and `SqliteDialect` construct services
+  with `new` against the otherwise-universal `GetInstance()` convention (4 sites vs
+  ~320); the new `services/Database/` namespace is constructor-injected PSR-style —
+  the better pattern, and the direction new services should take.
 
 ## Uniformity: the short list of deviants
 
@@ -207,7 +262,8 @@ AddNotFulfilledProductsToShoppingList` (no try/catch), `FilesApiController` (thr
    middleware ordering fix.
 4. **Frontend shared helpers** (`request()` core with default error toast, entity
    list/form factories) — before plans 05/06/08 mint new copies.
-5. **Transactions around stock/chore write paths** — before plan 02 writes.
+5. **Transactions around the four unwrapped stock entrypoints** (`ConsumeProduct`,
+   `TransferProduct`, `UndoBooking`, `UndoTransaction`) — before plan 02 writes.
 6. **Response-contract snapshot test** — before plan 02 ships, so the "additive API"
    rule is enforced by a failing test instead of vigilance.
 
