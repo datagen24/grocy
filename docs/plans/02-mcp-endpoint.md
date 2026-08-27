@@ -53,6 +53,20 @@ I would not design this from memory — the transport and auth revisions move, a
 knowledge has a cutoff. **Before building, confirm against the current spec revision and
 against the specific client you intend to use.** See Q1.
 
+**Future state, recorded 2026-08-27: the household IdP will eventually front this.**
+The longer term direction is to put the existing IdP in front of Grocy — forward-auth at
+the k3s ingress for the web UI (which is exactly what `ReverseProxyAuthMiddleware`
+already supports), and for MCP the IdP plays the authorization server role the MCP auth
+spec actually wants: the MCP endpoint validates the IdP's tokens and maps the subject to
+a Grocy user, and never issues tokens itself. That is a much better fit than Grocy
+growing its own OAuth. Consequence for v1: **build the identity seam, not the auth** —
+keep "credential → Grocy user" as one small replaceable resolver (bearer API key today,
+IdP token subject later) and have everything downstream (permissions, tool gating) work
+off the resolved user. If that seam exists, the IdP migration is a resolver swap plus
+ingress config, not a redesign. Caveat when the time comes: clients and IdPs vary in
+what they support of the auth spec (resource metadata discovery, dynamic client
+registration), so verify against the actual client and IdP then, not from memory.
+
 ### Transport
 
 Streamable HTTP, which is what remote MCP servers use. Slim can serve it. Server-initiated
@@ -100,7 +114,9 @@ existing endpoint.
    API key is a fraction of the work and fits a household instance; OAuth is what the spec
    wants and what some clients require. This should be answered by testing the client you
    actually plan to use, not by reading (or remembering) the spec. It is the one thing that
-   could invalidate the rest of the plan.
+   could invalidate the rest of the plan. *Update:* the future-state note above narrows
+   this — API key for v1 behind a replaceable credential→user resolver, IdP-backed OAuth
+   later.
 2. **Read-only first, or writes from the start?** I strongly favour read-only for v1. The
    read tools are where most of the value is, they cannot damage anything, and they let the
    transport and auth get proven before an assistant is allowed to consume stock.
@@ -108,7 +124,9 @@ existing endpoint.
    who may consume via the UI may not want an assistant doing it unprompted. A
    `MCP_WRITE` permission is cheap and makes the boundary explicit.
 4. **Exposure.** Local network only, or reachable externally? That changes the auth answer
-   considerably, and interacts with how the k3s ingress is set up.
+   considerably, and interacts with how the k3s ingress is set up. *Update:* external
+   exposure, if it ever happens, waits for the IdP future state — the ingress + IdP then
+   owns that boundary, not Grocy.
 5. **Tool granularity.** A few broad tools ("query stock") or many narrow ones? Narrow
    tools are easier for a model to use correctly and easier to permission, at the cost of a
    longer tool list.
