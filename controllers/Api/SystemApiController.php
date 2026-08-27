@@ -15,24 +15,64 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 class SystemApiController extends BaseApiController
 {
 	/**
-	 * GET /api/system/config - returns all GROCY_* constants as a key/value map with
-	 * the GROCY_ prefix stripped; internal constants (GROCY_AUTHENTICATED, GROCY_DATAPATH,
-	 * GROCY_IS_EMBEDDED_INSTALL, GROCY_USER_ID) are excluded. 400 error response on failure.
+	 * The config settings which are exposed through GET /api/system/config.
+	 *
+	 * This is deliberately an allowlist: the endpoint used to filter the defined
+	 * constants by a blocklist of a few internal names, which meant every newly
+	 * added setting was leaked automatically - the DB_HOST/DB_USER/DB_PASSWORD and
+	 * LDAP_BIND_PW credentials of this fork among them. Anything a client does not
+	 * explicitly need stays out by default; add a name here only after checking
+	 * that it is safe to hand to any API key holder.
+	 *
+	 * The names are stored without the GROCY_ prefix, matching the output shape.
+	 * Additionally all GROCY_FEATURE_FLAG_* constants are exposed (see GetConfig),
+	 * those are non-sensitive by construction and the web UI already receives all
+	 * of them anyway.
+	 */
+	private const EXPOSED_SETTINGS = [
+		'MODE',
+		'CURRENCY',
+		'ENERGY_UNIT',
+		'DEFAULT_LOCALE',
+		'CALENDAR_FIRST_DAY_OF_WEEK',
+		'CALENDAR_SHOW_WEEK_OF_YEAR',
+		'MEAL_PLAN_FIRST_DAY_OF_WEEK',
+		'ENTRY_PAGE',
+		'BASE_PATH',
+		'BASE_URL',
+		'DISABLE_URL_REWRITING',
+		'GROCYCODE_TYPE',
+		'LABEL_PRINTER_WEBHOOK',
+		'LABEL_PRINTER_RUN_SERVER',
+		'LABEL_PRINTER_PARAMS',
+		'LABEL_PRINTER_HOOK_JSON'
+	];
+
+	/**
+	 * GET /api/system/config - returns the config settings which are safe to expose
+	 * to clients (self::EXPOSED_SETTINGS plus all GROCY_FEATURE_FLAG_* constants) as
+	 * a key/value map with the GROCY_ prefix stripped. Settings which are not defined
+	 * are omitted (no null values). 400 error response on failure.
 	 */
 	public function GetConfig(Request $request, Response $response, array $args)
 	{
 		try
 		{
-			$constants = get_defined_constants();
-
-			// Some GROCY_* constants are not really config settings and therefore should not be exposed
-			unset($constants['GROCY_AUTHENTICATED'], $constants['GROCY_DATAPATH'], $constants['GROCY_IS_EMBEDDED_INSTALL'], $constants['GROCY_USER_ID']);
-
 			$returnArray = [];
 
+			foreach (self::EXPOSED_SETTINGS as $setting)
+			{
+				if (defined('GROCY_' . $setting))
+				{
+					$returnArray[$setting] = constant('GROCY_' . $setting);
+				}
+			}
+
+			// Feature flags are not sensitive by definition, so all of them are exposed
+			$constants = get_defined_constants();
 			foreach ($constants as $constant => $value)
 			{
-				if (substr($constant, 0, 6) === 'GROCY_')
+				if (substr($constant, 0, 19) === 'GROCY_FEATURE_FLAG_')
 				{
 					$returnArray[substr($constant, 6)] = $value;
 				}
@@ -96,9 +136,9 @@ class SystemApiController extends BaseApiController
 
 	/**
 	 * POST /api/system/log-missing-localization - adds the body field "text" to the
-	 * localization POT file when it is not translated yet. Only active when
-	 * GROCY_MODE is "dev" (204 on success, 400 on error); in any other mode the
-	 * method returns nothing at all.
+	 * localization POT file when it is not translated yet. That only happens when
+	 * GROCY_MODE is "dev", in any other mode the request is accepted and ignored.
+	 * Returns 204 on success, 400 on error.
 	 */
 	public function LogMissingLocalization(Request $request, Response $response, array $args)
 	{
@@ -109,13 +149,14 @@ class SystemApiController extends BaseApiController
 				$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
 				LocalizationService::GetInstance()->CheckAndAddMissingTranslationToPot($requestBody['text']);
-				return $this->EmptyApiResponse($response);
 			}
 			catch (\Exception $ex)
 			{
 				return $this->GenericErrorResponse($response, $ex->getMessage());
 			}
 		}
+
+		return $this->EmptyApiResponse($response);
 	}
 
 	/**

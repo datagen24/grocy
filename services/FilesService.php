@@ -3,6 +3,7 @@
 namespace Grocy\Services;
 
 use Gumlet\ImageResize;
+use Gumlet\ImageResizeException;
 
 /**
  * Manages uploaded files (product pictures, equipment manuals, ...) below
@@ -72,7 +73,7 @@ class FilesService extends BaseService
 			{
 				$image = new ImageResize($filePath);
 
-				if ($bestFitHeight !== null && $bestFitHeight !== null)
+				if ($bestFitHeight !== null && $bestFitWidth !== null)
 				{
 					$image->resizeToBestFit($bestFitWidth, $bestFitHeight);
 				}

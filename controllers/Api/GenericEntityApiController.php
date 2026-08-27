@@ -92,8 +92,9 @@ class GenericEntityApiController extends BaseApiController
 
 	/**
 	 * DELETE /api/objects/{entity}/{objectId} - deletes the given object.
-	 * Requires an entity-dependent permission (as in AddObject; api_keys are always
-	 * deletable), answered with 403 when missing.
+	 * Requires an entity-dependent permission (as in AddObject), answered with 403
+	 * when missing; api_keys need no such permission, but non-admins can only delete
+	 * their own keys.
 	 * Returns 204 on success or a 400 error response (invalid/undeletable entity
 	 * or object not found).
 	 */
@@ -117,7 +118,7 @@ class GenericEntityApiController extends BaseApiController
 		}
 		elseif ($args['entity'] == 'api_keys')
 		{
-			// Always allowed
+			// No permission needed, ownership is checked below
 		}
 		else
 		{
@@ -135,6 +136,18 @@ class GenericEntityApiController extends BaseApiController
 			if ($row == null)
 			{
 				return $this->GenericErrorResponse($response, 'Object not found', 400);
+			}
+
+			// API keys can only be deleted by their owner (or by any admin), otherwise
+			// anybody could delete anybody's keys, as the ids are sequential.
+			// Keys of other users are answered with the same "not found" response as
+			// non-existing ones, so that this can't be used to enumerate valid ids.
+			if ($args['entity'] == 'api_keys' && $row->user_id != GROCY_USER_ID)
+			{
+				if (!User::HasPermissions(User::PERMISSION_ADMIN))
+				{
+					return $this->GenericErrorResponse($response, 'Object not found', 400);
+				}
 			}
 
 			$row->delete();

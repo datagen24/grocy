@@ -92,25 +92,25 @@ class ChoresController extends BaseController
 	 */
 	public function Journal(Request $request, Response $response, array $args)
 	{
+		// Default 1 year
+		$months = 12;
 		if (isset($request->getQueryParams()['months']) && filter_var($request->getQueryParams()['months'], FILTER_VALIDATE_INT) !== false)
 		{
-			$months = $request->getQueryParams()['months'];
-			$where = "tracked_time > DATE(DATE('now', 'localtime'), '-$months months')";
+			$months = intval($request->getQueryParams()['months']);
 		}
-		else
-		{
-			// Default 1 year
-			$where = "tracked_time > DATE(DATE('now', 'localtime'), '-12 months')";
-		}
+
+		// The cut-off date is computed here and bound as a parameter instead of being
+		// expressed in SQL: SQLite's DATE(x, '-N months') has no PostgreSQL equivalent,
+		// so date arithmetic must not leak into the query (see DatabaseDialect)
+		$choresLog = $this->DB->chores_log()->where('tracked_time > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
 
 		if (isset($request->getQueryParams()['chore']) && filter_var($request->getQueryParams()['chore'], FILTER_VALIDATE_INT) !== false)
 		{
-			$choreId = $request->getQueryParams()['chore'];
-			$where .= " AND chore_id = $choreId";
+			$choresLog = $choresLog->where('chore_id', intval($request->getQueryParams()['chore']));
 		}
 
 		return $this->RenderPage($response, 'choresjournal', [
-			'choresLog' => $this->DB->chores_log()->where($where)->orderBy('tracked_time', 'DESC'),
+			'choresLog' => $choresLog->orderBy('tracked_time', 'DESC'),
 			'chores' => $this->DB->chores()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'users' => $this->DB->users()->orderBy('username'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('chores_log'),

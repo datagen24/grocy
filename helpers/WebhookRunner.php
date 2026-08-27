@@ -3,6 +3,7 @@
 namespace Grocy\Helpers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
 
 /**
  * Fires outgoing webhooks (HTTP POST requests with a 2 second timeout),
@@ -42,7 +43,11 @@ class WebhookRunner
 
 			$this->client->request('POST', $url, $reqArgs);
 		}
-		catch (RequestException $e)
+		// GuzzleException is the interface every Guzzle exception implements - catching
+		// only RequestException would miss ConnectException (which extends TransferException,
+		// not RequestException), so DNS failures and timeouts would still escape, and a
+		// timeout is the most likely printer failure given the 2 second client timeout above.
+		catch (GuzzleException $e)
 		{
 			file_put_contents('php://stderr', 'Webhook failed: ' . $url . "\n" . $e->getMessage());
 		}

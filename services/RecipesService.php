@@ -171,8 +171,11 @@ class RecipesService extends BaseService
 	 * The recipes_resolved view (per-recipe fulfillment summary), optionally filtered.
 	 *
 	 * @param string|null $customWhere Raw SQL WHERE fragment, or null for all rows
+	 * @param array $customWhereParams Values for the positional "?" placeholders in $customWhere.
+	 *              Anything engine specific (date arithmetic above all) belongs here rather than
+	 *              in $customWhere, which has to stay portable across SQLite and PostgreSQL.
 	 */
-	public function GetRecipesResolved($customWhere = null): Result
+	public function GetRecipesResolved($customWhere = null, array $customWhereParams = []): Result
 	{
 		if ($customWhere == null)
 		{
@@ -180,8 +183,42 @@ class RecipesService extends BaseService
 		}
 		else
 		{
-			return $this->DB->recipes_resolved()->where($customWhere);
+			return $this->DB->recipes_resolved()->where($customWhere, $customWhereParams);
 		}
+	}
+
+	/**
+	 * The name of the internal RECIPE_TYPE_MEALPLAN_WEEK recipe covering the given day,
+	 * as "YYYY-WW".
+	 *
+	 * This deliberately reimplements SQLite's STRFTIME('%W', ...) in PHP - "week of year,
+	 * Monday as first day of week 1, days before the year's first Monday are week 00".
+	 * The name is written by the meal_plan triggers (migrations/0071.sql, 0073.sql,
+	 * 0096.sql, 0139.sql on SQLite; grocy_mealplan_week_name() on PostgreSQL, see
+	 * db/pgsql/baseline/03_views_group1.sql), and anything looking a week recipe up has to
+	 * produce byte identical output or the lookup silently stops matching. Neither PHP's
+	 * "W" (ISO-8601, which shifts dates across the year boundary) nor PostgreSQL's
+	 * to_char('WW') matches those semantics, hence the explicit arithmetic.
+	 *
+	 * @param string $day An ISO date (Y-m-d)
+	 * @return string
+	 */
+	public static function GetMealPlanWeekRecipeName(string $day): string
+	{
+		$date = new \DateTimeImmutable($day);
+		$firstOfJanuary = new \DateTimeImmutable($date->format('Y') . '-01-01');
+		$firstMonday = $firstOfJanuary->modify('+' . ((8 - intval($firstOfJanuary->format('N'))) % 7) . ' days');
+
+		if ($date < $firstMonday)
+		{
+			$week = 0;
+		}
+		else
+		{
+			$week = intdiv($firstMonday->diff($date)->days, 7) + 1;
+		}
+
+		return ltrim($date->format('Y') . '-' . sprintf('%02d', $week), '0');
 	}
 
 	/**
