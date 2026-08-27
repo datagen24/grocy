@@ -1,4 +1,11 @@
-﻿$('#save-userentity-button').on('click', function(e)
+﻿// Powers the user entity create/edit modal form (userentityform.blade.php).
+// Grocy.EditMode ('create'/'edit') and Grocy.EditObjectId select POST vs PUT. Note:
+// unlike most other forms here, this one has no userfields (a user entity IS the
+// definition userfields attach to, so it can't itself carry them).
+
+// Validates and submits the form, then either postMessages the parent (embedded mode)
+// to reload, or navigates back to the user entities list
+$('#save-userentity-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -61,6 +68,7 @@
 	}
 });
 
+// Live-validates on every keystroke / select change
 $('#userentity-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('userentity-form');
@@ -71,6 +79,7 @@ $('#userentity-form select').change(function(event)
 	Grocy.FrontendHelpers.ValidateForm('userentity-form');
 });
 
+// Enter key submits the form (if valid) instead of doing a default form submit
 $('#userentity-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter

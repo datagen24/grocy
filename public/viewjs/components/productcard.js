@@ -1,5 +1,12 @@
+// Implements the ProductCard widget (views/components/productcard.blade.php): a modal showing
+// summary details for one product (stock amount/value, last purchased/used, location, prices,
+// average shelf life, edit/journal/shopping-list/stock-entries links) and, when
+// GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING is enabled, a Chart.js price-history line chart.
+// Public API: Refresh(productId) - fetches and renders the product, also called by the
+// ".productcard-trigger" click handler below to populate the modal before showing it.
 Grocy.Components.ProductCard = {};
 
+/** Fetches product details (GET stock/products/{id}) and renders them into the #productcard-* elements */
 Grocy.Components.ProductCard.Refresh = function(productId)
 {
 	Grocy.Api.Get('stock/products/' + productId,
@@ -127,6 +134,8 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 			RefreshContextualTimeago(".productcard");
 			RefreshLocaleNumberDisplay(".productcard");
 
+			// Price history chart: one dataset per shopping location plus a hidden aggregate
+			// "_TrendlineDataset" used only to render the overall trendline
 			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			{
 				Grocy.Api.Get('stock/products/' + productId + '/price-history',
@@ -219,6 +228,10 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 	);
 };
 
+/**
+ * (Re-)creates the Chart.js price-history line chart in #productcard-product-price-history-chart,
+ * destroying any previous instance first. Datasets/labels are populated afterwards by Refresh().
+ */
 Grocy.Components.ProductCard.ReInitPriceHistoryChart = function()
 {
 	if (typeof Grocy.Components.ProductCard.PriceHistoryChart !== "undefined")
@@ -295,6 +308,7 @@ Grocy.Components.ProductCard.ReInitPriceHistoryChart = function()
 	});
 }
 
+// Toggles the "Show more"/"Show less" label on the collapsible product description
 $("#productcard-product-description").on("shown.bs.collapse", function()
 {
 	$(".expandable-text").find("a[data-toggle='collapse']").text(__t("Show less"));
@@ -305,6 +319,7 @@ $("#productcard-product-description").on("hidden.bs.collapse", function()
 	$(".expandable-text").find("a[data-toggle='collapse']").text(__t("Show more"));
 })
 
+// Any element with class "productcard-trigger" and a "data-product-id" attribute opens this card
 $(document).on("click", ".productcard-trigger", function(e)
 {
 	var productId = $(e.currentTarget).attr("data-product-id");

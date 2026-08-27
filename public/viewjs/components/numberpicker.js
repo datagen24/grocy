@@ -1,3 +1,7 @@
+// Implements the NumberPicker widget (views/components/numberpicker.blade.php): a plus/minus
+// stepper wrapped around a number input with dynamic min/max/decimals validation messages.
+// No Grocy.Components.* public API - purely class/selector-driven (".numberpicker",
+// ".numberpicker-up-button", ".numberpicker-down-button").
 $(".numberpicker-down-button").unbind('click').on("click", function()
 {
 	var inputElement = $(this).parent().parent().find('input[type="number"]');
@@ -14,6 +18,7 @@ $(".numberpicker-up-button").unbind('click').on("click", function()
 	inputElement.trigger('change');
 });
 
+// Custom validation: flags the value invalid when it equals data-not-equal (e.g. "amount cannot equal the current stock amount")
 $(".numberpicker").on("keyup", function()
 {
 	if ($(this).attr("data-not-equal") && $(this).attr("data-not-equal") == $(this).val())
@@ -26,6 +31,9 @@ $(".numberpicker").on("keyup", function()
 	}
 });
 
+// Watches min/max/data-not-equal/data-initialised attribute changes (set dynamically by other
+// scripts, e.g. ProductAmountPicker/consume.js adjusting limits) and regenerates the localized
+// "invalid-feedback" validation message text to match the new limits
 $(".numberpicker").each(function()
 {
 	new MutationObserver(function(mutations)
@@ -79,6 +87,7 @@ $(".numberpicker").each(function()
 });
 $(".numberpicker").attr("data-initialised", "true"); // Dummy change to trigger MutationObserver above once
 
+// Arrow up/down keys act as the up/down stepper buttons
 $(".numberpicker").on("keydown", function(e)
 {
 	if (e.key == "ArrowUp")
@@ -93,6 +102,8 @@ $(".numberpicker").on("keydown", function(e)
 	}
 });
 
+// When enabled (stock_auto_decimal_separator_prices), auto-inserts a decimal point into a
+// plain-digit price entry (e.g. typing "199" with 2 configured decimal places becomes "1.99")
 $(".numberpicker.locale-number-input.locale-number-currency").on("blur", function()
 {
 	if (BoolVal(Grocy.UserSettings.stock_auto_decimal_separator_prices))

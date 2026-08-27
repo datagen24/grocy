@@ -67,6 +67,7 @@ if (typeof prefillUser !== "undefined")
 	}
 }
 
+// Prefill by user id (from the template's data-prefill-by-user-id attribute on the wrapper)
 var prefillUserId = Grocy.Components.UserPicker.GetPicker().parent().data('prefill-by-user-id').toString();
 if (typeof prefillUserId !== "undefined")
 {

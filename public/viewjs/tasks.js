@@ -133,6 +133,8 @@ $(document).on('click', '.do-task-button', function (e)
 	);
 });
 
+// Reverts a completed task back to open (POST tasks/{id}/undo); reloads the whole page
+// since the row's markup needs to change back to its "open" form
 $(document).on('click', '.undo-task-button', function (e)
 {
 	e.preventDefault();
@@ -155,6 +157,7 @@ $(document).on('click', '.undo-task-button', function (e)
 	);
 });
 
+// Deletes a task (DELETE objects/tasks/{id}) after confirmation, fading the row out
 $(document).on('click', '.delete-task-button', function (e)
 {
 	e.preventDefault();
@@ -197,6 +200,7 @@ $(document).on('click', '.delete-task-button', function (e)
 	});
 });
 
+// Toggling "show done tasks" reloads the page with/without the include_done query param
 $("#show-done-tasks").change(function ()
 {
 	if (this.checked)
@@ -209,11 +213,17 @@ $("#show-done-tasks").change(function ()
 	}
 });
 
+// Reflect the current include_done state onto the checkbox on load
 if (GetUriParam('include_done'))
 {
 	$("#show-done-tasks").prop('checked', true);
 }
 
+/**
+ * Refreshes the due-today/due-soon/overdue summary widgets by fetching all tasks (GET
+ * tasks) and bucketing them by due_date relative to today and the configured "next X
+ * days" threshold. Called on load and after marking a task done.
+ */
 function RefreshStatistics()
 {
 	var nextXDays = $("#info-due-soon-tasks").data("next-x-days");

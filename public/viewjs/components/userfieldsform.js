@@ -1,5 +1,18 @@
+// Implements the UserfieldsForm widget (views/components/userfieldsform.blade.php,
+// userfields_thead.blade.php, userfields_tbody.blade.php): renders/persists the custom
+// "userfields" defined for an entity (text/checkbox/date/datetime/file/link/multi-select
+// inputs with class "userfield-input") against Grocy.EditObjectId.
+// Public API: Save(success, error), Load(), Clear() - all are no-ops when no #userfields-form
+// is present on the page. Consumers call these alongside their own object save/load/clear flow.
 Grocy.Components.UserfieldsForm = {};
 
+/**
+ * Persists every changed ("is-dirty") userfield input via PUT userfields/{entity}/{Grocy.EditObjectId},
+ * one field at a time. File-type fields additionally upload the new file and/or delete the old
+ * one (Grocy.Api.UploadFile/DeleteFile against the "userfiles" group) before/after the PUT.
+ * @param {function} [success] Called once after the last field has saved successfully.
+ * @param {function} [error] Called once if the last field's save (or its file operation) fails.
+ */
 Grocy.Components.UserfieldsForm.Save = function (success, error)
 {
 	if (!$("#userfields-form").length)
@@ -70,6 +83,8 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 		Grocy.Api.Put('userfields/' + $("#userfields-form").data("entity") + '/' + Grocy.EditObjectId, jsonData,
 			function (result)
 			{
+				// Depending on which file-related state was collected above, follow up the field
+				// value save with the matching file upload and/or delete against 'userfiles'
 				if (typeof newFile !== 'undefined' && typeof oldFile !== 'undefined') // Delete and Upload
 				{
 					Grocy.Api.DeleteFile(oldFile, 'userfiles',
@@ -162,6 +177,12 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 	});
 }
 
+/**
+ * Populates the userfield inputs: when no Grocy.EditObjectId is set (creating a new object),
+ * applies each userfield's configured default value (GET objects/userfields); otherwise loads
+ * the object's actual stored values (GET userfields/{entity}/{Grocy.EditObjectId}) and renders
+ * them per input type (checkbox/file/multi-select/link/plain).
+ */
 Grocy.Components.UserfieldsForm.Load = function ()
 {
 	if (!$("#userfields-form").length)
@@ -300,6 +321,10 @@ Grocy.Components.UserfieldsForm.Load = function ()
 	}
 }
 
+/**
+ * Resets every userfield input to its empty state (unchecked/blank/no file), fetching the
+ * entity's userfield definitions (GET objects/userfields) to know which inputs exist and their types.
+ */
 Grocy.Components.UserfieldsForm.Clear = function ()
 {
 	if (!$("#userfields-form").length)
@@ -373,6 +398,8 @@ Grocy.Components.UserfieldsForm.Clear = function ()
 	);
 }
 
+// "link" type userfields are backed by two visible title/link inputs; keeps the hidden
+// userfield-input's JSON value (and dirty state) in sync as either is typed
 $(".userfield-link").keyup(function (e)
 {
 	var formRow = $(this).parent().parent();
@@ -387,6 +414,7 @@ $(".userfield-link").keyup(function (e)
 	formRow.find(".userfield-input").val(JSON.stringify(value)).addClass("is-dirty");
 });
 
+// Re-validates every form on the page whenever a userfield input changes
 $(".userfield-input").change(function (e)
 {
 	$("form").each(function ()
@@ -395,6 +423,8 @@ $(".userfield-input").change(function (e)
 	});
 });
 
+// Bootstrap-select fires its own "changed.bs.select" event instead of a native "change";
+// mark the field dirty so Save() picks it up
 $(".userfield-input.selectpicker").on("changed.bs.select", function ()
 {
 	$(this).addClass("is-dirty");
