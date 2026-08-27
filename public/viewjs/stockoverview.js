@@ -1,4 +1,9 @@
-﻿
+﻿// Powers the stock overview view (stockoverview.blade.php): the main per-product stock
+// table (aggregated by product, one row per product/parent-product), the "due
+// soon"/overdue/expired/missing summary widgets, and the consume/open/undo actions.
+// Table row and status-widget updates are done in place via RefreshProductRow()/
+// RefreshStatistics() rather than a full page reload, and via the "ProductChanged"
+// postMessage broadcast used by other views (purchase/consume/transfer/...) after a booking.
 
 var stockOverviewTable = $('#stock-overview-table').DataTable({
 	'order': [[5, 'asc']],
@@ -37,6 +42,9 @@ var stockOverviewTable = $('#stock-overview-table').DataTable({
 $('#stock-overview-table tbody').removeClass("d-none");
 stockOverviewTable.columns.adjust().draw();
 
+// Location filter, matched against the hidden locations column (index 6), which lists
+// all locations a product is stocked at wrapped in "xx...xx" markers so a substring
+// match on one location id can't accidentally match another
 $("#location-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -52,6 +60,8 @@ $("#location-filter").on("change", function ()
 	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(6)).search(value).draw();
 });
 
+// Product group filter, matched against the hidden product-group column (index 8),
+// same "xx...xx" wrapping technique as the location filter
 $("#product-group-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -67,6 +77,8 @@ $("#product-group-filter").on("change", function ()
 	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(8)).search(value).draw();
 });
 
+// Status filter dropdown (e.g. "below min. stock amount"/"expired"/"due soon"), matched
+// against the hidden status-info column (index 7)
 $("#status-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -81,6 +93,7 @@ $("#status-filter").on("change", function ()
 	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(7)).search(value).draw();
 });
 
+// Clicking a summary widget (due soon/overdue/expired/missing) applies that status as the filter
 $(".status-filter-message").on("click", function ()
 {
 	var value = $(this).data("status-filter");
@@ -88,6 +101,7 @@ $(".status-filter-message").on("click", function ()
 	$("#status-filter").trigger("change");
 });
 
+// Resets all filters
 $("#clear-filter-button").on("click", function ()
 {
 	$("#search").val("");
@@ -100,6 +114,7 @@ $("#clear-filter-button").on("click", function ()
 	stockOverviewTable.search("").draw();
 });
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function ()
 {
 	var value = $(this).val();
@@ -111,6 +126,8 @@ $("#search").on("keyup", Delay(function ()
 	stockOverviewTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Fetches label data for a product's Grocy-code and forwards it to the configured
+// label printer webhook (Grocy.Webhooks.labelprinter), if any is set up
 $(document).on('click', '.product-grocycode-label-print', function (e)
 {
 	e.preventDefault();
@@ -125,6 +142,11 @@ $(document).on('click', '.product-grocycode-label-print', function (e)
 	});
 });
 
+// Consumes (or marks spoiled) the given amount of a product's aggregated stock
+// (allow_subproduct_substitution lets sub-products cover the amount too), shows a toast
+// with an inline "Undo" link (calling the UndoStockTransaction() helper, which is defined
+// in purchase.js - also loaded on this view for its quick-entry modal), and refreshes
+// both that product's row and the summary widgets
 $(document).on('click', '.product-consume-button', function (e)
 {
 	e.preventDefault();
@@ -142,6 +164,9 @@ $(document).on('click', '.product-consume-button', function (e)
 			Grocy.Api.Get('stock/products/' + productId,
 				function (result)
 				{
+					// For tare-weight-handled products, the toast reports the original total
+					// stock amount rather than the (weight-derived) consumeAmount; the message
+					// text itself is otherwise identical to the else-branch below
 					if (result.product.enable_tare_weight_handling == 1)
 					{
 						var toastMessage = __t('Removed %1$s of %2$s from stock', originalTotalStockAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
@@ -176,6 +201,8 @@ $(document).on('click', '.product-consume-button', function (e)
 	);
 });
 
+// Marks the given amount of a product's aggregated stock as opened; optionally moves it
+// to a default "consume location" (server-driven, reported via result.product.move_on_open)
 $(document).on('click', '.product-open-button', function (e)
 {
 	e.preventDefault();
@@ -220,6 +247,13 @@ $(document).on('click', '.product-open-button', function (e)
 	);
 });
 
+/**
+ * Refreshes the top summary widgets: the total product count/value (GET stock,
+ * gated by GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING for whether value is shown), and the
+ * due-soon/overdue/expired/missing-below-min-stock counts (GET stock/volatile). Products
+ * with hide_on_stock_overview set are excluded from all counts. Called on load and after
+ * any stock-changing action.
+ */
 function RefreshStatistics()
 {
 	Grocy.Api.Get('stock',
@@ -268,6 +302,15 @@ function RefreshStatistics()
 }
 RefreshStatistics();
 
+/**
+ * Re-fetches a single product's stock details (stock/products/{id}) and updates its
+ * table row in place (amount, value, next due date, opened/aggregated amounts, due/
+ * low-stock row styling, consume/open button enabled state), rather than reloading the
+ * whole table. Recurses to refresh the parent product's row too, since its aggregated
+ * amount depends on this one. Hides the row entirely if stock has dropped to zero and
+ * the "show all out of stock products" setting is off.
+ * @param {number|string} productId - product id, matching the "product-{id}-row" DOM id
+ */
 function RefreshProductRow(productId)
 {
 	productId = productId.toString();
@@ -403,6 +446,8 @@ function RefreshProductRow(productId)
 	);
 }
 
+// Reacts to a "ProductChanged" broadcast (e.g. from purchase/consume/transfer forms in
+// a modal iframe elsewhere) by refreshing that product's row and the summary widgets
 $(window).on("message", function (e)
 {
 	var data = e.originalEvent.data;

@@ -1,4 +1,11 @@
-﻿$('#save-stockentry-button').on('click', function(e)
+﻿// Powers the "edit stock entry" modal form (stockentryform.blade.php). Unlike most forms
+// here this is edit-only (PUT stock/entry/{Grocy.EditObjectRowId}) - there's no create
+// mode, since new stock entries are made via the purchase/consume workflows.
+
+// Validates and submits the form (PUT, always - no create mode), optionally prints a
+// label and saves userfields, then notifies the parent window to broadcast the product
+// change, show a success toast (with an inline Undo link) and close the modal
+$('#save-stockentry-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -78,11 +85,13 @@
 
 Grocy.FrontendHelpers.ValidateForm('stockentry-form');
 
+// Live-validates on every keystroke
 $('#stockentry-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('stockentry-form');
 });
 
+// Enter key submits the form (if valid) instead of doing a default form submit
 $('#stockentry-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -100,6 +109,8 @@ $('#stockentry-form input').keydown(function(event)
 	}
 });
 
+// Re-validate as the best-before-date (DateTimePicker) and purchased-date (DateTimePicker2)
+// fields change
 Grocy.Components.DateTimePicker.GetInputElement().on('change', function(e)
 {
 	Grocy.FrontendHelpers.ValidateForm('stockentry-form');
@@ -120,6 +131,7 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keypress', function(e)
 	Grocy.FrontendHelpers.ValidateForm('stockentry-form');
 });
 
+// Show the product's stock quantity unit name next to the amount field
 Grocy.Api.Get('stock/products/' + Grocy.EditObjectProductId,
 	function(productDetails)
 	{
@@ -131,11 +143,14 @@ Grocy.Api.Get('stock/products/' + Grocy.EditObjectProductId,
 	}
 );
 
+// Selects the amount field's content on focus for quick overtyping
 $("#amount").on("focus", function(e)
 {
 	$(this).select();
 });
 
+// Changing the best-before-date pre-checks "print label" (a label is typically wanted
+// whenever the due date changes), when label printing is enabled
 Grocy.Components.DateTimePicker.GetInputElement().on('change', function(e)
 {
 	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
@@ -144,6 +159,7 @@ Grocy.Components.DateTimePicker.GetInputElement().on('change', function(e)
 	}
 });
 
+// Initial setup: load userfields, focus the amount field, run initial validation
 Grocy.Components.UserfieldsForm.Load();
 setTimeout(function()
 {

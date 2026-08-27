@@ -1,3 +1,11 @@
+// Implements the CameraBarcodeScanner widget (views/components/camerabarcodescanner.blade.php):
+// adds a camera-scan button next to every ".barcodescanner-input" on the page, and on click
+// opens a bootbox modal that live-decodes barcodes from the device camera using the ZXing
+// library. On a successful decode it emits a "Grocy.BarcodeScanned" document event with the
+// decoded text and the input's "data-target" (consumed by ProductPicker/RecipePicker/... and
+// other views), then closes the modal.
+// Public API: Init() (idempotent, called once per page), StartScanning(), StopScanning(),
+// TorchToggle(track), CheckCapabilities().
 Grocy.Components.CameraBarcodeScanner = {};
 
 Grocy.Components.CameraBarcodeScanner.Scanner = null;
@@ -5,6 +13,11 @@ Grocy.Components.CameraBarcodeScanner.LiveVideoSizeAdjusted = false;
 Grocy.Components.CameraBarcodeScanner.CameraSelectLoaded = false;
 Grocy.Components.CameraBarcodeScanner.TorchIsOn = false;
 
+/**
+ * Inspects the active camera stream's capabilities: populates the camera-select dropdown
+ * (once), shows/hides the torch button depending on hardware support, and shrinks the live
+ * video element when its aspect ratio would otherwise overflow the viewport.
+ */
 Grocy.Components.CameraBarcodeScanner.CheckCapabilities = async function()
 {
 	var track = Grocy.Components.CameraBarcodeScanner.Scanner.stream.getVideoTracks()[0];
@@ -70,6 +83,13 @@ Grocy.Components.CameraBarcodeScanner.CheckCapabilities = async function()
 	}
 }
 
+/**
+ * Starts (or restarts, e.g. after switching cameras) continuous decoding from the selected
+ * camera (window.localStorage "cameraId", or the browser default) into the live video element.
+ * On a successful decode: stops scanning, fires "Grocy.BarcodeScanned" with the decoded text
+ * and Grocy.Components.CameraBarcodeScanner.CurrentTarget, and closes the topmost modal.
+ * On init failure (e.g. no camera permission/HTTPS): shows an error and closes the modal.
+ */
 Grocy.Components.CameraBarcodeScanner.StartScanning = function()
 {
 	Grocy.Components.CameraBarcodeScanner.Scanner.decodeFromVideoDevice(
@@ -113,6 +133,7 @@ Grocy.Components.CameraBarcodeScanner.StartScanning = function()
 		})
 }
 
+/** Stops the camera stream/decoder and resets per-session UI adjustment flags */
 Grocy.Components.CameraBarcodeScanner.StopScanning = function()
 {
 	Grocy.Components.CameraBarcodeScanner.Scanner.reset();
@@ -122,6 +143,7 @@ Grocy.Components.CameraBarcodeScanner.StopScanning = function()
 	Grocy.Components.CameraBarcodeScanner.TorchIsOn = false;
 }
 
+/** Toggles the given video track's torch (flashlight) constraint, if supported */
 Grocy.Components.CameraBarcodeScanner.TorchToggle = function(track)
 {
 	if (track)
@@ -137,6 +159,9 @@ Grocy.Components.CameraBarcodeScanner.TorchToggle = function(track)
 	}
 }
 
+// Opens the scan modal for the camera button belonging to a given barcode input: builds the
+// bootbox dialog (with a torch button and a camera-select dropdown appended to it) and starts
+// scanning; StopScanning() runs automatically via the dialog's onHide callback.
 $(document).on("click", "#camerabarcodescanner-start-button", async function(e)
 {
 	e.preventDefault();
@@ -192,6 +217,11 @@ $(document).on("click", "#camerabarcodescanner-start-button", async function(e)
 });
 
 Grocy.Components.CameraBarcodeScanner.InitDone = false;
+/**
+ * Creates the shared ZXing reader (limited to the barcode formats Grocy expects) and appends a
+ * camera-scan button after every visible ".barcodescanner-input" on the page. Guarded by
+ * InitDone so repeated calls (see the setTimeout below) are a no-op once buttons exist.
+ */
 Grocy.Components.CameraBarcodeScanner.Init = function()
 {
 	if (Grocy.Components.CameraBarcodeScanner.InitDone)
@@ -223,6 +253,7 @@ Grocy.Components.CameraBarcodeScanner.Init = function()
 	});
 }
 
+// Deferred so it runs after the view's own script has rendered/replaced any barcode inputs
 setTimeout(function()
 {
 	Grocy.Components.CameraBarcodeScanner.Init();

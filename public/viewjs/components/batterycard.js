@@ -1,5 +1,10 @@
+// Implements the BatteryCard widget (views/components/batterycard.blade.php): a modal showing
+// summary details for one battery (last charged, charge cycle count, edit/journal links).
+// Public API: Refresh(batteryId) - fetches and renders the battery, also called by the
+// ".batterycard-trigger" click handler below to populate the modal before showing it.
 Grocy.Components.BatteryCard = {};
 
+/** Fetches battery details (GET batteries/{id}) and renders them into the #batterycard-* elements */
 Grocy.Components.BatteryCard.Refresh = function(batteryId)
 {
 	Grocy.Api.Get('batteries/' + batteryId,
@@ -25,6 +30,7 @@ Grocy.Components.BatteryCard.Refresh = function(batteryId)
 	);
 };
 
+// Any element with class "batterycard-trigger" and a "data-battery-id" attribute opens this card
 $(document).on("click", ".batterycard-trigger", function(e)
 {
 	Grocy.Components.BatteryCard.Refresh($(e.currentTarget).attr("data-battery-id"));

@@ -204,6 +204,7 @@ $('#save-mark-as-open-button').on('click', function(e)
 					Grocy.FrontendHelpers.EndUiBusy("consume-form");
 					toastr.success(__t('Marked %1$s of %2$s as opened', Number.parseFloat(jsonForm.amount).toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
 
+					// Inform the user when opening also relocated the stock entry (product's move_on_open setting)
 					if (productDetails.product.move_on_open == 1 && productDetails.default_consume_location != null)
 					{
 						toastr.info('<span>' + __t("Moved to %1$s", productDetails.default_consume_location.name) + "</span> <i class='fa-solid fa-exchange-alt'></i>");
@@ -238,6 +239,9 @@ $('#save-mark-as-open-button').on('click', function(e)
 	);
 });
 var sumValue = 0;
+// Location selector changed: rebuilds the specific-stock-entry dropdown for the new location.
+// When embedded with a pre-selected stock entry (stockId URI param) or when the product was
+// scanned via Grocycode (which encodes a specific stock_id), that entry is auto-selected.
 $("#location_id").on('change', function(e)
 {
 	var locationId = $(e.target).val();
@@ -283,6 +287,14 @@ $("#location_id").on('change', function(e)
 	}
 });
 
+/**
+ * Populates #specific_stock_entry with the stock entries at the given location
+ * (GET stock/products/{id}/entries), tallies sumValue (total available amount there),
+ * refreshes the product details/form, and auto-submits in scan mode when the product was
+ * identified unambiguously via barcode or Grocycode.
+ * @param {number} locationId Location to show stock entries for.
+ * @param {number|null} stockId Stock entry id to pre-select, if known.
+ */
 function OnLocationChange(locationId, stockId)
 {
 	sumValue = 0;
@@ -355,6 +367,11 @@ function OnLocationChange(locationId, stockId)
 	}
 }
 
+// Product selected: refreshes the ProductCard, reloads the amount/quantity-unit picker
+// (Grocy.Components.ProductAmountPicker) for the product's stock QU, rebuilds the location
+// dropdown (GET stock/products/{id}/locations) defaulting to the product's default consume
+// location, applies tare-weight min/max limits, and looks up any barcode-specific amount/QU
+// (GET objects/product_barcodes) to prefill the amount and trigger scan-mode auto-submit.
 Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 {
 	if (BoolVal(Grocy.UserSettings.scan_mode_consume_enabled))
@@ -568,6 +585,9 @@ $('#consume-form input').keydown(function(event)
 	}
 });
 
+// Specific stock entry selected/cleared: caps #display_amount's max to either the single
+// entry's amount, or (when 'any entry' is chosen) the summed amount across all entries at
+// the current location.
 $("#specific_stock_entry").on("change", function(e)
 {
 	if ($(e.target).val() == "")
@@ -601,6 +621,7 @@ $("#specific_stock_entry").on("change", function(e)
 	}
 });
 
+// Toggles whether a specific stock entry must be chosen (enables/requires #specific_stock_entry)
 $("#use_specific_stock_entry").on("change", function()
 {
 	var value = $(this).is(":checked");
@@ -620,11 +641,16 @@ $("#use_specific_stock_entry").on("change", function()
 	Grocy.FrontendHelpers.ValidateForm("consume-form");
 });
 
+// Quantity unit changed: re-evaluate min/max amount limits for the new unit
 $("#qu_id").on("change", function()
 {
 	RefreshForm();
 });
 
+/**
+ * Undoes a stock booking (POST stock/bookings/{id}/undo). Currently unused from this view
+ * but kept available as a global for other views/inline handlers.
+ */
 function UndoStockBooking(bookingId)
 {
 	Grocy.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
@@ -639,6 +665,10 @@ function UndoStockBooking(bookingId)
 	);
 };
 
+/**
+ * Undoes a stock transaction (POST stock/transactions/{id}/undo). Called from the "Undo"
+ * link in the success toast shown after consuming/opening stock.
+ */
 function UndoStockTransaction(transactionId)
 {
 	Grocy.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
@@ -653,6 +683,8 @@ function UndoStockTransaction(transactionId)
 	);
 };
 
+// When embedded (opened from another view in a modal), pick up the product/location/stock
+// entry to prefill from URI params and kick off the product-picker change chain
 if (GetUriParam("embedded") !== undefined)
 {
 	var locationId = GetUriParam('locationId');
@@ -677,6 +709,7 @@ setTimeout(function()
 	Grocy.Components.ProductPicker.GetInputElement().focus();
 }, Grocy.FormFocusDelay);
 
+// Requests audio permission when scan mode is first enabled (beeps are used for feedback)
 $(document).on("change", "#scan-mode", function(e)
 {
 	if ($(this).prop("checked"))
@@ -685,6 +718,7 @@ $(document).on("change", "#scan-mode", function(e)
 	}
 });
 
+// Toggle button that proxies clicks to the underlying #scan-mode checkbox and updates its label/color
 $("#scan-mode-button").on("click", function(e)
 {
 	$("#scan-mode").click();
@@ -701,6 +735,11 @@ $("#scan-mode-button").on("click", function(e)
 
 $('#consume-exact-amount').on('change', RefreshForm);
 var current_productDetails;
+/**
+ * Re-applies min/max amount constraints and the tare-weight info hint based on the currently
+ * selected product (current_productDetails), quantity unit and 'exact amount' checkbox state.
+ * Called after a product/location/QU/specific-stock-entry change.
+ */
 function RefreshForm()
 {
 	var productDetails = current_productDetails;
@@ -745,6 +784,11 @@ function RefreshForm()
 	Grocy.FrontendHelpers.ValidateForm("consume-form");
 }
 
+/**
+ * Auto-submits the consume form when scan mode is enabled and the form validates - used so
+ * scanning a barcode can complete a consumption without further user interaction.
+ * @param {boolean} singleUnit When true, forces the amount to 1 before submitting.
+ */
 function ScanModeSubmit(singleUnit = true)
 {
 	if (BoolVal(Grocy.UserSettings.scan_mode_consume_enabled))

@@ -564,6 +564,7 @@ function PrefillBestBeforeDate(product, location)
 	}
 }
 
+// Re-run the due date prefill whenever the target stock location changes, so moving to/from a freezer location updates the suggested due date
 if (Grocy.Components.LocationPicker !== undefined)
 {
 	Grocy.Components.LocationPicker.GetPicker().on('change', function (e)
@@ -582,6 +583,7 @@ if (Grocy.Components.LocationPicker !== undefined)
 	});
 }
 
+// Initial page setup: seed the amount field with the user's default purchase amount and validate the still-empty form
 $('#display_amount').val(Grocy.UserSettings.stock_default_purchase_amount);
 RefreshLocaleNumberInput();
 $(".input-group-productamountpicker").trigger("change");
@@ -591,6 +593,7 @@ if (Grocy.Components.ProductPicker)
 {
 	if (Grocy.Components.ProductPicker.InAnyFlow() === false && GetUriParam("embedded") === undefined)
 	{
+		// Plain page load, no product preselected: focus the product picker so scanning/typing can start right away
 		setTimeout(function ()
 		{
 			Grocy.Components.ProductPicker.GetInputElement().focus();
@@ -598,6 +601,7 @@ if (Grocy.Components.ProductPicker)
 	}
 	else
 	{
+		// A product was already preselected by the picker (e.g. via URL flow/barcode/copy) - trigger its change handler to prefill the form
 		Grocy.Components.ProductPicker.GetPicker().trigger('change');
 
 		if (Grocy.Components.ProductPicker.InProductModifyWorkflow())
@@ -610,6 +614,7 @@ if (Grocy.Components.ProductPicker)
 	}
 }
 
+// Focusing the amount field with no product selected yet redirects focus back to the product picker instead
 $('#display_amount').on('focus', function (e)
 {
 	if (Grocy.Components.ProductPicker.GetValue().length === 0)
@@ -630,11 +635,13 @@ $('#price').on('focus', function (e)
 	$(this).select();
 });
 
+// Re-validate on every keystroke so button state / invalid-feedback stays current
 $('#purchase-form input').keyup(function (event)
 {
 	Grocy.FrontendHelpers.ValidateForm('purchase-form');
 });
 
+// Enter key anywhere in the form submits the purchase (when valid)
 $('#purchase-form input').keydown(function (event)
 {
 	if (event.keyCode === 13) // Enter
@@ -652,6 +659,7 @@ $('#purchase-form input').keydown(function (event)
 	}
 });
 
+// Due date picker: re-validate the form on every change/keypress
 if (Grocy.Components.DateTimePicker)
 {
 	Grocy.Components.DateTimePicker.GetInputElement().on('change', function (e)
@@ -665,6 +673,7 @@ if (Grocy.Components.DateTimePicker)
 	});
 }
 
+// Purchased date picker (only rendered when show_purchased_date_on_purchase is enabled): same re-validation, plus an initial input trigger
 if (Grocy.Components.DateTimePicker2)
 {
 	Grocy.Components.DateTimePicker2.GetInputElement().on('change', function (e)
@@ -680,6 +689,7 @@ if (Grocy.Components.DateTimePicker2)
 	Grocy.Components.DateTimePicker2.GetInputElement().trigger("input");
 }
 
+// Recompute the "means X per Y" price hint whenever the price, its type (unit/total) or the amount changes
 $('#price').on('keyup', function (e)
 {
 	RefreshPriceHint();
@@ -701,6 +711,14 @@ $('#display_amount').on('change', function (e)
 	Grocy.FrontendHelpers.ValidateForm('purchase-form');
 });
 
+/**
+ * Updates the "means X per Y" hint text (#price-hint) shown below the price field, converting
+ * the entered price into a price per stock quantity unit for display - mirrors the same
+ * unit-price/total-price/QU-factor math used to build jsonData.price in the save handler above,
+ * but rendered with stock_decimal_places_prices_display instead of being persisted.
+ * Only shown when there is something to convert: total-price mode, or a purchase QU different
+ * from the stock QU (#qu_id's data-destination-qu-name). Reads CurrentProductDetails for tare weight handling.
+ */
 function RefreshPriceHint()
 {
 	if ($('#amount').val() == 0 || $('#price').val() == 0)
@@ -717,6 +735,7 @@ function RefreshPriceHint()
 			amount -= CurrentProductDetails.product.tare_weight;
 		}
 
+		// price-per-selected-QU * factor (selected-QU units per 1 stock-QU unit) = price-per-stock-QU
 		var price = Number.parseFloat($('#price').val() * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Grocy.UserSettings.stock_decimal_places_prices_display);
 		if ($("input[name='price-type']:checked").val() == "total-price")
 		{
@@ -731,6 +750,12 @@ function RefreshPriceHint()
 	}
 };
 
+/**
+ * Undoes a single stock booking (stock/bookings/{id}/undo) and notifies the parent window/other
+ * views that the affected product changed. Invoked from inline onclick handlers built server-side
+ * (not used directly in this file, e.g. see stock journal "Undo" buttons).
+ * @param {number|string} bookingId The stock booking id to undo
+ */
 function UndoStockBooking(bookingId)
 {
 	Grocy.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
@@ -756,6 +781,12 @@ function UndoStockBooking(bookingId)
 	);
 };
 
+/**
+ * Undoes a whole stock transaction (stock/transactions/{id}/undo, e.g. a purchase composed of
+ * multiple bookings) and notifies the parent window/other views that the affected product
+ * changed. Called from the "Undo" link embedded in the purchase success toast.
+ * @param {number|string} transactionId The stock transaction id to undo
+ */
 function UndoStockTransaction(transactionId)
 {
 	Grocy.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
@@ -781,6 +812,7 @@ function UndoStockTransaction(transactionId)
 	);
 };
 
+// Requesting the notification-sound permission the first time scan mode gets enabled
 $("#scan-mode").on("change", function (e)
 {
 	if ($(this).prop("checked"))
@@ -789,6 +821,7 @@ $("#scan-mode").on("change", function (e)
 	}
 });
 
+// Header "Scan mode" toggle button: mirrors/toggles the underlying (hidden) #scan-mode checkbox and its on/off label + styling
 $("#scan-mode-button").on("click", function (e)
 {
 	$("#scan-mode").click();
@@ -803,6 +836,7 @@ $("#scan-mode-button").on("click", function (e)
 	}
 });
 
+// Keep the "Unit price" radio label in sync with the currently selected quantity unit (e.g. "kg price") and refresh the price hint
 $('#qu_id').on('change', function (e)
 {
 	var priceTypeUnitPrice = $("#price-type-unit-price");
@@ -811,6 +845,13 @@ $('#qu_id').on('change', function (e)
 	RefreshPriceHint();
 });
 
+/**
+ * When scan mode is enabled, auto-submits the purchase form after a barcode/product was
+ * resolved and the form validates - called after the barcode lookup flow completes.
+ * @param {boolean} [singleUnit=true] When true, forces #display_amount to 1 before submitting
+ *   (used when no explicit amount was found on the scanned barcode); pass false when the
+ *   barcode already provided its own amount so it should be kept as-is.
+ */
 function ScanModeSubmit(singleUnit = true)
 {
 	if (BoolVal(Grocy.UserSettings.scan_mode_purchase_enabled))
@@ -834,6 +875,7 @@ function ScanModeSubmit(singleUnit = true)
 	}
 }
 
+// "Label per unit" hint: shows how many labels will be printed (one per stock unit) based on the current stock amount
 if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
 {
 	$("#stock_label_type, #amount").on("change", function (e)
@@ -849,6 +891,7 @@ if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
 	});
 }
 
+// Load the stock entity's userfields into the purchase form
 if (Grocy.Components.UserfieldsForm)
 {
 	Grocy.Components.UserfieldsForm.Load();

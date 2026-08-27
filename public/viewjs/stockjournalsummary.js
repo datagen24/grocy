@@ -1,3 +1,6 @@
+// Powers the stock journal summary view (stockjournalsummary.blade.php): an aggregated,
+// per-product summary of stock transactions, filterable by product/transaction type/user.
+// All filtering here is purely client-side against the already-rendered table.
 var journalSummaryTable = $('#stock-journal-summary-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
@@ -8,6 +11,8 @@ var journalSummaryTable = $('#stock-journal-summary-table').DataTable({
 $('#stock-journal-summary-table tbody').removeClass("d-none");
 journalSummaryTable.columns.adjust().draw();
 
+// Product filter, matched as an exact-text regex against the product column (index 1)
+// so that one product's name being a substring of another's doesn't cause false matches
 $("#product-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -22,6 +27,7 @@ $("#product-filter").on("change", function()
 	}
 });
 
+// Transaction type filter, matched against the type column (index 2)
 $("#transaction-type-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -34,6 +40,7 @@ $("#transaction-type-filter").on("change", function()
 	journalSummaryTable.column(journalSummaryTable.colReorder.transpose(2)).search(text).draw();
 });
 
+// User filter, matched against the user column (index 3)
 $("#user-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -46,6 +53,7 @@ $("#user-filter").on("change", function()
 	journalSummaryTable.column(journalSummaryTable.colReorder.transpose(3)).search(text).draw();
 });
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -57,6 +65,8 @@ $("#search").on("keyup", Delay(function()
 	journalSummaryTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Resets all filters (note: #location-filter doesn't exist on this view, so that line
+// is a harmless no-op left over from the shared filter-clearing pattern)
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");

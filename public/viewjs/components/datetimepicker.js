@@ -1,15 +1,26 @@
+// Implements the (primary) DateTimePicker widget (views/components/datetimepicker.blade.php):
+// wraps a Tempus Dominus datetimepicker bound to ".datetimepicker input" with typed shorthand
+// parsing (arrow keys to step, "x"/"X" for "never overdue", "+/-n[d/m/y]" relative offsets,
+// "MMDD"/"YYYYMMDD"/"YYYYMM[e/+]" quick dates) and an optional "shortcut" checkbox
+// (#datetimepicker-shortcut) that snaps to a fixed configured value.
+// A second, independently-scoped instance of this same widget exists as DateTimePicker2 (see
+// datetimepicker2.js) for views needing two pickers at once (e.g. a date range).
+// Public API: GetInputElement/GetValue/SetValue/Clear/ChangeFormat/Init.
 Grocy.Components.DateTimePicker = {};
 
+/** @returns {jQuery} The picker's underlying date/time text input */
 Grocy.Components.DateTimePicker.GetInputElement = function()
 {
 	return $('.datetimepicker').find('input').not(".form-check-input");
 }
 
+/** @returns {string} The current input value, formatted per the input's configured "format" */
 Grocy.Components.DateTimePicker.GetValue = function()
 {
 	return Grocy.Components.DateTimePicker.GetInputElement().val();
 }
 
+/** Sets the input value directly and un-checks the shortcut checkbox if it no longer applies */
 Grocy.Components.DateTimePicker.SetValue = function(value, inputElement = Grocy.Components.DateTimePicker.GetInputElement())
 {
 	// "Click" the shortcut checkbox when the desired value is
@@ -23,6 +34,7 @@ Grocy.Components.DateTimePicker.SetValue = function(value, inputElement = Grocy.
 	inputElement.keyup();
 }
 
+/** Re-inits the underlying picker widget and empties the input/shortcut/timeago display */
 Grocy.Components.DateTimePicker.Clear = function()
 {
 	Grocy.Components.DateTimePicker.Init(true);
@@ -41,6 +53,7 @@ Grocy.Components.DateTimePicker.Clear = function()
 	$('#datetimepicker-timeago').text('');
 }
 
+/** Destroys and re-inits the picker with a new moment.js display/parse format (e.g. date-only vs date+time) */
 Grocy.Components.DateTimePicker.ChangeFormat = function(format)
 {
 	$(".datetimepicker").datetimepicker("destroy");
@@ -57,6 +70,8 @@ Grocy.Components.DateTimePicker.ChangeFormat = function(format)
 	}
 }
 
+// Determine the initial date shown when opening the picker, from the template's
+// data-init-with-now / data-init-value attributes on the input
 var startDate = null;
 if (Grocy.Components.DateTimePicker.GetInputElement().data('init-with-now') === true)
 {
@@ -67,12 +82,19 @@ if (Grocy.Components.DateTimePicker.GetInputElement().data('init-value').length 
 	startDate = moment(Grocy.Components.DateTimePicker.GetInputElement().data('init-value')).format(Grocy.Components.DateTimePicker.GetInputElement().data('format'));
 }
 
+// data-limit-end-to-now caps the calendar (and later validation) to not go beyond "now"
 var limitDate = moment('2999-12-31 23:59:59');
 if (Grocy.Components.DateTimePicker.GetInputElement().data('limit-end-to-now') === true)
 {
 	limitDate = moment();
 }
 
+/**
+ * (Re-)initializes the Tempus Dominus widget on every ".datetimepicker" input with the format/
+ * limits/icons configured via data attributes. Idempotent unless reInit is set, which first
+ * destroys any existing instance (used by ChangeFormat/Clear).
+ * @param {boolean} [reInit=false] Destroy an existing picker instance before initializing.
+ */
 Grocy.Components.DateTimePicker.Init = function(reInit = false)
 {
 	if (reInit)
@@ -126,6 +148,8 @@ Grocy.Components.DateTimePicker.Init = function(reInit = false)
 }
 Grocy.Components.DateTimePicker.Init();
 
+// Core typed-shorthand handling: interprets special input values/arrow-key combos as relative
+// date edits, then re-validates the resulting value (required/limit-end-to-now/limit-start-to-now)
 Grocy.Components.DateTimePicker.GetInputElement().on('keyup', function(e)
 {
 	$('.datetimepicker').datetimepicker('hide');
@@ -254,7 +278,8 @@ Grocy.Components.DateTimePicker.GetInputElement().on('keyup', function(e)
 	$('#datetimepicker-timeago').attr("datetime", Grocy.Components.DateTimePicker.GetValue());
 	RefreshContextualTimeago(".datetimepicker-wrapper");
 
-	//Custom validation
+	// Custom validation: invalid/unparsable dates, and dates violating limit-end-to-now /
+	// limit-start-to-now are flagged via the input's native validity API
 	value = Grocy.Components.DateTimePicker.GetValue();
 	dateObj = moment(value, format, true);
 	var element = Grocy.Components.DateTimePicker.GetInputElement()[0];
@@ -280,6 +305,8 @@ Grocy.Components.DateTimePicker.GetInputElement().on('keyup', function(e)
 			element.setCustomValidity("");
 		}
 
+		// data-earlier-than-limit shows an informational (non-blocking) hint when the chosen
+		// date is earlier than a given reference date (e.g. a related field's value)
 		var earlierThanLimit = Grocy.Components.DateTimePicker.GetInputElement().data("earlier-than-limit");
 		if (earlierThanLimit)
 		{
@@ -303,17 +330,20 @@ Grocy.Components.DateTimePicker.GetInputElement().on('keyup', function(e)
 	}
 });
 
+// Keeps the contextual "timeago" display in sync with manual edits
 Grocy.Components.DateTimePicker.GetInputElement().on('input', function(e)
 {
 	$('#datetimepicker-timeago').attr("datetime", Grocy.Components.DateTimePicker.GetValue());
 	RefreshContextualTimeago(".datetimepicker-wrapper");
 });
 
+// Calendar widget updated its value programmatically -> propagate to our own 'input' handling
 $('.datetimepicker').on('update.datetimepicker', function(e)
 {
 	Grocy.Components.DateTimePicker.GetInputElement().trigger('input');
 });
 
+// Calendar closed -> re-run all of our change handling (input/change/keypress/keyup) once more
 $('.datetimepicker').on('hide.datetimepicker', function(e)
 {
 	Grocy.Components.DateTimePicker.GetInputElement().trigger('input');
@@ -322,6 +352,8 @@ $('.datetimepicker').on('hide.datetimepicker', function(e)
 	Grocy.Components.DateTimePicker.GetInputElement().trigger('keyup');
 });
 
+// The "shortcut" checkbox snaps the picker to (and locks it at) a preconfigured value
+// (data-datetimepicker-shortcut-value), e.g. "never expires"
 $("#datetimepicker-shortcut").on("click", function()
 {
 	if (this.checked)

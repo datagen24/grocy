@@ -1,6 +1,21 @@
+// Implements the ProductAmountPicker widget (views/components/productamountpicker.blade.php):
+// pairs the #display_amount input (entered in whatever QU the user picks) with the #qu_id
+// select (populated from Grocy.QuantityUnitConversionsResolved for the product) and the hidden
+// #amount input holding the amount converted to the destination/stock quantity unit.
+// Public API: Reload(productId, destinationQuId), SetQuantityUnit(quId), AllowAnyQu(), Reset().
 Grocy.Components.ProductAmountPicker = {};
 Grocy.Components.ProductAmountPicker.AllowAnyQuEnabled = false;
 
+/**
+ * (Re)populates the #qu_id dropdown with the quantity units convertible to/from destinationQuId
+ * for the given product (based on Grocy.QuantityUnitConversionsResolved), and converts the
+ * currently displayed amount to the newly selected QU on first load.
+ * @param {number} productId Product to load QU conversions for.
+ * @param {number} destinationQuId The QU the resulting #amount value should be expressed in
+ *   (usually the stock QU).
+ * @param {boolean} [forceInitialDisplayQu=false] When true, resets the selection back to the
+ *   QU configured as data-initial-qu-id even on a reload.
+ */
 Grocy.Components.ProductAmountPicker.Reload = function (productId, destinationQuId, forceInitialDisplayQu = false)
 {
 	var conversionsForProduct = FindAllObjectsInArrayByPropertyValue(Grocy.QuantityUnitConversionsResolved, 'product_id', productId);
@@ -64,11 +79,18 @@ Grocy.Components.ProductAmountPicker.Reload = function (productId, destinationQu
 	$(".input-group-productamountpicker").trigger("change");
 }
 
+/** Selects the given quantity unit in #qu_id (option must already be present) */
 Grocy.Components.ProductAmountPicker.SetQuantityUnit = function (quId)
 {
 	$("#qu_id").val(quId);
 }
 
+/**
+ * Switches the picker into "any quantity unit" mode: replaces #qu_id's options with the full
+ * list of Grocy.QuantityUnits (each with a 1:1 factor) instead of only the product's configured
+ * conversions - used where a specific product isn't known yet (e.g. generic stock entries).
+ * @param {boolean} [keepInitialQu=false] When true, re-selects data-initial-qu-id afterwards.
+ */
 Grocy.Components.ProductAmountPicker.AllowAnyQu = function (keepInitialQu = false)
 {
 	Grocy.Components.ProductAmountPicker.AllowAnyQuEnabled = true;
@@ -94,6 +116,7 @@ Grocy.Components.ProductAmountPicker.AllowAnyQu = function (keepInitialQu = fals
 	$(".input-group-productamountpicker").trigger("change");
 }
 
+/** Clears the QU options and any conversion info hint, e.g. when no product is selected */
 Grocy.Components.ProductAmountPicker.Reset = function ()
 {
 	$("#qu_id").find("option").remove();
@@ -101,6 +124,8 @@ Grocy.Components.ProductAmountPicker.Reset = function ()
 	$("#qu-display_amount-info").val("");
 }
 
+// Recomputes the hidden #amount (converted to the destination QU) whenever the displayed amount
+// or selected QU changes, and shows/hides the "this equals X Y" conversion hint
 $(".input-group-productamountpicker").on("change", function ()
 {
 	var selectedQuName = $("#qu_id option:selected").text();
@@ -128,6 +153,7 @@ $(".input-group-productamountpicker").on("change", function ()
 	$("#amount").val(destinationAmount.toFixed(n).replace(/0*$/g, '')).trigger("change");
 });
 
+// Keep the derived #amount/conversion info in sync while typing
 $("#display_amount").on("keyup", function ()
 {
 	$(".input-group-productamountpicker").trigger("change");

@@ -1,4 +1,9 @@
-﻿$('#save-shopping-location-button').on('click', function(e)
+﻿// Powers the shopping location create/edit modal form (shoppinglocationform.blade.php).
+// Grocy.EditMode ('create'/'edit') and Grocy.EditObjectId select POST vs PUT.
+
+// Validates and submits the form, saves userfields, then either postMessages the
+// parent (embedded mode) to reload, or navigates back to the shopping locations list
+$('#save-shopping-location-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -66,11 +71,13 @@
 	}
 });
 
+// Live-validates on every keystroke
 $('#shoppinglocation-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('shoppinglocation-form');
 });
 
+// Enter key submits the form (if valid) instead of doing a default form submit
 $('#shoppinglocation-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -88,6 +95,7 @@ $('#shoppinglocation-form input').keydown(function(event)
 	}
 });
 
+// Initial setup: load userfields, focus the name field, run initial validation
 Grocy.Components.UserfieldsForm.Load();
 setTimeout(function()
 {

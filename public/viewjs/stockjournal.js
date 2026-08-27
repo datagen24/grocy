@@ -1,4 +1,8 @@
-﻿var stockJournalTable = $('#stock-journal-table').DataTable({
+﻿// Powers the stock journal view (stockjournal.blade.php): lists all stock transactions
+// with product/type/location/user/date-range filters, and lets the user undo a booking
+// or print a product's Grocy-code label. Product and date-range filters reload the page
+// (via URI params, since they affect the server-side query); the rest filter client-side.
+var stockJournalTable = $('#stock-journal-table').DataTable({
 	'order': [[3, 'desc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +12,8 @@
 $('#stock-journal-table tbody').removeClass("d-none");
 stockJournalTable.columns.adjust().draw();
 
+// Product filter is server-side (the journal is queried per-product), so it updates the
+// "product" URI param and reloads
 $("#product-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -23,6 +29,7 @@ $("#product-filter").on("change", function()
 	window.location.reload();
 });
 
+// Transaction type filter, matched against the type column (index 4), client-side
 $("#transaction-type-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -35,6 +42,7 @@ $("#transaction-type-filter").on("change", function()
 	stockJournalTable.column(stockJournalTable.colReorder.transpose(4)).search(text).draw();
 });
 
+// Location filter, matched against the location column (index 5), client-side
 $("#location-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -47,6 +55,7 @@ $("#location-filter").on("change", function()
 	stockJournalTable.column(stockJournalTable.colReorder.transpose(5)).search(text).draw();
 });
 
+// User filter, matched against the user column (index 6), client-side
 $("#user-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -59,12 +68,15 @@ $("#user-filter").on("change", function()
 	stockJournalTable.column(stockJournalTable.colReorder.transpose(6)).search(text).draw();
 });
 
+// Date range filter (number of months back) is server-side, so it updates the "months"
+// URI param and reloads
 $("#daterange-filter").on("change", function()
 {
 	UpdateUriParam("months", $(this).val());
 	window.location.reload();
 });
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -76,6 +88,8 @@ $("#search").on("keyup", Delay(function()
 	stockJournalTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Resets all filters (leaving the product filter alone when embedded, e.g. opened
+// scoped to one product) and reloads
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");
@@ -94,6 +108,7 @@ $("#clear-filter-button").on("click", function()
 	window.location.reload();
 });
 
+// Reflect the current product/months URI params onto their filter dropdowns on load
 if (typeof GetUriParam("product") !== "undefined")
 {
 	$("#product-filter").val(GetUriParam("product"));
@@ -104,6 +119,9 @@ if (typeof GetUriParam("months") !== "undefined")
 	$("#daterange-filter").val(GetUriParam("months"));
 }
 
+// Undoes a stock booking (stock/bookings/{id}/undo); if the booking has a correlation id
+// (data-correlation-id, e.g. linking a transfer's "from" and "to" bookings), all rows
+// sharing that correlation are struck through together, since undoing one undoes the group
 $(document).on('click', '.undo-stock-booking-button', function(e)
 {
 	e.preventDefault();
@@ -134,6 +152,8 @@ $(document).on('click', '.undo-stock-booking-button', function(e)
 	);
 });
 
+// Fetches label data for a product's Grocy-code and forwards it to the configured
+// label printer webhook (Grocy.Webhooks.labelprinter), if any is set up
 $(document).on('click', '.product-grocycode-label-print', function(e)
 {
 	e.preventDefault();
