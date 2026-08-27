@@ -76,17 +76,37 @@ freezing/thawing due date handling, so getting it wrong changes due dates. See Q
    I lean to `UNIQUE(parent_location_id, name)` — note that in PostgreSQL, NULLs are
    distinct by default, so several root locations could share a name unless
    `NULLS NOT DISTINCT` is used, which is PostgreSQL 15+.
+
+   > **Response:** `UNIQUE(parent_location_id, name)` with `NULLS NOT DISTINCT`
+   > (this fork can require 15+); on SQLite the equivalent is a unique
+   > **expression** index on `(IFNULL(parent_location_id, -1), name)`. That makes
+   > this the first migration pair where the two engines need genuinely different
+   > DDL for the same rule — a good, small test of the per-engine migration
+   > convention.
 2. **Deleting a parent that has children and stock.** Reparent children to the deleted
    node's parent, block the delete, or cascade? Blocking is safest and easiest to explain.
+
+   > **Response:** Block. Reparenting silently rewrites history; cascade deletes
+   > stock's location. Blocking with a clear message is honest.
 3. **Does `is_freezer` inherit from an ancestor?** If yes, the effective value comes from
    `locations_resolved` and due date logic must use that rather than the row's own flag.
    If no, the user ticks it on each compartment. Inheriting is friendlier but touches due
    date behaviour, which is stock-correctness territory.
+
+   > **Response:** Don't inherit, v1 — keep the flag literal, and get 90% of the
+   > friendliness by defaulting the checkbox from the parent when creating a child
+   > location. Inheritance can be revisited if the explicit flag proves annoying.
 4. **Should stock roll up by default anywhere in the UI?** For example, should the stock
    overview's location filter for "Kitchen" include everything beneath it? I would say yes
    for filtering, no for the location content report, but this is a taste call.
+
+   > **Response:** Agreed with the lean: roll up for filtering, not for the location
+   > content report.
 5. **Depth cap?** Same question as 07 Q3. Floor/room/cabinet/shelf is four, so any cap
    should be comfortably above that.
+
+   > **Response:** Share one constant with 07; something like 6 clears
+   > floor/room/cabinet/shelf with headroom.
 
 ## Effort
 

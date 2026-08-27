@@ -68,18 +68,42 @@ the ordering table which goes in `ExposedEntity`. No existing response changes s
 1. **Order by product group or by something else?** See B. I recommend product groups. If
    your shops are laid out in a way groups do not capture, say so, because that changes the
    table.
+
+   > **Response:** Product groups. Home-storage location is the wrong axis for shop
+   > layout, and 08's tree should not be bent into that role.
 2. **Is per-store ordering worth it at all for you**, or is filtering by store enough? A
    store filter alone is a fraction of the work and might be the whole benefit in practice.
+
+   > **Response:** Ship A + C first exactly as the effort section proposes, and let
+   > real shopping trips decide whether B happens. Filtering may well be 80% of it.
 3. **What happens to an item whose product's default store is not the list's store?** Hide
    it, show it greyed, or show it normally? I lean to showing everything and only using the
    store for ordering, since "I am at this shop, buy what I can here" is better served by
    sorting than by hiding things you might still want.
+
+   > **Response:** Show everything, use the store only for sort. Hiding rows from a
+   > shopping list is how things fail to get bought.
 4. **Should `shopping_locations` be renamed to `stores`?** It is the clearer word and this
    is a hard fork. But it is a table rename on an exposed entity, so it breaks goal 1 —
    probably a "later, deliberately, with the other breaking changes" item rather than
    something to slip in here.
+
+   > **Response:** Not now — and [15](15-deliberate-cleanup.md) Q5's review landed
+   > on declining the rename outright, including the compatibility-view middle path,
+   > unless a breaking batch happens for other reasons.
 5. **Recipe default lists** — per recipe, or per meal plan section? Per recipe is simpler
    and matches the issue.
+
+   > **Response:** Per recipe.
+
+## Review notes
+
+- For the B ordering table: `(shopping_location_id, product_group_id, sort_number)`
+  with a unique constraint on the pair; the drag-to-order UI already exists in spirit
+  on meal plan sections, so copy that pattern rather than inventing one.
+- `product_groups` is quietly becoming a hub — [03](03-category-min-stock.md) gives it
+  a minimum, this plan a per-store position. Fine (it is the natural place), but it
+  moves the group picker from "optional taxonomy" to load-bearing master data.
 
 ## Effort
 

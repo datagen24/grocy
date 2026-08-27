@@ -154,6 +154,8 @@ a body sending only the documented `transaction_type` starts working. Accepting 
 documented spelling would break any client that stumbled into sending both — theoretically
 none, since the current behaviour is not documented anywhere and reads as a typo. Q1.
 
+   > **Response:** See the Q1 response below — only the documented spelling.
+
 The default error toast is a *user-visible* behaviour change with no wire-format
 component: operations that used to fail silently now say so. That is the point, but it
 will surface pre-existing failures nobody knew about, and the first week after it lands is
@@ -222,6 +224,12 @@ useful when a failed import says so instead of logging to a console nobody has o
    noted as deprecated, then removing it with the other breaking changes in
    [15](15-deliberate-cleanup.md) — but it may not be worth the ceremony for a spelling
    that is plainly a typo.
+
+   > **Response:** Only the documented spelling — skip the deprecation ceremony. The
+   > current code requires *both* spellings simultaneously, so no client sending
+   > only the undocumented one has ever worked, and a client sending both is a
+   > client that read this exact broken source. There is no one to deprecate for;
+   > fix to the spec, one changelog line.
 2. **Which callers must keep an explicit no-op error handler?** Making
    `ShowGenericError` the default is right for the 148, but some calls legitimately
    expect failure and must not toast: the `db-changed-time` poller
@@ -229,25 +237,53 @@ useful when a failed import says so instead of logging to a console nobody has o
    where "not found" is an ordinary outcome. These need `function () { }` passed
    deliberately with a comment saying why. The question is whether that list is those
    three or longer — it needs the grep, not a guess.
+
+   > **Response:** The three named are right; the grep will likely add the test
+   > pages (`barcodescannertesting`, `quantityunitpluraltesting`), background
+   > statistics refreshers, and the product-card price-history fetch where empty
+   > history is normal. Criterion worth writing into the factory docs: *failure is
+   > an expected domain outcome or a background poll* → explicit `function() {}`
+   > with a comment; anything user-initiated toasts.
 3. **Which embedded-dialog reload convention wins?** Both are in the tree and both work.
    This wants five minutes of reading the two and picking, and it should be picked before
    the factory is written rather than after, because the factory bakes it in.
+
+   > **Response:** Form-posts-`Reload` wins. The form knows whether data actually
+   > changed; a list reloading on every `CloseLastModal` refreshes on cancel for
+   > nothing, and the majority of the tree already leans the form-posts way. Factory
+   > lists handle the `Reload` message; the `CloseLastModal`-triggered reloads get
+   > deleted.
 4. **Is there a real reason `datetimepicker2` exists as a copy?** The stated reason is
    "so two pickers can share a page", which parameterisation solves. If there is a second
    reason buried in it — different validation, a different date format, a different
    dependency on page state — a naive merge will break one of the two pages that use it.
    The honest check is a diff of the two files before committing to the merge.
+
+   > **Response:** That diff has effectively been run: the frontend review
+   > normalized-diffed the pair and found naming-only differences, and the component
+   > documentation pass confirmed it. Proceed with parameterization, merge the Blade
+   > component pair too; verification check 5 is the safety net.
 5. **How far do the factories go?** A config-object factory that owns the whole page is
    the biggest win and the biggest blast radius; a set of shared mixins the scripts opt
    into is safer and collapses less. I lean to the factory for the pure clones and mixins
    for the ~5 list scripts that are only partly clones (`stockjournal`,
    `userpermissions`, `manageapikeys`, `products`, `recipes`), rather than forcing all 36
    scripts through one shape.
+
+   > **Response:** Agreed — factory for the pure clones, mixins for the five partial
+   > clones — with one addition: leave `mealplan.js` and `recipes.js` entirely
+   > alone. They are the two most divergent files in the tree; forcing them through
+   > either shape is where a mechanical conversion becomes a rewrite.
 6. **Does this want a build step?** Everything above is plain browser JS with no
    bundling, matching the current architecture. Introducing a bundler would make the
    shared-module story conventional and would also be a new dependency, a new build
    artifact and a departure from a design that is otherwise working. I lean strongly to
    no — but it is worth stating as a decision rather than a default.
+
+   > **Response:** No bundler, stated as a decision: the no-build convention is
+   > load-bearing for this fork's maintainability, and a second `<script>` in the
+   > layout is the whole cost of sharing code. Revisit only if a real module problem
+   > appears, which nothing in this plan creates.
 
 ## Effort
 

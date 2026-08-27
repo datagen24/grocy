@@ -1,8 +1,8 @@
 # Fork roadmap
 
 Action plans for the work this fork exists to do. Each is a draft for review, not a
-commitment — the **Open questions** sections are numbered so they can be commented on
-individually.
+commitment — the **Open questions** sections are numbered, and each carries its review
+answer inline as a `> **Response:**` block, so question and answer read together.
 
 ## Status
 
@@ -75,28 +75,79 @@ per engine pair. See `db/pgsql/README.md`.
 and `trigdifftest.php` (trigger behaviour). New views must return identical output on both
 engines unless the plan says otherwise and explains why.
 
-## Suggested order
+## Order of operations
 
-0. **09 barcode lookup**, or at least its Q1 — twenty barcodes off things in the pantry,
-   run against each candidate source. Thirty minutes, and it decides both whether that plan
-   is worth doing and whether 04 should ship barcode data at all.
-1. **06 location barcodes** — smallest, self contained, and a useful warm up for writing
-   the first dual engine migrations. Ship the codes and printing; the camera ingest API in
-   its Q2 is unbounded until the camera side is specified and should not be scoped with it.
-2. **03 category minimums** — one view change, one new column, no UI rework.
-3. **08 nested locations** — introduces the recursive-hierarchy pattern on the simpler of
-   the two trees.
-4. **07 nested products** — same pattern, far more call sites. Doing 08 first means the
-   pattern is already proven when the hard one starts.
-5. **01 file storage** — independent of the above; slot in whenever the stateless
-   deployment is wanted.
-6. **05 store lists**, **04 seed datasets**, **02 MCP** — larger, more design freedom,
-   and none of them block anything else.
+The single sequence to work from, features and hardening interleaved. Constraints it
+encodes: 14's suite unblocks every other plan's verification; 12 must precede the plans
+that add list/form pairs (05/06/08); 11, 13, 15-C1 and 14's snapshot precede 02; 08
+proves the recursive pattern before 07 spends it; 10 then 01 produce the volume-less
+pod. Waves are strictly ordered; tracks inside a wave touch disjoint files and can run
+as parallel sessions.
 
-07 is the one to be careful with: it is not "make the view recursive", it is an audit of
-every place that assumes exactly one level of nesting.
+### Wave 0 — decisions and scaffolding (one sitting)
 
-The hardening plans interleave with this rather than queueing behind it: **14** wants to
-come before 08 and 07 (step 3) so their fixtures have somewhere to live, **12** before 06
-and 08 (steps 1 and 3), and **10** alongside 01 (step 5). **13**, **11** and **15** are
-only ordered against 02, which is last anyway.
+- **09-Q1 experiment**: twenty pantry barcodes against each candidate source. Thirty
+  minutes; decides 09's scope and settles 04-Q2 (ship no barcodes) on data.
+- **14 piece 1**: the runnable diff suite (recover or rewrite the seeds), plus its
+  recursive-CTE tool check (14 verification 7) — done now so wave 4 never waits on it.
+- **14 piece 3**: CI (lint + the suite) the same day piece 1 exists.
+
+### Wave 1 — platform (three parallel tracks, disjoint files)
+
+- **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
+  easier to reason about once cold start no longer rewrites requests. Together they end
+  the PVC.
+- **Track B: 12 frontend shared core.** Land steps 1–2 (latent bugs + the `request()`
+  core with default error toast) as their own PR — most of the user-visible value —
+  then the factory conversions.
+- **Track C: 13 write-path transactions.** All seven entrypoints, webhook after commit.
+
+### Wave 2 — API correctness
+
+- **11 API error handling**, presented as a before/after diff from 14's sweep. Then,
+  while the auth files are open: **15-C1** (authenticator extraction), **15-B1** (LDAP
+  removal + the `AUTH_CLASS` validation check) and **15-B2** (cookie flags) as one
+  small, changelogged follow-on. The remaining 15 one-liners (C3–C9) ride along with
+  whatever wave has the file open; C10 stays deferred until after 13, then folds in
+  here or later.
+
+### Wave 3 — first features on the new platform
+
+- **09 implementation**, if wave 0's experiment justified it.
+- **06 location barcodes** — the first shipped dual-engine migration (deliberately
+  small), on the locations list/form pair 12 just converted. Codes, printing, UUID, QR;
+  camera ingest stays unscoped.
+- **03 category minimums** — one column, one new view, group shortfalls kept out of
+  `stock_missing_products`.
+
+### Wave 4 — the hierarchy work
+
+- **08 nested locations** — recursive pattern on the simpler tree, fixtures in 14's
+  suite first.
+- **07 nested products** — only after 08 is merged and used. Fixtures before any
+  change, per its own verification section; this is the largest item on the roadmap
+  and the one to be careful with — it is an audit of every one-level assumption, not
+  "make the view recursive".
+
+### Wave 5 — the assistant and the lists
+
+- **14 piece 2** — the response-contract snapshot, now that 11 has stabilized the
+  failure paths it records. This freezes the API surface 02 builds on.
+- **02 MCP, read-only v1** — separate container per its Q6 response, bearer key
+  behind the credential→user seam per the IdP note.
+- **05 A + C** — store on lists, default list per product/recipe. B (store-layout
+  ordering) waits for real shopping trips to prove it wanted.
+
+### Usage-driven tail — no scheduled slot
+
+- **02 writes** (`MCP_WRITE`-gated) once read-only has proven the transport — 13 is
+  already in place by then.
+- **05 B** if filtering alone turns out not to be enough.
+- **04 seed importer** the first time a seeded disposable instance is wanted; the
+  curated dataset content stays open-ended and unscheduled.
+- **Declined**: the `shopping_locations` rename (15-Q5) — revisit only if a breaking
+  batch happens for other reasons.
+
+Every wave ends mergeable: nothing in a later wave reworks what an earlier wave
+shipped, and each track lands through its own PR with its plan's Verification section
+executed on a booted instance.

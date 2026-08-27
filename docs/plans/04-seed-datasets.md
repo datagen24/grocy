@@ -79,16 +79,41 @@ My recommendation is to ship **no** barcodes here and fix lookup instead — see
 1. **Is this actually valuable to you**, or is it a "good for the fork's users" item? You
    already have a populated instance. If it is the latter, it is the easiest thing on the
    roadmap to defer, and A without B is most of the durable value.
+
+   > **Response:** Reframed: **A is worth building for this fork's own operational
+   > life regardless of B.** A name-keyed, idempotent master-data importer is also
+   > how disposable test instances get seeded — which the difftest workflow and
+   > every future plan's manual testing will want. Build A when the first plan needs
+   > a seeded instance (probably 06 or 08); let B wait indefinitely.
 2. **Ship barcodes or not?** I recommend not, for the reasons above. If yes, they need a
    region marker and a clear statement that they are best-effort.
+
+   > **Response:** Ship none. Agreed completely, for the stated reasons — and 09's
+   > Q1 experiment settles it on data.
 3. **Should a dataset be able to update existing rows**, or only create? Create-only is
    safe and predictable. Update-capable makes datasets a sync mechanism, which is a much
    bigger idea with conflict questions attached.
+
+   > **Response:** Create-only. Update-capable turns a seed file into a sync
+   > protocol; decline.
 4. **Where do datasets live?** In the repo (reviewable, versioned, but every user carries
    every dataset) or fetched on demand (flexible, but adds a network dependency and a
    trust question about what is being fetched).
+
+   > **Response:** In the repo. A network fetch for master data is a trust and
+   > availability cost with no household-scale benefit.
 5. **Localisation.** Product names are language specific. One dataset per locale, or
    English only to start? English only, unless you want otherwise.
+
+   > **Response:** English only.
+
+## Review notes
+
+- Give the JSON format a `schema_version` field and validate the whole file before
+  writing anything, so `--dry-run` and "half-imported dataset" both stay honest.
+- Plans [03](03-category-min-stock.md) and [05](05-store-shopping-lists.md) make
+  `product_groups` load-bearing (a minimum, a per-store position) — the shipped
+  dataset should include a sane default group set.
 
 ## Effort
 

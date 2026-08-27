@@ -117,24 +117,55 @@ existing endpoint.
    could invalidate the rest of the plan. *Update:* the future-state note above narrows
    this — API key for v1 behind a replaceable credential→user resolver, IdP-backed OAuth
    later.
+
+   > **Response:** Bearer API key for v1, and let the ingress do the rest — the
+   > future-state note above records the full direction. Still test against the
+   > actual client before building.
 2. **Read-only first, or writes from the start?** I strongly favour read-only for v1. The
    read tools are where most of the value is, they cannot damage anything, and they let the
    transport and auth get proven before an assistant is allowed to consume stock.
+
+   > **Response:** Read-only, strongly.
 3. **Should writes need a separate permission**, beyond the user's existing ones? A user
    who may consume via the UI may not want an assistant doing it unprompted. A
    `MCP_WRITE` permission is cheap and makes the boundary explicit.
+
+   > **Response:** Yes — though a per-key read-only flag may be simpler than a new
+   > permission: revocation and scoping then live in one place, the key management
+   > screen.
 4. **Exposure.** Local network only, or reachable externally? That changes the auth answer
    considerably, and interacts with how the k3s ingress is set up. *Update:* external
    exposure, if it ever happens, waits for the IdP future state — the ingress + IdP then
    owns that boundary, not Grocy.
+
+   > **Response:** Local network/tailnet only until there is a concrete reason; the
+   > future-state note covers what changes if that ever flips.
 5. **Tool granularity.** A few broad tools ("query stock") or many narrow ones? Narrow
    tools are easier for a model to use correctly and easier to permission, at the cost of a
    longer tool list.
+
+   > **Response:** Narrow, roughly the table above (6–10 tools). Keep responses
+   > deliberately small — return name/amount/due-date fields, not raw view rows. Raw
+   > `uihelper_*` rows are wide, and token economy is a real constraint for the
+   > consuming model.
 6. **Is a built-in server the right shape at all?** A standalone MCP server talking to the
    existing REST API would need no Grocy changes and could be updated independently as the
    spec moves. Building it in gets native permission handling and one less moving part.
    Worth being explicit about the tradeoff, because "integrated" was the stated goal but
    the spec churn is a real argument for keeping it separable.
+
+   > **Response:** Separate container — and answer this question first, because it
+   > reshapes the rest. The MCP protocol layer (streamable HTTP, JSON-RPC framing,
+   > session lifecycle) has mature official SDKs in TypeScript and Python and none
+   > in PHP; building and tracking it by hand in Slim is the largest and least
+   > durable part of the integrated design. A sidecar calling the REST API with an
+   > `API_KEY_TYPE_MCP` key gets independent deploys as the spec moves, an SDK doing
+   > the transport, and a second small scale-to-zero service — exactly the pattern
+   > being practiced. "Authenticates against Grocy's own user system" is still
+   > satisfied: the key resolves to a user and every REST call is permission-checked
+   > as that user. What is lost is in-process permission granularity, which Q3's
+   > answer covers. If it stays integrated anyway, the `/api/mcp` mount trick is
+   > elegant and correct.
 
 ## Effort
 

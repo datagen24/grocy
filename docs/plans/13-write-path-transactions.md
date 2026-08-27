@@ -198,7 +198,7 @@ is the review's own ordering and it is right: read-only MCP tools do not need it
 moment an assistant can call `consume_product`, "a failure mid-loop leaves a half-consumed
 booking" stops being a theoretical risk and becomes something that will happen unattended,
 with nobody watching the screen to notice the stock went strange. If 02 ships read-only
-first (as both the plan and [review-comments](review-comments.md) recommend), this can
+first (as both the plan and 02's Q2 response recommend), this can
 land during that window rather than blocking it.
 
 **Independent of the other hardening plans.** It touches `services/StockService.php`,
@@ -223,34 +223,66 @@ Against feature plans generally: it blocks none of 01–09 outright.
    the transfer happened. The cost is that the webhook payload has to be built and held
    rather than sent inline, which is a slightly bigger diff in a method that is already
    long.
+
+   > **Response:** (a). Implementation note worth a comment in the code: build the
+   > payloads *eagerly during the loop* from values in hand — only the firing moves
+   > after commit. A label describing an entry should describe it as it was booked,
+   > not as re-read after commit.
 2. **Depth counting or savepoints for the nested `UndoBooking` case?** Depth counting is
    simpler and matches the semantics (nothing wants partial rollback). Savepoints are more
    general and would let a future caller undo one booking of a transaction without
    abandoning the rest — which is not a use case that exists today. I lean to depth
    counting, but if `InTransaction` is going to be the fork's one transaction idiom
    forever, it is worth deciding deliberately rather than by expedience.
+
+   > **Response:** Depth counting. Nothing wants partial rollback, and an undo that
+   > half-succeeds is the disease being cured. Note the helper is not merely
+   > convenient but *required* by the existing call graph: `ConsumeRecipe` already
+   > wraps, and once `ConsumeProduct` wraps too, that pair nests before any undo
+   > recursion enters the picture. If a future feature genuinely needs savepoints,
+   > the helper's signature doesn't change.
 3. **Does the transaction include the validation, or start after it?** `ConsumeProduct`
    and `TransferProduct` both do a run of `throw`-on-invalid checks before touching
    anything. Including them is simpler to write and means a validation failure rolls back
    an empty transaction, which is harmless. Excluding them keeps the transaction as short
    as possible, which matters on SQLite. Marginal either way; worth being consistent.
+
+   > **Response:** After validation — the transaction contains only writes, the
+   > SQLite write-lock window stays minimal, and it is the version of consistent
+   > that reads best.
 4. **Are `AddProduct`, `InventoryProduct` and `OpenProduct` in scope?** They have the same
    loop-plus-webhook shape as `TransferProduct` and the same failure mode. The review
    named four entrypoints, not seven. Including them triples the webhook question's blast
    radius but leaves nothing half-done; excluding them means a second pass later. I lean
    to including them, on the grounds that "the write paths are transactional" is a
    property worth being able to state without exceptions.
+
+   > **Response:** Include all seven. "Every stock write path is transactional" is
+   > the property to have — and `InventoryProduct` is precisely the entrypoint plan
+   > 06's future camera-ingest work would hit hardest. Q1's webhook answer applies
+   > uniformly, so this is one decision applied seven times, not three new
+   > decisions.
 5. **What is the sampling rule for the importer's value-level check?** Every row is
    correct and, for a 30 MB database, probably fast enough to just do. A bounded sample
    (first N, last N, plus N random) is cheaper but can miss the one coerced value. Given
    the import runs once per deployment lifetime, I lean to checking everything and
    accepting the runtime — but that should be measured on a real database rather than
    assumed.
+
+   > **Response:** Everything, measured. It runs once per deployment lifetime
+   > against a ~30 MB database; stream rows with difftest's normalization and
+   > compare all of it. If measurement says minutes rather than seconds, that is
+   > still fine for a once-ever command.
 6. **Should `InTransaction` be on `DatabaseService` or on the dialect?** It is
    engine-independent as written, which argues for `DatabaseService`. But
    [10](10-cold-start-statelessness.md) proposes a per-engine `WithMigrationLock` on
    `DatabaseDialect`, and having two similar-looking wrappers in two places invites
    confusion about which to reach for. Worth deciding once, with both plans in view.
+
+   > **Response:** `DatabaseService`. The split against 10's dialect-level
+   > `WithMigrationLock` is principled — engine-neutral composition on the service,
+   > engine-specific behavior on the dialect. A cross-referencing docblock each way
+   > solves the discoverability worry; colocation would solve nothing.
 
 ## Effort
 

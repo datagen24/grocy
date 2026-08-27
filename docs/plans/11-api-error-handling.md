@@ -227,7 +227,7 @@ that work twice or doing it by hand.
 02 is the plan this most directly de-risks. Every MCP tool is a call onto this API (or
 onto the same services behind it); an assistant that receives 400 for "you are not
 allowed" and 500 for "you typed the filter wrong" cannot recover sensibly from either.
-If [review-comments](review-comments.md) 02-Q6 lands on a separate MCP container calling
+If 02's Q6 response lands on a separate MCP container calling
 the REST API, this plan stops being a nicety and becomes the interface contract.
 
 Against the other hardening plans: independent of [10](10-cold-start-statelessness.md)
@@ -248,36 +248,75 @@ every new endpoint written before it is another one to convert afterwards.
    real call, and the answer depends on whether the Home Assistant integration
    distinguishes 400 from 403 anywhere. Worth ten minutes reading its error handling
    before deciding.
+
+   > **Response:** Ship outright, no flag. All changed codes are on failure paths,
+   > they are corrections, and a flag means testing two behaviours forever. Do the
+   > Home Assistant read first as confirmation, not as a decision gate. Changelog
+   > entry, listed with 15's breaking batch for visibility.
 2. **Which permission for `CalculateNextExecutionAssignments`?** It is a write (it
    assigns chores to users) exposed as a `POST`, so `PERMISSION_CHORES` is the obvious
    reading. But it is also called by the chores overview page as a refresh, so gating it
    on the edit permission may lock out users who can see chores but not manage them. The
    answer depends on who is expected to be able to trigger a recalculation, which is a
    product question.
+
+   > **Response:** Resolve the tension by removing it: recompute server-side during
+   > the overview *render* (the page controller does what the JS currently asks the
+   > API to do), and gate the API route on `PERMISSION_CHORES`. Viewers still see
+   > fresh data; only chore managers can force a recompute through the API. If that
+   > is more surgery than wanted, gate on `PERMISSION_CHORES` alone and accept that
+   > read-only users see assignments as of the last tracked execution —
+   > recomputation happens on every track anyway, so the staleness window is small.
 3. **CORS default: off, or preserve `*`?** Off is right for the stated deployment and
    makes the setting meaningful. Preserving `*` avoids breaking a browser-based client
    that might exist and that I do not know about. I lean off, on the grounds that
    `Allow-Origin: *` on an API-key-authenticated endpoint is not a feature anyone should
    be relying on.
+
+   > **Response:** Off, without reservation. `Allow-Origin: *` on an authenticated
+   > API was never a feature; nothing browser-cross-origin exists; the ingress can
+   > add headers in an emergency.
 4. **Hash API keys?** Yes on principle; the cost is that the manage-keys screen can only
    ever show a key at creation time, and anyone who wrote a key down nowhere and reads it
    back off that screen loses that. For a household instance that is a mild annoyance
    against a real improvement. The migration is one-way, which is the honest form of the
    change but also means "decide once".
+
+   > **Response:** Yes — and use SHA-256, not `password_hash`. Keys must be looked
+   > up *by value*, which salted bcrypt cannot do without a full-table scan, and
+   > these are 50-character random strings (~250 bits): brute force is not the
+   > threat model, a leaked `api_keys` table is. Unsalted SHA-256 gives O(1) lookup
+   > and is exactly right for high-entropy secrets. Keep a `key_hint` (last four
+   > characters) column so the manage screen can still identify keys after creation.
 5. **Mass-assignment: blocklist or spec-derived allowlist?** Blocklisting `id` and the
    timestamps is five minutes and covers the known problem. An allowlist derived from the
    OpenAPI schemas is correct-by-construction and would also catch the next column added
    with a meaning nobody wants clients writing — but the spec's entity schemas would have
    to be complete enough to trust, and that has never been tested.
+
+   > **Response:** Blocklist now — `id` + `row_created_timestamp` covers the known
+   > problem in five minutes. The spec-derived allowlist depends on entity schemas
+   > being complete, and 14's snapshot-vs-schema leg is what will make them
+   > trustworthy. Revisit the allowlist after 14 has run for a while; do not build
+   > it on an unvalidated spec.
 6. **`ExposedEntityEditRequiresAdmin`: populate or delete?** If there is a set of entities
    where a non-admin should be able to read but not edit, name them and populate it. If
    there is not, delete the enum and its three call sites. Leaving an empty gate in place
    is the one option that is definitely wrong.
+
+   > **Response:** Populate with `userfields` and `userentities` at minimum —
+   > definition-level entities that reshape the data model, which is a different act
+   > from editing master data. If on reflection nobody should be admin-gated, delete
+   > the enum and its three call sites the same day.
 7. **What is the retention story for the error log?** stderr and let the platform handle
    it is the k3s answer and needs no code. But a household instance with no log
    aggregation gets errors that scroll away. A file with rotation is more work and
    reintroduces a writable path that [10](10-cold-start-statelessness.md) just removed.
    I lean stderr only.
+
+   > **Response:** stderr only. Correct for k3s and for the household case too —
+   > `kubectl logs` / `docker logs` *is* the log file. A rotating file reintroduces
+   > the writable path 10 just removed; decline it.
 
 ## Effort
 
