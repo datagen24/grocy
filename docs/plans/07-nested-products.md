@@ -128,6 +128,13 @@ compared against a deliberate expectation rather than against whatever falls out
    > **Response:** Write the concrete tree down before starting. This is the largest
    > fixed cost on the roadmap and its value is proportional to how deep the real
    > data goes — decide on data, not symmetry with 08.
+   >
+   > Unresolved, and deliberately so: this is the one open question on the roadmap
+   > that no amount of code reading answers, because the input is the maintainer's
+   > own catalogue. **07 does not start until a real example tree is written into
+   > this plan** — actual products, actual depth. Until then the plan cannot say
+   > whether it is designing for three levels or for arbitrary recursion, and that
+   > difference is most of its cost. It sits behind 08 anyway, so there is time.
 
 ## Review notes
 

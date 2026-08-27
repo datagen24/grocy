@@ -35,7 +35,7 @@ Grouped by whether they change behaviour anyone can observe.
 | C6 | `config-dist.php` documents locale precedence as browser → user setting → default; `LocaleMiddleware::GetLocale` actually does user setting → browser → default | `config-dist.php:40-43` vs `middleware/LocaleMiddleware.php:41,52` |
 | C7 | `composer.json` requires PHP `8.5.*` and `PrerequisiteChecker::REQUIRED_PHP_VERSION` is `8.5.0`, while the real language floor in the code is 8.4 | `composer.json`, `helpers/PrerequisiteChecker.php:19` |
 | C8 | Request data read three ways: PSR-7 `getQueryParams()` (most controllers), slim/http `getQueryParam()` (`GrocycodeTrait`, `ApiKeyAuthMiddleware`), raw superglobals (`BaseController:84` `$_GET['embedded']`, `ReverseProxyAuthMiddleware:47,53` `$_SERVER`, `ApplicationService:94`, `UrlManager:58-63`) | across |
-| C9 | Four `new Service()` sites against the otherwise universal `GetInstance()` convention (~320 sites), in `DemoDataGeneratorService` and `SqliteDialect` | services |
+| C9 | Five `new Service()` sites against the otherwise universal `GetInstance()` convention (~320 sites): three in `DemoDataGeneratorService` (`StockService`, `ChoresService`, `BatteriesService`), one in `SqliteDialect` (`UsersService`), and `middleware/Auth/ApiKeyAuthMiddleware.php:46` (`ApiKeyService`) | services |
 | C10 | `UndoBooking`'s switch repeats the same undo-bookkeeping block seven times; `StockService` returns LessQL rows from most methods and plain `stdClass` from the raw-SQL ones, so callers must know which they got | `services/StockService.php` |
 
 C4's status clamping is worth a sentence: `ExceptionController` sets
@@ -98,6 +98,13 @@ raw SQL lives, so that "all raw SQL is behind the dialect boundary in services" 
 true without exception, which matters the next time someone reaches for engine-specific
 syntax.
 
+One thing to move unchanged rather than "clean up" on the way past: all three queries use
+`COLLATE NOCASE`, which looks engine-specific and is not. It is the deliberate
+cross-engine pattern documented as hazard 15 in `db/pgsql/README.md` — PostgreSQL has a
+matching `NOCASE` collation defined for exactly this. Rewriting it while relocating the
+SQL would break case-insensitive ordering on both engines and would not show up in C2's
+result-set diff unless the fixture happens to contain mixed-case names.
+
 ### C3, C4, C5, C6, C9 — one-liners
 
 C3: report the actual engine's version (`PDO::ATTR_SERVER_VERSION` on the live
@@ -110,7 +117,9 @@ C4: delete the dead block; clamp the status to 400–599 with a 500 fallback.
 C5: delete the property.
 C6: fix the comment to match the code — the code's order (explicit user setting beats
 browser guess) is the correct behaviour; the comment is what is wrong.
-C9: `GetInstance()` at the four sites.
+C9: `GetInstance()` at the five sites. Do the `ApiKeyAuthMiddleware.php:46` one as part of
+C1's auth refactor rather than separately — that file is already being rewritten there, so
+this avoids touching it twice.
 
 ### C7 — pin alignment
 

@@ -11,11 +11,14 @@ copy from.
 ## Today
 
 The wiring is exemplary for a no-framework app. The layout auto-loads
-`/viewjs/{view}.js`, every view/viewjs/route name lines up across all 73 views, inline
-Blade scripts inject data and nothing else, and all API traffic goes through
-`Grocy.Api.*` — there is not a single `$.ajax` or `fetch` bypass anywhere in the
-codebase. That last property is what makes this plan cheap: there is exactly one place to
-change.
+`/viewjs/{view}.js`, every view/viewjs/route name lines up (72 top-level scripts in
+`public/viewjs`, 73 top-level Blade views — 96 counting the subdirectories), inline
+Blade scripts inject data and nothing else, and every call to grocy's own API goes
+through `Grocy.Api.*`. The one bypass in the tree is `public/js/grocy.js:562`, which uses
+`$.ajax` to fire *outbound webhooks* — a different thing to a different host, with its
+own `.fail()` handler that already calls `ShowGenericError`. It is not a candidate for
+the shared core and does not need converting. That leaves exactly one place to change for
+grocy's own traffic, which is what makes this plan cheap.
 
 What is wrong is underneath it.
 
@@ -27,20 +30,26 @@ either callback: the form stays disabled and the user is left with a spinner and
 information, forever.
 
 **Silent failure is the default.** 148 error callbacks across 41 viewjs files do nothing
-but `console.error(xhr)`. A failed delete, a failed save, a rejected edit — the UI simply
-does not react. The fix is one line in one place, not 148 edits:
+but `console.error(xhr)`, plus 9 more across 5 files in `public/viewjs/components/`,
+which the counts below and the conversion order should not forget. A failed delete, a
+failed save, a rejected edit — the UI simply does not react.
 `Grocy.FrontendHelpers.ShowGenericError` already exists (`public/js/grocy.js:485`) and
 already renders exactly the right thing, a toast with click-through technical details.
+The catch is that all 157 handlers are passed *explicitly*, so no default in the request
+core can reach them: each one has to be deleted where it stands, which is why this is 41
+files of work and not one line.
 
 **Two clone families.** ~14 master-data list scripts and 22 `*form.js` scripts are
 byte-identical modulo the entity name — roughly 2,300 lines. The delete-confirm
-`bootbox.confirm` block appears in 23 files. `datetimepicker2.js` is a 344-line copy of
-`datetimepicker.js` whose entire reason to exist is that two pickers cannot share a page.
+`bootbox.confirm` block appears in 23 files. `datetimepicker2.js` is a 373-line copy of
+the 376-line `datetimepicker.js` whose entire reason to exist is that two pickers cannot
+share a page.
 
 **The copies have already drifted**, which is the actual argument for this plan rather
 than tidiness:
 
-- sibling lists disagree about the embedded-dialog reload convention;
+- sibling lists disagree about the embedded-dialog reload convention — `productgroups.js`
+  reloads the whole page on `CloseLastModal` where its siblings listen for `Reload`;
 - `userobjectform.js` lost the Enter-to-submit handler its siblings all have;
 - `stockjournal.js` and `userpermissions.js` hand-roll
   `toastr.error(JSON.parse(xhr.response).error_message)` instead of using the helper;
@@ -93,12 +102,27 @@ gains what none of the six has:
 - `error` defaulting to `Grocy.FrontendHelpers.ShowGenericError` when the caller passes
   nothing.
 
-That last line is the one that fixes 148 silent handlers, because after it the 148
-`console.error` callbacks can simply be deleted rather than rewritten — omitting the
-argument is then the correct spelling. Q2 covers the callers that legitimately expect
-failures and must keep an explicit no-op.
+**Be honest about what that default does on the day it lands: nothing.** All 157
+`console.error` handlers are passed explicitly, so the default never fires until they are
+deleted — and deleting them means editing the same 41 files that step 3 rewrites
+wholesale. Doing the deletions here would mean touching every file twice and would put a
+behaviour change in the middle of what is meant to be a pure no-op refactor.
 
-The two hand-rolled `toastr.error(JSON.parse(…))` sites collapse into the same default.
+So the split is: **step 2's PR is the four bug fixes plus the `request()` core**, and its
+real user-visible value is the `timeout`/`onerror` pair — the form that stays disabled
+forever on a dropped connection starts re-enabling and reporting, which is a genuine
+class of failure and cannot be fixed anywhere else. The default error callback ships in
+the same PR as inert scaffolding that the next step switches on.
+
+**The 157 handler deletions ride with step 3**, per file, as each script is converted:
+deleting the callback is one more line of the same mechanical edit, the toast starts
+working for that page the moment its file is converted, and the surfacing of previously
+silent failures arrives gradually rather than all at once. Q2 covers the callers that
+legitimately expect failures and must keep an explicit no-op — those are the ones *not*
+deleted during the conversion.
+
+The two hand-rolled `toastr.error(JSON.parse(…))` sites collapse into the same default,
+on the same schedule.
 
 ### Step 3 — `GrocyEntityList` and `GrocyEntityForm`
 
@@ -112,15 +136,22 @@ own the DataTable wiring, the delete-confirm dialog, the Enter-to-submit handler
 save/disable/re-enable cycle and the embedded-dialog reload — so `userobjectform.js` gets
 its missing Enter handler back by construction, not by being noticed.
 
+This step also carries the `console.error` deletions described above: converting a file
+means removing its explicit error callbacks unless Q2's list says that one is deliberate.
+The 5 files under `public/viewjs/components/` are not clone scripts and get no factory,
+but their 9 handlers are on the same list and are deleted in a pass of their own.
+
 Convert **one** pair first (`locations` is the smallest and is also what
 [06](06-location-barcodes.md) and [08](08-nested-locations.md) will extend), verify it,
 then do the rest mechanically.
 
 ### Step 4 — one embedded-dialog reload convention
 
-The two conventions currently in the tree do the same thing differently. Pick one, put it
-in the factory, and delete the other. Q3 — this needs someone to look at both and decide,
-not a plan to assert one.
+The factory handles the form-posts-`Reload` message for lists, and `productgroups.js`'s
+full-page reload on `CloseLastModal` — the one list that does that — is converted to it.
+`CloseLastModal` itself stays exactly as it is: it is the app's global close-the-dialog
+message, not a competing reload convention, and the forms whose parents do targeted
+refreshes on it keep posting it. Q3 has the detail and the reason not to unify further.
 
 ### Step 5 — `purchase.js` and `datetimepicker2`
 
@@ -130,7 +161,7 @@ nothing depends on a `@push` side effect. `purchase.js` keeps only what the purc
 itself uses.
 
 `datetimepicker2` disappears: parameterise the single component by element id/suffix so
-two instances can coexist. This is 344 lines deleted and is the cleanest win in the plan,
+two instances can coexist. This is 373 lines deleted and is the cleanest win in the plan,
 but it is also the one most likely to have a subtle reason to exist — see Q4.
 
 ### Step 6 — the Blade minor items
@@ -158,8 +189,10 @@ none, since the current behaviour is not documented anywhere and reads as a typo
 
 The default error toast is a *user-visible* behaviour change with no wire-format
 component: operations that used to fail silently now say so. That is the point, but it
-will surface pre-existing failures nobody knew about, and the first week after it lands is
-likely to produce bug reports that are really discoveries.
+will surface pre-existing failures nobody knew about. Because the handler deletions
+happen per file during step 3 rather than in one switch-flip, those discoveries arrive
+page by page — which is the easier version to triage, since at any moment it is clear
+which conversion introduced the noise.
 
 ## Verification
 
@@ -184,8 +217,10 @@ Everything here is browser behaviour, so verification is a booted instance and a
    mid-save (throttle to offline in devtools after clicking save) and confirm the form
    re-enables rather than staying locked — this is the `onerror`/`timeout` gap and it
    cannot be tested any other way.
-4. **`grep -c console.error public/viewjs/*.js` must reach 0** for the handlers that are
-   pure logging, with the survivors being deliberate and documented (Q2).
+4. **`grep -rc console.error public/viewjs/` must reach 0** across both the 41
+   top-level files and the 5 under `components/`, for the handlers that are pure
+   logging, with the survivors being deliberate and documented (Q2). This is step 3's
+   exit criterion, not step 2's — after step 2 the count is unchanged by design.
 5. **Two datetimepickers on one page.** The meal plan and stock entry forms are the
    places two pickers coexist; after step 5 both must set, clear and validate
    independently, including the "clear" and "now" shortcuts.
@@ -244,15 +279,47 @@ useful when a failed import says so instead of logging to a console nobody has o
    > history is normal. Criterion worth writing into the factory docs: *failure is
    > an expected domain outcome or a background poll* → explicit `function() {}`
    > with a comment; anything user-initiated toasts.
-3. **Which embedded-dialog reload convention wins?** Both are in the tree and both work.
-   This wants five minutes of reading the two and picking, and it should be picked before
-   the factory is written rather than after, because the factory bakes it in.
+   >
+   > One case the guess misses and the grep must not: `public/js/grocy.js:317` and
+   > `:351` post to `system/log-missing-localization` with **no error argument at
+   > all** — not a `console.error`, nothing — so the moment a default exists those
+   > two start toasting on any failure. Worse, both calls are made from inside
+   > `__t()`/`__n()`, and `ShowGenericError` renders a toast whose own text goes
+   > through `__t()`; a failing localization log could therefore re-enter
+   > localization and, on a dev instance with a broken API, recurse. So
+   > `log-missing-localization` goes on an explicit *silent* list — passed
+   > `function () { }` deliberately, with the recursion as the stated reason, not
+   > merely "failure is expected here". Anything else in the tree that calls
+   > `Grocy.Api.*` from inside a rendering or translation helper wants the same
+   > treatment, and the grep should look for that shape specifically.
+3. **What does the factory do about `CloseLastModal`?** The two "conventions" are not
+   two ways of doing one thing. `CloseLastModal` is a *global* mechanism: the Escape
+   key and any `.close-last-modal-button` post it (`public/js/grocy.js:819-830`), and
+   the listener at `:841` hides the topmost visible modal. It is the app's close-the-
+   dialog message and it cannot be replaced by `Reload`. Layered on top of it, about
+   eleven forms post it deliberately after a successful save — `productgroupform`,
+   `shoppinglistform`, `shoppinglistitemform`, `recipeposform`, `stockentryform`,
+   `productbarcodeform`, `quantityunitconversionform`, and the `consume`, `inventory`,
+   `purchase` and `transfer` dialogs — because their parents do a targeted refresh
+   when the dialog closes. Exactly one list reloads the whole page on the message:
+   `public/viewjs/productgroups.js:76`. The question is what the factory bakes in, and
+   which of these it is allowed to convert.
 
-   > **Response:** Form-posts-`Reload` wins. The form knows whether data actually
-   > changed; a list reloading on every `CloseLastModal` refreshes on cancel for
-   > nothing, and the majority of the tree already leans the form-posts way. Factory
-   > lists handle the `Reload` message; the `CloseLastModal`-triggered reloads get
-   > deleted.
+   > **Response:** Leave `CloseLastModal` alone as the close mechanism and convert
+   > exactly one pair: `productgroupform` / `productgroups` moves to the
+   > form-posts-`Reload` shape that `locationform`, `batteryform`,
+   > `taskcategoryform`, `quantityunitform` and the rest already use, and
+   > `productgroups.js`'s `window.location.reload()` listener goes away. That is the
+   > single genuine drift marker — a list doing a full page reload on a message that
+   > also fires on Escape and on cancel.
+   >
+   > Every other form that posts `CloseLastModal` keeps doing so, because its parent
+   > is not doing a page reload: `purchase`, `consume`, `transfer` and
+   > `shoppinglistitemform` all rely on parent-side targeted refreshes, and pushing
+   > them through `Reload` would replace a redrawn row with a full page load. That is
+   > a regression dressed as consistency. The factory therefore handles the `Reload`
+   > message for lists and leaves the `CloseLastModal` handlers where a parent
+   > deliberately listens for one.
 4. **Is there a real reason `datetimepicker2` exists as a copy?** The stated reason is
    "so two pickers can share a page", which parameterisation solves. If there is a second
    reason buried in it — different validation, a different date format, a different
@@ -270,10 +337,19 @@ useful when a failed import says so instead of logging to a console nobody has o
    `userpermissions`, `manageapikeys`, `products`, `recipes`), rather than forcing all 36
    scripts through one shape.
 
-   > **Response:** Agreed — factory for the pure clones, mixins for the five partial
-   > clones — with one addition: leave `mealplan.js` and `recipes.js` entirely
-   > alone. They are the two most divergent files in the tree; forcing them through
-   > either shape is where a mechanical conversion becomes a rewrite.
+   > **Response:** Agreed — factory for the pure clones, mixins for the partial
+   > clones — with two corrections to the list in the question. First, `recipes`
+   > comes *off* the mixin list: `mealplan.js` and `recipes.js` are the two most
+   > divergent files in the tree and are left entirely alone, so `recipes` cannot
+   > also be a mixin adopter. That leaves `stockjournal`, `userpermissions`,
+   > `manageapikeys` and `products` as the partial clones.
+   >
+   > Second, the files the question left unbucketed: `equipment.js` (192 lines),
+   > `tasks.js` (278) and `stockjournal.js` are mixin adopters — list-shaped with
+   > enough page-specific behaviour that the full factory would fight them.
+   > `shoppinglist.js` (708 lines) joins `mealplan.js` and `recipes.js` in the
+   > leave-alone bucket; at that size it is its own application, not a list script
+   > with extras.
 6. **Does this want a build step?** Everything above is plain browser JS with no
    bundling, matching the current architecture. Introducing a bundler would make the
    shared-module story conventional and would also be a new dependency, a new build
@@ -288,8 +364,11 @@ useful when a failed import says so instead of logging to a console nobody has o
 ## Effort
 
 Medium, dominated by conversion volume rather than difficulty. Steps 1 and 2 are a single
-short session each and deliver most of the user-visible value — the bug fixes and the end
-of silent failures. Step 3 is the bulk: one pair converted carefully, then ~35 mechanical
-conversions with the baseline from verification check 1 as the acceptance list. Steps 4–6
-are tidy-up that can ride along. Worth splitting: 1 and 2 are worth landing on their own
-even if the factories wait.
+short session each and deliver the four bug fixes plus network-failure handling — a
+dropped connection now re-enables the form and reports, where today it hangs forever.
+They do *not* deliver the end of silent failures: that is step 3's, one file at a time,
+because the 157 explicit handlers can only be removed by the same edits that convert the
+files. Step 3 is the bulk: one pair converted carefully, then ~35 mechanical conversions
+with the baseline from verification check 1 as the acceptance list. Steps 4–6 are tidy-up
+that can ride along. Worth splitting: 1 and 2 are worth landing on their own even if the
+factories wait.

@@ -22,7 +22,7 @@ atomically, and there is no PVC at all.
 | PostgreSQL `BYTEA` reaches PHP as a **stream**; SQLite `BLOB` as a **string** | Backends must normalise. Moot given the PostgreSQL-only decision, but worth recording |
 | `pg_column_size` == length for incompressible bytes | JPEGs do not TOAST-compress; storage ≈ actual bytes |
 | `ImageResize::createFromString()` and `getImageAsString()` exist | Downscaling works on bytes — **no temp files anywhere** |
-| Only three call sites outside `FilesService` | Small change, not a rewrite |
+| Several call sites outside `FilesService`, not three — `controllers/FilesApiController.php` (lines 41, 73/79, 82/85/87, 116, 167, 189/193) plus `services/StockService.php:850` | Small change, not a rewrite |
 
 The real coupling is that the current code is **path oriented**: `file_exists`,
 `mime_content_type($path)`, `fopen($path)`, `new ImageResize($path)`. That is what changes.
@@ -51,8 +51,11 @@ A 60 MB nightly dump is seconds. Ten times wrong is still fine.
 
 ### Schema — migration `0256.pgsql.sql`, with no SQLite counterpart
 
-The first deliberately engine-exclusive feature, which also exercises the per-engine
-migration convention.
+Settled: this is the first deliberately engine-exclusive migration, and the ground rule is
+amended to match — "portable, per-engine pair, **or** documented engine-exclusive" rather
+than requiring both engines unconditionally. `0256.pgsql.sql` ships PostgreSQL-only, with
+the exemption recorded in `db/pgsql/README.md` alongside the rule. (The README wording
+itself is another writer's edit; this plan just needs to be consistent with it.)
 
 ```sql
 CREATE TABLE files (
@@ -86,9 +89,9 @@ Delete(group, name)          ListNames(group, prefix)
 GetMimeType(group, name)
 ```
 
-Three call sites move: `FilesApiController` (serve/upload/delete), `FilesService`
-(downscale/delete), and one line in `StockService:659` where barcode lookup writes a
-product picture.
+Call sites move: `FilesApiController` (serve/upload/delete, several lines), `FilesService`
+(downscale/delete), and `StockService.php:850` where barcode lookup writes a product
+picture.
 
 Config validation rejects `FILE_STORAGE=database` with `DB_DRIVER=sqlite` at startup,
 with a clear message rather than a failure at first upload.
@@ -128,15 +131,27 @@ No change. Same three routes, same headers, same 404 behaviour. `files` is delib
    but `userfiles` and `equipmentmanuals` accept arbitrary uploads and a bound you can raise
    beats an unbounded read.
 
-   > **Response:** Yes — and validate it against PHP's own `upload_max_filesize` /
-   > `post_max_size` at startup: a `FILE_STORAGE_MAX_SIZE_MB` larger than what PHP
-   > accepts is a lie, and one smaller is the real bound. Report the effective
-   > value.
+   > **Response:** Yes — and reconcile it against PHP's own `upload_max_filesize` /
+   > `post_max_size` at startup rather than hard-failing: clamp the effective limit to
+   > whichever of the three is smallest, log it, and surface it (a startup warning,
+   > plus reporting the effective value) so a `FILE_STORAGE_MAX_SIZE_MB` larger than
+   > what PHP accepts is visible rather than a silent lie. Startup keeps running either
+   > way.
 3. **Reverse migration?** Proposing not to build one. `pg_dump` plus a script is a later
    problem if it ever comes up.
 
    > **Response:** Agreed, don't build it. `COPY (SELECT content ...) TO` plus a
    > shell loop covers the contingency.
+4. **Demo/prerelease collision.** `FilesService::__construct` (lines 31-44) appends a
+   per-demo-instance suffix to the storage path in demo/prerelease mode, so multiple demo
+   instances can share one filesystem without colliding. The proposed
+   `UNIQUE(file_group, name)` has no column for that suffix, so demo instances sharing one
+   *database* would collide on it.
+
+   > **Response:** Resolved by scoping, not schema. Declare `FILE_STORAGE=database`
+   > unsupported in demo/prerelease modes rather than folding the suffix into
+   > `file_group` — the demo path already provisions a separate database per instance,
+   > so there is nothing to share and no collision to design around.
 
 ## Review notes
 
@@ -144,10 +159,10 @@ No change. Same three routes, same headers, same 404 behaviour. `files` is delib
   (file_group, name) DO UPDATE` so overwrite is atomic; `Create` as a plain insert
   letting the unique constraint signal "exists". Cheaper and more correct than
   exists-then-write.
-- The `files` table will be the first engine-exclusive table. Check that
-  `.devtools/pgsql/difftest.php` and `DatabaseImporter` tolerate a table that exists on
-  one engine only, and note the exception in `db/pgsql/README.md` so the "every
-  migration works on both engines" rule has its documented exemption.
+- The `files` table is the first engine-exclusive table, now that the ground rule
+  permits a documented exemption. Check that `.devtools/pgsql/difftest.php` and
+  `DatabaseImporter` tolerate a table that exists on one engine only; the exemption
+  itself is recorded in `db/pgsql/README.md`.
 - Thumbnails written on first request are a runtime DB write from a GET path. Harmless
   here, but worth a one-line comment in the code, since "GETs don't write" is otherwise
   a nice invariant.

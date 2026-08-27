@@ -3,7 +3,9 @@
 **Goal:** An integrated MCP server that authenticates against Grocy's own user system, so
 an assistant can answer "what is expiring this week" or "add milk to the shopping list"
 without a separate bridge process.
-**Depends on:** nothing.
+**Depends on:** per the README's Wave 5 — [11](11-api-error-handling.md),
+[13](13-write-path-transactions.md) and [15](15-deliberate-cleanup.md) C1, plus
+[14](14-contract-and-regression-scaffolding.md)'s snapshot — all of which gate this plan.
 **Status:** draft for review — the least settled plan here, and the one with the most
 design freedom.
 
@@ -130,9 +132,12 @@ existing endpoint.
    who may consume via the UI may not want an assistant doing it unprompted. A
    `MCP_WRITE` permission is cheap and makes the boundary explicit.
 
-   > **Response:** Yes — though a per-key read-only flag may be simpler than a new
-   > permission: revocation and scoping then live in one place, the key management
-   > screen.
+   > **Response:** A per-key read-only flag, not a new `MCP_WRITE` permission
+   > constant. It matches Q1's design — a bearer key behind the credential→user
+   > resolver, where scoping lives with the key rather than the user's global
+   > permission set — and it avoids threading a new `PERMISSION_*` constant through
+   > the 30 already in `controllers/Users/User.php`. Revocation and scoping then live
+   > in one place, the key management screen.
 4. **Exposure.** Local network only, or reachable externally? That changes the auth answer
    considerably, and interacts with how the k3s ingress is set up. *Update:* external
    exposure, if it ever happens, waits for the IdP future state — the ingress + IdP then

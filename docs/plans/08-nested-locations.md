@@ -1,8 +1,9 @@
 # 08. Deeply nested locations
 
 **Goal:** Locations form a tree — floor / room / cabinet / shelf — rather than a flat list.
-**Depends on:** nothing. Worth doing before [07](07-nested-products.md), which needs the
-same recursive pattern against far more call sites.
+**Depends on:** [12](12-frontend-shared-core.md) and [14](14-contract-and-regression-scaffolding.md),
+per the README. Worth doing before [07](07-nested-products.md), which needs the same
+recursive pattern against far more call sites.
 **Status:** draft for review.
 
 ## Today
