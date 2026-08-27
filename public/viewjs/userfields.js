@@ -1,4 +1,7 @@
-﻿var userfieldsTable = $('#userfields-table').DataTable({
+﻿// Powers the custom userfields list view (userfields.blade.php): lists userfields
+// (optionally scoped to one entity via the "entity" URI param), with search/entity
+// filters and deletion.
+var userfieldsTable = $('#userfields-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +11,7 @@
 $('#userfields-table tbody').removeClass("d-none");
 userfieldsTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -19,6 +23,9 @@ $("#search").on("keyup", Delay(function()
 	userfieldsTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Entity filter, matched against the entity column (index 1); option value/text are both
+// the entity's internal name, so it doubles as the search term and as the "entity" param
+// pre-filled into the "add new userfield" button's link
 $("#entity-filter").on("change", function()
 {
 	var value = $("#entity-filter option:selected").text();
@@ -31,6 +38,7 @@ $("#entity-filter").on("change", function()
 	$("#new-userfield-button").attr("href", U("/userfield/new?embedded&entity=" + value));
 });
 
+// Resets the search and entity filters
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");
@@ -39,6 +47,7 @@ $("#clear-filter-button").on("click", function()
 	userfieldsTable.search("").draw();
 });
 
+// Deletes a userfield (DELETE objects/userfields/{id}) after confirmation
 $(document).on('click', '.userfield-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-userfield-name');
@@ -76,6 +85,7 @@ $(document).on('click', '.userfield-delete-button', function(e)
 	});
 });
 
+// Pre-apply the entity filter when opened scoped to one
 if (GetUriParam("entity"))
 {
 	$("#entity-filter").val(GetUriParam("entity"));

@@ -1,4 +1,12 @@
-﻿$('#save-userobject-button').on('click', function(e)
+﻿// Powers the create/edit form for a single record ("userobject") of a custom user
+// entity (userobjectform.blade.php). A userobject has no fields of its own beyond its
+// entity link - all visible inputs are userfields, so the form body itself is just the
+// (relabeled) userfields form; Grocy.EditObjectParentId/-Name identify the owning entity.
+
+// Creates/updates the bare userobject (linking it to its parent entity), then saves the
+// userfields that carry its actual data, then either postMessages the parent (embedded
+// mode) to reload, or navigates back to that entity's object list
+$('#save-userobject-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -68,6 +76,8 @@
 	}
 });
 
+// Load userfield values, then strip the userfields form's usual "boxed section" styling
+// and heading since here it IS the whole form rather than an addendum to one
 Grocy.Components.UserfieldsForm.Load();
 $("#userfields-form").removeClass("border").removeClass("border-info").removeClass("p-2").find("h2").addClass("d-none");
 

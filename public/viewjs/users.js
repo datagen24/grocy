@@ -1,4 +1,6 @@
-﻿var usersTable = $('#users-table').DataTable({
+﻿// Powers the users list view (users.blade.php): table listing, search filtering, and
+// user deletion (via the dedicated "users" endpoint, not the generic objects/* CRUD API).
+var usersTable = $('#users-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +10,7 @@
 $('#users-table tbody').removeClass("d-none");
 usersTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +28,7 @@ $("#clear-filter-button").on("click", function()
 	usersTable.search("").draw();
 });
 
+// Deletes a user (DELETE users/{id}) after confirmation
 $(document).on('click', '.user-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-user-username');
