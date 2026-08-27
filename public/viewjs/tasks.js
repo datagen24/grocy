@@ -1,4 +1,7 @@
-﻿var tasksTable = $('#tasks-table').DataTable({
+﻿// Powers the tasks list view (tasks.blade.php): table listing with status/category/user
+// filters, marking tasks done/undone, deletion, the done-tasks toggle, and the due-today/
+// due-soon/overdue summary widgets.
+var tasksTable = $('#tasks-table').DataTable({
 	'order': [[2, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -9,6 +12,7 @@
 $('#tasks-table tbody').removeClass("d-none");
 tasksTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function ()
 {
 	var value = $(this).val();

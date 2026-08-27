@@ -1,4 +1,6 @@
-﻿var categoriesTable = $('#taskcategories-table').DataTable({
+﻿// Powers the task categories list view (taskcategories.blade.php): table listing,
+// search filtering, delete confirmation, and the disabled-items toggle.
+var categoriesTable = $('#taskcategories-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +10,7 @@
 $('#taskcategories-table tbody').removeClass("d-none");
 categoriesTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +28,7 @@ $("#clear-filter-button").on("click", function()
 	categoriesTable.search("").draw();
 });
 
+// Deletes a task category (DELETE objects/task_categories/{id}) after confirmation
 $(document).on('click', '.task-category-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-category-name');
@@ -62,6 +66,7 @@ $(document).on('click', '.task-category-delete-button', function(e)
 	});
 });
 
+// Toggling "show disabled" reloads the page with/without the include_disabled query param
 $("#show-disabled").change(function()
 {
 	if (this.checked)
@@ -74,6 +79,7 @@ $("#show-disabled").change(function()
 	}
 });
 
+// Reflect the current include_disabled state onto the checkbox on load
 if (GetUriParam('include_disabled'))
 {
 	$("#show-disabled").prop('checked', true);

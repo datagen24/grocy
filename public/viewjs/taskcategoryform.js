@@ -1,4 +1,9 @@
-﻿$('#save-task-category-button').on('click', function(e)
+﻿// Powers the task category create/edit modal form (taskcategoryform.blade.php).
+// Grocy.EditMode ('create'/'edit') and Grocy.EditObjectId select POST vs PUT.
+
+// Validates and submits the form, saves userfields, then either postMessages the
+// parent (embedded mode) to reload, or navigates back to the task categories list
+$('#save-task-category-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -66,11 +71,13 @@
 	}
 });
 
+// Live-validates on every keystroke
 $('#task-category-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('task-category-form');
 });
 
+// Enter key submits the form (if valid) instead of doing a default form submit
 $('#task-category-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -88,6 +95,7 @@ $('#task-category-form input').keydown(function(event)
 	}
 });
 
+// Initial setup: load userfields, focus the name field, run initial validation
 Grocy.Components.UserfieldsForm.Load();
 setTimeout(function()
 {
