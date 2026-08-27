@@ -97,6 +97,7 @@ $('#userentity-form input').keydown(function(event)
 	}
 });
 
+// Enable/disable the icon CSS class input depending on whether "show in sidebar menu" is on
 $("#show_in_sidebar_menu").on("click", function()
 {
 	if (this.checked)
@@ -109,6 +110,7 @@ $("#show_in_sidebar_menu").on("click", function()
 	}
 });
 
+// Initial setup: focus the name field, run initial validation
 Grocy.FrontendHelpers.ValidateForm('userentity-form');
 setTimeout(function()
 {
