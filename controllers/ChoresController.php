@@ -9,10 +9,20 @@ use Grocy\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for the chore views (overview, journal, master data
+ * list/edit form, execution tracking and settings). Due date calculations are
+ * delegated to ChoresService.
+ */
 class ChoresController extends BaseController
 {
 	use GrocycodeTrait;
 
+	/**
+	 * Serves the chore create/edit form (route GET /chore/{choreId}).
+	 *
+	 * @param array $args Route arguments; choreId is either a chore id or the literal 'new' for create mode
+	 */
 	public function ChoreEditForm(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
@@ -43,6 +53,11 @@ class ChoresController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the chore master data list view (route GET /chores).
+	 *
+	 * Query parameter include_disabled (presence only) also lists inactive chores.
+	 */
 	public function ChoresList(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
@@ -61,11 +76,20 @@ class ChoresController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the chores settings view (route GET /choressettings).
+	 */
 	public function ChoresSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'choressettings');
 	}
 
+	/**
+	 * Serves the chore execution journal view (route GET /choresjournal).
+	 *
+	 * Optional query parameters: months (int, how far back to list; default 12)
+	 * and chore (int, filter by chore id).
+	 */
 	public function Journal(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['months']) && filter_var($request->getQueryParams()['months'], FILTER_VALIDATE_INT) !== false)
@@ -94,6 +118,11 @@ class ChoresController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the chores overview view (route GET /choresoverview); flags each
+	 * current chore as overdue/duetoday/duesoon based on its next estimated
+	 * execution time and the user's "due soon" days setting.
+	 */
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
@@ -130,6 +159,9 @@ class ChoresController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the chore execution tracking view (route GET /choretracking).
+	 */
 	public function TrackChoreExecution(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'choretracking', [
@@ -139,6 +171,9 @@ class ChoresController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the Grocycode barcode PNG for a chore (route GET /chore/{choreId}/grocycode).
+	 */
 	public function ChoreGrocycodeImage(Request $request, Response $response, array $args)
 	{
 		$gc = new Grocycode(Grocycode::CHORE, $args['choreId']);

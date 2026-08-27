@@ -1,7 +1,16 @@
+// Sidebar menu behavior: collapse/expand toggling of the left side navigation,
+// persisting the state in localStorage (key "sidebar_state" = "collapsed" | "expanded"),
+// tooltips for collapsed menu items and scrolling the active item into view.
+// Loaded on every page as part of the shared layout.
+
+// Sidenav item tooltips need a custom template class so they can be
+// styled/hidden depending on the collapsed state
 $('.navbar-sidenav [data-toggle="tooltip"]').tooltip({
 	template: '<div class="tooltip navbar-sidenav-tooltip"><div class="arrow"></div><div class="tooltip-inner"></div></div>'
 })
 
+// Toggle the sidebar between collapsed (icons only) and expanded,
+// remembering the choice in localStorage ("sidebar_state")
 $("#sidenavToggler").click(function(e)
 {
 	e.preventDefault();
@@ -21,6 +30,7 @@ $("#sidenavToggler").click(function(e)
 	}
 });
 
+// Opening a collapsible submenu always expands the sidebar
 $(".navbar-sidenav .nav-link-collapse").click(function(e)
 {
 	e.preventDefault();
@@ -28,6 +38,7 @@ $(".navbar-sidenav .nav-link-collapse").click(function(e)
 	window.localStorage.setItem("sidebar_state", "expanded");
 });
 
+// Restore the persisted collapsed state on page load
 if (window.localStorage.getItem("sidebar_state") === "collapsed")
 {
 	$("#sidenavToggler").click();

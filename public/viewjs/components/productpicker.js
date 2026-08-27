@@ -1,26 +1,38 @@
+// Implements the ProductPicker widget (views/components/productpicker.blade.php): a combobox
+// of products, driven by a hidden #product_id select plus #product_id_text_input, that also
+// resolves scanned barcodes/Grocycodes typed or scanned into it and, when a barcode does not
+// match any known product, offers "add as new product" / "add barcode to existing product" /
+// external-lookup / camera-retry workflows via a bootbox dialog.
+// Public API: GetPicker/GetInputElement/GetValue/SetValue/SetId/Clear/Disable/Enable,
+// ShowCustomError/HideCustomError, and the *Workflow()/FinishFlow() helpers below.
 Grocy.Components.ProductPicker = {};
 
+/** @returns {jQuery} The hidden select backing the combobox (#product_id) */
 Grocy.Components.ProductPicker.GetPicker = function ()
 {
 	return $('#product_id');
 }
 
+/** @returns {jQuery} The visible text input of the combobox (#product_id_text_input) */
 Grocy.Components.ProductPicker.GetInputElement = function ()
 {
 	return $('#product_id_text_input');
 }
 
+/** @returns {string} The currently selected product id */
 Grocy.Components.ProductPicker.GetValue = function ()
 {
 	return $('#product_id').val();
 }
 
+/** Sets the visible text (name/barcode) and lets blur-handling resolve it to a product */
 Grocy.Components.ProductPicker.SetValue = function (value)
 {
 	Grocy.Components.ProductPicker.GetInputElement().val(value);
 	Grocy.Components.ProductPicker.GetInputElement().trigger('change');
 }
 
+/** Selects the option with the given product id directly, refreshing the combobox display */
 Grocy.Components.ProductPicker.SetId = function (value)
 {
 	Grocy.Components.ProductPicker.GetPicker().val(value);
@@ -28,6 +40,7 @@ Grocy.Components.ProductPicker.SetId = function (value)
 	Grocy.Components.ProductPicker.GetInputElement().trigger('change');
 }
 
+/** Clears both the text/selection and the associated barcode attribute */
 Grocy.Components.ProductPicker.Clear = function ()
 {
 	Grocy.Components.ProductPicker.SetValue('');
@@ -35,21 +48,29 @@ Grocy.Components.ProductPicker.Clear = function ()
 	$('#product_id').attr("barcode", "null");
 }
 
+/** @returns {boolean} True when the "flow" URI param indicates the new-product-with-name workflow */
 Grocy.Components.ProductPicker.InProductAddWorkflow = function ()
 {
 	return GetUriParam('flow') == "InplaceNewProductWithName";
 }
 
+/** @returns {boolean} True when the "flow" URI param indicates the add-barcode-to-existing-product workflow */
 Grocy.Components.ProductPicker.InProductModifyWorkflow = function ()
 {
 	return GetUriParam('flow') == "InplaceAddBarcodeToExistingProduct";
 }
 
+/** @returns {boolean} True when either product picker workflow (add/modify) is currently active */
 Grocy.Components.ProductPicker.InAnyFlow = function ()
 {
 	return Grocy.Components.ProductPicker.InProductAddWorkflow() || Grocy.Components.ProductPicker.InProductModifyWorkflow();
 }
 
+/**
+ * Called by the consuming view after a workflow-driven save completes: tags the selected
+ * product option with the newly attached barcode (for future searches) and clears the
+ * flow/barcode/product-name URI params so the workflow doesn't restart on reload.
+ */
 Grocy.Components.ProductPicker.FinishFlow = function ()
 {
 	if (GetUriParam("flow") == "InplaceAddBarcodeToExistingProduct")
@@ -62,6 +83,7 @@ Grocy.Components.ProductPicker.FinishFlow = function ()
 	RemoveUriParam("product-name");
 }
 
+/** Shows a custom validation message below the picker (e.g. "This product is not in stock") */
 Grocy.Components.ProductPicker.ShowCustomError = function (text)
 {
 	var element = $("#custom-productpicker-error");
@@ -69,11 +91,13 @@ Grocy.Components.ProductPicker.ShowCustomError = function (text)
 	element.removeClass("d-none");
 }
 
+/** Hides the custom validation message shown via ShowCustomError */
 Grocy.Components.ProductPicker.HideCustomError = function ()
 {
 	$("#custom-productpicker-error").addClass("d-none");
 }
 
+/** Disables the text input and the adjacent camera-scan button */
 Grocy.Components.ProductPicker.Disable = function ()
 {
 	Grocy.Components.ProductPicker.GetInputElement().attr("disabled", "");
@@ -81,6 +105,7 @@ Grocy.Components.ProductPicker.Disable = function ()
 	$("#camerabarcodescanner-start-button").addClass("disabled");
 }
 
+/** Re-enables the text input and the adjacent camera-scan button */
 Grocy.Components.ProductPicker.Enable = function ()
 {
 	Grocy.Components.ProductPicker.GetInputElement().removeAttr("disabled");
@@ -90,6 +115,8 @@ Grocy.Components.ProductPicker.Enable = function ()
 
 $(".product-combobox").combobox(BootstrapComboboxDefaults);
 
+// Prefill by product name, either from the "product-name" URI param (used by add-product
+// workflows returning to this view) or from the Blade template's data-prefill-by-name attribute
 var prefillProduct = GetUriParam('product-name');
 var prefillProduct2 = Grocy.Components.ProductPicker.GetPicker().parent().data('prefill-by-name').toString();
 if (prefillProduct2)
@@ -115,6 +142,7 @@ if (typeof prefillProduct !== "undefined")
 	}
 }
 
+// Prefill by product id, either from the "product" URI param or the template's data-prefill-by-id attribute
 var prefillProductId = GetUriParam("product");
 var prefillProductId2 = Grocy.Components.ProductPicker.GetPicker().parent().data('prefill-by-id').toString();
 if (prefillProductId2)
@@ -139,6 +167,7 @@ if (typeof prefillProductId !== "undefined")
 	}
 }
 
+// Returning from the "add barcode to existing product" workflow: show the barcode-pending hint
 if (GetUriParam("flow") === "InplaceAddBarcodeToExistingProduct")
 {
 	$('#InplaceAddBarcodeToExistingProduct').text(GetUriParam("barcode"));
@@ -147,6 +176,11 @@ if (GetUriParam("flow") === "InplaceAddBarcodeToExistingProduct")
 	$('#barcode-lookup-hint').addClass('d-none');
 }
 
+// Resolves the typed input on blur: tries Grocycode (grcy:p:<id>) handling first, then matches
+// it against a product's barcode search data. If nothing matches and no workflow is already in
+// progress, offers the add-product/add-barcode/external-lookup/camera-retry dialog below -
+// unless the input actually exists as a product/barcode already (checked via the API), in which
+// case a "not in stock" error is shown instead (the product combobox here may only list in-stock products).
 Grocy.Components.ProductPicker.PopupOpen = false;
 $('#product_id_text_input').on('blur', function (e)
 {
@@ -204,6 +238,7 @@ $('#product_id_text_input').on('blur', function (e)
 				embedded = "embedded";
 			}
 
+			// Dialog buttons for the "could not be resolved to a product" workflow chooser
 			var buttons = {
 				cancel: {
 					label: __t('Cancel'),
@@ -310,6 +345,8 @@ $('#product_id_text_input').on('blur', function (e)
 			// so only show the workflow dialog when the entered input
 			// does not match in existing product (name) or barcode,
 			// otherwise an error validation message that the product is not in stock
+			// Verify the input doesn't already exist as a product/barcode before offering the
+			// creation workflows - if it does, it's simply not in the (possibly filtered) picker
 			var existsAsProduct = false;
 			var existsAsBarcode = false;
 			Grocy.Api.Get('objects/product_barcodes_view?query[]=barcode=' + input,
@@ -394,6 +431,8 @@ $('#product_id_text_input').on('blur', function (e)
 	}
 });
 
+// Handles a scanned barcode/Grocycode targeted at the product picker (from CameraBarcodeScanner
+// or an external scanner), routing it into the text input as if typed, which then triggers blur handling
 $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
 {
 	if (!(target == "@productpicker" || target == "undefined" || target == undefined)) // Default target
@@ -416,6 +455,7 @@ $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
 	}, Grocy.FormFocusDelay);
 });
 
+// Responsive tweak: stack modal footer buttons on small screens (applies to any modal, not just this one)
 $(document).on("shown.bs.modal", function (e)
 {
 	$(".modal-footer").addClass("d-block").addClass("d-sm-flex");

@@ -12,10 +12,20 @@ use Grocy\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for all stock related views: stock overview and
+ * entries, purchase/consume/transfer/inventory pages, the stock journal,
+ * the shopping list and the master data (products, quantity units, locations,
+ * stores, product groups, barcodes). Stock business logic is delegated to StockService.
+ */
 class StockController extends BaseController
 {
 	use GrocycodeTrait;
 
+	/**
+	 * Additionally exposes the configured external barcode lookup plugin name
+	 * to all views rendered by this controller (empty string when unavailable).
+	 */
 	public function __construct(Container $container)
 	{
 		parent::__construct($container);
@@ -34,6 +44,9 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the consume view (route GET /consume); only products currently in stock are offered.
+	 */
 	public function Consume(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'consume', [
@@ -46,6 +59,9 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the inventory (stocktaking) view (route GET /inventory).
+	 */
 	public function Inventory(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'inventory', [
@@ -59,6 +75,12 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the stock journal view (route GET /stockjournal).
+	 *
+	 * Optional query parameters: months (int, how far back to list; default 6)
+	 * and product (int, filter by product id).
+	 */
 	public function Journal(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['months']) && filter_var($request->getQueryParams()['months'], FILTER_VALIDATE_INT) !== false)
@@ -91,6 +113,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the printable location content sheet view (route GET /locationcontentsheet).
+	 *
+	 * Query parameter include_out_of_stock (presence only) also lists products without stock.
+	 */
 	public function LocationContentSheet(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'locationcontentsheet', [
@@ -101,6 +128,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the location create/edit form (route GET /location/{locationId}).
+	 *
+	 * @param array $args Route arguments; locationId is either a location id or the literal 'new' for create mode
+	 */
 	public function LocationEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['locationId'] == 'new')
@@ -120,6 +152,11 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the location master data list view (route GET /locations).
+	 *
+	 * Query parameter include_disabled (presence only) also lists inactive locations.
+	 */
 	public function LocationsList(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
@@ -138,6 +175,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the stock overview view (route GET /stockoverview); lists products in
+	 * stock or below their min stock amount (or all products, depending on the
+	 * user's stock_overview_show_all_out_of_stock_products setting).
+	 */
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
@@ -161,6 +203,13 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the product barcode create/edit form (route GET /productbarcodes/{productBarcodeId}).
+	 *
+	 * Query parameter product (id) preselects the associated product.
+	 *
+	 * @param array $args Route arguments; productBarcodeId is either a barcode id or the literal 'new' for create mode
+	 */
 	public function ProductBarcodesEditForm(Request $request, Response $response, array $args)
 	{
 		$product = null;
@@ -195,6 +244,14 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the product create/edit form (route GET /product/{productId}).
+	 *
+	 * In edit mode the selectable quantity units are restricted to units
+	 * reachable through conversions once the product has stock log entries.
+	 *
+	 * @param array $args Route arguments; productId is either a product id or the literal 'new' for create mode
+	 */
 	public function ProductEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['productId'] == 'new')
@@ -237,12 +294,20 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the Grocycode barcode PNG for a product (route GET /product/{productId}/grocycode).
+	 */
 	public function ProductGrocycodeImage(Request $request, Response $response, array $args)
 	{
 		$gc = new Grocycode(Grocycode::PRODUCT, $args['productId']);
 		return $this->ServeGrocycodeImage($request, $response, $gc);
 	}
 
+	/**
+	 * Serves the product group create/edit form (route GET /productgroup/{productGroupId}).
+	 *
+	 * @param array $args Route arguments; productGroupId is either a product group id or the literal 'new' for create mode
+	 */
 	public function ProductGroupEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['productGroupId'] == 'new')
@@ -262,6 +327,11 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the product group master data list view (route GET /productgroups).
+	 *
+	 * Query parameter include_disabled (presence only) also lists inactive product groups.
+	 */
 	public function ProductGroupsList(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
@@ -281,6 +351,12 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the product master data list view (route GET /products).
+	 *
+	 * Optional query parameters: include_disabled (presence only, also lists
+	 * inactive products) and filter ('only_in_stock' or 'only_out_of_stock').
+	 */
 	public function ProductsList(Request $request, Response $response, array $args)
 	{
 		$products = $this->DB->products();
@@ -314,6 +390,9 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the purchase view (route GET /purchase).
+	 */
 	public function Purchase(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'purchase', [
@@ -327,6 +406,14 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the quantity unit conversion create/edit form (route GET /quantityunitconversion/{quConversionId}).
+	 *
+	 * Optional query parameters: product (id, associates the conversion with a
+	 * product) and qu-unit (id, preselects the "from" quantity unit).
+	 *
+	 * @param array $args Route arguments; quConversionId is either a conversion id or the literal 'new' for create mode
+	 */
 	public function QuantityUnitConversionEditForm(Request $request, Response $response, array $args)
 	{
 		$product = null;
@@ -365,6 +452,11 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the quantity unit create/edit form (route GET /quantityunit/{quantityunitId}).
+	 *
+	 * @param array $args Route arguments; quantityunitId is either a quantity unit id or the literal 'new' for create mode
+	 */
 	public function QuantityUnitEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['quantityunitId'] == 'new')
@@ -392,6 +484,9 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the quantity unit plural form testing view (route GET /quantityunitpluraltesting).
+	 */
 	public function QuantityUnitPluralFormTesting(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'quantityunitpluraltesting', [
@@ -399,6 +494,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the quantity unit master data list view (route GET /quantityunits).
+	 *
+	 * Query parameter include_disabled (presence only) also lists inactive quantity units.
+	 */
 	public function QuantityUnitsList(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
@@ -417,6 +517,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the shopping list view (route GET /shoppinglist).
+	 *
+	 * Query parameter list (shopping list id) selects the displayed list; defaults to list 1.
+	 */
 	public function ShoppingList(Request $request, Response $response, array $args)
 	{
 		$listId = 1;
@@ -442,6 +547,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the shopping list create/edit form (route GET /shoppinglist/{listId}).
+	 *
+	 * @param array $args Route arguments; listId is either a shopping list id or the literal 'new' for create mode
+	 */
 	public function ShoppingListEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['listId'] == 'new')
@@ -461,6 +571,11 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the shopping list item create/edit form (route GET /shoppinglistitem/{itemId}).
+	 *
+	 * @param array $args Route arguments; itemId is either a list item id or the literal 'new' for create mode
+	 */
 	public function ShoppingListItemEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['itemId'] == 'new')
@@ -490,6 +605,9 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the shopping list settings view (route GET /shoppinglistsettings).
+	 */
 	public function ShoppingListSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'shoppinglistsettings', [
@@ -497,6 +615,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the store (shopping location) create/edit form (route GET /shoppinglocation/{shoppingLocationId}).
+	 *
+	 * @param array $args Route arguments; shoppingLocationId is either a store id or the literal 'new' for create mode
+	 */
 	public function ShoppingLocationEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['shoppingLocationId'] == 'new')
@@ -516,6 +639,11 @@ class StockController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the store (shopping location) master data list view (route GET /shoppinglocations).
+	 *
+	 * Query parameter include_disabled (presence only) also lists inactive stores.
+	 */
 	public function ShoppingLocationsList(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
@@ -534,6 +662,9 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the stock entry edit form (route GET /stockentry/{entryId}).
+	 */
 	public function StockEntryEditForm(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'stockentryform', [
@@ -545,6 +676,10 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the Grocycode barcode PNG for a single stock entry
+	 * (route GET /stockentry/{entryId}/grocycode).
+	 */
 	public function StockEntryGrocycodeImage(Request $request, Response $response, array $args)
 	{
 		$stockEntry = $this->DB->stock()->where('id', $args['entryId'])->fetch();
@@ -552,6 +687,10 @@ class StockController extends BaseController
 		return $this->ServeGrocycodeImage($request, $response, $gc);
 	}
 
+	/**
+	 * Serves the printable Grocycode label page for a single stock entry
+	 * (route GET /stockentry/{entryId}/label).
+	 */
 	public function StockEntryGrocycodeLabel(Request $request, Response $response, array $args)
 	{
 		$stockEntry = $this->DB->stock()->where('id', $args['entryId'])->fetch();
@@ -561,6 +700,9 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the stock settings view (route GET /stocksettings).
+	 */
 	public function StockSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'stocksettings', [
@@ -570,6 +712,9 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the stock entries view listing every single stock entry (route GET /stockentries).
+	 */
 	public function Stockentries(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
@@ -590,6 +735,10 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the transfer view (route GET /transfer); only products currently
+	 * in stock (with own stock) are offered.
+	 */
 	public function Transfer(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'transfer', [
@@ -601,6 +750,11 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the stock journal summary view (route GET /stockjournal/summary).
+	 *
+	 * Optional query parameters product_id, user_id and transaction_type filter the summary.
+	 */
 	public function JournalSummary(Request $request, Response $response, array $args)
 	{
 		$entries = $this->DB->uihelper_stock_journal_summary();
@@ -626,6 +780,12 @@ class StockController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the resolved quantity unit conversions view (route GET /quantityunitconversionsresolved).
+	 *
+	 * Query parameter product (id) shows the conversions for that product;
+	 * otherwise only product independent conversions are shown.
+	 */
 	public function QuantityUnitConversionsResolved(Request $request, Response $response, array $args)
 	{
 		$product = null;

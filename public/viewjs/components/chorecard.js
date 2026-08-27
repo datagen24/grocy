@@ -1,5 +1,11 @@
+// Implements the ChoreCard widget (views/components/chorecard.blade.php): a modal showing
+// summary details for one chore (last tracked, tracked count, last done by, average frequency,
+// edit/journal links).
+// Public API: Refresh(choreId) - fetches and renders the chore, also called by the
+// ".chorecard-trigger" click handler below to populate the modal before showing it.
 Grocy.Components.ChoreCard = {};
 
+/** Fetches chore details (GET chores/{id}) and renders them into the #chorecard-* elements */
 Grocy.Components.ChoreCard.Refresh = function(choreId)
 {
 	Grocy.Api.Get('chores/' + choreId,
@@ -49,6 +55,7 @@ Grocy.Components.ChoreCard.Refresh = function(choreId)
 	);
 };
 
+// Any element with class "chorecard-trigger" and a "data-chore-id" attribute opens this card
 $(document).on("click", ".chorecard-trigger", function(e)
 {
 	Grocy.Components.ChoreCard.Refresh($(e.currentTarget).attr("data-chore-id"));

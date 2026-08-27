@@ -8,8 +8,20 @@ use Grocy\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for the task views (task list, task/category edit
+ * forms, category list and settings). Current task retrieval is delegated
+ * to TasksService.
+ */
 class TasksController extends BaseController
 {
+	/**
+	 * Serves the tasks list view (route GET /tasks); flags each task as
+	 * overdue/duetoday/duesoon based on its due date and the user's
+	 * "due soon" days setting.
+	 *
+	 * Query parameter include_done (presence only) also lists completed tasks.
+	 */
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
@@ -54,6 +66,11 @@ class TasksController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the task category master data list view (route GET /taskcategories).
+	 *
+	 * Query parameter include_disabled (presence only) also lists inactive categories.
+	 */
 	public function TaskCategoriesList(Request $request, Response $response, array $args)
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
@@ -72,6 +89,11 @@ class TasksController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the task category create/edit form (route GET /taskcategory/{categoryId}).
+	 *
+	 * @param array $args Route arguments; categoryId is either a category id or the literal 'new' for create mode
+	 */
 	public function TaskCategoryEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['categoryId'] == 'new')
@@ -91,6 +113,11 @@ class TasksController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the task create/edit form (route GET /task/{taskId}).
+	 *
+	 * @param array $args Route arguments; taskId is either a task id or the literal 'new' for create mode
+	 */
 	public function TaskEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['taskId'] == 'new')
@@ -114,6 +141,9 @@ class TasksController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the tasks settings view (route GET /taskssettings).
+	 */
 	public function TasksSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'taskssettings');

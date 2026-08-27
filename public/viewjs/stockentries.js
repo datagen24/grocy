@@ -1,4 +1,7 @@
-﻿var stockEntriesTable = $('#stockentries-table').DataTable({
+﻿// Powers the stock entries view (stockentries.blade.php): lists individual stock rows
+// (optionally filtered to one product via Grocy.Components.ProductPicker), and lets the
+// user consume/open/undo a booking or print a Grocy-code label directly from a row.
+var stockEntriesTable = $('#stockentries-table').DataTable({
 	'order': [[2, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -15,6 +18,8 @@
 $('#stockentries-table tbody').removeClass("d-none");
 stockEntriesTable.columns.adjust().draw();
 
+// Custom DataTables search plugin: restricts rows to the product selected in the
+// product picker (column 1 holds the row's product id), or shows all when none is selected
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex)
 {
 	var productId = Grocy.Components.ProductPicker.GetValue();
@@ -27,6 +32,8 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex)
 	return false;
 });
 
+// Resets the location filter and (unless embedded, e.g. opened from a product's stock
+// entries link) the product picker
 $("#clear-filter-button").on("click", function()
 {
 	$("#location-filter").val("all");
@@ -40,6 +47,7 @@ $("#clear-filter-button").on("click", function()
 	stockEntriesTable.draw();
 });
 
+// Location filter dropdown, matched against the location name column (index 5)
 $("#location-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -52,6 +60,7 @@ $("#location-filter").on("change", function()
 	stockEntriesTable.column(stockEntriesTable.colReorder.transpose(5)).search(text).draw();
 });
 
+// Re-run the custom search filter whenever the product picker's value or its text input changes
 Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 {
 	stockEntriesTable.draw();
@@ -62,6 +71,8 @@ Grocy.Components.ProductPicker.GetInputElement().on('keyup', function(e)
 	stockEntriesTable.draw();
 });
 
+// Consumes (or marks spoiled) a specific stock entry's amount, shows a toast with an
+// "Undo" action, and refreshes that entry's row in place
 $(document).on('click', '.stock-consume-button', function(e)
 {
 	e.preventDefault();
@@ -109,6 +120,8 @@ $(document).on('click', '.stock-consume-button', function(e)
 	);
 });
 
+// Marks a specific stock entry's amount as opened; optionally moves it to a default
+// "consume location" (server-driven, reported back via result.product.move_on_open)
 $(document).on('click', '.product-open-button', function(e)
 {
 	e.preventDefault();
@@ -154,6 +167,8 @@ $(document).on('click', '.product-open-button', function(e)
 	);
 });
 
+// Fetches label data for a stock entry's Grocy-code and forwards it to the configured
+// label printer webhook (Grocy.Webhooks.labelprinter), if any is set up
 $(document).on('click', '.stockentry-grocycode-label-print', function(e)
 {
 	e.preventDefault();
@@ -168,6 +183,14 @@ $(document).on('click', '.stockentry-grocycode-label-print', function(e)
 	});
 });
 
+/**
+ * Re-fetches a single stock entry (stock/entry/{id}) and updates its table row in place
+ * (amount, due/purchase dates, location, price, opened state, styling for due/overdue),
+ * rather than reloading the whole table. Falls back to a full page reload if the row
+ * can no longer be found (e.g. after an undo created a different row id). Hides the row
+ * entirely if the entry's amount has dropped to zero.
+ * @param {number|string} stockRowId - stock entry id, matching the "stock-{id}-row" DOM id
+ */
 function RefreshStockEntryRow(stockRowId)
 {
 	Grocy.Api.Get("stock/entry/" + stockRowId,
@@ -312,6 +335,8 @@ function RefreshStockEntryRow(stockRowId)
 	);
 }
 
+// Reacts to a "ProductChanged" broadcast (e.g. from a stock booking elsewhere) by
+// refreshing every visible row for that product
 $(window).on("message", function(e)
 {
 	var data = e.originalEvent.data;
@@ -325,8 +350,17 @@ $(window).on("message", function(e)
 	};
 });
 
+// Apply the initial product filter (from the product picker's pre-filled value, if any)
 Grocy.Components.ProductPicker.GetPicker().trigger('change');
 
+/**
+ * Undoes a stock booking (consume/open) via stock/bookings/{id}/undo, then broadcasts
+ * a "ProductChanged" message so all views showing this product refresh themselves.
+ * Invoked from the inline "Undo" link injected into the consume/open toast messages.
+ * @param {number} bookingId - id of the booking to undo
+ * @param {number} stockRowId - unused by the undo call itself, kept for the caller's context
+ * @param {number} productId - product id, broadcast to trigger refreshes elsewhere
+ */
 function UndoStockBookingEntry(bookingId, stockRowId, productId)
 {
 	Grocy.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},

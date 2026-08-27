@@ -1,4 +1,9 @@
-﻿var recipesTables = $('#recipes-table').DataTable({
+﻿// Powers the recipes overview view (views/recipes.blade.php): recipe list (table + gallery tab) with search and
+// stock fulfillment status filter, the selected recipe's detail card, and actions such as consume all ingredients,
+// put missing ingredients on the shopping list, copy/delete a recipe, servings scaling and adding to the meal plan.
+
+// DataTables setup for the recipes list; single row selection shows the recipe (see the "select" handler below)
+var recipesTables = $('#recipes-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -19,11 +24,13 @@
 $('#recipes-table tbody').removeClass("d-none");
 recipesTables.columns.adjust().draw();
 
+// Restore the gallery tab when requested via the "tab" URI parameter or remembered in localStorage
 if ((typeof GetUriParam("tab") !== "undefined" && GetUriParam("tab") === "gallery") || window.localStorage.getItem("recipes_last_tab_id") == "gallery-tab")
 {
 	$(".nav-tabs a[href='#gallery']").tab("show");
 }
 
+// Highlight the recipe given via the "recipe" URI parameter in table and gallery (the detail card is rendered server-side)
 var recipe = GetUriParam("recipe");
 if (typeof recipe !== "undefined")
 {
@@ -41,6 +48,7 @@ if (typeof recipe !== "undefined")
 	}
 }
 
+// Re-apply search / status filter passed via URI parameters
 if (GetUriParam("search") !== undefined)
 {
 	$("#search").val(GetUriParam("search"));
@@ -59,12 +67,14 @@ if (GetUriParam("status") !== undefined)
 	}, 50);
 }
 
+// Remember the last active tab (list/gallery) in localStorage
 $("a[data-toggle='tab']").on("shown.bs.tab", function(e)
 {
 	var tabId = $(e.target).attr("id");
 	window.localStorage.setItem("recipes_last_tab_id", tabId);
 });
 
+// Debounced search: filters the table, syncs the "search" URI parameter and hides non-matching gallery cards
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -92,6 +102,7 @@ $("#clear-filter-button").on("click", function()
 	$("#status-filter").trigger("change");
 });
 
+// Stock fulfillment status filter: filters the hidden status column of the table and the gallery cards (by CSS class)
 $("#status-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -129,6 +140,7 @@ $("#status-filter").on("change", function()
 	}
 });
 
+// Delete recipe (expects data-recipe-name / data-recipe-id); confirms via bootbox, then DELETEs objects/recipes/{id}
 $(".recipe-delete").on('click', function(e)
 {
 	e.preventDefault();
@@ -168,6 +180,7 @@ $(".recipe-delete").on('click', function(e)
 	});
 });
 
+// Copy recipe: POSTs recipes/{id}/copy and navigates to the new copy
 $(".recipe-copy").on('click', function(e)
 {
 	e.preventDefault();
@@ -186,6 +199,9 @@ $(".recipe-copy").on('click', function(e)
 	);
 });
 
+// "Put missing products on shopping list": shows a confirmation containing the (server-rendered, hidden) list of missing
+// ingredients with checkboxes, then POSTs recipes/{id}/add-not-fulfilled-products-to-shoppinglist with the unchecked
+// products as excludedProductIds
 $(document).on('click', '.recipe-shopping-list', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-recipe-name');
@@ -232,6 +248,7 @@ $(document).on('click', '.recipe-shopping-list', function(e)
 	});
 });
 
+// "Consume all ingredients": confirms, then POSTs recipes/{id}/consume to book all needed in-stock amounts out of stock
 $(".recipe-consume").on('click', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-recipe-name');
@@ -274,6 +291,8 @@ $(".recipe-consume").on('click', function(e)
 	});
 });
 
+// Row selection: with the "side by side" user setting the page reloads with the selected recipe in the "recipe"
+// URI parameter, otherwise the recipe is opened embedded in a fullscreen bootbox dialog (row's data-recipe-id)
 recipesTables.on('select', function(e, dt, type, indexes)
 {
 	if (type === 'row')
@@ -313,6 +332,7 @@ recipesTables.on('select', function(e, dt, type, indexes)
 	}
 });
 
+// Gallery card click: same behavior as row selection above (side-by-side navigation or embedded dialog)
 $(".recipe-gallery-item").on("click", function(e)
 {
 	e.preventDefault();
@@ -351,6 +371,7 @@ $(".recipe-edit-button").on("click", function(e)
 	e.stopPropagation();
 });
 
+// Toggle the recipe card between normal and fullscreen layout (reflected in the #fullscreen location hash)
 $(".recipe-fullscreen").on('click', function(e)
 {
 	e.preventDefault();
@@ -374,6 +395,7 @@ $(".recipe-fullscreen").on('click', function(e)
 	}
 });
 
+// Print: leave fullscreen layout first, then open the browser print dialog
 $(".recipe-print").on('click', function(e)
 {
 	e.preventDefault();
@@ -387,6 +409,8 @@ $(".recipe-print").on('click', function(e)
 	window.print();
 });
 
+// Servings scaling: persists desired_servings via PUT objects/recipes/{id} (id from the input's data-recipe-id)
+// and reloads so the server re-renders the scaled ingredient amounts
 $('#servings-scale').keyup(function(event)
 {
 	var data = {};
@@ -404,6 +428,7 @@ $('#servings-scale').keyup(function(event)
 	);
 });
 
+// Checkbox handling inside the "missing ingredients" confirmation dialog (toggle row <-> checkbox)
 $(document).on("click", ".missing-recipe-pos-select-button", function(e)
 {
 	e.preventDefault();
@@ -427,6 +452,8 @@ if (window.location.hash === "#fullscreen")
 	$("#selectedRecipeToggleFullscreenButton").click();
 }
 
+// Grocycode label printing: fetches label data from recipes/{id}/printlabel and sends it to the configured
+// label printer webhook (Grocy.Webhooks.labelprinter)
 $(document).on('click', '.recipe-grocycode-label-print', function(e)
 {
 	e.preventDefault();
@@ -441,6 +468,7 @@ $(document).on('click', '.recipe-grocycode-label-print', function(e)
 	});
 });
 
+// Strike through an ingredient line when its "done" checkbox is clicked (visual only, not persisted)
 $(document).on('click', '.ingredient-done-button', function(e)
 {
 	e.preventDefault();
@@ -448,6 +476,7 @@ $(document).on('click', '.ingredient-done-button', function(e)
 	$(e.currentTarget).parent().toggleClass("text-strike-through").toggleClass("text-muted");
 });
 
+// "Add to meal plan": opens the modal prefilled with today's date and the clicked recipe (data-recipe-id)
 $(document).on("click", ".add-to-mealplan-button", function(e)
 {
 	Grocy.Components.DateTimePicker.Init(true);
@@ -461,6 +490,7 @@ $(document).on("click", ".add-to-mealplan-button", function(e)
 	$("#recipe_servings").focus();
 });
 
+// Meal plan modal submit: POSTs objects/meal_plan with the form data plus the picked day
 $('#save-add-to-mealplan-button').on('click', function(e)
 {
 	e.preventDefault();

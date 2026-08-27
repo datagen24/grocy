@@ -9,8 +9,23 @@ use Grocy\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Serves the generic CRUD endpoints /api/objects/{entity}[/{objectId}] and the
+ * Userfields endpoints /api/userfields/{entity}/{objectId} for all entities
+ * exposed through the OpenAPI spec (ExposedEntity* enums also control which
+ * entities can be listed, edited, deleted or require admin rights).
+ */
 class GenericEntityApiController extends BaseApiController
 {
+	/**
+	 * POST /api/objects/{entity} - creates a new object from the JSON request body.
+	 * Requires an entity-dependent permission (shopping list, recipes, meal plan,
+	 * equipment or MASTER_DATA_EDIT as fallback; some entities additionally ADMIN),
+	 * answered with 403 when missing. As a side effect, creating a product may add
+	 * below-min-stock products to the shopping list (per user setting).
+	 * Returns { "created_object_id": int|string } (200) or a 400 error response
+	 * (unknown/not exposed/not editable entity or invalid body).
+	 */
 	public function AddObject(Request $request, Response $response, array $args)
 	{
 		if ($args['entity'] == 'shopping_list' || $args['entity'] == 'shopping_lists')
@@ -75,6 +90,13 @@ class GenericEntityApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * DELETE /api/objects/{entity}/{objectId} - deletes the given object.
+	 * Requires an entity-dependent permission (as in AddObject; api_keys are always
+	 * deletable), answered with 403 when missing.
+	 * Returns 204 on success or a 400 error response (invalid/undeletable entity
+	 * or object not found).
+	 */
 	public function DeleteObject(Request $request, Response $response, array $args)
 	{
 		if ($args['entity'] == 'shopping_list' || $args['entity'] == 'shopping_lists')
@@ -125,6 +147,14 @@ class GenericEntityApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * PUT /api/objects/{entity}/{objectId} - updates the given object with the JSON
+	 * request body. Requires an entity-dependent permission (as in AddObject),
+	 * answered with 403 when missing. As a side effect, editing a product may add
+	 * below-min-stock products to the shopping list (per user setting).
+	 * Returns 204 on success or a 400 error response (invalid/not editable entity,
+	 * invalid body or object not found).
+	 */
 	public function EditObject(Request $request, Response $response, array $args)
 	{
 		if ($args['entity'] == 'shopping_list' || $args['entity'] == 'shopping_lists')
@@ -191,6 +221,11 @@ class GenericEntityApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/objects/{entity}/{objectId} - returns a single object including its
+	 * Userfield values under the "userfields" key (null when none exist).
+	 * Returns 400 for an unknown/not listable entity and 404 when the object does not exist.
+	 */
 	public function GetObject(Request $request, Response $response, array $args)
 	{
 		if (!$this->IsValidExposedEntity($args['entity']) || $this->IsEntityWithNoListing($args['entity']))
@@ -220,6 +255,12 @@ class GenericEntityApiController extends BaseApiController
 		return $this->ApiResponse($response, $object);
 	}
 
+	/**
+	 * GET /api/objects/{entity} - lists all objects of the given entity, filterable via
+	 * the generic query/limit/offset/order query parameters; when Userfields exist for
+	 * the entity, each object gets a "userfields" key/value map attached.
+	 * Returns 400 for an unknown or not listable entity.
+	 */
 	public function GetObjects(Request $request, Response $response, array $args)
 	{
 		if (!$this->IsValidExposedEntity($args['entity']) || $this->IsEntityWithNoListing($args['entity']))
@@ -264,6 +305,10 @@ class GenericEntityApiController extends BaseApiController
 		return $this->ApiResponse($response, $objects);
 	}
 
+	/**
+	 * GET /api/userfields/{entity}/{objectId} - returns the Userfield values of the
+	 * given object as a key/value map (200) or a 400 error response.
+	 */
 	public function GetUserfields(Request $request, Response $response, array $args)
 	{
 		try
@@ -276,6 +321,12 @@ class GenericEntityApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * PUT /api/userfields/{entity}/{objectId} - sets the Userfield values of the given
+	 * object from the JSON request body (a key/value map).
+	 * Requires the MASTER_DATA_EDIT permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function SetUserfields(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_MASTER_DATA_EDIT);
@@ -298,26 +349,41 @@ class GenericEntityApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * Whether editing the given entity additionally requires the ADMIN permission (per OpenAPI spec enum).
+	 */
 	private function IsEntityWithEditRequiresAdmin($entity)
 	{
 		return in_array($entity, $this->GetOpenApispec()->components->schemas->ExposedEntityEditRequiresAdmin->enum);
 	}
 
+	/**
+	 * Whether the given entity is excluded from listing/reading (per OpenAPI spec enum).
+	 */
 	private function IsEntityWithNoListing($entity)
 	{
 		return in_array($entity, $this->GetOpenApispec()->components->schemas->ExposedEntityNoListing->enum);
 	}
 
+	/**
+	 * Whether the given entity cannot be created/edited through this API (per OpenAPI spec enum).
+	 */
 	private function IsEntityWithNoEdit($entity)
 	{
 		return in_array($entity, $this->GetOpenApispec()->components->schemas->ExposedEntityNoEdit->enum);
 	}
 
+	/**
+	 * Whether the given entity cannot be deleted through this API (per OpenAPI spec enum).
+	 */
 	private function IsEntityWithNoDelete($entity)
 	{
 		return in_array($entity, $this->GetOpenApispec()->components->schemas->ExposedEntityNoDelete->enum);
 	}
 
+	/**
+	 * Whether the given entity is exposed through this API at all (per OpenAPI spec enum).
+	 */
 	private function IsValidExposedEntity($entity)
 	{
 		return in_array($entity, $this->GetOpenApispec()->components->schemas->ExposedEntity->enum);

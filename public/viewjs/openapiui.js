@@ -1,4 +1,11 @@
-﻿function HideTopbarPlugin()
+﻿// View script for the interactive REST API documentation page (views/openapiui.blade.php):
+// boots Swagger UI against grocy's OpenAPI specification.
+
+/**
+ * Swagger UI plugin that hides the default top bar (URL input / explore bar).
+ * @returns {Object} Swagger UI plugin object replacing the Topbar component with nothing
+ */
+function HideTopbarPlugin()
 {
 	return {
 		components: {
@@ -7,6 +14,7 @@
 	}
 }
 
+// Swagger UI setup - Grocy.OpenApi.SpecUrl (provided by the Blade template) points to the served openapi.json
 const swaggerUi = SwaggerUIBundle({
 	url: Grocy.OpenApi.SpecUrl,
 	dom_id: '#swagger-ui',

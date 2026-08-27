@@ -4,8 +4,16 @@ namespace Grocy\Services;
 
 use LessQL\Result;
 
+/**
+ * Task list operations: listing open tasks and toggling their done state.
+ */
 class TasksService extends BaseService
 {
+	/**
+	 * All not-done tasks (tasks_current view), with each row enriched with an
+	 * assigned_to_user object (users_dto row) and a category object - either may be
+	 * null when unassigned/uncategorised.
+	 */
 	public function GetCurrent(): Result
 	{
 		$users = UsersService::GetInstance()->GetUsersAsDto();
@@ -36,6 +44,14 @@ class TasksService extends BaseService
 		return $tasks;
 	}
 
+	/**
+	 * Marks a task done at the given time.
+	 *
+	 * @param int $taskId
+	 * @param string $doneTime Timestamp "Y-m-d H:i:s"
+	 * @return bool Always true; a missing task throws instead
+	 * @throws \Exception When the task does not exist
+	 */
 	public function MarkTaskAsCompleted($taskId, $doneTime)
 	{
 		if (!$this->TaskExists($taskId))
@@ -52,6 +68,13 @@ class TasksService extends BaseService
 		return true;
 	}
 
+	/**
+	 * Reverts a task to not done, clearing its done timestamp.
+	 *
+	 * @param int $taskId
+	 * @return bool Always true; a missing task throws instead
+	 * @throws \Exception When the task does not exist
+	 */
 	public function UndoTask($taskId)
 	{
 		if (!$this->TaskExists($taskId))

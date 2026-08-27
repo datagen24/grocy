@@ -1,3 +1,9 @@
+// Powers the user permissions form (userpermissions.blade.php): a nested tree of
+// permission checkboxes (rendered recursively by the userpermission_select component,
+// one "permission-sub-{permission_name}" container per node) where checking a parent
+// permission implies and locks all its descendants.
+
+// Checking/unchecking any permission checkbox cascades to its descendant checkboxes
 $('input.permission-cb').click(
 	function()
 	{
@@ -5,6 +11,13 @@ $('input.permission-cb').click(
 	}
 );
 
+/**
+ * Forces every descendant permission checkbox under the given parent permission name to
+ * match (and, when checked, be disabled - since it's implied by the parent) the parent's
+ * checked state.
+ * @param {boolean} checked - the parent checkbox's new checked state
+ * @param {string} name - the parent permission's name, matching its "permission-sub-{name}" container
+ */
 function check_hierachy(checked, name)
 {
 	var disabled = checked;
@@ -13,6 +26,9 @@ function check_hierachy(checked, name)
 		.attr('disabled', disabled);
 }
 
+// Saves the effective permission set: only checkboxes that are checked AND not disabled
+// (i.e. explicitly checked, not merely implied by a checked ancestor) are sent, since
+// implied permissions are re-derived server-side from what's actually submitted
 $('#permission-save').click(
 	function()
 	{
@@ -38,6 +54,9 @@ $('#permission-save').click(
 	}
 );
 
+// Extra safety net when editing your own permissions: unchecking your own ADMIN
+// permission asks for confirmation and reverts the checkbox if declined, so you can't
+// accidentally lock yourself out
 if (Grocy.EditObjectId == Grocy.UserId)
 {
 	$('input.permission-cb[name=ADMIN]').click(function()

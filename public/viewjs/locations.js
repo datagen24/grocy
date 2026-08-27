@@ -1,4 +1,8 @@
-﻿var locationsTable = $('#locations-table').DataTable({
+﻿// View script for the locations list (views/locations.blade.php):
+// DataTables listing of all stock locations with search, delete and a "show disabled" filter.
+
+// DataTables setup - first column (row menu) is neither orderable nor searchable
+var locationsTable = $('#locations-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +12,7 @@
 $('#locations-table tbody').removeClass("d-none");
 locationsTable.columns.adjust().draw();
 
+// Debounced free text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +30,8 @@ $("#clear-filter-button").on("click", function()
 	locationsTable.search("").draw();
 });
 
+// Delete a location after confirmation (DELETE /api/objects/locations/{id});
+// the buttons carry data-location-id/-name from the Blade template
 $(document).on('click', '.location-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-location-name');
@@ -62,6 +69,7 @@ $(document).on('click', '.location-delete-button', function(e)
 	});
 });
 
+// "Show disabled" is filtered server side via the include_disabled URI param
 $("#show-disabled").change(function()
 {
 	if (this.checked)

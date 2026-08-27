@@ -1,3 +1,8 @@
+// Powers the shopping list view (shoppinglist.blade.php): renders/filters the active
+// shopping list, toggles item done-state, drives the "add to stock" workflow and printing.
+
+// Main shopping list table, grouped by product group (column 3) and pre-sorted by
+// the done-status column (fixed order) then by product name
 var shoppingListTable = $('#shoppinglist-table').DataTable({
 	'order': [[1, 'asc']],
 	"orderFixed": [[3, 'asc']],
@@ -21,6 +26,8 @@ var shoppingListTable = $('#shoppinglist-table').DataTable({
 $('#shoppinglist-table tbody').removeClass("d-none");
 shoppingListTable.columns.adjust().draw();
 
+// Hidden shadow table used only to produce a grouped/sorted print layout
+// (mirrors the visible table's data, grouped by product group)
 var shoppingListPrintShadowTable = $('#shopping-list-print-shadow-table').DataTable({
 	'order': [[0, 'asc']],
 	'orderFixed': [[2, 'asc']],
@@ -35,6 +42,7 @@ var shoppingListPrintShadowTable = $('#shopping-list-print-shadow-table').DataTa
 });
 shoppingListPrintShadowTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function ()
 {
 	var value = $(this).val();
@@ -46,6 +54,7 @@ $("#search").on("keyup", Delay(function ()
 	shoppingListTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Resets the search box and status filter dropdown
 $("#clear-filter-button").on("click", function ()
 {
 	$("#search").val("");
@@ -54,6 +63,8 @@ $("#clear-filter-button").on("click", function ()
 	$("#status-filter").trigger("change");
 });
 
+// Status filter dropdown ("all"/"below min stock amount"/"expired"/...); filters
+// the hidden status-info column (index 4) which encodes the item's status text
 $("#status-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -68,12 +79,14 @@ $("#status-filter").on("change", function ()
 	shoppingListTable.column(shoppingListTable.colReorder.transpose(4)).search(value).draw();
 });
 
+// Switching the shopping list dropdown navigates to that list (list id passed as query param)
 $("#selected-shopping-list").on("change", function ()
 {
 	var value = $(this).val();
 	window.location.href = U('/shoppinglist?list=' + value);
 });
 
+// Clicking a status message (e.g. "N items below min. stock amount") applies that status as the filter
 $(".status-filter-message").on("click", function ()
 {
 	var value = $(this).data("status-filter");
@@ -81,6 +94,8 @@ $(".status-filter-message").on("click", function ()
 	$("#status-filter").trigger("change");
 });
 
+// Deletes the currently selected shopping list itself (DELETE objects/shopping_lists/{id}),
+// after user confirmation, then redirects back to the (now default) shopping list
 $("#delete-selected-shopping-list").on("click", function ()
 {
 	var objectName = $("#selected-shopping-list option:selected").attr("data-shoppinglist-name");
@@ -118,6 +133,8 @@ $("#delete-selected-shopping-list").on("click", function ()
 	});
 });
 
+// Removes a single item from the list (DELETE objects/shopping_list/{id}), fades the row
+// out and refreshes the total value; delegated because rows are re-rendered/removed dynamically
 $(document).on('click', '.shoppinglist-delete-button', function (e)
 {
 	e.preventDefault();
@@ -143,6 +160,7 @@ $(document).on('click', '.shoppinglist-delete-button', function (e)
 	);
 });
 
+// Adds all products currently below their minimum stock amount to the selected list
 $(document).on('click', '#add-products-below-min-stock-amount', function (e)
 {
 	Grocy.Api.Post('stock/shoppinglist/add-missing-products', { "list_id": $("#selected-shopping-list").val() },
@@ -157,6 +175,7 @@ $(document).on('click', '#add-products-below-min-stock-amount', function (e)
 	);
 });
 
+// Adds overdue then expired products to the selected list (two sequential API calls)
 $(document).on('click', '#add-overdue-expired-products', function (e)
 {
 	Grocy.Api.Post('stock/shoppinglist/add-overdue-products', { "list_id": $("#selected-shopping-list").val() },
@@ -180,6 +199,7 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 	);
 });
 
+// Empties the selected shopping list entirely (all items removed), after confirmation
 $(document).on('click', '#clear-shopping-list', function (e)
 {
 	var confirmMessage = __t('Are you sure you want to empty shopping list "%s"?', $("#selected-shopping-list option:selected").text());
@@ -223,6 +243,7 @@ $(document).on('click', '#clear-shopping-list', function (e)
 	});
 });
 
+// Removes only the items already marked done (done_only flag) from the selected list
 $(document).on("click", "#clear-done-items", function (e)
 {
 	Grocy.Api.Post('stock/shoppinglist/clear', { "list_id": $("#selected-shopping-list").val(), "done_only": true },
@@ -237,6 +258,9 @@ $(document).on("click", "#clear-done-items", function (e)
 	);
 });
 
+// "Add to stock" workflow: opens the item's purchase form inside a modal iframe.
+// When used via #add-all-items-to-stock-button below, Grocy.ShoppingListToStockWorkflow*
+// tracks progress so items can be stepped through one after another
 $(document).on('click', '.shopping-list-stock-add-workflow-list-item-button', function (e)
 {
 	e.preventDefault();
@@ -259,10 +283,13 @@ $(document).on('click', '.shopping-list-stock-add-workflow-list-item-button', fu
 	}
 });
 
+// Global state for the "add all items to stock" bulk workflow (reset on modal close)
 Grocy.ShoppingListToStockWorkflowAll = false;
 Grocy.ShoppingListToStockWorkflowCount = 0;
 Grocy.ShoppingListToStockWorkflowCurrent = 0;
 Grocy.ShoppingListAddToStockButtonList = [];
+// Kicks off the bulk workflow by simulating a click on the first item's add-to-stock button;
+// subsequent items are triggered by the "Ready"/"AfterItemAdded" postMessage handler below
 $(document).on('click', '#add-all-items-to-stock-button', function (e)
 {
 	Grocy.ShoppingListToStockWorkflowAll = true;
@@ -273,6 +300,7 @@ $(document).on('click', '#add-all-items-to-stock-button', function (e)
 	$(".shopping-list-stock-add-workflow-list-item-button").first().click();
 });
 
+// Reset bulk-workflow state whenever the modal is closed (manually or after the last item)
 $("#shopping-list-stock-add-workflow-modal").on("hidden.bs.modal", function (e)
 {
 	Grocy.ShoppingListToStockWorkflowAll = false;
@@ -282,6 +310,10 @@ $("#shopping-list-stock-add-workflow-modal").on("hidden.bs.modal", function (e)
 	$("#shopping-list-stock-add-workflow-modal .modal-footer").addClass("d-none");
 })
 
+// Listens for postMessage events sent by the purchase form iframe:
+// "AfterItemAdded" -> removes the now-purchased item from the shopping list;
+// "Ready" -> either closes the modal (single-item mode) or advances to the next
+// item's button click (bulk mode), closing the modal once all items are done
 $(window).on("message", function (e)
 {
 	var data = e.originalEvent.data;
@@ -311,6 +343,7 @@ $(window).on("message", function (e)
 	}
 });
 
+// Skips the current item in the bulk workflow without purchasing it, by faking a "Ready" message
 $(document).on('click', '#shopping-list-stock-add-workflow-skip-button', function (e)
 {
 	e.preventDefault();
@@ -318,6 +351,8 @@ $(document).on('click', '#shopping-list-stock-add-workflow-skip-button', functio
 	window.postMessage(WindowMessageBag("Ready"), Grocy.BaseUrl);
 });
 
+// Toggles an item's done/undone state (checkbox-like button), updates the row styling
+// and status text in place, then re-sorts/re-filters the table without a full reload
 $(document).on('click', '.order-listitem-button', function (e)
 {
 	e.preventDefault();
@@ -365,6 +400,12 @@ $(document).on('click', '.order-listitem-button', function (e)
 	);
 });
 
+/**
+ * Recomputes the "total value" display after an item was removed/purchased, by summing
+ * last_price_total across the uihelper_shopping_list view for the selected list; also
+ * disables the "add all to stock" button once no purchasable items remain. Called once
+ * on load and after every item removal.
+ */
 function OnListItemRemoved()
 {
 	if ($(".shopping-list-stock-add-workflow-list-item-button").length === 0)
@@ -386,6 +427,9 @@ function OnListItemRemoved()
 }
 OnListItemRemoved();
 
+// Print workflow: builds a bootbox dialog with print options (persisted as user settings
+// via the .user-setting-control class), then either triggers window.print() with the
+// chosen layout, or calls the thermal-printer API endpoint if that feature flag is enabled
 $(document).on("click", "#print-shopping-list-button", function (e)
 {
 	var checkedPrintShowHeader = "";
@@ -488,6 +532,7 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 				// Delaying for one second so that the alert can be closed
 				setTimeout(function ()
 				{
+					// Server renders and sends the print job directly to the configured thermal printer
 					Grocy.Api.Get('print/shoppinglist/thermal?list=' + $("#selected-shopping-list").val() + '&printHeader=' + printHeader,
 						function (result)
 						{
@@ -570,6 +615,8 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 	});
 });
 
+// Shopping list description is edited via a Summernote rich-text editor; enables/disables
+// the save/clear buttons based on whether the content changed and/or is empty
 $("#description").on("summernote.change", function ()
 {
 	$("#save-description-button").removeClass("disabled");
@@ -584,6 +631,7 @@ $("#description").on("summernote.change", function ()
 	}
 });
 
+// Persists the description text to the shopping list object
 $(document).on("click", "#save-description-button", function (e)
 {
 	e.preventDefault();
@@ -600,6 +648,7 @@ $(document).on("click", "#save-description-button", function (e)
 	);
 });
 
+// Clears the description editor and immediately saves the (now empty) description
 $(document).on("click", "#clear-description-button", function (e)
 {
 	e.preventDefault();
@@ -611,6 +660,8 @@ $(document).on("click", "#clear-description-button", function (e)
 $("#description").trigger("summernote.change");
 $("#save-description-button").addClass("disabled");
 
+// Reacts to a "ShoppingListChanged" postMessage (e.g. sent by a stock booking iframe)
+// by reloading the page against the affected list
 $(window).on("message", function (e)
 {
 	var data = e.originalEvent.data;
@@ -621,6 +672,8 @@ $(window).on("message", function (e)
 	}
 });
 
+// Renders each item's barcode image (data-barcode attribute) client-side via bwip-js,
+// auto-detecting EAN-8/EAN-13/Code128 based on digit length
 var dummyCanvas = document.createElement("canvas");
 $("img.barcode").each(function ()
 {
@@ -647,6 +700,8 @@ $("img.barcode").each(function ()
 	img.attr("src", dummyCanvas.toDataURL("image/png"));
 });
 
+// On small screens or when stock tracking is disabled, the "stock" filter group
+// isn't shown, so drop the border that would otherwise separate it visually
 if ($(window).width() < 768 || !Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK)
 {
 	$("#filter-container").removeClass("border-bottom");

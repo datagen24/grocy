@@ -10,11 +10,27 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 use Slim\Routing\RouteContext;
 
+/**
+ * Base class for all authentication middlewares (the concrete class is selected
+ * via the GROCY_AUTH_CLASS setting). Handles the common flow: public routes
+ * (root/login), authentication-less modes (dev/demo/prerelease, embedded
+ * install, DISABLE_AUTH) and, otherwise, delegating to AuthenticateRequest().
+ * On success the GROCY_AUTHENTICATED / GROCY_USER_* constants are defined;
+ * on failure API routes get a 401 response and other routes a redirect to /login.
+ */
 abstract class BaseAuthMiddleware extends BaseMiddleware
 {
+	/** @var string|null Name of the currently matched route */
 	protected ?string $RouteName = null;
+
+	/** @var bool True when the request path starts with /api/ */
 	protected bool $IsApiRoute = false;
 
+	/**
+	 * Authenticates the request as described in the class docblock and
+	 * either passes it on to the next handler or short-circuits with a
+	 * 401 / login redirect response.
+	 */
 	public function __invoke(Request $request, RequestHandler $handler): Response
 	{
 		$routeContext = RouteContext::fromRequest($request);
@@ -90,6 +106,11 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 		}
 	}
 
+	/**
+	 * Sets the session cookie with the given session key on the client.
+	 *
+	 * @param string $sessionKey The session key as returned by SessionService::CreateSession()
+	 */
 	protected static function SetSessionCookie(string $sessionKey)
 	{
 		// Cookie never expires, session validity is up to SessionService
@@ -97,13 +118,17 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 	}
 
 	/**
-	 * @param array $postParams
+	 * Processes a login form submission and, on success, creates a session and sets the session cookie.
+	 *
+	 * @param array $postParams The POST parameters of the login form (username, password, stay_logged_in)
 	 * @return bool True/False if the provided credentials were valid
 	 * @throws \Exception Throws an \Exception if an error happened during credentials processing or if this authentication middlware doesn't provide credentials processing (e.g. handles this externally)
 	 */
 	abstract public static function ProcessLogin(array $postParams);
 
 	/**
+	 * Authenticates the given request (implementation-specific).
+	 *
 	 * @param Request $request
 	 * @return mixed|null the user row or null if the request is not authenticated
 	 * @throws \Exception Throws an \Exception if authentaction config is invalid

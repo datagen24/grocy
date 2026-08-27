@@ -8,8 +8,21 @@ use jucksearm\barcode\lib\DatamatrixFactory;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Shared helper for controllers that serve Grocycode (grocy's own barcode)
+ * images for their entities (products, stock entries, chores, batteries, recipes).
+ */
 trait GrocycodeTrait
 {
+	/**
+	 * Renders the given Grocycode as a PNG (DataMatrix when GROCY_GROCYCODE_TYPE is '2D',
+	 * otherwise Code 128) and writes it to the response.
+	 *
+	 * Query parameters: size (image size in pixels 2D / bar height 1D; renderer default when omitted)
+	 * and download (truthy value serves the PNG as a file attachment instead of inline).
+	 *
+	 * @return Response The response with PNG body and appropriate content headers
+	 */
 	public function ServeGrocycodeImage(Request $request, Response $response, Grocycode $grocycode)
 	{
 		$size = $request->getQueryParam('size', null);

@@ -6,6 +6,10 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
 
+/**
+ * Adds CORS headers (Access-Control-Allow-Origin: *) to every response
+ * and answers CORS preflight OPTIONS requests directly with 204.
+ */
 class CorsMiddleware extends BaseMiddleware
 {
 	public function __invoke(Request $request, RequestHandler $handler): Response

@@ -1,4 +1,7 @@
-﻿var tasksTable = $('#tasks-table').DataTable({
+﻿// Powers the tasks list view (tasks.blade.php): table listing with status/category/user
+// filters, marking tasks done/undone, deletion, the done-tasks toggle, and the due-today/
+// due-soon/overdue summary widgets.
+var tasksTable = $('#tasks-table').DataTable({
 	'order': [[2, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -9,6 +12,7 @@
 $('#tasks-table tbody').removeClass("d-none");
 tasksTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function ()
 {
 	var value = $(this).val();
@@ -20,6 +24,8 @@ $("#search").on("keyup", Delay(function ()
 	tasksTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Status filter dropdown (e.g. "due soon"/"overdue"), matched against the hidden
+// status-info column (index 5)
 $("#status-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -34,6 +40,9 @@ $("#status-filter").on("change", function ()
 	tasksTable.column(tasksTable.colReorder.transpose(5)).search(value).draw();
 });
 
+// Assigned-user filter, matched against the user column (index 4).
+// Note: the anchored-regex expression in the else-branch below is never assigned/used,
+// so it has no effect - the filter always ends up doing a plain (non-regex) substring search.
 $("#user-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -49,6 +58,7 @@ $("#user-filter").on("change", function ()
 	tasksTable.column(tasksTable.colReorder.transpose(4)).search(value, true, false).draw();
 });
 
+// Category filter, matched against the category column (index 3)
 $("#category-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -60,6 +70,7 @@ $("#category-filter").on("change", function ()
 	tasksTable.column(tasksTable.colReorder.transpose(3)).search(value).draw();
 });
 
+// Resets all filters (search/status/category/user)
 $("#clear-filter-button").on("click", function ()
 {
 	$("#search").val("");
@@ -72,6 +83,7 @@ $("#clear-filter-button").on("click", function ()
 	$("#show-done-tasks").trigger('checked', false);
 });
 
+// Clicking a summary widget (due today/due soon/overdue) applies that status as the filter
 $(".status-filter-message").on("click", function ()
 {
 	var value = $(this).data("status-filter");
@@ -79,6 +91,8 @@ $(".status-filter-message").on("click", function ()
 	$("#status-filter").trigger("change");
 });
 
+// Marks a task as completed (POST tasks/{id}/complete); either removes the row
+// (default, done tasks hidden) or strikes it through in place (when "show done" is on)
 $(document).on('click', '.do-task-button', function (e)
 {
 	e.preventDefault();
@@ -119,6 +133,8 @@ $(document).on('click', '.do-task-button', function (e)
 	);
 });
 
+// Reverts a completed task back to open (POST tasks/{id}/undo); reloads the whole page
+// since the row's markup needs to change back to its "open" form
 $(document).on('click', '.undo-task-button', function (e)
 {
 	e.preventDefault();
@@ -141,6 +157,7 @@ $(document).on('click', '.undo-task-button', function (e)
 	);
 });
 
+// Deletes a task (DELETE objects/tasks/{id}) after confirmation, fading the row out
 $(document).on('click', '.delete-task-button', function (e)
 {
 	e.preventDefault();
@@ -183,6 +200,7 @@ $(document).on('click', '.delete-task-button', function (e)
 	});
 });
 
+// Toggling "show done tasks" reloads the page with/without the include_done query param
 $("#show-done-tasks").change(function ()
 {
 	if (this.checked)
@@ -195,11 +213,17 @@ $("#show-done-tasks").change(function ()
 	}
 });
 
+// Reflect the current include_done state onto the checkbox on load
 if (GetUriParam('include_done'))
 {
 	$("#show-done-tasks").prop('checked', true);
 }
 
+/**
+ * Refreshes the due-today/due-soon/overdue summary widgets by fetching all tasks (GET
+ * tasks) and bucketing them by due_date relative to today and the configured "next X
+ * days" threshold. Called on load and after marking a task done.
+ */
 function RefreshStatistics()
 {
 	var nextXDays = $("#info-due-soon-tasks").data("next-x-days");

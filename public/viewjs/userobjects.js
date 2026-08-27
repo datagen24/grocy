@@ -1,4 +1,6 @@
-﻿var userobjectsTable = $('.userobjects-table').DataTable({
+﻿// Powers the userobjects list view (userobjects.blade.php): lists the records ("objects")
+// belonging to one custom user entity. Table listing, search filtering, deletion.
+var userobjectsTable = $('.userobjects-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +10,7 @@
 $('.userobjects-table tbody').removeClass("d-none");
 userobjectsTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +28,7 @@ $("#clear-filter-button").on("click", function()
 	userobjectsTable.search("").draw();
 });
 
+// Deletes a userobject (DELETE objects/userobjects/{id}) after confirmation
 $(document).on('click', '.userobject-delete-button', function(e)
 {
 	var objectId = $(e.currentTarget).attr('data-userobject-id');

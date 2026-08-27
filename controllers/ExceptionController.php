@@ -13,8 +13,16 @@ use Slim\Exception\HttpForbiddenException;
 use Slim\Exception\HttpNotFoundException;
 use Throwable;
 
+/**
+ * Slim custom error handler for the whole application: renders uncaught
+ * exceptions either as a JSON API error payload (for /api/* routes) or as an
+ * HTML error page (404/403/500) for regular view routes.
+ */
 class ExceptionController extends BaseApiController
 {
+	/**
+	 * @param ResponseFactoryInterface $responseFactory Factory used to create the fresh error response
+	 */
 	public function __construct(Container $container, ResponseFactoryInterface $responseFactory)
 	{
 		parent::__construct($container);
@@ -23,6 +31,16 @@ class ExceptionController extends BaseApiController
 
 	private $ResponseFactory;
 
+	/**
+	 * Handles the given exception (Slim error handler signature).
+	 *
+	 * For API routes a JSON body with error_message (plus stack trace details when
+	 * $displayErrorDetails is true) is returned; the HTTP status comes from the
+	 * exception for HttpExceptions, otherwise 500. For view routes the matching
+	 * error page (404, 403 or 500) is rendered.
+	 *
+	 * @return \Psr\Http\Message\ResponseInterface
+	 */
 	public function __invoke(ServerRequestInterface $request, Throwable $exception, bool $displayErrorDetails, bool $logErrors, bool $logErrorDetails, ?LoggerInterface $logger = null)
 	{
 		if (!defined('GROCY_LOCALE'))

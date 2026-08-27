@@ -1,9 +1,15 @@
-﻿var firstDay = null;
+﻿// View script for the calendar page (views/calendar.blade.php):
+// FullCalendar setup fed by the server-rendered fullcalendarEventSources global,
+// iCal sharing link retrieval via GET /api/calendar/ical/sharing-link and event color configuration modal
+
+// First day of week comes from the Grocy.CalendarFirstDayOfWeek user setting (empty = locale default)
+var firstDay = null;
 if (Grocy.CalendarFirstDayOfWeek)
 {
 	firstDay = Number.parseInt(Grocy.CalendarFirstDayOfWeek);
 }
 
+// FullCalendar setup; clicking an event navigates to its associated Grocy page (info.link)
 var calendar = $("#calendar").fullCalendar({
 	"themeSystem": "bootstrap4",
 	"header": {
@@ -24,6 +30,7 @@ var calendar = $("#calendar").fullCalendar({
 	"timeFormat": "HH:mm"
 });
 
+// Show the public iCal sharing URL (GET /api/calendar/ical/sharing-link) in a dialog including a QR code
 $("#ical-button").on("click", function(e)
 {
 	e.preventDefault();
@@ -59,6 +66,7 @@ $(window).one("resize", function()
 	}
 });
 
+// Event color configuration modal; reload the page on close so changed colors take effect
 $("#configure-colors-button").on("click", function(e)
 {
 	e.preventDefault();

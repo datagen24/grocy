@@ -2,12 +2,25 @@
 
 namespace Grocy\Helpers;
 
+/**
+ * Thrown when a GROCY_* configuration constant has an invalid value.
+ */
 class EInvalidConfig extends \Exception
 {
 }
 
+/**
+ * Validates the GROCY_* configuration constants (mode, database driver,
+ * locale, currency, entry page, week start days, auto night mode range)
+ * on application startup.
+ */
 class ConfigurationValidator
 {
+	/**
+	 * Runs all configuration checks.
+	 *
+	 * @throws EInvalidConfig On the first invalid configuration value found
+	 */
 	public function validateConfig()
 	{
 		self::checkMode();

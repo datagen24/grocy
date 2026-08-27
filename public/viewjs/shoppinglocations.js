@@ -1,3 +1,5 @@
+// Powers the shopping locations (stores) list view (shoppinglocations.blade.php):
+// table listing, search filtering, delete confirmation, and the disabled-items toggle.
 var locationsTable = $('#shoppinglocations-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
@@ -8,6 +10,7 @@ var locationsTable = $('#shoppinglocations-table').DataTable({
 $('#shoppinglocations-table tbody').removeClass("d-none");
 locationsTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +28,7 @@ $("#clear-filter-button").on("click", function()
 	locationsTable.search("").draw();
 });
 
+// Deletes a shopping location (DELETE objects/shopping_locations/{id}) after confirmation
 $(document).on('click', '.shoppinglocation-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-shoppinglocation-name');
@@ -62,6 +66,7 @@ $(document).on('click', '.shoppinglocation-delete-button', function(e)
 	});
 });
 
+// Toggling "show disabled" reloads the page with/without the include_disabled query param
 $("#show-disabled").change(function()
 {
 	if (this.checked)
@@ -74,6 +79,7 @@ $("#show-disabled").change(function()
 	}
 });
 
+// Reflect the current include_disabled state onto the checkbox on load
 if (GetUriParam('include_disabled'))
 {
 	$("#show-disabled").prop('checked', true);

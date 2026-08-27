@@ -9,10 +9,22 @@ use Grocy\Services\UserfieldsService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for the recipe and meal plan views (recipe overview,
+ * recipe/ingredient edit forms, meal plan calendar and meal plan sections).
+ * Recipe fulfillment/resolution logic is delegated to RecipesService.
+ */
 class RecipesController extends BaseController
 {
 	use GrocycodeTrait;
 
+	/**
+	 * Serves the meal plan calendar view (route GET /mealplan); builds fullcalendar
+	 * event objects from the meal plan entries around the requested week.
+	 *
+	 * Optional query parameters: start (ISO date the displayed week is based on;
+	 * default today) and days (int, days before/after start to load; default 6).
+	 */
 	public function MealPlan(Request $request, Response $response, array $args)
 	{
 		$start = date('Y-m-d');
@@ -80,6 +92,13 @@ class RecipesController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the recipes overview view (route GET /recipes) with the selected
+	 * recipe's resolved positions, sub recipes, total costs and calories.
+	 *
+	 * Query parameter recipe (id) selects a recipe; otherwise the first one
+	 * (by name) is preselected.
+	 */
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$recipes = $this->DB->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE');
@@ -158,6 +177,11 @@ class RecipesController extends BaseController
 		return $this->RenderPage($response, 'recipes', $viewData);
 	}
 
+	/**
+	 * Serves the recipe create/edit form (route GET /recipe/{recipeId}).
+	 *
+	 * @param array $args Route arguments; recipeId is either a recipe id or the literal 'new' for create mode
+	 */
 	public function RecipeEditForm(Request $request, Response $response, array $args)
 	{
 		$recipeId = $args['recipeId'];
@@ -175,6 +199,12 @@ class RecipesController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the recipe ingredient (position) create/edit form
+	 * (route GET /recipe/{recipeId}/pos/{recipePosId}).
+	 *
+	 * @param array $args Route arguments; recipePosId is either a position id or the literal 'new' for create mode
+	 */
 	public function RecipePosEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['recipePosId'] == 'new')
@@ -203,11 +233,19 @@ class RecipesController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the recipes settings view (route GET /recipessettings).
+	 */
 	public function RecipesSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'recipessettings');
 	}
 
+	/**
+	 * Serves the meal plan section create/edit form (route GET /mealplansection/{sectionId}).
+	 *
+	 * @param array $args Route arguments; sectionId is either a section id or the literal 'new' for create mode
+	 */
 	public function MealPlanSectionEditForm(Request $request, Response $response, array $args)
 	{
 		if ($args['sectionId'] == 'new')
@@ -225,6 +263,9 @@ class RecipesController extends BaseController
 		}
 	}
 
+	/**
+	 * Serves the meal plan sections list view (route GET /mealplansections).
+	 */
 	public function MealPlanSectionsList(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'mealplansections', [
@@ -232,6 +273,9 @@ class RecipesController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the Grocycode barcode PNG for a recipe (route GET /recipe/{recipeId}/grocycode).
+	 */
 	public function RecipeGrocycodeImage(Request $request, Response $response, array $args)
 	{
 		$gc = new Grocycode(Grocycode::RECIPE, $args['recipeId']);

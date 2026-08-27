@@ -15,8 +15,18 @@ use Grocy\Services\CalendarService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Serves the /api/calendar endpoints: iCal export of all grocy events
+ * (due products, chores, tasks, meal plan etc.) and the shareable link for it.
+ */
 class CalendarApiController extends BaseApiController
 {
+	/**
+	 * GET /api/calendar/ical - exports all events from CalendarService as an iCal file
+	 * (Content-Type text/calendar, served as attachment "Grocy.ics"); events without
+	 * a start are skipped, timed events are exported as zero-length occurrences.
+	 * Returns a 400 JSON error response on failure.
+	 */
 	public function Ical(Request $request, Response $response, array $args)
 	{
 		try
@@ -91,6 +101,11 @@ class CalendarApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/calendar/ical/sharing-link - returns { "url": string }, a link to the
+	 * iCal endpoint with an embedded special purpose API key ("secret" query parameter),
+	 * or a 400 error response on failure.
+	 */
 	public function IcalSharingLink(Request $request, Response $response, array $args)
 	{
 		try

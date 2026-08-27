@@ -4,8 +4,18 @@ namespace Grocy\Services;
 
 use Gumlet\ImageResize;
 
+/**
+ * Manages uploaded files (product pictures, equipment manuals, ...) below
+ * <data path>/storage, organized in per purpose group folders, including cached
+ * downscaled versions of images. In demo/prerelease mode the storage path gets a per
+ * demo instance suffix, mirroring the separate demo databases.
+ */
 class FilesService extends BaseService
 {
+	/**
+	 * Value of the "force_serve_as" request option: serve the file inline as a
+	 * picture instead of as a download.
+	 */
 	const FILE_SERVE_TYPE_PICTURE = 'picture';
 
 	public function __construct()
@@ -36,6 +46,17 @@ class FilesService extends BaseService
 
 	private $StoragePath;
 
+	/**
+	 * Returns the path of a downscaled copy of the given image, created on first use
+	 * and cached next to the original as "<name>__downscaledto<h>x<w>.<ext>".
+	 * Falls back to the original file when resizing fails.
+	 *
+	 * @param string $group Group folder name, e.g. "productpictures"
+	 * @param string $fileName
+	 * @param int|null $bestFitHeight Maximum height in pixels, or null for no height limit
+	 * @param int|null $bestFitWidth Maximum width in pixels, or null for no width limit
+	 * @return string Absolute path of the file to serve
+	 */
 	public function DownscaleImage($group, $fileName, $bestFitHeight = null, $bestFitWidth = null)
 	{
 		$filePath = $this->GetFilePath($group, $fileName);
@@ -75,6 +96,12 @@ class FilesService extends BaseService
 		return $filePathDownscaled;
 	}
 
+	/**
+	 * Deletes the given file; for images, also all of its cached "__downscaledto" copies.
+	 *
+	 * @param string $group Group folder name
+	 * @param string $fileName
+	 */
 	public function DeleteFile($group, $fileName)
 	{
 		$filePath = $this->GetFilePath($group, $fileName);
@@ -102,6 +129,14 @@ class FilesService extends BaseService
 		}
 	}
 
+	/**
+	 * Returns the absolute path for a file in the given group folder, creating the
+	 * folder when needed (the file itself may or may not exist).
+	 *
+	 * @param string $group Group folder name
+	 * @param string $fileName
+	 * @return string
+	 */
 	public function GetFilePath($group, $fileName)
 	{
 		$groupFolderPath = $this->StoragePath . '/' . $group;

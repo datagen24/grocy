@@ -61,6 +61,9 @@ abstract class DatabaseDialect
 	 */
 	abstract public function GetOptimizeStatement(): ?string;
 
+	/**
+	 * Quotes a single table or column name for safe interpolation into SQL.
+	 */
 	abstract public function QuoteIdentifier(string $name): string;
 
 	/**
@@ -79,6 +82,10 @@ abstract class DatabaseDialect
 	 */
 	abstract public function GetDbChangedTime(\PDO $pdo): string;
 
+	/**
+	 * Overwrites the changed time with an explicit value ("Y-m-d H:i:s" or anything
+	 * strtotime() accepts). Used to restore the previous value after bookkeeping writes.
+	 */
 	abstract public function SetDbChangedTime(\PDO $pdo, string $dateTime): void;
 
 	/**
@@ -141,6 +148,12 @@ abstract class DatabaseDialect
 		return preg_match('/\b(INSERT|UPDATE|DELETE|REPLACE|TRUNCATE)\b/i', $sql) === 1;
 	}
 
+	/**
+	 * Factory: picks the dialect matching the GROCY_DB_DRIVER setting
+	 * ("sqlite" when undefined). Called once per request by DatabaseService.
+	 *
+	 * @throws \Exception On an unsupported driver value
+	 */
 	public static function Create(): self
 	{
 		$driver = defined('GROCY_DB_DRIVER') ? strtolower(GROCY_DB_DRIVER) : 'sqlite';

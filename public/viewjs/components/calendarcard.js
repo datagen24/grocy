@@ -1,3 +1,6 @@
+// Implements the CalendarCard widget (views/components/calendarcard.blade.php): renders a plain
+// inline (non-input-bound) Tempus Dominus calendar into #calendar for at-a-glance date display.
+// No Grocy.Components.* public API - purely a self-initializing view widget.
 $('#calendar').datetimepicker(
 	{
 		format: 'L',
@@ -37,4 +40,5 @@ $('#calendar').datetimepicker(
 		}
 	});
 
+// Always shown inline (never hidden behind an input click)
 $('#calendar').datetimepicker('show');

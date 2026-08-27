@@ -8,8 +8,18 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Exception\HttpNotFoundException;
 use Slim\Psr7\Stream;
 
+/**
+ * Serves the /api/files endpoints for uploading, serving and deleting files
+ * (e.g. product or recipe pictures). The {group} route argument must be one of
+ * the FileGroups defined in the OpenAPI spec and the {fileName} route argument
+ * is expected to be BASE64 encoded.
+ */
 class FilesApiController extends BaseApiController
 {
+	/**
+	 * DELETE /api/files/{group}/{fileName} - deletes the given file.
+	 * Returns 204 on success or a 400 error response (invalid file group or filename).
+	 */
 	public function DeleteFile(Request $request, Response $response, array $args)
 	{
 		try
@@ -38,6 +48,14 @@ class FilesApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/files/{group}/{fileName} - streams the given file inline with its detected
+	 * MIME type and a 30 day Cache-Control header. {fileName} may also be two BASE64
+	 * encoded names joined by "_" (actual file name + download file name). Query
+	 * parameters force_serve_as=picture with optional best_fit_height/best_fit_width
+	 * serve a downscaled image variant. Any failure (including an invalid group or
+	 * filename) results in a 404 HttpNotFoundException.
+	 */
 	public function ServeFile(Request $request, Response $response, array $args)
 	{
 		try
@@ -79,6 +97,11 @@ class FilesApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * PUT /api/files/{group}/{fileName} - stores the raw request body as a new file,
+	 * written to disk in 1 MB chunks. Fails when the file already exists (exclusive
+	 * "xb" mode). Returns 204 on success or a 400 error response.
+	 */
 	public function UploadFile(Request $request, Response $response, array $args)
 	{
 		try
@@ -119,6 +142,9 @@ class FilesApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * BASE64 decodes $fileName and returns it; throws when the decoded name is not a valid filename.
+	 */
 	protected function CheckFileName(string $fileName)
 	{
 		if (IsValidFileName(base64_decode($fileName)))
@@ -133,6 +159,11 @@ class FilesApiController extends BaseApiController
 		return $fileName;
 	}
 
+	/**
+	 * Resolves the on-disk path for the given file; when the query parameters request
+	 * force_serve_as=picture, a downscaled variant honoring best_fit_height/best_fit_width
+	 * is created and its path returned instead.
+	 */
 	protected function GetFilePath(string $group, string $fileName, array $queryParams = [])
 	{
 		$forceServeAs = null;

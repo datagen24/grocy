@@ -1,4 +1,9 @@
-﻿$('#save-barcode-button').on('click', function(e)
+﻿// Powers the product barcode create/edit form (views/productbarcodeform.blade.php), embedded in a modal from the product edit form:
+// saves a barcode (with optional default amount/quantity unit/store/note) via the objects/product_barcodes API.
+
+// Form submit: POSTs objects/product_barcodes (create) or PUTs objects/product_barcodes/{id} (edit, id from Grocy.EditObjectId);
+// display_amount (the amount in the selected purchase unit) is sent as "amount", then the parent window is told to refresh and close the modal
+$('#save-barcode-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -55,6 +60,7 @@
 	}
 });
 
+// Live validation on the relevant inputs
 $('#barcode').on('keyup', function(e)
 {
 	Grocy.FrontendHelpers.ValidateForm('barcode-form');
@@ -70,6 +76,7 @@ $('#display_amount').on('keyup', function(e)
 	Grocy.FrontendHelpers.ValidateForm('barcode-form');
 });
 
+// Enter submits the form (when valid)
 $('#barcode-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -87,6 +94,8 @@ $('#barcode-form input').keydown(function(event)
 	}
 });
 
+// Initial setup: load the amount/quantity unit picker for the product this barcode belongs to
+// (Grocy.EditObjectProduct is provided by the template) and prefill amount/unit in edit mode
 Grocy.Components.ProductAmountPicker.Reload(Grocy.EditObjectProduct.id, Grocy.EditObjectProduct.qu_id_purchase);
 if (Grocy.EditMode == "edit")
 {
@@ -107,6 +116,7 @@ setTimeout(function()
 RefreshLocaleNumberInput();
 Grocy.Components.UserfieldsForm.Load()
 
+// Barcode scanner hook: when the camera scanner (Grocy.BarcodeScanned event) targets this form's field, fill it in
 $(document).on("Grocy.BarcodeScanned", function(e, barcode, target)
 {
 	if (target !== "#barcode")

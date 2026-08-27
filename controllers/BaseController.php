@@ -9,8 +9,19 @@ use Grocy\Services\DatabaseService;
 use Grocy\Services\LocalizationService;
 use Grocy\Services\UsersService;
 
+/**
+ * Base class for all non-API (view) controllers.
+ *
+ * Provides the shared DI container, the Blade view engine and the database
+ * connection, plus the Render()/RenderPage() helpers that populate the
+ * template variables common to every grocy page (localization, feature
+ * flags, permissions, URL builder etc.).
+ */
 class BaseController
 {
+	/**
+	 * Wires up the view engine and the LessQL database connection from the DI container.
+	 */
 	public function __construct(Container $container)
 	{
 		$this->AppContainer = $container;
@@ -18,10 +29,25 @@ class BaseController
 		$this->DB = DatabaseService::GetInstance()->GetDbConnection();
 	}
 
+	/** @var Container The application DI container */
 	protected $AppContainer;
+
+	/** @var \Grocy\Helpers\SlimBladeView The shared Blade view engine */
 	protected $View;
+
+	/** @var \LessQL\Database Fluent database connection (SQLite or PostgreSQL, depending on configuration) */
 	protected $DB;
 
+	/**
+	 * Renders the given view with the globally needed template variables set
+	 * (version, translation closures, text direction, URL builder, feature flags
+	 * and - when authenticated - the current user's permissions).
+	 *
+	 * @param \Psr\Http\Message\ResponseInterface $response
+	 * @param string $viewName Name of the view file (without extension) below the views folder
+	 * @param array $data Additional variables passed through to the view
+	 * @return \Psr\Http\Message\ResponseInterface
+	 */
 	protected function Render($response, $viewName, $data = [])
 	{
 		$container = $this->AppContainer;
@@ -92,6 +118,15 @@ class BaseController
 		return $this->View->Render($response, $viewName, $data);
 	}
 
+	/**
+	 * Renders a full page: additionally provides the sidebar userentities and the
+	 * current user's settings (null when not logged in), then delegates to Render().
+	 *
+	 * @param \Psr\Http\Message\ResponseInterface $response
+	 * @param string $viewName Name of the view file (without extension) below the views folder
+	 * @param array $data Additional variables passed through to the view
+	 * @return \Psr\Http\Message\ResponseInterface
+	 */
 	protected function RenderPage($response, $viewName, $data = [])
 	{
 		$this->View->set('userentitiesForSidebar', $this->DB->userentities()->where('show_in_sidebar_menu = 1')->orderBy('name'));

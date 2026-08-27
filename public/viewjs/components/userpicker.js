@@ -1,26 +1,34 @@
+// Implements the UserPicker widget (views/components/userpicker.blade.php): a combobox of
+// users, driven by a hidden #user_id select plus #user_id_text_input.
+// Public API: GetPicker/GetInputElement/GetValue/SetValue/SetId/Clear.
 Grocy.Components.UserPicker = {};
 
+/** @returns {jQuery} The hidden select backing the combobox (#user_id) */
 Grocy.Components.UserPicker.GetPicker = function ()
 {
 	return $('#user_id');
 }
 
+/** @returns {jQuery} The visible text input of the combobox (#user_id_text_input) */
 Grocy.Components.UserPicker.GetInputElement = function ()
 {
 	return $('#user_id_text_input');
 }
 
+/** @returns {string} The currently selected user id */
 Grocy.Components.UserPicker.GetValue = function ()
 {
 	return $('#user_id').val();
 }
 
+/** Sets the visible text and triggers change (does not itself resolve it to an option) */
 Grocy.Components.UserPicker.SetValue = function (value)
 {
 	Grocy.Components.UserPicker.GetInputElement().val(value);
 	Grocy.Components.UserPicker.GetInputElement().trigger('change');
 }
 
+/** Selects the option with the given user id directly, refreshing the combobox display */
 Grocy.Components.UserPicker.SetId = function (value)
 {
 	Grocy.Components.UserPicker.GetPicker().val(value);
@@ -28,6 +36,7 @@ Grocy.Components.UserPicker.SetId = function (value)
 	Grocy.Components.UserPicker.GetInputElement().trigger('change');
 }
 
+/** Clears both the text and the selected id */
 Grocy.Components.UserPicker.Clear = function ()
 {
 	Grocy.Components.UserPicker.SetValue('');
@@ -36,6 +45,8 @@ Grocy.Components.UserPicker.Clear = function ()
 
 $(".user-combobox").combobox(BootstrapComboboxDefaults);
 
+// Prefill by username (from the template's data-prefill-by-username attribute on the wrapper),
+// matched against additional-searchdata first, falling back to a name-contains match
 var prefillUser = Grocy.Components.UserPicker.GetPicker().parent().data('prefill-by-username').toString();
 if (typeof prefillUser !== "undefined")
 {
@@ -56,6 +67,7 @@ if (typeof prefillUser !== "undefined")
 	}
 }
 
+// Prefill by user id (from the template's data-prefill-by-user-id attribute on the wrapper)
 var prefillUserId = Grocy.Components.UserPicker.GetPicker().parent().data('prefill-by-user-id').toString();
 if (typeof prefillUserId !== "undefined")
 {

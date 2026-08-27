@@ -1,4 +1,14 @@
-﻿$('#save-transfer-button').on('click', function (e)
+﻿// Powers the "transfer stock" quick-entry view (transfer.blade.php): moves an amount of
+// a product's stock from one location to another (POST stock/products/{id}/transfer).
+// Can run standalone or "embedded" in a modal iframe opened from elsewhere (product page,
+// barcode scan, etc.), signalled by the "embedded" URI param.
+
+// Validates and submits the transfer. Fetches the product's details first (for the
+// success message and tare-weight handling), then posts the transfer; on success,
+// optionally links a scanned barcode to the product (barcode-scan flow), shows a toast
+// with an inline "Undo" link, and either notifies the parent window to close (embedded
+// mode) or resets the form in place for another transfer (standalone mode)
+$('#save-transfer-button').on('click', function (e)
 {
 	e.preventDefault();
 
@@ -37,6 +47,7 @@
 				{
 					bookingResponse = result;
 
+					// Barcode-scan flow: additionally link the scanned barcode to the selected product
 					if (GetUriParam("flow") === "InplaceAddBarcodeToExistingProduct")
 					{
 						var jsonDataBarcode = {};
@@ -59,6 +70,9 @@
 						);
 					}
 
+					// For tare-weight-handled products, the reported amount subtracts the tare
+					// weight from the entered value; the message text is otherwise identical
+					// to the else-branch below
 					if (productDetails.product.enable_tare_weight_handling == 1)
 					{
 						var successMessage = __t('Transfered %1$s of %2$s from %3$s to %4$s', Math.abs(jsonForm.amount - productDetails.product.tare_weight) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name, $('option:selected', "#location_id_from").text(), $('option:selected', "#location_id_to").text()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
@@ -80,6 +94,7 @@
 						toastr.success(successMessage);
 						Grocy.Components.ProductPicker.FinishFlow();
 
+						// Show an info toast when the transfer moved the product into or out of a freezer location
 						if ($("#location_id_from option:selected").attr("data-is-freezer") == 0 && $("#location_id_to option:selected").attr("data-is-freezer") == 1) // Frozen
 						{
 							toastr.info('<span>' + __t("Frozen") + "</span> <i class='fa-solid fa-snowflake'></i>");
@@ -94,6 +109,7 @@
 							toastr.info('<span>' + __t("Thawed") + "</span> <i class='fa-solid fa-fire-alt'></i>");
 						}
 
+						// Reset the whole form in place for another transfer (standalone mode only)
 						$("#specific_stock_entry").find("option").remove().end().append("<option></option>");
 						$("#specific_stock_entry").attr("disabled", "");
 						$("#specific_stock_entry").removeAttr("required");
@@ -133,6 +149,10 @@
 	);
 });
 
+// When a product is picked: resets dependent fields, refreshes the product card/amount
+// picker, rejects tare-weight-handled products (unsupported for transfer), rebuilds the
+// "from" location dropdown from the product's actual stock locations (defaulting to its
+// default location), and pre-fills fields from a matched barcode or Grocy-code if present
 Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 {
 	$("#specific_stock_entry").find("option").remove().end().append("<option></option>");
@@ -158,6 +178,7 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 				Grocy.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id);
 				Grocy.Components.ProductAmountPicker.SetQuantityUnit(productDetails.quantity_unit_stock.id);
 
+				// Tare-weight-handled products can't be transferred; reject the selection
 				if (productDetails.product.enable_tare_weight_handling == 1)
 				{
 					Grocy.Components.ProductPicker.GetPicker().parent().find(".invalid-feedback").text(__t('Products with tare weight enabled are currently not supported for transfer'));
@@ -165,6 +186,7 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 					return;
 				}
 
+				// Rebuild the "from" location dropdown from the product's actual stock locations
 				$("#location_id_from").find("option").remove().end().append("<option></option>");
 				Grocy.Api.Get("stock/products/" + productId + '/locations',
 					function (stockLocations)
@@ -211,6 +233,8 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 					}
 				);
 
+				// If the product was selected via a scanned barcode, pre-fill amount/QU from
+				// that barcode's configured defaults (product_barcodes_view)
 				if (document.getElementById("product_id").getAttribute("barcode") != "null")
 				{
 					Grocy.Api.Get('objects/product_barcodes_view?query[]=barcode=' + document.getElementById("product_id").getAttribute("barcode"),
@@ -246,7 +270,9 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 					);
 				}
 
-				// If a stock entry Grocycode was used, prefill location_from accordingly
+				// If a stock entry Grocycode was used, prefill location_from accordingly.
+				// A Grocy-code barcode has the form "grcy:p:<productId>:<stockId>" (4 parts);
+				// gc[3] is the specific stock entry's id
 				if ($("#product_id").data("grocycode"))
 				{
 					var gc = $("#product_id").attr("barcode").split(":");
@@ -293,11 +319,15 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 	}
 });
 
+// Initial default transfer amount, from user settings
 $('#display_amount').val(Grocy.UserSettings.stock_default_transfer_amount);
 $(".input-group-productamountpicker").trigger("change");
 Grocy.FrontendHelpers.ValidateForm('transfer-form');
 RefreshLocaleNumberInput();
 
+// When the "from" location changes: prevents picking the same location as "to" (hides it
+// in that dropdown), and rebuilds the specific-stock-entry dropdown plus the amount's max
+// from the stock entries actually present at that location
 $("#location_id_from").on('change', function (e)
 {
 	var locationId = $(e.target).val();
@@ -386,16 +416,19 @@ $("#location_id_from").on('change', function (e)
 	}
 });
 
+// Re-scale the amount's max when the quantity unit changes (converted via the QU's factor)
 $("#qu_id").on('change', function (e)
 {
 	$("#display_amount").attr("max", (Number.parseFloat($('#display_amount').attr("data-stock-amount")) * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Grocy.UserSettings.stock_decimal_places_amounts));
 });
 
+// Selects the amount field's content on focus for quick overtyping
 $('#display_amount').on('focus', function (e)
 {
 	$(this).select();
 });
 
+// Live-validates on every keystroke / select change
 $('#transfer-form input').keyup(function (event)
 {
 	Grocy.FrontendHelpers.ValidateForm('transfer-form');
@@ -406,6 +439,7 @@ $('#transfer-form select').change(function (event)
 	Grocy.FrontendHelpers.ValidateForm('transfer-form');
 });
 
+// Enter key submits the form (if valid) instead of doing a default form submit
 $('#transfer-form input').keydown(function (event)
 {
 	if (event.keyCode === 13) // Enter
@@ -423,6 +457,8 @@ $('#transfer-form input').keydown(function (event)
 	}
 });
 
+// When a specific stock entry is picked, cap the amount's max at that entry's amount;
+// when cleared ("Any"), fall back to the sum of all entries at the selected location
 $("#specific_stock_entry").on("change", function (e)
 {
 	if ($(e.target).val() == "")
@@ -456,6 +492,8 @@ $("#specific_stock_entry").on("change", function (e)
 	}
 });
 
+// Toggles whether a specific stock entry must be picked (vs. transferring from the
+// location's stock in general)
 $("#use_specific_stock_entry").on("change", function ()
 {
 	var value = $(this).is(":checked");
@@ -476,6 +514,13 @@ $("#use_specific_stock_entry").on("change", function ()
 	Grocy.FrontendHelpers.ValidateForm("transfer-form");
 });
 
+/**
+ * Undoes a single stock booking via stock/bookings/{id}/undo. Not currently invoked from
+ * this view (transfer's own "Undo" link uses UndoStockTransaction below, which undoes all
+ * bookings belonging to a transaction); kept here for parity with the sibling
+ * purchase/consume/inventory views that do use it.
+ * @param {number} bookingId
+ */
 function UndoStockBooking(bookingId)
 {
 	Grocy.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
@@ -490,6 +535,12 @@ function UndoStockBooking(bookingId)
 	);
 };
 
+/**
+ * Undoes an entire stock transaction (a transfer books two linked stock movements sharing
+ * one transaction id) via stock/transactions/{id}/undo. Invoked from the inline "Undo"
+ * link injected into the transfer success toast.
+ * @param {number} transactionId
+ */
 function UndoStockTransaction(transactionId)
 {
 	Grocy.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
@@ -504,6 +555,9 @@ function UndoStockTransaction(transactionId)
 	);
 };
 
+// Embedded-mode init: when opened with a preset location (e.g. from a location's stock
+// entries page), pre-select it and jump straight to specific-stock-entry mode; otherwise
+// just trigger the product picker's change handler to initialize dependent fields
 if (GetUriParam("embedded") !== undefined)
 {
 	var locationId = GetUriParam('locationId');

@@ -9,8 +9,17 @@ use Grocy\Services\UserfieldsService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Serves the OpenAPI documentation endpoints (/api and /api/openapi/specification)
+ * and the API key management pages (/manageapikeys) - a mix of API and view routes.
+ */
 class OpenApiController extends BaseApiController
 {
+	/**
+	 * GET /manageapikeys - renders the API key management page; non-admins only see
+	 * their own keys. The optional integer query parameter "key" preselects a key
+	 * (used to highlight a freshly created one).
+	 */
 	public function ApiKeysList(Request $request, Response $response, array $args)
 	{
 		$selectedKeyId = -1;
@@ -32,6 +41,10 @@ class OpenApiController extends BaseApiController
 		]);
 	}
 
+	/**
+	 * GET /manageapikeys/new - creates a new API key (optional "description" query
+	 * parameter) and redirects to /manageapikeys?key={newKeyId}.
+	 */
 	public function CreateNewApiKey(Request $request, Response $response, array $args)
 	{
 		$description = null;
@@ -45,6 +58,12 @@ class OpenApiController extends BaseApiController
 		return $response->withRedirect($this->AppContainer->get('UrlManager')->ConstructUrl("/manageapikeys?key=$newApiKeyId"));
 	}
 
+	/**
+	 * GET /api/openapi/specification - returns grocy.openapi.json enriched at runtime
+	 * with the installed version, the instance server URL and derived ExposedEntity_*
+	 * enum variants (including user entities and minus not editable/deletable/listable
+	 * entities) used by the Swagger UI.
+	 */
 	public function DocumentationSpec(Request $request, Response $response, array $args)
 	{
 		$spec = $this->GetOpenApispec();
@@ -107,6 +126,9 @@ class OpenApiController extends BaseApiController
 		return $this->ApiResponse($response, $spec);
 	}
 
+	/**
+	 * GET /api - renders the interactive API documentation UI (openapiui view).
+	 */
 	public function DocumentationUi(Request $request, Response $response, array $args)
 	{
 		return $this->Render($response, 'openapiui');

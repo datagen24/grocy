@@ -4,6 +4,11 @@ namespace Grocy\Services;
 
 use LessQL\Result;
 
+/**
+ * Recipe operations beyond plain CRUD: shopping list integration, consuming a recipe's
+ * ingredients from stock, and copying. The meal plan reuses recipes internally via the
+ * RECIPE_TYPE_MEALPLAN_* shadow types below.
+ */
 class RecipesService extends BaseService
 {
 	const RECIPE_TYPE_MEALPLAN_DAY = 'mealplan-day'; // A recipe per meal plan day => name = YYYY-MM-DD
@@ -11,6 +16,15 @@ class RecipesService extends BaseService
 	const RECIPE_TYPE_MEALPLAN_SHADOW = 'mealplan-shadow'; // A recipe per meal plan recipe (for separated stock fulfillment checking) => name = YYYY-MM-DD#<meal_plan.id>
 	const RECIPE_TYPE_NORMAL = 'normal'; // Normal / manually created recipes
 
+	/**
+	 * Puts every ingredient the stock cannot fulfill onto the (default) shopping list,
+	 * adding to an existing shopping list entry when the product already has one.
+	 * The ordered amount is the missing amount minus what is already on the list,
+	 * unless the recipe is flagged not_check_shoppinglist.
+	 *
+	 * @param int $recipeId
+	 * @param int[]|null $excludedProductIds Product ids to skip (null means none)
+	 */
 	public function AddNotFulfilledProductsToShoppingList($recipeId, $excludedProductIds = null)
 	{
 		$recipe = $this->DB->recipes($recipeId);
@@ -77,6 +91,16 @@ class RecipesService extends BaseService
 		}
 	}
 
+	/**
+	 * Consumes all of the recipe's ingredients from stock in one stock transaction
+	 * (capped at what is actually in stock; ingredients flagged "only check single unit
+	 * in stock" are skipped) and, when the recipe produces a product, books the produced
+	 * amount back in as self-production. For meal plan shadow recipes the produced
+	 * product and servings come from the original recipe / meal plan entry.
+	 *
+	 * @param int $recipeId
+	 * @throws \Exception When the recipe does not exist
+	 */
 	public function ConsumeRecipe($recipeId)
 	{
 		if (!$this->RecipeExists($recipeId))
@@ -131,12 +155,23 @@ class RecipesService extends BaseService
 		}
 	}
 
+	/**
+	 * All rows of the recipes_pos_resolved view (each recipe ingredient with its stock
+	 * fulfillment, missing amount and shopping list state) as plain objects.
+	 *
+	 * @return object[]
+	 */
 	public function GetRecipesPosResolved()
 	{
 		$sql = 'SELECT * FROM recipes_pos_resolved';
 		return DatabaseService::GetInstance()->ExecuteDbQuery($sql)->fetchAll(\PDO::FETCH_OBJ);
 	}
 
+	/**
+	 * The recipes_resolved view (per-recipe fulfillment summary), optionally filtered.
+	 *
+	 * @param string|null $customWhere Raw SQL WHERE fragment, or null for all rows
+	 */
 	public function GetRecipesResolved($customWhere = null): Result
 	{
 		if ($customWhere == null)
@@ -149,6 +184,14 @@ class RecipesService extends BaseService
 		}
 	}
 
+	/**
+	 * Duplicates a recipe including its ingredients and nested (included) recipes,
+	 * under a localised "Copy of ..." name.
+	 *
+	 * @param int $recipeId
+	 * @return string Id of the new recipe
+	 * @throws \Exception When the recipe does not exist
+	 */
 	public function CopyRecipe($recipeId)
 	{
 		if (!$this->RecipeExists($recipeId))

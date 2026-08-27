@@ -1,4 +1,20 @@
-﻿Grocy.Api = {};
+﻿// Grocy global object core: API wrapper (Grocy.Api), translation helpers (__t/__n),
+// generic frontend helpers (Grocy.FrontendHelpers), locale aware number/date display,
+// iframe modal / cross-window messaging and various global UI wiring.
+// Loaded on every page (after extensions.js) before the per-view script; the Grocy
+// object itself (BaseUrl, UserSettings, UserId, Mode, ...) is pre-populated inline
+// by views/layout/default.blade.php.
+
+// Thin XMLHttpRequest wrapper around the grocy REST API,
+// all apiFunction arguments are paths relative to /api (e.g. "stock/products/1")
+Grocy.Api = {};
+
+/**
+ * Executes a GET request against the grocy API.
+ * @param {string} apiFunction API path relative to /api, e.g. "system/db-changed-time"
+ * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+ * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ */
 Grocy.Api.Get = function (apiFunction, success, error)
 {
 	var xhr = new XMLHttpRequest();
@@ -36,6 +52,13 @@ Grocy.Api.Get = function (apiFunction, success, error)
 	xhr.send();
 };
 
+/**
+ * Executes a POST request (JSON body) against the grocy API.
+ * @param {string} apiFunction API path relative to /api
+ * @param {Object} jsonData Request body, sent as JSON
+ * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+ * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ */
 Grocy.Api.Post = function (apiFunction, jsonData, success, error)
 {
 	var xhr = new XMLHttpRequest();
@@ -74,6 +97,13 @@ Grocy.Api.Post = function (apiFunction, jsonData, success, error)
 	xhr.send(JSON.stringify(jsonData));
 };
 
+/**
+ * Executes a PUT request (JSON body) against the grocy API.
+ * @param {string} apiFunction API path relative to /api
+ * @param {Object} jsonData Request body, sent as JSON
+ * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+ * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ */
 Grocy.Api.Put = function (apiFunction, jsonData, success, error)
 {
 	var xhr = new XMLHttpRequest();
@@ -112,6 +142,13 @@ Grocy.Api.Put = function (apiFunction, jsonData, success, error)
 	xhr.send(JSON.stringify(jsonData));
 };
 
+/**
+ * Executes a DELETE request against the grocy API.
+ * @param {string} apiFunction API path relative to /api
+ * @param {Object} jsonData Request body, sent as JSON (usually {})
+ * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+ * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ */
 Grocy.Api.Delete = function (apiFunction, jsonData, success, error)
 {
 	var xhr = new XMLHttpRequest();
@@ -150,6 +187,14 @@ Grocy.Api.Delete = function (apiFunction, jsonData, success, error)
 	xhr.send(JSON.stringify(jsonData));
 };
 
+/**
+ * Uploads a file via PUT /api/files/{group}/{fileName} (raw octet-stream body).
+ * @param {Blob|File} file The file contents to upload
+ * @param {string} group File group (server side subfolder, e.g. "productpictures", "recipepictures")
+ * @param {string} fileName File name; is BASE64 encoded for the URL
+ * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+ * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ */
 Grocy.Api.UploadFile = function (file, group, fileName, success, error)
 {
 	var xhr = new XMLHttpRequest();
@@ -188,6 +233,13 @@ Grocy.Api.UploadFile = function (file, group, fileName, success, error)
 	xhr.send(file);
 };
 
+/**
+ * Deletes a file via DELETE /api/files/{group}/{fileName}.
+ * @param {string} fileName File name; is BASE64 encoded for the URL
+ * @param {string} group File group (server side subfolder)
+ * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+ * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ */
 Grocy.Api.DeleteFile = function (fileName, group, success, error)
 {
 	var xhr = new XMLHttpRequest();
@@ -226,13 +278,30 @@ Grocy.Api.DeleteFile = function (fileName, group, success, error)
 	xhr.send();
 };
 
+/**
+ * Turns a root relative path (e.g. "/api/stock" or "/css/grocy.css") into an
+ * absolute URL by prepending the configured base URL (Grocy.BaseUrl).
+ * @param {string} relativePath Path starting with "/"
+ * @returns {string} Absolute URL
+ */
 U = function (relativePath)
 {
 	return Grocy.BaseUrl.replace(/\/$/, '') + relativePath;
 }
 
+// Gettext style translators; the localization strings are provided inline by the layout
+// (TranslatorQu holds the separate quantity unit plural strings)
 Grocy.Translator = new window.translator.default(Grocy.LocalizationStrings);
 Grocy.TranslatorQu = new window.translator.default(Grocy.LocalizationStringsQu);
+
+/**
+ * Translates the given text into the current language,
+ * placeholders are filled in sprintf-style (e.g. __t("Removed %1$s of %2$s", amount, name)).
+ * In dev mode missing localizations are reported via POST /api/system/log-missing-localization.
+ * @param {string} text Source (English) text / localization key
+ * @param {...*} placeholderValues Values for sprintf placeholders in the translated text
+ * @returns {string} Translated text
+ */
 __t = function (text, ...placeholderValues)
 {
 	if (!text)
@@ -258,6 +327,15 @@ __t = function (text, ...placeholderValues)
 		return Grocy.Translator.__(text, ...placeholderValues);
 	}
 }
+/**
+ * Translates a singular/plural text based on the given number
+ * (the number itself is provided to the "%s"/"%d" placeholder, locale formatted).
+ * @param {number} number Amount deciding the plural form (absolute value is used)
+ * @param {string} singularForm Source singular text
+ * @param {string} pluralForm Source plural text (defaults to singularForm)
+ * @param {boolean} [isQu=false] Use the quantity unit translator (TranslatorQu) instead of the general one
+ * @returns {string} Translated text with the number filled in
+ */
 __n = function (number, singularForm, pluralForm, isQu = false)
 {
 	if (!singularForm)
@@ -291,6 +369,14 @@ __n = function (number, singularForm, pluralForm, isQu = false)
 	}
 }
 
+/**
+ * Renders all <time class="timeago" datetime="..."> elements below rootSelector
+ * as relative time ("x days ago" via moment.fromNow()), "Today", or the special
+ * labels "Never"/"Unknown" for the sentinel dates 2999-12-31 / 2888-12-31;
+ * for elements with class "timeago-date-only" the preceding element's text is
+ * truncated to the date part (first 10 characters, YYYY-MM-DD).
+ * @param {string} [rootSelector="#page-content"] Selector to limit the processed subtree
+ */
 RefreshContextualTimeago = function (rootSelector = "#page-content")
 {
 	$(rootSelector + " time.timeago").each(function ()
@@ -349,6 +435,7 @@ RefreshContextualTimeago = function (rootSelector = "#page-content")
 }
 RefreshContextualTimeago();
 
+// Global defaults for toastr notifications (used for all success/error toasts)
 toastr.options = {
 	toastClass: 'alert',
 	closeButton: true,

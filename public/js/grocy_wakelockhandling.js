@@ -1,7 +1,12 @@
-﻿Grocy.WakeLock = {};
-Grocy.WakeLock.NoSleepJsIntance = null;
-Grocy.WakeLock.InitDone = false;
+// Screen wake lock handling: keeps the device screen on via NoSleep.js,
+// either always (user setting "keep_screen_on") or only while a fullscreen-card
+// is displayed ("keep_screen_on_when_fullscreen_card"). Loaded on every page.
 
+Grocy.WakeLock = {};
+Grocy.WakeLock.NoSleepJsIntance = null; // Lazily created NoSleep.js instance
+Grocy.WakeLock.InitDone = false; // Whether the wake lock was already enabled once from a user gesture
+
+// Toggle wake lock live when the settings page checkbox changes
 $("#keep_screen_on").on("change", function()
 {
 	var value = $(this).is(":checked");
@@ -15,6 +20,7 @@ $("#keep_screen_on").on("change", function()
 	}
 });
 
+/** Enables the screen wake lock (creates the NoSleep.js instance on first use). */
 Grocy.WakeLock.Enable = function()
 {
 	if (Grocy.WakeLock.NoSleepJsIntance === null)
@@ -25,6 +31,7 @@ Grocy.WakeLock.Enable = function()
 	Grocy.WakeLock.InitDone = true;
 }
 
+/** Disables the screen wake lock (no-op when it was never enabled). */
 Grocy.WakeLock.Disable = function()
 {
 	if (Grocy.WakeLock.NoSleepJsIntance !== null)

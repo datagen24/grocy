@@ -1,4 +1,14 @@
-﻿function saveRecipePicture(result, location, jsonData)
+﻿// Powers the recipe create/edit form (views/recipeform.blade.php): saves the recipe (incl. picture upload) via the
+// objects/recipes API and manages the ingredient (recipes_pos) and included recipe (recipes_nestings) tables.
+
+/**
+ * Post-save step shared by create and edit: stores userfields, uploads the newly selected
+ * recipe picture (if any) to the "recipepictures" file group, then redirects to `location + recipeId`.
+ * @param {object} result API response of the recipe POST/PUT (used for created_object_id on create)
+ * @param {string} location Redirect base path ('/recipe/' or '/recipes?recipe=')
+ * @param {object} jsonData The serialized recipe form data (checked for picture_file_name)
+ */
+function saveRecipePicture(result, location, jsonData)
 {
 	var recipeId = Grocy.EditObjectId || result.created_object_id;
 	Grocy.EditObjectId = recipeId; // Grocy.EditObjectId is not yet set when adding a recipe
@@ -26,6 +36,9 @@
 	});
 }
 
+// Form submit: POSTs objects/recipes (create) or PUTs objects/recipes/{id} (edit, id from Grocy.EditObjectId);
+// a pending picture deletion (Grocy.DeleteRecipePictureOnSave) removes the old file from the "recipepictures" group first.
+// The save button's data-location attribute decides whether to return to the recipes list or stay on the recipe page
 $('.save-recipe').on('click', function(e)
 {
 	e.preventDefault();
@@ -79,6 +92,7 @@ $('.save-recipe').on('click', function(e)
 	);
 });
 
+// DataTables setup for the ingredients list, grouped by the hidden ingredient group column (4)
 var recipesPosTables = $('#recipes-pos-table').DataTable({
 	'order': [[1, 'asc']],
 	"orderFixed": [[4, 'asc']],
@@ -95,6 +109,7 @@ var recipesPosTables = $('#recipes-pos-table').DataTable({
 $('#recipes-pos-table tbody').removeClass("d-none");
 recipesPosTables.columns.adjust().draw();
 
+// DataTables setup for the included recipes list
 var recipesIncludesTables = $('#recipes-includes-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
@@ -111,11 +126,13 @@ setTimeout(function()
 	$("#name").focus();
 }, Grocy.FormFocusDelay);
 
+// Live validation while typing
 $('#recipe-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('recipe-form');
 });
 
+// Enter submits the form (when valid)
 $('#recipe-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -133,6 +150,7 @@ $('#recipe-form input').keydown(function(event)
 	}
 });
 
+// Delete an ingredient (expects data-recipe-pos-name / data-recipe-pos-id); confirms, then DELETEs objects/recipes_pos/{id}
 $(document).on('click', '.recipe-pos-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-recipe-pos-name');
@@ -170,6 +188,7 @@ $(document).on('click', '.recipe-pos-delete-button', function(e)
 	});
 });
 
+// Remove an included recipe (expects data-recipe-include-name / data-recipe-include-id); DELETEs objects/recipes_nestings/{id}
 $(document).on('click', '.recipe-include-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-recipe-include-name');
@@ -207,6 +226,7 @@ $(document).on('click', '.recipe-include-delete-button', function(e)
 	});
 });
 
+// Show an ingredient's note (from data-recipe-pos-note) in an alert dialog
 $(document).on('click', '.recipe-pos-show-note-button', function(e)
 {
 	var note = $(e.currentTarget).attr('data-recipe-pos-note');
@@ -214,6 +234,7 @@ $(document).on('click', '.recipe-pos-show-note-button', function(e)
 	bootbox.alert(note);
 });
 
+// Edit an ingredient: opens the recipe position form (/recipe/{id}/pos/{posId}) embedded in an iframe dialog
 $(document).on('click', '.recipe-pos-edit-button', function(e)
 {
 	e.preventDefault();
@@ -230,6 +251,8 @@ $(document).on('click', '.recipe-pos-edit-button', function(e)
 	});
 });
 
+// Edit an included recipe: saves the recipe form first (so unsaved edits survive the reload triggered later),
+// then opens the include modal prefilled from the row's data attributes
 $(document).on('click', '.recipe-include-edit-button', function(e)
 {
 	var id = $(e.currentTarget).attr('data-recipe-include-id');
@@ -254,6 +277,7 @@ $(document).on('click', '.recipe-include-edit-button', function(e)
 	);
 });
 
+// Add an ingredient: opens the recipe position form (/recipe/{id}/pos/new) embedded in an iframe dialog
 $("#recipe-pos-add-button").on("click", function(e)
 {
 	e.preventDefault();
@@ -267,6 +291,7 @@ $("#recipe-pos-add-button").on("click", function(e)
 	});
 });
 
+// Add an included recipe: saves the recipe form first, then opens the include modal in create mode
 $("#recipe-include-add-button").on("click", function(e)
 {
 	Grocy.Api.Put('objects/recipes/' + Grocy.EditObjectId, $('#recipe-form').serializeJSON(),
@@ -286,6 +311,8 @@ $("#recipe-include-add-button").on("click", function(e)
 	);
 });
 
+// Include modal submit: POSTs objects/recipes_nestings (create) or PUTs objects/recipes_nestings/{id} (edit,
+// id from the form's recipe-nesting-id data), then triggers the IngredientsChanged reload below
 $('#save-recipe-include-button').on('click', function(e)
 {
 	e.preventDefault();
@@ -336,6 +363,7 @@ $('#save-recipe-include-button').on('click', function(e)
 	}
 });
 
+// Picking a new picture cancels any pending picture deletion and updates the picture labels
 $("#recipe-picture").on("change", function(e)
 {
 	$("#recipe-picture-label").removeClass("d-none");
@@ -345,6 +373,7 @@ $("#recipe-picture").on("change", function(e)
 	Grocy.DeleteRecipePictureOnSave = false;
 });
 
+// Mark the current picture for deletion on the next save (actual file delete happens in the submit handler)
 Grocy.DeleteRecipePictureOnSave = false;
 $("#delete-current-recipe-picture-button").on("click", function(e)
 {
@@ -357,6 +386,8 @@ $("#delete-current-recipe-picture-button").on("click", function(e)
 
 Grocy.Components.UserfieldsForm.Load();
 
+// When ingredients or includes changed (posted by the embedded forms / handlers above),
+// save the recipe form and reload the recipe page to re-render the tables
 $(window).on("message", function(e)
 {
 	var data = e.originalEvent.data;
@@ -376,6 +407,8 @@ $(window).on("message", function(e)
 	}
 });
 
+// Grocycode label printing: fetches label data from recipes/{id}/printlabel and sends it to the
+// configured label printer webhook (Grocy.Webhooks.labelprinter)
 $(document).on('click', '.recipe-grocycode-label-print', function(e)
 {
 	e.preventDefault();

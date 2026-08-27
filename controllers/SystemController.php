@@ -8,8 +8,16 @@ use Grocy\Services\DemoDataGeneratorService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for application level pages: the root entry point
+ * (which also runs database schema migrations), the about page, the PWA
+ * manifest and the barcode scanner testing page.
+ */
 class SystemController extends BaseController
 {
+	/**
+	 * Serves the about view with version, system info and changelog (route GET /about).
+	 */
 	public function About(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'about', [
@@ -19,11 +27,19 @@ class SystemController extends BaseController
 		]);
 	}
 
+	/**
+	 * Serves the barcode scanner testing view (route GET /barcodescannertesting).
+	 */
 	public function BarcodeScannerTesting(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'barcodescannertesting');
 	}
 
+	/**
+	 * Handles the application root (route GET /): runs pending database schema
+	 * migrations, populates demo data in dev/demo/prerelease mode and redirects
+	 * to the configured entry page.
+	 */
 	public function Root(Request $request, Response $response, array $args)
 	{
 		// Schema migration is done here
@@ -39,6 +55,12 @@ class SystemController extends BaseController
 		return $response->withRedirect($this->AppContainer->get('UrlManager')->ConstructUrl($this->GetEntryPageRelative()));
 	}
 
+	/**
+	 * Serves the dynamic PWA web app manifest as JSON (route GET /manifest).
+	 *
+	 * Query parameter data is a base64 encoded '#'-separated pair of
+	 * app name suffix and start URL.
+	 */
 	public function Manifest(Request $request, Response $response, array $args)
 	{
 		$data = explode('#', base64_decode($request->getQueryParams()['data']));
@@ -61,6 +83,12 @@ class SystemController extends BaseController
 		return $response->withHeader('Content-Type', 'application/json');
 	}
 
+	/**
+	 * Resolves the relative URL of the configured entry page (GROCY_ENTRY_PAGE),
+	 * falling back to /about when the corresponding feature is disabled.
+	 *
+	 * @return string Relative URL, e.g. '/stockoverview'
+	 */
 	private function GetEntryPageRelative()
 	{
 		if (defined('GROCY_ENTRY_PAGE'))

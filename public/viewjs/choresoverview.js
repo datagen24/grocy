@@ -1,4 +1,6 @@
-﻿var choresOverviewTable = $('#chores-overview-table').DataTable({
+﻿// View script for choresoverview.blade.php - shows all chores with due dates in a DataTable,
+// supports quick tracking/skipping/rescheduling of a chore and rendering the "due" status stats.
+var choresOverviewTable = $('#chores-overview-table').DataTable({
 	'order': [[2, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -11,6 +13,7 @@
 $('#chores-overview-table tbody').removeClass("d-none");
 choresOverviewTable.columns.adjust().draw();
 
+// Free-text search, filtered client-side against the DataTable
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -22,6 +25,7 @@ $("#search").on("keyup", Delay(function()
 	choresOverviewTable.search(value).draw();
 }, Grocy.FormFocusDelay));
 
+// Status filter (overdue/due today/due soon/...) - filters the hidden status column (index 5)
 $("#status-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -36,6 +40,7 @@ $("#status-filter").on("change", function()
 	choresOverviewTable.column(choresOverviewTable.colReorder.transpose(5)).search(value).draw();
 });
 
+// "Assigned to" user filter - filters the hidden user column (index 6) and reflects it in the "user" URI param
 $("#user-filter").on("change", function()
 {
 	var value = $(this).val();
@@ -55,6 +60,7 @@ $("#user-filter").on("change", function()
 	}
 });
 
+// Resets search/status/user filters (and the "user" URI param)
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");
@@ -66,6 +72,7 @@ $("#clear-filter-button").on("click", function()
 	RemoveUriParam("user");
 });
 
+// Clicking a "due soon"/"overdue"/... info badge applies the matching status filter
 $(".status-filter-message").on("click", function()
 {
 	var value = $(this).data("status-filter");
@@ -73,6 +80,7 @@ $(".status-filter-message").on("click", function()
 	$("#status-filter").trigger("change");
 });
 
+// Clicking the "assigned to me" info badge applies the matching user filter
 $(".user-filter-message").on("click", function()
 {
 	var value = $(this).data("user-filter");
@@ -80,6 +88,10 @@ $(".user-filter-message").on("click", function()
 	$("#user-filter").trigger("change");
 });
 
+// Inline "track"/"skip" button on a chore row: determines the tracked time (now, or the chore's
+// next estimated execution time when tracking in the past / skipping), posts the execution via
+// GET chores/{id} + POST chores/{id}/execute, then updates the row's due-state styling and
+// timestamps in place instead of reloading the whole table.
 $(document).on('click', '.track-chore-button', function(e)
 {
 	e.preventDefault();
@@ -115,6 +127,7 @@ $(document).on('click', '.track-chore-button', function(e)
 			Grocy.Api.Post('chores/' + choreId + '/execute', { 'tracked_time': trackedTime, 'skipped': skipped },
 				function()
 				{
+					// Re-fetch the chore to get its newly calculated next execution time/assignee
 					Grocy.Api.Get('chores/' + choreId,
 						function(result)
 						{
@@ -176,7 +189,8 @@ $(document).on('click', '.track-chore-button', function(e)
 							toastr.success(__t('Tracked execution of chore %1$s on %2$s', choreName, trackedTime));
 							RefreshStatistics();
 
-							// Delay due to delayed/animated set of new timestamps above
+							// Delay due to delayed/animated set of new timestamps above; re-applies the
+							// status filters afterwards since the row's due-status column changed
 							setTimeout(function()
 							{
 								RefreshContextualTimeago("#chore-" + choreId + "-row");
@@ -208,6 +222,8 @@ $(document).on('click', '.track-chore-button', function(e)
 	);
 });
 
+// Fetches the Grocycode label data for a chore (GET chores/{id}/printlabel) and forwards it
+// to the configured label printer webhook, if any
 $(document).on('click', '.chore-grocycode-label-print', function(e)
 {
 	e.preventDefault();
@@ -222,6 +238,10 @@ $(document).on('click', '.chore-grocycode-label-print', function(e)
 	});
 });
 
+/**
+ * Recomputes the due-today/due-soon/overdue/assigned-to-me counters shown above the table
+ * by fetching all chores (GET chores) and re-evaluating their next_estimated_execution_time.
+ */
 function RefreshStatistics()
 {
 	var nextXDays = $("#info-due-soon-chores").data("next-x-days");
@@ -272,6 +292,8 @@ function RefreshStatistics()
 	);
 }
 
+// Opens the reschedule modal for a chore, prefilling the DateTimePicker and UserPicker
+// components with the chore's current (rescheduled or estimated) next execution
 $(document).on("click", ".reschedule-chore-button", function(e)
 {
 	e.preventDefault();
@@ -316,6 +338,8 @@ $(document).on("click", ".reschedule-chore-button", function(e)
 	});
 });
 
+// Saves the reschedule modal: persists rescheduled_date/rescheduled_next_execution_assigned_to_user_id
+// on the chore, then recalculates chore assignments and reloads the page
 $("#reschedule-chore-save-button").on("click", function(e)
 {
 	e.preventDefault();
@@ -346,6 +370,7 @@ $("#reschedule-chore-save-button").on("click", function(e)
 	);
 });
 
+// Clears a previously set reschedule on the chore, reverting to the normal schedule
 $("#reschedule-chore-clear-button").on("click", function(e)
 {
 	e.preventDefault();
@@ -371,6 +396,7 @@ $("#reschedule-chore-clear-button").on("click", function(e)
 	);
 });
 
+// Pre-select the user filter from the "user" URI param on initial page load
 if (GetUriParam("user") !== undefined)
 {
 	$("#user-filter").val("xx" + GetUriParam("user") + "xx");

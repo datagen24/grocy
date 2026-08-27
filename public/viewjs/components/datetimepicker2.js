@@ -1,15 +1,23 @@
+// Implements the DateTimePicker2 widget (views/components/datetimepicker2.blade.php): a second,
+// independently-scoped instance of the DateTimePicker widget (see datetimepicker.js for the
+// full behavior description), bound to ".datetimepicker2 input" instead - used on views that
+// need two date/time pickers on the same page (e.g. a date range) without id/class collisions.
+// Public API: GetInputElement/GetValue/SetValue/Clear/ChangeFormat/Init.
 Grocy.Components.DateTimePicker2 = {};
 
+/** @returns {jQuery} The picker's underlying date/time text input */
 Grocy.Components.DateTimePicker2.GetInputElement = function()
 {
 	return $('.datetimepicker2').find('input').not(".form-check-input");
 }
 
+/** @returns {string} The current input value, formatted per the input's configured "format" */
 Grocy.Components.DateTimePicker2.GetValue = function()
 {
 	return Grocy.Components.DateTimePicker2.GetInputElement().val();
 }
 
+/** Sets the input value directly and un-checks the shortcut checkbox if it no longer applies */
 Grocy.Components.DateTimePicker2.SetValue = function(value, inputElement = Grocy.Components.DateTimePicker2.GetInputElement())
 {
 	// "Click" the shortcut checkbox when the desired value is
@@ -23,6 +31,7 @@ Grocy.Components.DateTimePicker2.SetValue = function(value, inputElement = Grocy
 	inputElement.keyup();
 }
 
+/** Re-inits the underlying picker widget and empties the input/shortcut/timeago display */
 Grocy.Components.DateTimePicker2.Clear = function()
 {
 	Grocy.Components.DateTimePicker2.Init(true);
@@ -41,6 +50,7 @@ Grocy.Components.DateTimePicker2.Clear = function()
 	$('#datetimepicker2-timeago').text('');
 }
 
+/** Destroys and re-inits the picker with a new moment.js display/parse format (e.g. date-only vs date+time) */
 Grocy.Components.DateTimePicker2.ChangeFormat = function(format)
 {
 	$(".datetimepicker2").datetimepicker("destroy");
@@ -57,6 +67,8 @@ Grocy.Components.DateTimePicker2.ChangeFormat = function(format)
 	}
 }
 
+// Determine the initial date shown when opening the picker, from the template's
+// data-init-with-now / data-init-value attributes on the input
 var startDate = null;
 if (Grocy.Components.DateTimePicker2.GetInputElement().data('init-with-now') === true)
 {
@@ -67,12 +79,19 @@ if (Grocy.Components.DateTimePicker2.GetInputElement().data('init-value').length
 	startDate = moment(Grocy.Components.DateTimePicker2.GetInputElement().data('init-value')).format(Grocy.Components.DateTimePicker2.GetInputElement().data('format'));
 }
 
+// data-limit-end-to-now caps the calendar (and later validation) to not go beyond "now"
 var limitDate = moment('2999-12-31 23:59:59');
 if (Grocy.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') === true)
 {
 	limitDate = moment();
 }
 
+/**
+ * (Re-)initializes the Tempus Dominus widget on every ".datetimepicker2" input with the format/
+ * limits/icons configured via data attributes. Idempotent unless reInit is set, which first
+ * destroys any existing instance (used by ChangeFormat/Clear).
+ * @param {boolean} [reInit=false] Destroy an existing picker instance before initializing.
+ */
 Grocy.Components.DateTimePicker2.Init = function(reInit = false)
 {
 	if (reInit)
@@ -126,6 +145,8 @@ Grocy.Components.DateTimePicker2.Init = function(reInit = false)
 }
 Grocy.Components.DateTimePicker2.Init();
 
+// Core typed-shorthand handling: interprets special input values/arrow-key combos as relative
+// date edits, then re-validates the resulting value (required/limit-end-to-now/limit-start-to-now)
 Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 {
 	$('.datetimepicker2').datetimepicker('hide');
@@ -254,7 +275,8 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 	$('#datetimepicker2-timeago').attr("datetime", Grocy.Components.DateTimePicker2.GetValue());
 	RefreshContextualTimeago(".datetimepicker2-wrapper");
 
-	//Custom validation
+	// Custom validation: invalid/unparsable dates, and dates violating limit-end-to-now /
+	// limit-start-to-now are flagged via the input's native validity API
 	value = Grocy.Components.DateTimePicker2.GetValue();
 	dateObj = moment(value, format, true);
 	var element = Grocy.Components.DateTimePicker2.GetInputElement()[0];
@@ -280,6 +302,8 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 			element.setCustomValidity("");
 		}
 
+		// data-earlier-than-limit shows an informational (non-blocking) hint when the chosen
+		// date is earlier than a given reference date (e.g. a related field's value)
 		var earlierThanLimit = Grocy.Components.DateTimePicker2.GetInputElement().data("earlier-than-limit");
 		if (earlierThanLimit)
 		{
@@ -303,17 +327,20 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 	}
 });
 
+// Keeps the contextual "timeago" display in sync with manual edits
 Grocy.Components.DateTimePicker2.GetInputElement().on('input', function(e)
 {
 	$('#datetimepicker2-timeago').attr("datetime", Grocy.Components.DateTimePicker2.GetValue());
 	RefreshContextualTimeago(".datetimepicker2-wrapper");
 });
 
+// Calendar widget updated its value programmatically -> propagate to our own 'input' handling
 $('.datetimepicker2').on('update.datetimepicker', function(e)
 {
 	Grocy.Components.DateTimePicker2.GetInputElement().trigger('input');
 });
 
+// Calendar closed -> re-run all of our change handling (input/change/keypress/keyup) once more
 $('.datetimepicker2').on('hide.datetimepicker', function(e)
 {
 	Grocy.Components.DateTimePicker2.GetInputElement().trigger('input');
@@ -322,6 +349,8 @@ $('.datetimepicker2').on('hide.datetimepicker', function(e)
 	Grocy.Components.DateTimePicker2.GetInputElement().trigger('keyup');
 });
 
+// The "shortcut" checkbox snaps the picker to (and locks it at) a preconfigured value
+// (data-datetimepicker2-shortcut-value), e.g. "never expires"
 $("#datetimepicker2-shortcut").on("click", function()
 {
 	if (this.checked)

@@ -1,4 +1,13 @@
-﻿$('.save-task-button').on('click', function(e)
+﻿// Powers the task create/edit modal form (taskform.blade.php). Grocy.EditMode
+// ('create'/'edit') and Grocy.EditObjectId select POST vs PUT. Two submit buttons share
+// this handler: the regular save, and an "add another" variant (identified by the
+// "add-another" class) that re-opens a fresh create form instead of closing.
+
+// Validates and submits the form (renaming the picked user_id field to assigned_to_user_id
+// as expected by the API, and reading the due date from the date picker component),
+// saves userfields, then either postMessages the parent (embedded mode) to reload, or
+// navigates back to the tasks list / a new task form
+$('.save-task-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -86,11 +95,13 @@
 	}
 });
 
+// Live-validates on every keystroke
 $('#task-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('task-form');
 });
 
+// Enter key submits the form (if valid) instead of doing a default form submit
 $('#task-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -108,6 +119,7 @@ $('#task-form input').keydown(function(event)
 	}
 });
 
+// Initial setup: load userfields, focus the name field, re-validate the due date, run initial validation
 Grocy.Components.UserfieldsForm.Load();
 setTimeout(function()
 {

@@ -8,6 +8,13 @@ use LessQL\Result;
 use Psr\Http\Message\ResponseInterface as Response;
 use Slim\Exception\HttpException;
 
+/**
+ * Base class for all REST API controllers (everything below /api).
+ *
+ * Provides the JSON response helpers, the generic filtering/pagination/ordering
+ * applied to list endpoints (query/limit/offset/order query parameters) and the
+ * HTMLPurifier-based request body parsing/sanitization.
+ */
 class BaseApiController extends BaseController
 {
 	const PATTERN_FIELD = '[A-Za-z_][A-Za-z0-9_]+';
@@ -16,6 +23,9 @@ class BaseApiController extends BaseController
 
 	protected $OpenApiSpec = null;
 
+	/**
+	 * Writes $data JSON-encoded to the response body; with $cache = true a 30 day Cache-Control header is added.
+	 */
 	protected function ApiResponse(Response $response, $data, $cache = false)
 	{
 		if ($cache)
@@ -27,11 +37,17 @@ class BaseApiController extends BaseController
 		return $response;
 	}
 
+	/**
+	 * Returns a bodyless response with the given status code (default 204 No Content).
+	 */
 	protected function EmptyApiResponse(Response $response, $status = 204)
 	{
 		return $response->withStatus($status);
 	}
 
+	/**
+	 * Returns a JSON error body of the shape { "error_message": string } with the given status code (default 400).
+	 */
 	protected function GenericErrorResponse(Response $response, $errorMessage, $status = 400)
 	{
 		$response = $response->withStatus($status);
@@ -41,12 +57,20 @@ class BaseApiController extends BaseController
 		]);
 	}
 
+	/**
+	 * Applies the generic list query parameters (see QueryData) to $data and returns the result JSON-encoded.
+	 */
 	public function FilteredApiResponse(Response $response, Result $data, array $query)
 	{
 		$data = $this->QueryData($data, $query);
 		return $this->ApiResponse($response, $data);
 	}
 
+	/**
+	 * Applies the generic list query parameters to a LessQL result:
+	 * query[] (filter conditions, see FilterData), limit/offset (pagination)
+	 * and order ("field" or "field:asc|desc"; throws on any other sort order).
+	 */
 	protected function QueryData(Result $data, array $query)
 	{
 		if (isset($query['query']))
@@ -86,6 +110,12 @@ class BaseApiController extends BaseController
 		return $data;
 	}
 
+	/**
+	 * Applies each query[] filter condition of the form "<field><operator><value>"
+	 * (operators =, !=, ~, !~, <, >, <=, >= and § for regex matching; the value
+	 * "null" additionally matches SQL NULL) as a WHERE clause to $data.
+	 * Throws when a condition does not match the expected pattern.
+	 */
 	protected function FilterData(Result $data, array $query): Result
 	{
 		foreach ($query as $q)
@@ -147,6 +177,9 @@ class BaseApiController extends BaseController
 		return $data;
 	}
 
+	/**
+	 * Lazily loads and returns grocy.openapi.json as an object (also used for entity/file group validation).
+	 */
 	protected function GetOpenApispec()
 	{
 		if ($this->OpenApiSpec == null)
@@ -158,6 +191,12 @@ class BaseApiController extends BaseController
 	}
 
 	private static $htmlPurifierInstance = null;
+	/**
+	 * Returns the parsed JSON request body with all scalar string values run through HTMLPurifier.
+	 * Throws a Slim HttpException (status 400) when the Content-Type is not application/json.
+	 *
+	 * @return array|null Null when the body could not be parsed as JSON
+	 */
 	protected function GetParsedAndFilteredRequestBody($request)
 	{
 		if ($request->getHeaderLine('Content-Type') != 'application/json')

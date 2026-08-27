@@ -1,4 +1,10 @@
-﻿$('#save-location-button').on('click', function(e)
+﻿// View script for the location create/edit form (views/locationform.blade.php):
+// saves a location via the objects/locations API endpoints, incl. userfields.
+
+// Form submit: POST /api/objects/locations on create or PUT /api/objects/locations/{id} on edit
+// (mode/id from Grocy.EditMode / Grocy.EditObjectId); when the form runs embedded in a dialog
+// iframe (?embedded), the parent window is told to reload instead of navigating
+$('#save-location-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -66,6 +72,7 @@
 	}
 });
 
+// Live-validate on any input; Enter submits the form when valid
 $('#location-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('location-form');
@@ -88,6 +95,7 @@ $('#location-form input').keydown(function(event)
 	}
 });
 
+// Initial state: load userfield values, validate once and focus the name field
 Grocy.Components.UserfieldsForm.Load();
 Grocy.FrontendHelpers.ValidateForm('location-form');
 setTimeout(function()

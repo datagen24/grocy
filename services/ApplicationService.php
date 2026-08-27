@@ -2,10 +2,20 @@
 
 namespace Grocy\Services;
 
+/**
+ * Provides application level metadata: version information, the changelog and
+ * system/time diagnostics.
+ */
 class ApplicationService extends BaseService
 {
 	private $InstalledVersion;
 
+	/**
+	 * Parses the changelog/*.md files (named "<release number>_<version>_<release date>.md")
+	 * into a list sorted by newest release first.
+	 *
+	 * @return array {changelog_items: array{version: string, release_date: string, body: string, release_number: int}[], newest_release_number: int}
+	 */
 	public function GetChangelog()
 	{
 		$changelogItems = [];
@@ -49,6 +59,11 @@ class ApplicationService extends BaseService
 		];
 	}
 
+	/**
+	 * Returns the contents of version.json (Version, ReleaseDate), cached per instance.
+	 *
+	 * @return object
+	 */
 	public function GetInstalledVersion()
 	{
 		if ($this->InstalledVersion == null)
@@ -59,6 +74,11 @@ class ApplicationService extends BaseService
 		return $this->InstalledVersion;
 	}
 
+	/**
+	 * Collects environment information for the "About" dialog / system info API endpoint.
+	 *
+	 * @return array {grocy_version: object, php_version: string, sqlite_version: string, db_version: int, os: string, client: string}
+	 */
 	public function GetSystemInfo()
 	{
 		$pdo = new \PDO('sqlite::memory:');
@@ -75,6 +95,9 @@ class ApplicationService extends BaseService
 		];
 	}
 
+	/**
+	 * Formats a Unix timestamp as "Y-m-d H:i:s" in UTC.
+	 */
 	private static function convertToUtc(int $timestamp): string
 	{
 		$dt = new \DateTime('now', new \DateTimeZone('UTC'));
@@ -82,6 +105,10 @@ class ApplicationService extends BaseService
 		return $dt->format('Y-m-d H:i:s');
 	}
 
+	/**
+	 * The current local time as SQLite itself computes it (shifted by $offset seconds),
+	 * so clock skew between PHP and SQLite can be diagnosed.
+	 */
 	private static function getSqliteLocaltime(int $offset): string
 	{
 		$pdo = new \PDO('sqlite::memory:');
@@ -95,6 +122,13 @@ class ApplicationService extends BaseService
 		}
 	}
 
+	/**
+	 * Returns the current server time from several perspectives (PHP local, UTC, SQLite),
+	 * optionally shifted by $offset seconds.
+	 *
+	 * @param int $offset Shift in seconds relative to now
+	 * @return array {timezone: string, time_local: string, time_local_sqlite3: string, time_utc: string, timestamp: int, offset: int}
+	 */
 	public function GetSystemTime(int $offset = 0): array
 	{
 		$timestamp = time() + $offset;

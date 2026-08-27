@@ -10,8 +10,21 @@ use Grocy\Services\StockService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Serves the /api/stock endpoints: current/volatile stock, stock entries,
+ * bookings/transactions with undo, product details and price history, the
+ * purchase/consume/transfer/inventory/open flows (also by barcode via
+ * /api/stock/products/by-barcode/...), shopping list operations
+ * (/api/stock/shoppinglist/...) and label printing.
+ */
 class StockApiController extends BaseApiController
 {
+	/**
+	 * POST /api/stock/shoppinglist/add-missing-products - adds all products below their
+	 * minimum stock amount to the shopping list given by the numeric body field list_id
+	 * (default 1). Requires the SHOPPINGLIST_ITEMS_ADD permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function AddMissingProductsToShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
@@ -36,6 +49,12 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/shoppinglist/add-overdue-products - adds all overdue products to
+	 * the shopping list given by the numeric body field list_id (default 1).
+	 * Requires the SHOPPINGLIST_ITEMS_ADD permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function AddOverdueProductsToShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
@@ -59,6 +78,12 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/shoppinglist/add-expired-products - adds all expired products to
+	 * the shopping list given by the numeric body field list_id (default 1).
+	 * Requires the SHOPPINGLIST_ITEMS_ADD permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function AddExpiredProductsToShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
@@ -82,6 +107,14 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/{productId}/add - adds the given amount of a product to
+	 * stock (a purchase). Requires the STOCK_PURCHASE permission (403 otherwise).
+	 * Body fields: amount (required), best_before_date (ISO date), purchased_date
+	 * (ISO date, default today), price, location_id, shopping_location_id,
+	 * transaction_type (default "purchase"), stock_label_type (default 0) and note.
+	 * Returns the stock_log rows of the resulting transaction (200) or a 400 error response.
+	 */
 	public function AddProduct(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_PURCHASE);
@@ -159,6 +192,11 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/by-barcode/{barcode}/add - resolves the barcode to a
+	 * product id and delegates to AddProduct (same body fields/responses);
+	 * 400 error response when the barcode is unknown.
+	 */
 	public function AddProductByBarcode(Request $request, Response $response, array $args)
 	{
 		try
@@ -172,6 +210,13 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/shoppinglist/add-product - adds a product to a shopping list.
+	 * Body fields: product_id (required, numeric), product_amount (default 1),
+	 * qu_id (quantity unit id, default -1), note and list_id (default 1).
+	 * Requires the SHOPPINGLIST_ITEMS_ADD permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response (e.g. missing product id).
+	 */
 	public function AddProductToShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
@@ -225,6 +270,13 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/shoppinglist/clear - removes all items (or only the done ones,
+	 * when the boolean body field done_only is true) from the shopping list given by
+	 * the numeric body field list_id (default 1).
+	 * Requires the SHOPPINGLIST_ITEMS_DELETE permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function ClearShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_DELETE);
@@ -254,6 +306,16 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/{productId}/consume - consumes the given amount of a
+	 * product from stock. Requires the STOCK_CONSUME permission (403 otherwise).
+	 * Body fields: amount (required), spoiled, stock_entry_id (consume a specific
+	 * entry), location_id, recipe_id, exact_amount and allow_subproduct_substitution;
+	 * transaction_type defaults to "consume" (note: the override is only picked up
+	 * from a body field spelled "transactiontype" while the presence check looks at
+	 * "transaction_type", so both must be sent to take effect).
+	 * Returns the stock_log rows of the resulting transaction (200) or a 400 error response.
+	 */
 	public function ConsumeProduct(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_CONSUME);
@@ -325,6 +387,12 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/by-barcode/{barcode}/consume - resolves the barcode to a
+	 * product id and delegates to ConsumeProduct; when the barcode is a Grocycode
+	 * carrying a stock entry id, that id is injected as the stock_entry_id body field.
+	 * 400 error response when the barcode is unknown.
+	 */
 	public function ConsumeProductByBarcode(Request $request, Response $response, array $args)
 	{
 		try
@@ -350,11 +418,19 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock - returns all products currently in stock with their amounts (200).
+	 */
 	public function CurrentStock(Request $request, Response $response, array $args)
 	{
 		return $this->ApiResponse($response, StockService::GetInstance()->GetCurrentStock());
 	}
 
+	/**
+	 * GET /api/stock/volatile - returns { "due_products": [], "overdue_products": [],
+	 * "expired_products": [], "missing_products": [] }; the numeric query parameter
+	 * due_soon_days (default 5) controls the "due soon" horizon.
+	 */
 	public function CurrentVolatileStock(Request $request, Response $response, array $args)
 	{
 		$nextXDays = 5;
@@ -376,6 +452,14 @@ class StockApiController extends BaseApiController
 		]);
 	}
 
+	/**
+	 * PUT /api/stock/entry/{entryId} - edits a single stock entry.
+	 * Requires the STOCK_EDIT permission (403 otherwise).
+	 * Body fields: amount (required), open and purchased_date (both read
+	 * unconditionally), best_before_date (ISO date), price, location_id,
+	 * shopping_location_id and note.
+	 * Returns the stock_log rows of the resulting transaction (200) or a 400 error response.
+	 */
 	public function EditStockEntry(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_EDIT);
@@ -434,6 +518,12 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/barcodes/external-lookup/{barcode} - looks up the barcode via the
+	 * configured external barcode lookup plugin; with query parameter add=true the
+	 * found product is also created. Requires the MASTER_DATA_EDIT permission (403
+	 * otherwise). Returns the lookup result (200) or a 400 error response.
+	 */
 	public function ExternalBarcodeLookup(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_MASTER_DATA_EDIT);
@@ -454,6 +544,15 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/{productId}/inventory - sets the stock amount of a
+	 * product to a new absolute value (inventory correction booking).
+	 * Requires the STOCK_INVENTORY permission (403 otherwise).
+	 * Body fields: new_amount (required), best_before_date (ISO date), purchased_date
+	 * (ISO date), location_id, price, shopping_location_id, stock_label_type (default 0)
+	 * and note.
+	 * Returns the stock_log rows of the resulting transaction (200) or a 400 error response.
+	 */
 	public function InventoryProduct(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_INVENTORY);
@@ -524,6 +623,11 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/by-barcode/{barcode}/inventory - resolves the barcode to
+	 * a product id and delegates to InventoryProduct (same body fields/responses);
+	 * 400 error response when the barcode is unknown.
+	 */
 	public function InventoryProductByBarcode(Request $request, Response $response, array $args)
 	{
 		try
@@ -537,6 +641,13 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/{productId}/open - marks the given amount of a product
+	 * as opened. Requires the STOCK_OPEN permission (403 otherwise).
+	 * Body fields: amount (required), stock_entry_id (open a specific entry) and
+	 * allow_subproduct_substitution.
+	 * Returns the stock_log rows of the resulting transaction (200) or a 400 error response.
+	 */
 	public function OpenProduct(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_OPEN);
@@ -578,6 +689,12 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/by-barcode/{barcode}/open - resolves the barcode to a
+	 * product id and delegates to OpenProduct; when the barcode is a Grocycode carrying
+	 * a stock entry id, that id is injected as the stock_entry_id body field.
+	 * 400 error response when the barcode is unknown.
+	 */
 	public function OpenProductByBarcode(Request $request, Response $response, array $args)
 	{
 		try
@@ -603,6 +720,11 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/products/{productId} - returns aggregated stock details for a
+	 * product (product master data, current stock amount/value, best before/next due
+	 * date, average price/shelf life etc.). Returns 200 or a 400 error response.
+	 */
 	public function ProductDetails(Request $request, Response $response, array $args)
 	{
 		try
@@ -615,6 +737,11 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/products/by-barcode/{barcode} - resolves the barcode to a
+	 * product id and delegates to ProductDetails; 400 error response when the
+	 * barcode is unknown.
+	 */
 	public function ProductDetailsByBarcode(Request $request, Response $response, array $args)
 	{
 		try
@@ -628,6 +755,11 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/products/{productId}/price-history - returns the price history
+	 * of a product (one row per stock_log entry that carries a price), oldest first.
+	 * Returns 200 or a 400 error response.
+	 */
 	public function ProductPriceHistory(Request $request, Response $response, array $args)
 	{
 		try
@@ -640,6 +772,12 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/products/{productId}/entries - returns the individual (non-opened)
+	 * stock entries of a product; the boolean query parameter include_sub_products
+	 * (default false) also includes stock entries of sub products. Supports the
+	 * generic list filtering/sorting/pagination query parameters. Returns 200.
+	 */
 	public function ProductStockEntries(Request $request, Response $response, array $args)
 	{
 		$allowSubproductSubstitution = false;
@@ -651,11 +789,23 @@ class StockApiController extends BaseApiController
 		return $this->FilteredApiResponse($response, StockService::GetInstance()->GetProductStockEntries($args['productId'], false, $allowSubproductSubstitution), $request->getQueryParams());
 	}
 
+	/**
+	 * GET /api/stock/locations/{locationId}/entries - returns the individual stock
+	 * entries currently held at a given location. Supports the generic list
+	 * filtering/sorting/pagination query parameters. Returns 200.
+	 */
 	public function LocationStockEntries(Request $request, Response $response, array $args)
 	{
 		return $this->FilteredApiResponse($response, StockService::GetInstance()->GetLocationStockEntries($args['locationId']), $request->getQueryParams());
 	}
 
+	/**
+	 * GET /api/stock/products/{productId}/locations - returns the locations a product
+	 * is stocked at with the amount at each; the boolean query parameter
+	 * include_sub_products (default false) also includes locations of sub products.
+	 * Supports the generic list filtering/sorting/pagination query parameters.
+	 * Returns 200.
+	 */
 	public function ProductStockLocations(Request $request, Response $response, array $args)
 	{
 		$allowSubproductSubstitution = false;
@@ -667,6 +817,13 @@ class StockApiController extends BaseApiController
 		return $this->FilteredApiResponse($response, StockService::GetInstance()->GetProductStockLocations($args['productId'], $allowSubproductSubstitution), $request->getQueryParams());
 	}
 
+	/**
+	 * GET /api/stock/products/{productId}/printlabel - builds the webhook payload
+	 * (product name, Grocycode, product details, GROCY_LABEL_PRINTER_PARAMS) for
+	 * printing a product label; when GROCY_LABEL_PRINTER_RUN_SERVER is enabled the
+	 * configured GROCY_LABEL_PRINTER_WEBHOOK is also triggered server-side.
+	 * Returns the payload (200) or a 400 error response.
+	 */
 	public function ProductPrintLabel(Request $request, Response $response, array $args)
 	{
 		try
@@ -692,6 +849,15 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/entry/{entryId}/printlabel - builds the webhook payload (product
+	 * name, Grocycode carrying the stock entry id, product details, the stock entry
+	 * row, GROCY_LABEL_PRINTER_PARAMS, plus a due_date field when best-before-date
+	 * tracking is enabled) for printing a stock entry label; when
+	 * GROCY_LABEL_PRINTER_RUN_SERVER is enabled the configured
+	 * GROCY_LABEL_PRINTER_WEBHOOK is also triggered server-side.
+	 * Returns the payload (200) or a 400 error response.
+	 */
 	public function StockEntryPrintLabel(Request $request, Response $response, array $args)
 	{
 		try
@@ -724,6 +890,13 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/shoppinglist/remove-product - removes a product from a
+	 * shopping list. Body fields: product_id (required, numeric), product_amount
+	 * (default 1) and list_id (default 1).
+	 * Requires the SHOPPINGLIST_ITEMS_DELETE permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response (e.g. missing product id).
+	 */
 	public function RemoveProductFromShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_DELETE);
@@ -765,6 +938,10 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/bookings/{bookingId} - returns a single stock_log row by its id.
+	 * Returns 200 or a 400 error response when the booking does not exist.
+	 */
 	public function StockBooking(Request $request, Response $response, array $args)
 	{
 		try
@@ -784,11 +961,21 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * GET /api/stock/entry/{entryId} - returns a single stock entry by its id (200).
+	 */
 	public function StockEntry(Request $request, Response $response, array $args)
 	{
 		return $this->ApiResponse($response, StockService::GetInstance()->GetStockEntry($args['entryId']));
 	}
 
+	/**
+	 * GET /api/stock/transactions/{transactionId} - returns all stock_log rows that
+	 * belong to a given transaction id; also used internally by the other stock
+	 * booking endpoints (AddProduct, ConsumeProduct, InventoryProduct, OpenProduct,
+	 * TransferProduct, EditStockEntry) to return the rows of the booking they just made.
+	 * Returns 200 or a 400 error response when no matching transaction is found.
+	 */
 	public function StockTransactions(Request $request, Response $response, array $args)
 	{
 		try
@@ -807,6 +994,13 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/{productId}/transfer - moves the given amount of a
+	 * product from one location to another. Requires the STOCK_TRANSFER permission
+	 * (403 otherwise). Body fields: amount, location_id_from and location_id_to
+	 * (all required), and stock_entry_id to transfer a specific entry.
+	 * Returns the stock_log rows of the resulting transaction (200) or a 400 error response.
+	 */
 	public function TransferProduct(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_TRANSFER);
@@ -852,6 +1046,12 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/by-barcode/{barcode}/transfer - resolves the barcode to
+	 * a product id and delegates to TransferProduct; when the barcode is a Grocycode
+	 * carrying a stock entry id, that id is injected as the stock_entry_id body field.
+	 * 400 error response when the barcode is unknown.
+	 */
 	public function TransferProductByBarcode(Request $request, Response $response, array $args)
 	{
 		try
@@ -877,6 +1077,11 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/bookings/{bookingId}/undo - reverts a single stock booking by
+	 * its stock_log id. Requires the STOCK_EDIT permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
+	 */
 	public function UndoBooking(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_EDIT);
@@ -892,6 +1097,11 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/transactions/{transactionId}/undo - reverts every booking that
+	 * belongs to a given transaction id. Requires the STOCK_EDIT permission
+	 * (403 otherwise). Returns 204 on success or a 400 error response.
+	 */
 	public function UndoTransaction(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_EDIT);
@@ -907,6 +1117,13 @@ class StockApiController extends BaseApiController
 		}
 	}
 
+	/**
+	 * POST /api/stock/products/{productIdToKeep}/merge/{productIdToRemove} - merges
+	 * two products, moving all stock, references and history from the
+	 * productIdToRemove product onto productIdToKeep and deleting the former.
+	 * Requires the STOCK_EDIT permission (403 otherwise). Returns 204 on success or a
+	 * 400 error response (e.g. non-numeric ids).
+	 */
 	public function MergeProducts(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_EDIT);

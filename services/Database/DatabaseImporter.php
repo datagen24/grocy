@@ -16,6 +16,10 @@ class DatabaseImporter
 	 */
 	const TARGET_ONLY_TABLES = ['user_settings_defaults', 'system_db_changed_time'];
 
+	/**
+	 * Rows per multi-row INSERT. 250 keeps the placeholder count well under
+	 * PostgreSQL's 65535 bind parameter limit even for wide tables.
+	 */
 	const BATCH_SIZE = 250;
 
 	private $Source;
@@ -23,6 +27,12 @@ class DatabaseImporter
 	private $TargetDialect;
 	private $Progress;
 
+	/**
+	 * @param \PDO $source The SQLite database to copy from
+	 * @param \PDO $target The already-migrated database to copy into
+	 * @param DatabaseDialect $targetDialect Dialect matching $target (quoting, id counter resync)
+	 * @param callable|null $progress Receives one human-readable string per progress line, or null for silence
+	 */
 	public function __construct(\PDO $source, \PDO $target, DatabaseDialect $targetDialect, ?callable $progress = null)
 	{
 		$this->Source = $source;
@@ -34,6 +44,11 @@ class DatabaseImporter
 	}
 
 	/**
+	 * Copies all rows of every table both databases have in common, verbatim, with the
+	 * target's user triggers disabled. Refuses to run when the schema versions differ or
+	 * (unless $force) when the target already holds data.
+	 *
+	 * @param bool $force Skip the target-is-empty check; existing rows are truncated away
 	 * @return array Row counts per table, keyed by table name
 	 */
 	public function Import(bool $force = false): array
@@ -75,6 +90,10 @@ class DatabaseImporter
 		return $report;
 	}
 
+	/**
+	 * Streams one table from source to target in multi-row INSERT batches,
+	 * copying only the columns both sides share. Returns the number of rows copied.
+	 */
 	private function CopyTable(string $table): int
 	{
 		$columns = $this->GetCommonColumns($table);
@@ -114,6 +133,12 @@ class DatabaseImporter
 		return $copied;
 	}
 
+	/**
+	 * Executes one multi-row INSERT for the batch and returns the row count.
+	 *
+	 * @param string $rowPlaceholder Placeholder group for a single row, e.g. "(?, ?, ?)"
+	 * @param array $batch Associative source rows, all sharing the keys in $columns
+	 */
 	private function InsertBatch(string $quotedTable, string $quotedColumns, string $rowPlaceholder, array $columns, array $batch): int
 	{
 		$sql = 'INSERT INTO ' . $quotedTable . ' (' . $quotedColumns . ') VALUES '
@@ -135,6 +160,9 @@ class DatabaseImporter
 	}
 
 	/**
+	 * Tables present in both databases; tables existing on only one side are
+	 * reported through the progress callback and skipped.
+	 *
 	 * @return string[]
 	 */
 	private function GetCommonTables(): array
@@ -164,6 +192,9 @@ class DatabaseImporter
 	}
 
 	/**
+	 * Columns of the given table present in both databases; source-only columns are
+	 * reported through the progress callback and not copied.
+	 *
 	 * @return string[]
 	 */
 	private function GetCommonColumns(string $table): array
@@ -218,6 +249,10 @@ class DatabaseImporter
 		}
 	}
 
+	/**
+	 * Refuses to overwrite a target that already holds data, unless $force. The
+	 * migrations table is exempt - a freshly migrated target always has rows there.
+	 */
 	private function AssertTargetIsEmpty(array $tables, bool $force)
 	{
 		if ($force)
@@ -244,6 +279,12 @@ class DatabaseImporter
 		}
 	}
 
+	/**
+	 * Post-import sanity check: every table in the target must hold exactly the number
+	 * of rows that were copied into it.
+	 *
+	 * @param array $report Row counts per table, keyed by table name (as returned by Import())
+	 */
 	private function AssertRowCountsMatch(array $report)
 	{
 		$mismatches = [];
@@ -264,6 +305,11 @@ class DatabaseImporter
 		}
 	}
 
+	/**
+	 * Toggles user-defined triggers on the given target tables. Only implemented for
+	 * PostgreSQL - it is currently the only non-SQLite target, and rows never need
+	 * trigger suppression on the way out of the SQLite source.
+	 */
 	private function SetTriggersEnabled(array $tables, bool $enabled)
 	{
 		if ($this->TargetDialect->GetName() !== 'pgsql')

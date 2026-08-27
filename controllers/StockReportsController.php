@@ -6,8 +6,21 @@ use Grocy\Services\DatabaseService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Slim route controller for stock reports; currently only the spendings
+ * report, aggregated directly from the products price history via raw SQL.
+ */
 class StockReportsController extends BaseController
 {
+	/**
+	 * Serves the spendings report view (route GET /stockreports/spendings);
+	 * sums amount * price from the price history, excluding self-production.
+	 *
+	 * Optional query parameters: start_date/end_date (ISO dates; default is the
+	 * current month), group-by ('product', 'productgroup' or 'store'; default
+	 * 'product') and product-group (a group id, 'ungrouped' or 'all'; only
+	 * applied when grouping by product).
+	 */
 	public function Spendings(Request $request, Response $response, array $args)
 	{
 		$where = "pph.transaction_type != 'self-production'";

@@ -5,6 +5,11 @@ namespace Grocy\Controllers\Users;
 use Grocy\Services\DatabaseService;
 use LessQL\Result;
 
+/**
+ * Permission helper for the currently authenticated user (GROCY_USER_ID):
+ * defines all known permission names as PERMISSION_* constants and offers
+ * static checks against the resolved permissions in the database.
+ */
 class User
 {
 	const PERMISSION_ADMIN = 'ADMIN';
@@ -38,19 +43,35 @@ class User
 	const PERMISSION_USERS_EDIT_SELF = 'USERS_EDIT_SELF';
 	const PERMISSION_USERS_READ = 'USERS_READ';
 
+	/**
+	 * Grabs the shared database connection.
+	 */
 	public function __construct()
 	{
 		$this->DB = DatabaseService::GetInstance()->GetDbConnection();
 	}
 
+	/** @var \LessQL\Database Fluent database connection */
 	protected $DB;
 
+	/**
+	 * Static convenience wrapper around GetPermissionList().
+	 *
+	 * @return Result The current user's rows from the uihelper_user_permissions view
+	 */
 	public static function PermissionList()
 	{
 		$user = new self();
 		return $user->GetPermissionList();
 	}
 
+	/**
+	 * Asserts that the current user has the given permission.
+	 *
+	 * @param \Psr\Http\Message\ServerRequestInterface $request The current request (needed to construct the exception)
+	 * @param string $permission One of the PERMISSION_* constants
+	 * @throws PermissionMissingException When the permission is not granted
+	 */
 	public static function CheckPermission($request, string $permission): void
 	{
 		$user = new self();
@@ -60,16 +81,34 @@ class User
 		}
 	}
 
+	/**
+	 * Returns the current user's permission rows from the uihelper_user_permissions
+	 * view (used e.g. to expose permissions to the templates).
+	 *
+	 * @return Result
+	 */
 	public function GetPermissionList()
 	{
 		return $this->DB->uihelper_user_permissions()->where('user_id', GROCY_USER_ID);
 	}
 
+	/**
+	 * Whether the current user has the given permission (resolved, i.e. including
+	 * permissions inherited via ADMIN/parent permissions).
+	 *
+	 * @param string $permission One of the PERMISSION_* constants
+	 */
 	public function HasPermission(string $permission): bool
 	{
 		return $this->GetPermissions()->where('permission_name', $permission)->fetch() !== null;
 	}
 
+	/**
+	 * Whether the current user has ALL of the given permissions.
+	 *
+	 * @param string ...$permissions PERMISSION_* constants
+	 * @return bool
+	 */
 	public static function HasPermissions(string ...$permissions)
 	{
 		$user = new self();
@@ -85,6 +124,9 @@ class User
 		return true;
 	}
 
+	/**
+	 * Returns the current user's resolved permissions (user_permissions_resolved view).
+	 */
 	protected function GetPermissions(): Result
 	{
 		return $this->DB->user_permissions_resolved()->where('user_id', GROCY_USER_ID);

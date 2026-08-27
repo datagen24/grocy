@@ -1,4 +1,8 @@
-﻿var quantityUnitsTable = $('#quantityunits-table').DataTable({
+﻿// Powers the quantity units list view (views/quantityunits.blade.php):
+// DataTable of all quantity units with search, delete confirmation and a "show disabled" toggle.
+
+// DataTables setup for the quantity units list (column 0 = row menu, not sortable/searchable)
+var quantityUnitsTable = $('#quantityunits-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +12,7 @@
 $('#quantityunits-table tbody').removeClass("d-none");
 quantityUnitsTable.columns.adjust().draw();
 
+// Debounced full-text search over the table
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +30,8 @@ $("#clear-filter-button").on("click", function()
 	quantityUnitsTable.search("").draw();
 });
 
+// Delete button per row (expects data-quantityunit-name / data-quantityunit-id from the template);
+// confirms via bootbox, then DELETEs objects/quantity_units/{id}
 $(document).on('click', '.quantityunit-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-quantityunit-name');
@@ -62,6 +69,7 @@ $(document).on('click', '.quantityunit-delete-button', function(e)
 	});
 });
 
+// "Show disabled" toggle reloads the page with/without the include_disabled URI parameter (filtering happens server-side)
 $("#show-disabled").change(function()
 {
 	if (this.checked)

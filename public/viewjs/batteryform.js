@@ -1,4 +1,10 @@
-﻿$('#save-battery-button').on('click', function(e)
+﻿// View script for the battery create/edit form (views/batteryform.blade.php):
+// saves via POST /api/objects/batteries (create) or PUT /api/objects/batteries/{id} (edit, using Grocy.EditObjectId),
+// including userfields; also handles grocycode label printing
+
+// Form submit: validate, then create or update depending on Grocy.EditMode; userfields are saved afterwards.
+// When embedded (iframe), notifies the parent window instead of navigating back to /batteries.
+$('#save-battery-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -66,11 +72,13 @@
 	}
 });
 
+// Live re-validation while typing
 $('#battery-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('battery-form');
 });
 
+// Enter submits the form (when valid) instead of the browser default
 $('#battery-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -88,6 +96,7 @@ $('#battery-form input').keydown(function(event)
 	}
 });
 
+// Print a battery grocycode label: GET /api/batteries/{id}/printlabel, then pass the label data to the configured label printer webhook
 $(document).on('click', '.battery-grocycode-label-print', function(e)
 {
 	e.preventDefault();
@@ -102,6 +111,7 @@ $(document).on('click', '.battery-grocycode-label-print', function(e)
 	});
 });
 
+// Initial setup: load userfield values, focus the name input and validate once
 Grocy.Components.UserfieldsForm.Load();
 setTimeout(function()
 {

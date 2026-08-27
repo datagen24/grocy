@@ -1,4 +1,6 @@
-﻿var userentitiesTable = $('#userentities-table').DataTable({
+﻿// Powers the custom "user entities" list view (userentities.blade.php): user-defined
+// data structures managed under Settings. Table listing, search filtering, deletion.
+var userentitiesTable = $('#userentities-table').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
@@ -8,6 +10,7 @@
 $('#userentities-table tbody').removeClass("d-none");
 userentitiesTable.columns.adjust().draw();
 
+// Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function()
 {
 	var value = $(this).val();
@@ -25,6 +28,7 @@ $("#clear-filter-button").on("click", function()
 	userentitiesTable.search("").draw();
 });
 
+// Deletes a user entity (DELETE objects/userentities/{id}) after confirmation
 $(document).on('click', '.userentity-delete-button', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-userentity-name');

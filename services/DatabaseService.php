@@ -5,6 +5,16 @@ namespace Grocy\Services;
 use Grocy\Services\Database\DatabaseDialect;
 use LessQL\Database;
 
+/**
+ * Central access point to the database: owns the single PDO connection, the LessQL
+ * wrapper around it, and the DatabaseDialect for the configured engine.
+ *
+ * The dialect (SQLite or PostgreSQL, chosen via DB_DRIVER) encapsulates everything
+ * engine specific - connection setup, identifier quoting and the "db changed time"
+ * bookkeeping. This service routes both LessQL writes and raw SQL through the dialect
+ * so that change tracking stays accurate on engines that need it (PostgreSQL); on
+ * SQLite the file modification time covers it for free.
+ */
 class DatabaseService
 {
 	private static $DbConnection = null;
@@ -13,6 +23,15 @@ class DatabaseService
 	private static $instance = null;
 	private static $ShutdownHandlerRegistered = false;
 
+	/**
+	 * Executes a SQL query and returns its result set.
+	 *
+	 * The statement is executed twice by design (once via ExecuteDbStatement for
+	 * logging/change tracking, once to obtain the result), so only use this for
+	 * side-effect free SELECTs.
+	 *
+	 * @return \PDOStatement|false The result statement, or false when execution failed
+	 */
 	public function ExecuteDbQuery(string $sql)
 	{
 		$pdo = $this->GetDbConnectionRaw();
@@ -25,6 +44,16 @@ class DatabaseService
 		return false;
 	}
 
+	/**
+	 * Executes a SQL statement without returning a result set, throwing on failure.
+	 *
+	 * Without $params the statement is run via PDO::exec(), which (engine permitting)
+	 * may contain several semicolon separated statements; with $params it is prepared
+	 * and executed with the given positional values.
+	 *
+	 * @param array|null $params Positional placeholder values, or null for a plain exec
+	 * @return bool Always true (an exception is thrown on failure)
+	 */
 	public function ExecuteDbStatement(string $sql, ?array $params = null)
 	{
 		$pdo = $this->GetDbConnectionRaw();
@@ -58,11 +87,21 @@ class DatabaseService
 		return true;
 	}
 
+	/**
+	 * When the data last changed, as "Y-m-d H:i:s" (see DatabaseDialect::GetDbChangedTime()
+	 * for the semantics external API clients rely on).
+	 *
+	 * @return string
+	 */
 	public function GetDbChangedTime()
 	{
 		return $this->GetDialect()->GetDbChangedTime($this->GetDbConnectionRaw());
 	}
 
+	/**
+	 * The dialect for the configured database engine (created on first use from
+	 * the DB_DRIVER setting, defaulting to SQLite).
+	 */
 	public function GetDialect(): DatabaseDialect
 	{
 		if (self::$Dialect == null)
@@ -73,6 +112,13 @@ class DatabaseService
 		return self::$Dialect;
 	}
 
+	/**
+	 * The shared LessQL wrapper around the PDO connection, configured for the current
+	 * dialect (identifier delimiter, and a query callback for change tracking and
+	 * query logging where needed).
+	 *
+	 * @return Database
+	 */
 	public function GetDbConnection()
 	{
 		if (self::$DbConnection == null)
@@ -102,6 +148,11 @@ class DatabaseService
 		return self::$DbConnection;
 	}
 
+	/**
+	 * The shared raw PDO connection, created and initialized by the dialect on first use.
+	 *
+	 * @return \PDO
+	 */
 	public function GetDbConnectionRaw()
 	{
 		if (self::$DbConnectionRaw == null)
@@ -121,17 +172,30 @@ class DatabaseService
 	/**
 	 * Tells the connection which user it acts for. Engines which resolve user settings in
 	 * SQL (PostgreSQL) need this; on SQLite it is a no-op.
+	 *
+	 * @param int|null $userId
 	 */
 	public function SetCurrentUserId($userId)
 	{
 		$this->GetDialect()->SetCurrentUserId($this->GetDbConnectionRaw(), $userId);
 	}
 
+	/**
+	 * Overrides the "db changed time", used to restore it after bookkeeping writes
+	 * (e.g. API key last-used stamps) that must not count as data changes.
+	 *
+	 * @param string $dateTime "Y-m-d H:i:s"
+	 */
 	public function SetDbChangedTime($dateTime)
 	{
 		$this->GetDialect()->SetDbChangedTime($this->GetDbConnectionRaw(), $dateTime);
 	}
 
+	/**
+	 * Returns the singleton instance of this service.
+	 *
+	 * @return self
+	 */
 	public static function GetInstance()
 	{
 		if (self::$instance == null)
@@ -142,6 +206,9 @@ class DatabaseService
 		return self::$instance;
 	}
 
+	/**
+	 * Query logging is opt-in: dev mode plus an existing <data path>/sql.log file.
+	 */
 	private function IsQueryLoggingEnabled(): bool
 	{
 		return GROCY_MODE === 'dev' && file_exists(GROCY_DATAPATH . '/sql.log');
@@ -165,6 +232,10 @@ class DatabaseService
 		file_put_contents($logFilePath, $line . PHP_EOL, FILE_APPEND);
 	}
 
+	/**
+	 * Registers a once-per-request shutdown handler which flushes a pending
+	 * "db changed" mark to the database (a no-op for dialects that write immediately).
+	 */
 	private function RegisterShutdownHandler()
 	{
 		if (self::$ShutdownHandlerRegistered)

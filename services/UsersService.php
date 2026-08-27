@@ -4,8 +4,19 @@ namespace Grocy\Services;
 
 use LessQL\Result;
 
+/**
+ * User account management and per-user settings. Settings are cached per request; the
+ * cache is shared with the SQL-side grocy_user_setting() helper on SQLite, which resolves
+ * settings through GetUserSetting().
+ */
 class UsersService extends BaseService
 {
+	/**
+	 * Creates a user (password hashed with Argon2id) and grants the permission set
+	 * configured as GROCY_DEFAULT_PERMISSIONS.
+	 *
+	 * @return \LessQL\Row The new users row
+	 */
 	public function CreateUser(string $username, ?string $firstName, ?string $lastName, string $password, ?string $pictureFileName = null)
 	{
 		$newUserRow = $this->DB->users()->createRow([
@@ -31,12 +42,22 @@ class UsersService extends BaseService
 		return $newUserRow;
 	}
 
+	/**
+	 * Deletes the users row (only that row - related rows like sessions or
+	 * permissions are not cleaned up here).
+	 */
 	public function DeleteUser($userId)
 	{
 		$row = $this->DB->users($userId);
 		$row->delete();
 	}
 
+	/**
+	 * Updates a user's profile; the password is only changed (re-hashed with Argon2id)
+	 * when a non-empty one is given.
+	 *
+	 * @throws \Exception When the user does not exist
+	 */
 	public function EditUser(int $userId, string $username, string $firstName, string $lastName, ?string $password, ?string $pictureFileName = null)
 	{
 		if (!$this->UserExists($userId))
@@ -67,7 +88,17 @@ class UsersService extends BaseService
 		}
 	}
 
+	/** @var array<int|string, array<string, mixed>> Per-request settings cache: [user id => [key => value]] */
 	private static $UserSettingsCache = [];
+
+	/**
+	 * One setting value for the user, falling back to the $GROCY_DEFAULT_USER_SETTINGS
+	 * default and finally null. Cached per request.
+	 *
+	 * @param int $userId
+	 * @param string $settingKey
+	 * @return mixed
+	 */
 	public function GetUserSetting($userId, $settingKey)
 	{
 		if (!array_key_exists($userId, self::$UserSettingsCache))
@@ -100,6 +131,13 @@ class UsersService extends BaseService
 		return $value;
 	}
 
+	/**
+	 * All settings of the user as [key => value], with $GROCY_DEFAULT_USER_SETTINGS
+	 * filling in every key the user has not overridden.
+	 *
+	 * @param int $userId
+	 * @return array<string, mixed>
+	 */
 	public function GetUserSettings($userId)
 	{
 		$settings = [];
@@ -114,11 +152,18 @@ class UsersService extends BaseService
 		return array_merge($GROCY_DEFAULT_USER_SETTINGS, $settings);
 	}
 
+	/**
+	 * All users via the users_dto view, i.e. without password hashes and with
+	 * display_name precomputed.
+	 */
 	public function GetUsersAsDto(): Result
 	{
 		return $this->DB->users_dto();
 	}
 
+	/**
+	 * Inserts or updates one setting for the user and refreshes the request cache.
+	 */
 	public function SetUserSetting($userId, $settingKey, $settingValue)
 	{
 		if (!array_key_exists($userId, self::$UserSettingsCache))
@@ -146,6 +191,10 @@ class UsersService extends BaseService
 		}
 	}
 
+	/**
+	 * Removes one stored setting for the user (reverting it to the configured default)
+	 * and evicts it from the request cache.
+	 */
 	public function DeleteUserSetting($userId, $settingKey)
 	{
 		if (!array_key_exists($userId, self::$UserSettingsCache))

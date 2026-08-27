@@ -1,4 +1,8 @@
-﻿$('.save-choretracking-button').on('click', function (e)
+﻿// View script for choretracking.blade.php - the quick chore-tracking form (chore picker,
+// DateTimePicker, done-by user, optional skip) used to log a chore execution.
+// Saves (or skips) an execution: GET chores/{id} for the chore name, then
+// POST chores/{id}/execute, then persists any userfields, resets the form and refocuses it.
+$('.save-choretracking-button').on('click', function (e)
 {
 	e.preventDefault();
 
@@ -53,6 +57,9 @@
 	);
 });
 
+// When a chore is selected: adjusts the DateTimePicker format/value for date-only chores,
+// enables/disables the "skip" button for manually-triggered chores, refreshes the ChoreCard
+// preview and focuses the next input
 $('#chore_id').on('change', function (e)
 {
 	var input = $('#chore_id_text_input').val().toString();
@@ -137,6 +144,8 @@ $('#choretracking-form input').keydown(function (event)
 	}
 });
 
+// Handles a scanned Grocycode/barcode targeted at the chore picker (from CameraBarcodeScanner
+// or an external scanner), routing it into the chore_id text input as if typed
 $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
 {
 	if (!(target == "@chorepicker" || target == "undefined" || target == undefined)) // Default target
@@ -165,6 +174,10 @@ Grocy.Components.DateTimePicker.GetInputElement().on('keypress', function (e)
 	Grocy.FrontendHelpers.ValidateForm('choretracking-form');
 });
 
+/**
+ * Undoes a tracked chore execution (POST chores/executions/{id}/undo). Called from the
+ * "Undo" link in the success toast shown after saving.
+ */
 function UndoChoreExecution(executionId)
 {
 	Grocy.Api.Post('chores/executions/' + executionId.toString() + '/undo', {},
@@ -179,6 +192,8 @@ function UndoChoreExecution(executionId)
 	);
 };
 
+// Resolves the typed value against Grocycodes (grcy:c:<id>) when the chore field loses focus;
+// selects the matching chore option or clears the field if nothing matches
 $('#chore_id_text_input').on('blur', function (e)
 {
 	if ($('#chore_id').hasClass("combobox-menu-visible"))
