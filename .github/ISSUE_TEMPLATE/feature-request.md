@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Ideas for improvements or new things which you would find useful are always welcome
+about: An improvement or something new you would find useful
 title: 'Feature Request: '
 labels: enhancement
 assignees: ''
@@ -8,10 +8,15 @@ assignees: ''
 ---
 
 <!--
-Please make sure to:
+Please describe what you would find useful, and the problem behind it - the use case is
+usually more useful than the proposed solution.
 
-- Describe what you would find useful as detailed as possible
-- Check if your idea was maybe already requested by searching open and also already closed requests here
-- Keep it to one topic per request
-- Exclude any AI generated content and only include what you truly understand yourself
+Worth checking first:
+
+- docs/plans/ holds this fork's roadmap. It may already be planned, in which case comment
+  on the plan's numbered open questions rather than opening a new issue
+- If the idea applies to grocy generally rather than to this fork, upstream is the better
+  home for it: https://github.com/grocy/grocy/issues/new/choose
+
+Please search open and closed issues first, and keep it to one topic per request.
 -->

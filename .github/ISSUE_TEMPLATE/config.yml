@@ -1,5 +1,8 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-    - name: Help & Usage Questions
+    - name: Help & usage questions about grocy
       url: https://www.reddit.com/r/grocy
-      about: Please use the r/grocy subreddit for general help and usage questions
+      about: Upstream's subreddit covers everything this fork shares with grocy, which is most of it
+    - name: Bugs and feature requests for upstream grocy
+      url: https://github.com/grocy/grocy/issues/new/choose
+      about: If it reproduces on demo-prerelease.grocy.info it belongs upstream rather than here
