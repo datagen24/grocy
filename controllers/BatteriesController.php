@@ -81,25 +81,25 @@ class BatteriesController extends BaseController
 	 */
 	public function Journal(Request $request, Response $response, array $args)
 	{
+		// Default 2 years
+		$months = 24;
 		if (isset($request->getQueryParams()['months']) && filter_var($request->getQueryParams()['months'], FILTER_VALIDATE_INT) !== false)
 		{
-			$months = $request->getQueryParams()['months'];
-			$where = "tracked_time > DATE(DATE('now', 'localtime'), '-$months months')";
+			$months = intval($request->getQueryParams()['months']);
 		}
-		else
-		{
-			// Default 2 years
-			$where = "tracked_time > DATE(DATE('now', 'localtime'), '-24 months')";
-		}
+
+		// The cut-off date is computed here and bound as a parameter instead of being
+		// expressed in SQL: SQLite's DATE(x, '-N months') has no PostgreSQL equivalent,
+		// so date arithmetic must not leak into the query (see DatabaseDialect)
+		$chargeCycles = $this->DB->battery_charge_cycles()->where('tracked_time > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
 
 		if (isset($request->getQueryParams()['battery']) && filter_var($request->getQueryParams()['battery'], FILTER_VALIDATE_INT) !== false)
 		{
-			$batteryId = $request->getQueryParams()['battery'];
-			$where .= " AND battery_id = $batteryId";
+			$chargeCycles = $chargeCycles->where('battery_id', intval($request->getQueryParams()['battery']));
 		}
 
 		return $this->RenderPage($response, 'batteriesjournal', [
-			'chargeCycles' => $this->DB->battery_charge_cycles()->where($where)->orderBy('tracked_time', 'DESC'),
+			'chargeCycles' => $chargeCycles->orderBy('tracked_time', 'DESC'),
 			'batteries' => $this->DB->batteries()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('battery_charge_cycles'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('battery_charge_cycles')

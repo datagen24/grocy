@@ -4,6 +4,7 @@ namespace Grocy\Controllers;
 
 use Grocy\Services\ApplicationService;
 use Grocy\Services\DatabaseMigrationService;
+use Grocy\Services\DatabaseService;
 use Grocy\Services\DemoDataGeneratorService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -37,8 +38,9 @@ class SystemController extends BaseController
 
 	/**
 	 * Handles the application root (route GET /): runs pending database schema
-	 * migrations, populates demo data in dev/demo/prerelease mode and redirects
-	 * to the configured entry page.
+	 * migrations, populates demo data in dev/demo/prerelease mode (on SQLite only,
+	 * as the demo data generator uses SQLite specific SQL) and redirects to the
+	 * configured entry page.
 	 */
 	public function Root(Request $request, Response $response, array $args)
 	{
@@ -48,8 +50,18 @@ class SystemController extends BaseController
 
 		if (GROCY_MODE === 'dev' || GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')
 		{
-			$demoDataGeneratorService = DemoDataGeneratorService::GetInstance();
-			$demoDataGeneratorService->PopulateDemoData(isset($request->getQueryParams()['nodemodata']));
+			// The demo data generator uses SQLite specific SQL, so it can only run there -
+			// on any other driver demo data is skipped and the app just continues
+			$databaseDialectName = DatabaseService::GetInstance()->GetDialect()->GetName();
+			if ($databaseDialectName === 'sqlite')
+			{
+				$demoDataGeneratorService = DemoDataGeneratorService::GetInstance();
+				$demoDataGeneratorService->PopulateDemoData(isset($request->getQueryParams()['nodemodata']));
+			}
+			else
+			{
+				file_put_contents('php://stderr', 'Demo data generation is SQLite only and was skipped for the ' . $databaseDialectName . " driver\n");
+			}
 		}
 
 		return $response->withRedirect($this->AppContainer->get('UrlManager')->ConstructUrl($this->GetEntryPageRelative()));

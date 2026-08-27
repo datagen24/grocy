@@ -17,15 +17,12 @@ class BatteriesApiController extends BaseApiController
 {
 	/**
 	 * GET /api/batteries/{batteryId} - returns details of the given battery.
-	 * Note: Currently always answers 400 with error_message "df" because of the
-	 * unconditional throw below (apparently a debugging leftover) - the actual
-	 * lookup via BatteriesService::GetBatteryDetails() is never reached.
+	 * Returns the battery details (200) or a 400 error response.
 	 */
 	public function BatteryDetails(Request $request, Response $response, array $args)
 	{
 		try
 		{
-			throw new \Exception('df');
 			return $this->ApiResponse($response, BatteriesService::GetInstance()->GetBatteryDetails($args['batteryId']));
 		}
 		catch (\Exception $ex)

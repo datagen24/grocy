@@ -25,16 +25,25 @@ class StockReportsController extends BaseController
 	{
 		$where = "pph.transaction_type != 'self-production'";
 
+		// Everything which would otherwise be interpolated into the SQL below is bound
+		// as a positional parameter instead - the date boundaries especially, because
+		// SQLite's DATE(x, 'start of month') has no PostgreSQL equivalent and date
+		// arithmetic must not leak into the query (see DatabaseDialect). $where is
+		// embedded exactly once in each of the queries below, so the order in which
+		// the values are appended here is the order the placeholders appear in.
+		$whereParams = [];
+
 		if (isset($request->getQueryParams()['start_date']) && isset($request->getQueryParams()['end_date']) && IsIsoDate($request->getQueryParams()['start_date']) && IsIsoDate($request->getQueryParams()['end_date']))
 		{
-			$startDate = $request->getQueryParams()['start_date'];
-			$endDate = $request->getQueryParams()['end_date'];
-			$where .= " AND pph.purchased_date BETWEEN '$startDate' AND '$endDate'";
+			$where .= ' AND pph.purchased_date BETWEEN ? AND ?';
+			$whereParams[] = $request->getQueryParams()['start_date'];
+			$whereParams[] = $request->getQueryParams()['end_date'];
 		}
 		else
 		{
 			// Default to this month
-			$where .= " AND pph.purchased_date >= DATE(DATE('now', 'localtime'), 'start of month')";
+			$where .= ' AND pph.purchased_date >= ?';
+			$whereParams[] = date('Y-m-01');
 		}
 
 		$groupBy = 'product';
@@ -53,7 +62,8 @@ class StockReportsController extends BaseController
 				}
 				elseif ($request->getQueryParams()['product-group'] != 'all' && filter_var($request->getQueryParams()['product-group'], FILTER_VALIDATE_INT) !== false)
 				{
-					$where .= ' AND pg.id = ' . $request->getQueryParams()['product-group'];
+					$where .= ' AND pg.id = ?';
+					$whereParams[] = intval($request->getQueryParams()['product-group']);
 				}
 			}
 
@@ -110,7 +120,7 @@ class StockReportsController extends BaseController
 		}
 
 		return $this->RenderPage($response, 'stockreportspendings', [
-			'metrics' => DatabaseService::GetInstance()->ExecuteDbQuery($sql)->fetchAll(\PDO::FETCH_OBJ),
+			'metrics' => DatabaseService::GetInstance()->ExecuteDbQuery($sql, $whereParams)->fetchAll(\PDO::FETCH_OBJ),
 			'productGroups' => $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'selectedGroup' => isset($request->getQueryParams()['product-group']) ? $request->getQueryParams()['product-group'] : null,
 			'groupBy' => $groupBy

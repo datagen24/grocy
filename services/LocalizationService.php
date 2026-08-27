@@ -165,7 +165,7 @@ class LocalizationService extends BaseService
 			$locale = GROCY_LOCALE;
 		}
 
-		if (!in_array($locale, self::$InstanceMap))
+		if (!isset(self::$InstanceMap[$locale]))
 		{
 			self::$InstanceMap[$locale] = new self($locale);
 		}

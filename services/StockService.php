@@ -890,13 +890,16 @@ class StockService extends BaseService
 	 * include the stock of resolved sub products.
 	 *
 	 * @param string $customWhere Optional raw SQL appended to the query (e.g. a WHERE clause) - must be trusted input
+	 * @param array $customWhereParams Values for the positional "?" placeholders in $customWhere.
+	 *              Anything engine specific (date arithmetic above all) belongs here rather than
+	 *              in $customWhere, which has to stay portable across SQLite and PostgreSQL.
 	 * @return array Array of stock_current row objects
 	 */
-	public function GetCurrentStock($customWhere = '')
+	public function GetCurrentStock($customWhere = '', array $customWhereParams = [])
 	{
 		$sql = 'SELECT * FROM stock_current ' . $customWhere;
-		$currentStockMapped = DatabaseService::GetInstance()->ExecuteDbQuery($sql)->fetchAll(\PDO::FETCH_GROUP | \PDO::FETCH_OBJ);
-		$relevantProducts = $this->DB->products()->where('id IN (SELECT product_id FROM (' . $sql . ') x)');
+		$currentStockMapped = DatabaseService::GetInstance()->ExecuteDbQuery($sql, $customWhereParams)->fetchAll(\PDO::FETCH_GROUP | \PDO::FETCH_OBJ);
+		$relevantProducts = $this->DB->products()->where('id IN (SELECT product_id FROM (' . $sql . ') x)', $customWhereParams);
 
 		foreach ($relevantProducts as $product)
 		{
@@ -949,13 +952,20 @@ class StockService extends BaseService
 	 */
 	public function GetDueProducts(int $days = 5, bool $excludeOverdue = false)
 	{
+		// The cut-off dates are computed here and bound as parameters instead of being
+		// expressed in SQL: SQLite's date('now', 'N days') and its zero argument date()
+		// have no PostgreSQL equivalent, so date arithmetic must not leak into the query
+		// (see DatabaseDialect). Note this also makes "today" the local date on both
+		// engines - SQLite's bare date() was UTC, unlike every other date in the app.
+		$dueDate = date('Y-m-d', strtotime($days . ' days'));
+
 		if ($excludeOverdue)
 		{
-			return $this->GetCurrentStock("WHERE best_before_date <= date('now', '$days days') AND best_before_date >= date()");
+			return $this->GetCurrentStock('WHERE best_before_date <= ? AND best_before_date >= ?', [$dueDate, date('Y-m-d')]);
 		}
 		else
 		{
-			return $this->GetCurrentStock("WHERE best_before_date <= date('now', '$days days')");
+			return $this->GetCurrentStock('WHERE best_before_date <= ?', [$dueDate]);
 		}
 	}
 
@@ -967,7 +977,8 @@ class StockService extends BaseService
 	 */
 	public function GetExpiredProducts()
 	{
-		return $this->GetCurrentStock('WHERE best_before_date < date() AND due_type = 2');
+		// See GetDueProducts() for why the date is computed here rather than in SQL
+		return $this->GetCurrentStock('WHERE best_before_date < ? AND due_type = 2', [date('Y-m-d')]);
 	}
 
 	/**

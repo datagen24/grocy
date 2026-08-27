@@ -144,7 +144,8 @@ function GetClassConstants($className, $prefix = null)
 
 /**
  * Generates a random string of the given length from $allowedChars
- * (default: alphanumeric); not cryptographically secure (uses rand()).
+ * (default: alphanumeric); cryptographically secure (uses random_int()),
+ * so the result is suitable for session keys and API keys.
  *
  * @return string
  */
@@ -153,7 +154,7 @@ function RandomString($length, $allowedChars = '0123456789abcdefghijklmnopqrstuv
 	$randomString = '';
 	for ($i = 0; $i < $length; $i++)
 	{
-		$randomString .= $allowedChars[rand(0, strlen($allowedChars) - 1)];
+		$randomString .= $allowedChars[random_int(0, strlen($allowedChars) - 1)];
 	}
 
 	return $randomString;

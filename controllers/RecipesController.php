@@ -36,14 +36,22 @@ class RecipesController extends BaseController
 		$days = 6;
 		if (isset($request->getQueryParams()['days']) && filter_var($request->getQueryParams()['days'], FILTER_VALIDATE_INT) !== false)
 		{
-			$days = $request->getQueryParams()['days'];
+			$days = intval($request->getQueryParams()['days']);
 		}
 
-		$mealPlanWhereTimespan = "day BETWEEN DATE('$start', '-$days days') AND DATE('$start', '+$days days')";
+		// The window boundaries are computed here and bound as parameters instead of being
+		// expressed in SQL: SQLite's DATE(x, '-N days') has no PostgreSQL equivalent, so
+		// date arithmetic must not leak into the query (see DatabaseDialect)
+		$startDate = new \DateTimeImmutable($start);
+		$mealPlanWhereTimespan = 'day BETWEEN ? AND ?';
+		$mealPlanWhereTimespanParams = [
+			$startDate->modify(sprintf('%+d days', -$days))->format('Y-m-d'),
+			$startDate->modify(sprintf('%+d days', $days))->format('Y-m-d')
+		];
 
 		$recipes = $this->DB->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE')->fetchAll();
 		$events = [];
-		foreach ($this->DB->meal_plan()->where($mealPlanWhereTimespan) as $mealPlanEntry)
+		foreach ($this->DB->meal_plan()->where($mealPlanWhereTimespan, $mealPlanWhereTimespanParams) as $mealPlanEntry)
 		{
 			$recipe = FindObjectInArrayByPropertyValue($recipes, 'id', $mealPlanEntry['recipe_id']);
 			$title = '';
@@ -71,7 +79,9 @@ class RecipesController extends BaseController
 			];
 		}
 
-		$weekRecipe = $this->DB->recipes()->where("type = 'mealplan-week' AND name = LTRIM(STRFTIME('%Y-%W', DATE('$start')), '0')")->fetch();
+		// The week recipe name is built in PHP for the same reason (STRFTIME is SQLite only);
+		// see RecipesService::GetMealPlanWeekRecipeName() for why it is not date('Y-W')
+		$weekRecipe = $this->DB->recipes()->where('type = ? AND name = ?', [RecipesService::RECIPE_TYPE_MEALPLAN_WEEK, RecipesService::GetMealPlanWeekRecipeName($start)])->fetch();
 		$weekRecipeId = 0;
 		if ($weekRecipe != null)
 		{
@@ -81,13 +91,13 @@ class RecipesController extends BaseController
 		return $this->RenderPage($response, 'mealplan', [
 			'fullcalendarEventSources' => $events,
 			'recipes' => $recipes,
-			'internalRecipes' => $this->DB->recipes()->where("id IN (SELECT recipe_id FROM meal_plan_internal_recipe_relation WHERE $mealPlanWhereTimespan) OR id = $weekRecipeId")->fetchAll(),
-			'recipesResolved' => RecipesService::GetInstance()->GetRecipesResolved("recipe_id IN (SELECT recipe_id FROM meal_plan_internal_recipe_relation WHERE $mealPlanWhereTimespan) OR recipe_id = $weekRecipeId"),
+			'internalRecipes' => $this->DB->recipes()->where("id IN (SELECT recipe_id FROM meal_plan_internal_recipe_relation WHERE $mealPlanWhereTimespan) OR id = ?", array_merge($mealPlanWhereTimespanParams, [$weekRecipeId]))->fetchAll(),
+			'recipesResolved' => RecipesService::GetInstance()->GetRecipesResolved("recipe_id IN (SELECT recipe_id FROM meal_plan_internal_recipe_relation WHERE $mealPlanWhereTimespan) OR recipe_id = ?", array_merge($mealPlanWhereTimespanParams, [$weekRecipeId])),
 			'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE'),
 			'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
 			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
 			'mealplanSections' => $this->DB->meal_plan_sections()->orderBy('sort_number'),
-			'usedMealplanSections' => $this->DB->meal_plan_sections()->where("id IN (SELECT section_id FROM meal_plan WHERE $mealPlanWhereTimespan)")->orderBy('sort_number'),
+			'usedMealplanSections' => $this->DB->meal_plan_sections()->where("id IN (SELECT section_id FROM meal_plan WHERE $mealPlanWhereTimespan)", $mealPlanWhereTimespanParams)->orderBy('sort_number'),
 			'weekRecipe' => $weekRecipe
 		]);
 	}
@@ -118,18 +128,29 @@ class RecipesController extends BaseController
 			}
 		}
 
+		// $selectedRecipe stays null on a fresh install (no recipes at all) and when the
+		// "recipe" query parameter names a non existing id, so everything derived from it
+		// has to be resolved inside this guard - an empty result for the view, not a
+		// dereference of null
 		$totalCosts = null;
 		$totalCalories = null;
+		$recipePositionsResolved = [];
 		if ($selectedRecipe)
 		{
-			$totalCosts = FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $selectedRecipe->id)->costs;
-			$totalCalories = FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $selectedRecipe->id)->calories;
+			$selectedRecipeResolved = FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $selectedRecipe->id);
+			if ($selectedRecipeResolved)
+			{
+				$totalCosts = $selectedRecipeResolved->costs;
+				$totalCalories = $selectedRecipeResolved->calories;
+			}
+
+			$recipePositionsResolved = $this->DB->recipes_pos_resolved()->where('recipe_id', $selectedRecipe->id);
 		}
 
 		$viewData = [
 			'recipes' => $recipes,
 			'recipesResolved' => $recipesResolved,
-			'recipePositionsResolved' => $this->DB->recipes_pos_resolved()->where('recipe_id', $selectedRecipe->id),
+			'recipePositionsResolved' => $recipePositionsResolved,
 			'selectedRecipe' => $selectedRecipe,
 			'products' => $this->DB->products(),
 			'quantityUnits' => $this->DB->quantity_units(),

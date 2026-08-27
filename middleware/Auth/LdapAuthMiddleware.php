@@ -39,7 +39,7 @@ class LdapAuthMiddleware extends BaseAuthMiddleware
 	 *
 	 * @param array $postParams The login form POST parameters (username, password, stay_logged_in)
 	 * @return bool True when the credentials were valid; false on missing input,
-	 *              an unresolvable/unknown user or a wrong password
+	 *              an unresolvable/unknown/ambiguous user or a wrong password
 	 * @throws \Exception On LDAP connection/bind/search failures
 	 */
 	public static function ProcessLogin(array $postParams)
@@ -57,7 +57,9 @@ class LdapAuthMiddleware extends BaseAuthMiddleware
 			// Bind with service account to retrieve user DN
 			if (ldap_bind($connect, GROCY_LDAP_BIND_DN, GROCY_LDAP_BIND_PW))
 			{
-				$filter = '(&(' . GROCY_LDAP_UID_ATTR . '=' . $postParams['username'] . ')' . GROCY_LDAP_USER_FILTER . ')';
+				// The username has to be escaped, otherwise filter meta characters in it
+				// (e.g. "*)(objectClass=*") would allow altering the search filter
+				$filter = '(&(' . GROCY_LDAP_UID_ATTR . '=' . ldap_escape($postParams['username'], '', LDAP_ESCAPE_FILTER) . ')' . GROCY_LDAP_USER_FILTER . ')';
 
 				$search = ldap_search($connect, GROCY_LDAP_BASE_DN, $filter);
 				if ($search === false)
@@ -69,6 +71,13 @@ class LdapAuthMiddleware extends BaseAuthMiddleware
 				if ($result === false)
 				{
 					throw new \Exception('LDAP error: ' . ldap_error($connect));
+				}
+
+				if (!isset($result['count']) || $result['count'] !== 1)
+				{
+					// User not found (or not unambiguously)
+					ldap_close($connect);
+					return false;
 				}
 
 				$ldapFirstName = $result[0]['givenname'][0];

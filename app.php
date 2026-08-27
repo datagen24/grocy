@@ -112,7 +112,9 @@ $app->add(new $authMiddlewareClass($container, $app->getResponseFactory()));
 // Add default middleware
 $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
-$errorMiddleware = $app->addErrorMiddleware(true, false, false);
+// Error details (including stack traces) are only displayed in dev mode
+// (arguments are displayErrorDetails, logErrors, logErrorDetails)
+$errorMiddleware = $app->addErrorMiddleware(GROCY_MODE === 'dev', false, false);
 $errorMiddleware->setDefaultErrorHandler(new ExceptionController($container, $app->getResponseFactory()));
 
 $app->getRouteCollector()->setCacheFile(GROCY_DATAPATH . '/viewcache/route_cache.php');

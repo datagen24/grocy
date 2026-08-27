@@ -83,27 +83,27 @@ class StockController extends BaseController
 	 */
 	public function Journal(Request $request, Response $response, array $args)
 	{
+		// Default 6 months
+		$months = 6;
 		if (isset($request->getQueryParams()['months']) && filter_var($request->getQueryParams()['months'], FILTER_VALIDATE_INT) !== false)
 		{
-			$months = $request->getQueryParams()['months'];
-			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-$months months')";
+			$months = intval($request->getQueryParams()['months']);
 		}
-		else
-		{
-			// Default 6 months
-			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-6 months')";
-		}
+
+		// The cut-off date is computed here and bound as a parameter instead of being
+		// expressed in SQL: SQLite's DATE(x, '-N months') has no PostgreSQL equivalent,
+		// so date arithmetic must not leak into the query (see DatabaseDialect)
+		$stockLog = $this->DB->uihelper_stock_journal()->where('row_created_timestamp > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
 
 		if (isset($request->getQueryParams()['product']) && filter_var($request->getQueryParams()['product'], FILTER_VALIDATE_INT) !== false)
 		{
-			$productId = $request->getQueryParams()['product'];
-			$where .= " AND product_id = $productId";
+			$stockLog = $stockLog->where('product_id', intval($request->getQueryParams()['product']));
 		}
 
 		$usersService = UsersService::GetInstance();
 
 		return $this->RenderPage($response, 'stockjournal', [
-			'stockLog' => $this->DB->uihelper_stock_journal()->where($where)->orderBy('row_created_timestamp', 'DESC'),
+			'stockLog' => $stockLog->orderBy('row_created_timestamp', 'DESC'),
 			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'locations' => $this->DB->locations()->orderBy('name', 'COLLATE NOCASE'),
 			'users' => $usersService->GetUsersAsDto(),

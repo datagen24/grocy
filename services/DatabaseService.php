@@ -30,18 +30,35 @@ class DatabaseService
 	 * logging/change tracking, once to obtain the result), so only use this for
 	 * side-effect free SELECTs.
 	 *
+	 * Pass $params for anything that would otherwise be interpolated into $sql -
+	 * notably date cut-offs, which have to be computed in PHP because the engines
+	 * disagree about date arithmetic (SQLite's DATE(x, '-6 months') has no
+	 * PostgreSQL equivalent).
+	 *
+	 * @param array|null $params Positional placeholder values, or null for a plain query
 	 * @return \PDOStatement|false The result statement, or false when execution failed
 	 */
-	public function ExecuteDbQuery(string $sql)
+	public function ExecuteDbQuery(string $sql, ?array $params = null)
 	{
 		$pdo = $this->GetDbConnectionRaw();
 
-		if ($this->ExecuteDbStatement($sql) === true)
+		if ($this->ExecuteDbStatement($sql, $params) !== true)
+		{
+			return false;
+		}
+
+		if (empty($params))
 		{
 			return $pdo->query($sql);
 		}
 
-		return false;
+		$cmd = $pdo->prepare($sql);
+		if ($cmd->execute($params) === false)
+		{
+			return false;
+		}
+
+		return $cmd;
 	}
 
 	/**
