@@ -263,6 +263,7 @@ $("#delete-current-product-picture-button").on("click", function (e)
 	$("#product-picture-label-none").removeClass("d-none");
 });
 
+// Product specific QU conversions table (edit mode only): sorted by "Quantity unit from", first column (row actions) not orderable/searchable
 var quConversionsTable = $('#qu-conversions-table-products').DataTable({
 	'order': [[1, 'asc']],
 	'columnDefs': [
@@ -273,6 +274,7 @@ var quConversionsTable = $('#qu-conversions-table-products').DataTable({
 $('#qu-conversions-table-products tbody').removeClass("d-none");
 quConversionsTable.columns.adjust().draw();
 
+// Barcodes table (edit mode only): sorted/fixed-sorted by barcode, row actions column not orderable/searchable, store/qu columns (indices 5/6) hidden by default
 var barcodeTable = $('#barcode-table').DataTable({
 	'order': [[1, 'asc']],
 	"orderFixed": [[1, 'asc']],
@@ -286,6 +288,7 @@ var barcodeTable = $('#barcode-table').DataTable({
 $('#barcode-table tbody').removeClass("d-none");
 barcodeTable.columns.adjust().draw();
 
+// Initial page setup: load the products userfields, prime the QU info texts/validation state and focus the name field
 Grocy.Components.UserfieldsForm.Load();
 $("#name").trigger("keyup");
 $('.input-group-qu').trigger('change');
@@ -295,6 +298,7 @@ setTimeout(function ()
 	$('#name').focus();
 }, Grocy.FormFocusDelay);
 
+// Print the product's grocycode via the configured label printer webhook
 $(document).on('click', '.product-grocycode-label-print', function (e)
 {
 	e.preventDefault();
@@ -309,6 +313,7 @@ $(document).on('click', '.product-grocycode-label-print', function (e)
 	});
 });
 
+// Delete a QU conversion row (after confirmation), then reload the page by re-submitting the product form with a "reload" redirect
 $(document).on('click', '.qu-conversion-delete-button', function (e)
 {
 	var objectId = $(e.currentTarget).attr('data-qu-conversion-id');
@@ -346,6 +351,7 @@ $(document).on('click', '.qu-conversion-delete-button', function (e)
 	});
 });
 
+// Delete a barcode row (after confirmation), then reload the page by re-submitting the product form with a "reload" redirect
 $(document).on('click', '.barcode-delete-button', function (e)
 {
 	var objectId = $(e.currentTarget).attr('data-barcode-id');
@@ -383,10 +389,15 @@ $(document).on('click', '.barcode-delete-button', function (e)
 	});
 });
 
+// Remembers the previously selected stock QU so the handler below can tell "still following stock QU" apart from "user picked their own value"
 var quIdStockBefore = $("#qu_id_stock").val();
 $('#qu_id_stock').change(function (e)
 {
 	// Preset qu_id_purchase / qu_id_consume / qu_id_price by qu_id_stock if unset or identical
+	// For each of the 3 dependent QU selects: adopt the new stock QU selection when that select is
+	// still empty (selectedIndex 0), or when its current value still equals the *previous* stock QU
+	// value (i.e. it was never manually overridden away from following the stock QU) - this way a
+	// later change to qu_id_stock keeps propagating, but a deliberately-different user choice sticks.
 
 	var quIdStock = $('#qu_id_stock');
 	var quIdPurchase = $('#qu_id_purchase');
@@ -413,6 +424,7 @@ $('#qu_id_stock').change(function (e)
 	Grocy.FrontendHelpers.ValidateForm('product-form');
 });
 
+// Reload the page when a QU-conversion/barcode dialog (opened via show-as-dialog-link, see the related-links buttons in the Blade view) posts back that it changed something
 $(window).on("message", function (e)
 {
 	var data = e.originalEvent.data;
@@ -423,6 +435,9 @@ $(window).on("message", function (e)
 	}
 });
 
+// "Duplicate product" flow (?copy-of=<id> on the create form): fetch the source product and copy
+// its field values into this (still empty) create form. Deliberately omits identity/display fields
+// (name, picture, barcodes, QU conversions) so the user creates a distinct new product.
 if (Grocy.EditMode == "create" && GetUriParam("copy-of") != undefined)
 {
 	Grocy.Api.Get('objects/products/' + GetUriParam("copy-of"),
@@ -502,6 +517,8 @@ if (Grocy.EditMode == "create" && GetUriParam("copy-of") != undefined)
 		}
 	);
 }
+// Plain create form (not a copy): apply the user's configured product presets (product_presets_* user
+// settings, "-1"/"0" meaning "no preset") as initial field values
 else if (Grocy.EditMode === 'create')
 {
 	if (Grocy.UserSettings.product_presets_location_id.toString() !== '-1')
@@ -535,6 +552,8 @@ else if (Grocy.EditMode === 'create')
 	}
 }
 
+// When a parent product is selected, disable this product's own min_stock_amount field if the parent
+// already cumulates its sub products' min stock amounts (see "cumulate_min_stock_amount_of_sub_products")
 Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 {
 	var parentProductId = $(e.target).val();
@@ -567,8 +586,10 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 });
 
 Grocy.FrontendHelpers.ValidateForm("product-form");
-Grocy.Components.ProductPicker.GetPicker().trigger("change");
+Grocy.Components.ProductPicker.GetPicker().trigger("change"); // Apply the min_stock_amount enable/disable state for a preselected parent product
 
+// In edit mode "Save & continue" is no longer the default (Enter-triggered) submit button, since
+// on create it double as "create & then edit further"; on edit both buttons behave the same way
 if (Grocy.EditMode == "edit")
 {
 	$(".save-product-button").toggleClass("default-submit-button");

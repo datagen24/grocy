@@ -1,4 +1,7 @@
-﻿$("#product_presets_location_id").val(Grocy.UserSettings.product_presets_location_id);
+﻿// Powers the stock settings section (stocksettings.blade.php): initializes all inputs/
+// checkboxes from Grocy.UserSettings (persistence itself is handled generically
+// elsewhere by the .user-setting-control click handler, not in this file).
+$("#product_presets_location_id").val(Grocy.UserSettings.product_presets_location_id);
 $("#product_presets_product_group_id").val(Grocy.UserSettings.product_presets_product_group_id);
 $("#product_presets_qu_id").val(Grocy.UserSettings.product_presets_qu_id);
 $("#product_presets_default_due_days").val(Grocy.UserSettings.product_presets_default_due_days);
@@ -53,6 +56,8 @@ if (BoolVal(Grocy.UserSettings.stock_auto_decimal_separator_prices))
 
 RefreshLocaleNumberInput();
 
+// Enable/disable the default consume amount input depending on whether the "use quick
+// consume amount instead" setting is on
 $("#stock_default_consume_amount_use_quick_consume_amount").on("click", function()
 {
 	if (this.checked)
