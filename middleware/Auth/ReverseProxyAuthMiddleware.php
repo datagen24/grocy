@@ -6,8 +6,27 @@ use Grocy\Services\DatabaseService;
 use Grocy\Services\UsersService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Active when GROCY_AUTH_CLASS is set to Grocy\Middleware\Auth\ReverseProxyAuthMiddleware:
+ * authenticates against the username supplied by an upstream reverse proxy that
+ * already performed authentication, either via the HTTP header named by
+ * GROCY_REVERSE_PROXY_AUTH_HEADER (default "REMOTE_USER") or, when
+ * GROCY_REVERSE_PROXY_AUTH_USE_ENV is enabled, the equally named entry in
+ * $_SERVER (see config-dist.php). A matching local Grocy user is created on
+ * first sight of a username. API routes still fall back to regular API key
+ * authentication first, for reverse proxy setups that bypass the proxy for them.
+ */
 class ReverseProxyAuthMiddleware extends BaseAuthMiddleware
 {
+	/**
+	 * Authenticates via API key (API routes only, as a proxy-bypass fallback), or
+	 * otherwise trusts the username supplied by the reverse proxy via header or
+	 * environment variable, creating the local user if it does not exist yet.
+	 *
+	 * @return mixed The user row
+	 * @throws \Exception When the configured header/env variable is missing, empty
+	 *                    or ambiguous
+	 */
 	public function AuthenticateRequest(Request $request)
 	{
 		define('GROCY_EXTERNALLY_MANAGED_AUTHENTICATION', true);
@@ -59,6 +78,13 @@ class ReverseProxyAuthMiddleware extends BaseAuthMiddleware
 		return $user;
 	}
 
+	/**
+	 * Not supported: authentication is fully delegated to the reverse proxy, so
+	 * there is no Grocy-handled login form to process.
+	 *
+	 * @param array $postParams The login form POST parameters (unused)
+	 * @throws \Exception Always
+	 */
 	public static function ProcessLogin(array $postParams)
 	{
 		throw new \Exception('Not implemented');

@@ -1,5 +1,16 @@
-﻿var CurrentProductDetails;
+﻿// Purchase page logic: submits stock/products/{id}/add to book a purchase, plus the
+// barcode-driven prefill and quantity-unit/price conversion math behind the purchase form.
+// This file also serves as the shared "purchase dialog" script pulled in via @push('pageScripts')
+// by stockoverview.blade.php, stockentries.blade.php and shoppinglist.blade.php, which embed
+// purchase.blade.php (and thus this script) in an iframe/modal to let the user purchase inline.
 
+// Holds the full stock/products/{id} API response for the currently selected product
+// (set on ProductPicker "change", read by RefreshPriceHint() and PrefillBestBeforeDate())
+var CurrentProductDetails;
+
+// Handles the purchase form submit: validates, builds and POSTs the stock/products/{id}/add
+// payload, then (depending on context) resets the form for the next purchase or notifies the
+// embedding parent window/dialog.
 $('#save-purchase-button').on('click', function (e)
 {
 	e.preventDefault();
@@ -9,6 +20,7 @@ $('#save-purchase-button').on('click', function (e)
 		return;
 	}
 
+	// Don't submit while a combobox dropdown is still open (e.g. Enter was meant to select an option)
 	if ($(".combobox-menu-visible").length)
 	{
 		return;
@@ -23,11 +35,12 @@ $('#save-purchase-button').on('click', function (e)
 
 	Grocy.FrontendHelpers.BeginUiBusy("purchase-form");
 
+	// Re-fetch the current product details (tare weight, stock QU, ...) right before submitting
 	Grocy.Api.Get('stock/products/' + jsonForm.product_id,
 		function (productDetails)
 		{
 			var jsonData = {};
-			jsonData.amount = jsonForm.amount;
+			jsonData.amount = jsonForm.amount; // Already converted to the product's stock quantity unit by ProductAmountPicker (hidden #amount field)
 			jsonData.note = jsonForm.note;
 			jsonData.stock_label_type = jsonForm.stock_label_type;
 
@@ -37,15 +50,22 @@ $('#save-purchase-button').on('click', function (e)
 			}
 			else
 			{
+				// Price/amount math: the API always expects a price per stock quantity unit.
+				// #display_amount is entered in the QU currently selected in #qu_id; when tare
+				// weight handling is enabled that select is locked to the stock QU (factor 1),
+				// so subtracting tare_weight (also defined in the stock QU) directly is valid.
 				var amount = Number.parseFloat(jsonForm.display_amount);
 				if (BoolVal(productDetails.product.enable_tare_weight_handling))
 				{
 					amount -= productDetails.product.tare_weight;
 				}
 
+				// data-qu-factor = how many units of the selected (purchase) QU equal 1 stock QU unit,
+				// so price-per-selected-QU * factor = price-per-stock-QU
 				var price = Number.parseFloat(jsonForm.price * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Grocy.UserSettings.stock_decimal_places_prices_input);
 				if ($("input[name='price-type']:checked").val() == "total-price")
 				{
+					// jsonForm.price was a total price for the whole purchased amount -> divide by the (tare adjusted) amount to get the per-stock-unit price
 					price = (price / amount).toFixed(Grocy.UserSettings.stock_decimal_places_prices_input);
 				}
 
@@ -75,9 +95,11 @@ $('#save-purchase-button').on('click', function (e)
 				jsonData.location_id = Grocy.Components.LocationPicker.GetValue();
 			}
 
+			// Book the purchase via the stock API
 			Grocy.Api.Post('stock/products/' + jsonForm.product_id + '/add', jsonData,
 				function (result)
 				{
+					// If this purchase was triggered by scanning a known barcode, keep its last_price up to date
 					if ($("#purchase-form").hasAttr("data-used-barcode"))
 					{
 						Grocy.Api.Put('objects/product_barcodes/' + $("#purchase-form").attr("data-used-barcode"), { last_price: $("#price").val() },
@@ -93,6 +115,7 @@ $('#save-purchase-button').on('click', function (e)
 						Grocy.UISound.Success();
 					}
 
+					// "Add barcode to existing product" flow: also persist the scanned barcode/qu/amount/note as a new product_barcodes row
 					if (GetUriParam("flow") == "InplaceAddBarcodeToExistingProduct")
 					{
 						var jsonDataBarcode = {};
@@ -119,6 +142,7 @@ $('#save-purchase-button').on('click', function (e)
 						);
 					}
 
+					// Build the toastr success message (with an inline "Undo" link) shown after a successful purchase
 					var amountMessage = Number.parseFloat(jsonForm.amount).toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts });
 					if (BoolVal(productDetails.product.enable_tare_weight_handling))
 					{
@@ -126,6 +150,8 @@ $('#save-purchase-button').on('click', function (e)
 					}
 					var successMessage = __t('Added %1$s of %2$s to stock', amountMessage + " " + __n(amountMessage, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 
+					// Fire the configured label printer webhook (Grocy.Webhooks.labelprinter), either once per
+					// purchase (single label) or once per individual stock entry created (label per unit)
 					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
 					{
 						if (Grocy.Webhooks.labelprinter !== undefined)
@@ -172,6 +198,8 @@ $('#save-purchase-button').on('click', function (e)
 					Grocy.EditObjectId = result[0].transaction_id;
 					if (GetUriParam("embedded") !== undefined)
 					{
+						// Embedded (dialog) mode: save the stock userfields, then tell the parent window about the
+						// change and close this dialog instead of resetting the in-place form
 						Grocy.Components.UserfieldsForm.Save(function ()
 						{
 							Grocy.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", jsonForm.product_id)), Grocy.BaseUrl);
@@ -187,6 +215,8 @@ $('#save-purchase-button').on('click', function (e)
 					}
 					else
 					{
+						// Standalone page mode: save userfields, show the success toast and reset the form/pickers
+						// so the next product can be purchased right away
 						Grocy.Components.UserfieldsForm.Save(function ()
 						{
 							Grocy.FrontendHelpers.EndUiBusy("purchase-form");
@@ -254,6 +284,12 @@ $('#save-purchase-button').on('click', function (e)
 	);
 });
 
+// Core barcode/product lookup flow: fires whenever a product gets selected (typed, picked or
+// via barcode scan through the ProductPicker component) and prefills the whole purchase form
+// (quantity unit, amount, price, store, location, due date, label type) from stock/products/{id},
+// then - if the product itself was resolved via a barcode - looks up that barcode's own defaults
+// (objects/product_barcodes_view) to override amount/qu/price/store/note, and finally triggers
+// scan-mode auto-submit.
 if (Grocy.Components.ProductPicker !== undefined)
 {
 	Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
@@ -269,14 +305,18 @@ if (Grocy.Components.ProductPicker !== undefined)
 		{
 			Grocy.Components.ProductCard.Refresh(productId);
 
+			// Load full product details and use them to prefill the rest of the form
 			Grocy.Api.Get('stock/products/' + productId,
 				function (productDetails)
 				{
 					CurrentProductDetails = productDetails;
 
+					// Reload the QU dropdown with the conversions applicable to this product
 					Grocy.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id);
 					if (productDetails.product.enable_tare_weight_handling == 1)
 					{
+						// Tare weight handling: lock the QU picker to the stock quantity unit so
+						// display_amount/tare_weight/amount all share the same unit (factor 1)
 						Grocy.Components.ProductAmountPicker.SetQuantityUnit(productDetails.quantity_unit_stock.id);
 						$("#qu_id").attr("disabled", "");
 					}
@@ -287,6 +327,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 					$('#display_amount').val(Grocy.UserSettings.stock_default_purchase_amount);
 					$(".input-group-productamountpicker").trigger("change");
 
+					// Coming from the shopping list "add to stock" flow: prefill QU/amount from the shopping list item (?quId=&amount=)
 					if (GetUriParam("flow") === "shoppinglistitemtostock")
 					{
 						Grocy.Components.ProductAmountPicker.SetQuantityUnit(GetUriParam("quId"));
@@ -295,6 +336,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 
 					$(".input-group-productamountpicker").trigger("change");
 
+					// Prefill the store: prefer the product's last used shopping location, fall back to its default one
 					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 					{
 						if (productDetails.last_shopping_location_id != null)
@@ -312,6 +354,8 @@ if (Grocy.Components.ProductPicker !== undefined)
 						Grocy.Components.LocationPicker.SetId(productDetails.location.id);
 					}
 
+					// Prefill the unit price field from the product's last purchase price (stored per stock QU),
+					// converted back to a price per the currently selected QU by dividing by its factor
 					if (productDetails.last_price == null || productDetails.last_price == 0)
 					{
 						$("#price").val("")
@@ -329,6 +373,8 @@ if (Grocy.Components.ProductPicker !== undefined)
 
 					if (productDetails.product.enable_tare_weight_handling == 1)
 					{
+						// Minimum weighable amount = the container's tare weight plus what's already in stock
+						// (QU is locked to the stock unit here, so the factor is 1 and this stays in stock units)
 						var minAmount = productDetails.product.tare_weight / $("#qu_id option:selected").attr("data-qu-factor") + productDetails.stock_amount;
 						$("#display_amount").attr("min", minAmount);
 						$("#tare-weight-handling-info").removeClass("d-none");
@@ -339,6 +385,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 						$("#tare-weight-handling-info").addClass("d-none");
 					}
 
+					// Suggest a due date based on the product's default due days (and freezer defaults, if applicable)
 					PrefillBestBeforeDate(productDetails.product, productDetails.location);
 
 					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
@@ -347,6 +394,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 						$("#stock_label_type").trigger("change");
 					}
 
+					// Preselect the product's default purchase price type (unit price / total price)
 					if (productDetails.product.default_purchase_price_type == 2)
 					{
 						$("#price-type-unit-price").click();
@@ -369,6 +417,9 @@ if (Grocy.Components.ProductPicker !== undefined)
 
 					RefreshLocaleNumberInput();
 
+					// If the product was resolved via a barcode (data-attribute "barcode" set on the hidden
+					// #product_id input by the ProductPicker component), look up that barcode's own product_barcodes
+					// row (amount/qu/store/price/note) to override the generic product defaults set above
 					if (document.getElementById("product_id").getAttribute("barcode") != "null")
 					{
 						Grocy.Api.Get('objects/product_barcodes_view?query[]=barcode=' + document.getElementById("product_id").getAttribute("barcode"),

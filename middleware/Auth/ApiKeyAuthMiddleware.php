@@ -17,14 +17,28 @@ use Psr\Http\Message\ServerRequestInterface as Request;
  */
 class ApiKeyAuthMiddleware extends BaseAuthMiddleware
 {
+	/**
+	 * Resolves the configured API key header name (service "ApiKeyHeaderName") in
+	 * addition to the base middleware construction.
+	 */
 	public function __construct(Container $container, ResponseFactoryInterface $responseFactory)
 	{
 		parent::__construct($container, $responseFactory);
 		$this->ApiKeyHeaderName = $this->AppContainer->get('ApiKeyHeaderName');
 	}
 
+	/** @var string Name of the header (and equally named query parameter) carrying the API key */
 	protected readonly string $ApiKeyHeaderName;
 
+	/**
+	 * Looks up the API key, in order: the configured header, then the equally
+	 * named query parameter, then - only on the "calendar-ical" route - the
+	 * "secret" query parameter checked against special-purpose calendar iCal
+	 * keys (API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL). This lets the calendar
+	 * feed be added to external calendar apps that can't set custom headers.
+	 *
+	 * @return mixed|null The user row owning the key, or null if no valid key was found
+	 */
 	public function AuthenticateRequest(Request $request)
 	{
 		$validApiKey = false;
@@ -68,6 +82,12 @@ class ApiKeyAuthMiddleware extends BaseAuthMiddleware
 		}
 	}
 
+	/**
+	 * Not supported: API key authentication has no login form to process.
+	 *
+	 * @param array $postParams The login form POST parameters (unused)
+	 * @throws \Exception Always
+	 */
 	public static function ProcessLogin(array $postParams)
 	{
 		throw new \Exception('Not implemented');

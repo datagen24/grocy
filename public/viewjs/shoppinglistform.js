@@ -1,4 +1,10 @@
-﻿$('#save-shopping-list-button').on('click', function(e)
+﻿// Powers the shopping list create/edit modal form (shoppinglistform.blade.php).
+// Runs inside a modal iframe; Grocy.EditMode ('create'/'edit') and Grocy.EditObjectId
+// are set by the server-rendered page to select POST vs PUT.
+
+// Validates and submits the form, saves associated userfields, then notifies the parent
+// window (shopping list page) via postMessage to refresh and close the modal
+$('#save-shopping-list-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -56,11 +62,13 @@
 	}
 });
 
+// Live-validates on every keystroke
 $('#shopping-list-form input').keyup(function(event)
 {
 	Grocy.FrontendHelpers.ValidateForm('shopping-list-form');
 });
 
+// Enter key submits the form (if valid) instead of doing a default form submit
 $('#shopping-list-form input').keydown(function(event)
 {
 	if (event.keyCode === 13) // Enter
@@ -78,6 +86,7 @@ $('#shopping-list-form input').keydown(function(event)
 	}
 });
 
+// Initial setup: load userfields, focus the name field, run initial validation
 Grocy.Components.UserfieldsForm.Load();
 setTimeout(function()
 {

@@ -1,4 +1,11 @@
-﻿$('#save-consume-button').on('click', function(e)
+﻿// View script for consume.blade.php - the stock "Consume"/"Open" form. Wires up the
+// ProductPicker, ProductAmountPicker, RecipePicker and LocationPicker components, drives the
+// specific-stock-entry dropdown, tare-weight/min-max handling and scan mode, and posts
+// consumption/opening bookings to the stock API.
+// Consumes stock: POST stock/products/{id}/consume. Reads the amount/exact-amount/spoiled/
+// specific-stock-entry/location/recipe fields from the form and, when embedded, notifies the
+// parent window instead of resetting the form in place.
+$('#save-consume-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -52,6 +59,8 @@
 
 					bookingResponse = result;
 
+					// "Add barcode to existing product" workflow: after consuming, also attach
+					// the scanned barcode (that didn't resolve to a product) to the chosen product
 					if (GetUriParam("flow") === "InplaceAddBarcodeToExistingProduct")
 					{
 						var jsonDataBarcode = {};
@@ -80,6 +89,7 @@
 						$("#use_specific_stock_entry").click();
 					}
 
+					// Tare-weight products consume "amount minus tare/current weight" unless an exact amount was entered
 					if (productDetails.product.enable_tare_weight_handling == 1 && !jsonData.exact_amount)
 					{
 						var successMessage = __t('Removed %1$s of %2$s from stock', Math.abs(jsonForm.amount - (productDetails.product.tare_weight + productDetails.stock_amount)) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
@@ -89,6 +99,8 @@
 						var successMessage = __t('Removed %1$s of %2$s from stock', Math.abs(jsonForm.amount) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 
+					// When embedded (e.g. in a modal iframe), notify the parent window instead of
+					// updating this page's own form
 					if (GetUriParam("embedded") !== undefined)
 					{
 						Grocy.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", jsonForm.product_id)), Grocy.BaseUrl);
@@ -97,6 +109,7 @@
 					}
 					else
 					{
+						// Reset the form for the next entry (scan mode / repeated consumption)
 						Grocy.FrontendHelpers.EndUiBusy("consume-form");
 						toastr.success(successMessage);
 						Grocy.Components.ProductPicker.FinishFlow();

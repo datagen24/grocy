@@ -8,10 +8,27 @@ use GuzzleHttp\Client;
 	Setting('STOCK_BARCODE_LOOKUP_PLUGIN', 'OpenFoodFactsBarcodeLookupPlugin');
 */
 
+/**
+ * External barcode lookup plugin (see BaseBarcodeLookupPlugin) which queries the
+ * public Open Food Facts product database (https://world.openfoodfacts.org) for
+ * the given barcode/EAN.
+ */
 class OpenFoodFactsBarcodeLookupPlugin extends BaseBarcodeLookupPlugin
 {
 	public const PLUGIN_NAME = 'Open Food Facts';
 
+	/**
+	 * Queries the Open Food Facts v2 product API for the barcode (digits only),
+	 * requesting the product name (localized to GROCY_LOCALE when available) and
+	 * image URL.
+	 *
+	 * @param string $barcode The barcode to look up
+	 * @return array|null Associative array with name, location_id, qu_id_purchase,
+	 *                     qu_id_stock, __qu_factor_purchase_to_stock (always 1),
+	 *                     __barcode and __image_url (validated/completed by
+	 *                     BaseBarcodeLookupPlugin::Lookup()), or null when the API
+	 *                     returns 404 or no matching product (status != 1)
+	 */
 	protected function ExecuteLookup($barcode)
 	{
 		$productNameFieldLocalized = 'product_name_' . substr(GROCY_LOCALE, 0, 2);

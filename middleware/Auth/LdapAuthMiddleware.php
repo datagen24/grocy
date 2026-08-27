@@ -7,8 +7,22 @@ use Grocy\Services\SessionService;
 use Grocy\Services\UsersService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
+/**
+ * Active when GROCY_AUTH_CLASS is set to Grocy\Middleware\Auth\LdapAuthMiddleware:
+ * authenticates logins against an external LDAP/Active Directory server (bind DN,
+ * base DN, user filter and UID attribute configured via the GROCY_LDAP_* settings,
+ * see config-dist.php), creating a local Grocy user on first successful login.
+ * Request authentication itself (session cookie / API key) is delegated to
+ * DefaultAuthMiddleware, since logins still result in a normal Grocy session.
+ */
 class LdapAuthMiddleware extends BaseAuthMiddleware
 {
+	/**
+	 * Marks the request as externally authenticated and delegates the actual
+	 * per-request authentication (session cookie / API key) to DefaultAuthMiddleware.
+	 *
+	 * @return mixed|null The user row or null if the request is not authenticated
+	 */
 	public function AuthenticateRequest(Request $request)
 	{
 		define('GROCY_EXTERNALLY_MANAGED_AUTHENTICATION', true);
@@ -17,6 +31,17 @@ class LdapAuthMiddleware extends BaseAuthMiddleware
 		return $auth->AuthenticateRequest($request);
 	}
 
+	/**
+	 * Verifies username/password against the configured LDAP server: binds with the
+	 * service account to look up the user's DN, then rebinds as that user to
+	 * validate the password. On success, creates the local Grocy user if it does not
+	 * exist yet, creates a session and sets the session cookie.
+	 *
+	 * @param array $postParams The login form POST parameters (username, password, stay_logged_in)
+	 * @return bool True when the credentials were valid; false on missing input,
+	 *              an unresolvable/unknown user or a wrong password
+	 * @throws \Exception On LDAP connection/bind/search failures
+	 */
 	public static function ProcessLogin(array $postParams)
 	{
 		if (empty($postParams['username']) || empty($postParams['password']))
