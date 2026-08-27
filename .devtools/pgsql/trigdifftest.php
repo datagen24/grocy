@@ -224,8 +224,17 @@ function CompareAllTables(PDO $sqlite, PDO $pg): int
 
 		$list = implode(', ', array_map(fn($c) => '"' . $c . '"', $columns));
 
-		$a = array_map('NormaliseRow', $sqlite->query('SELECT ' . $list . ' FROM "' . $table . '"')->fetchAll(PDO::FETCH_ASSOC));
-		$b = array_map('NormaliseRow', $pg->query('SELECT ' . $list . ' FROM "' . $table . '"')->fetchAll(PDO::FETCH_ASSOC));
+		$rowsA = $sqlite->query('SELECT ' . $list . ' FROM "' . $table . '"')->fetchAll(PDO::FETCH_ASSOC);
+		$rowsB = $pg->query('SELECT ' . $list . ' FROM "' . $table . '"')->fetchAll(PDO::FETCH_ASSOC);
+
+		if (IsInternalRecipeTable($table))
+		{
+			$rowsA = ProjectReachableRecipeRows($table, $rowsA, RecipeIdentities($sqlite));
+			$rowsB = ProjectReachableRecipeRows($table, $rowsB, RecipeIdentities($pg));
+		}
+
+		$a = array_map('NormaliseRow', $rowsA);
+		$b = array_map('NormaliseRow', $rowsB);
 
 		sort($a);
 		sort($b);
@@ -243,6 +252,106 @@ function CompareAllTables(PDO $sqlite, PDO $pg): int
 	}
 
 	return $problems;
+}
+
+/**
+ * The three tables that Grocy's meal plan triggers mint hidden rows in.
+ */
+function IsInternalRecipeTable(string $table): bool
+{
+	return in_array($table, ['recipes', 'recipes_pos', 'recipes_nestings'], true);
+}
+
+/**
+ * Every recipe's id mapped to what actually identifies it.
+ *
+ * For a real recipe that is its id, which is stable and meaningful. For one of the
+ * hidden rows the meal plan triggers generate it is the name and type, because the id is
+ * an artefact of how many times the generating trigger happened to fire.
+ *
+ * @return array<int|string, string> Recipe id => identity
+ */
+function RecipeIdentities(PDO $db): array
+{
+	$identities = [];
+
+	foreach ($db->query('SELECT id, name, type FROM recipes')->fetchAll(PDO::FETCH_ASSOC) as $recipe)
+	{
+		$identities[(string)$recipe['id']] = $recipe['type'] === 'normal'
+			? 'recipe#' . $recipe['id']
+			: 'internal:' . $recipe['type'] . ':' . $recipe['name'];
+	}
+
+	return $identities;
+}
+
+/**
+ * The reachable state of one of the internal recipe tables.
+ *
+ * This is the single accepted behavioural difference between the engines, and the one
+ * place the suite compares something other than the raw rows. db/pgsql/README.md records
+ * it: on SQLite a single INSERT INTO meal_plan re-fires update_internal_recipe several
+ * times, minting a new internal recipe id on each pass and abandoning the one before, so
+ * recipes_pos and recipes_nestings accumulate rows pointing at internal recipes that no
+ * longer exist. The port generates each one once. PostgreSQL therefore has strictly
+ * fewer unreachable rows, and no application code can see the difference, because a row
+ * whose recipe_id resolves to nothing is not reachable from any view or route.
+ *
+ * So: drop the rows that point at a recipe which no longer exists, and compare the rest
+ * by what identifies them rather than by generated ids. What is deliberately NOT relaxed
+ * is the content — every reachable row still has to match on product, amount, servings
+ * and everything else. If the two engines ever disagree about what a meal plan actually
+ * contains, this still fails, which is the whole point of not simply excluding the
+ * tables.
+ *
+ * @param array[] $rows
+ * @param array<int|string, string> $identities From RecipeIdentities()
+ * @return array[]
+ */
+function ProjectReachableRecipeRows(string $table, array $rows, array $identities): array
+{
+	$projected = [];
+
+	foreach ($rows as $row)
+	{
+		if ($table === 'recipes')
+		{
+			// A generated recipe's own id is meaningless; a real one's is not.
+			if (array_key_exists('id', $row))
+			{
+				$row['id'] = $identities[(string)$row['id']] ?? ('recipe#' . $row['id']);
+			}
+
+			$projected[] = $row;
+			continue;
+		}
+
+		// recipes_pos and recipes_nestings: unreachable rows are dropped entirely, and
+		// the surrogate key goes with them - its value counts how many rows were minted
+		// and discarded before it, which is exactly the difference being accepted.
+		if (!array_key_exists('recipe_id', $row) || !isset($identities[(string)$row['recipe_id']]))
+		{
+			continue;
+		}
+
+		$row['recipe_id'] = $identities[(string)$row['recipe_id']];
+
+		if (array_key_exists('includes_recipe_id', $row) && $row['includes_recipe_id'] !== null)
+		{
+			if (!isset($identities[(string)$row['includes_recipe_id']]))
+			{
+				continue;
+			}
+
+			$row['includes_recipe_id'] = $identities[(string)$row['includes_recipe_id']];
+		}
+
+		unset($row['id']);
+
+		$projected[] = $row;
+	}
+
+	return $projected;
 }
 
 /**

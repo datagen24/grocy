@@ -178,10 +178,11 @@ Lint proves nothing here; every check below wants a booted instance.
    Run this check with `FEATURE_FLAG_STOCK_LOCATION_TRACKING=false`. The `locations`
    row this plan's race is about is inserted by `migrations/8888.php` *inside* an
    `if (!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)` guard, and `config-dist.php:167`
-   defaults that flag to **true** — so on a default install the table is empty, the
-   assertion "exactly one row with id 1" fails for the wrong reason, and the race the
-   plan exists to close is never exercised at all. With the flag off, assert both the
-   `migrations` uniqueness and the single `locations` row.
+   defaults that flag to **true**. On a default install the guard never runs, and the
+   only row in `locations` is the id **2** "Fridge" that `migrations/0006.sql` inserts —
+   so the assertion "exactly one row with id 1" fails for a reason that has nothing to
+   do with concurrency, and the race the plan exists to close is never exercised at all.
+   With the flag off, assert both the `migrations` uniqueness and the id-1 row.
 3. **Racing pods against an already-migrated database.** Five concurrent
    `bin/grocy-migrate` runs must be no-ops and must not deadlock (this is the always-run
    `8888.php` path, which is the one that runs on every start forever).

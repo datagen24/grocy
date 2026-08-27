@@ -12,6 +12,8 @@
 
 require_once (getenv('GROCY_ROOT') ?: '/app') . '/packages/autoload.php';
 
+use Grocy\Services\Database\ValueComparison;
+
 $seedFile = $argv[1];
 $views = array_slice($argv, 2);
 
@@ -102,14 +104,8 @@ if (!empty($defaultUserSettings))
 	}
 }
 
-// 3. Compare the views
-function normalise($v)
-{
-	if ($v === null) return null;
-	if (is_bool($v)) return $v ? 1 : 0;
-	if (is_numeric($v)) return round((float)$v, 6);
-	return (string)$v;
-}
+// 3. Compare the views. The normalisation rules live in services/ so that this script
+// and DatabaseImporter's verification cannot drift apart about what "equal" means.
 
 $failures = 0;
 
@@ -127,8 +123,8 @@ foreach ($views as $view)
 		continue;
 	}
 
-	$ja = array_map(fn($r) => json_encode(array_map('normalise', $r)), $a);
-	$jb = array_map(fn($r) => json_encode(array_map('normalise', $r)), $b);
+	$ja = array_map(fn($r) => ValueComparison::NormaliseRow($r), $a);
+	$jb = array_map(fn($r) => ValueComparison::NormaliseRow($r), $b);
 
 	// Views have no inherent row order, so sort both sides by their normalised form and
 	// keep the rows in step with it - the type comparison below is only meaningful when
@@ -154,7 +150,7 @@ foreach ($views as $view)
 				$encodedA = json_encode($rowA[$column]);
 				$encodedB = json_encode($b[$i][$column]);
 
-				if ($encodedA !== $encodedB)
+				if (!ValueComparison::ComparableTypes($rowA[$column], $b[$i][$column]))
 				{
 					$typeMismatches[$column] = gettype($rowA[$column]) . ' ' . $encodedA
 						. '  vs  ' . gettype($b[$i][$column]) . ' ' . $encodedB;
