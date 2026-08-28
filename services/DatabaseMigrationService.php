@@ -31,7 +31,11 @@ class DatabaseMigrationService extends BaseService
 	 * rather than replaying a history they were never part of.
 	 *
 	 * Consequently every migration from here on has to work on all supported engines -
-	 * either as a portable NNNN.sql, or as per engine NNNN.sqlite.sql / NNNN.pgsql.sql.
+	 * either as a portable NNNN.sql, as per engine NNNN.sqlite.sql / NNNN.pgsql.sql, or
+	 * as a documented engine-exclusive file where the other engine genuinely needs no
+	 * change. The last case means the two engines can sit at different numbers while
+	 * both being fully migrated, which is why GetLatestMigrationNumber() takes a
+	 * dialect.
 	 */
 	const BASELINE_MIGRATION_ID = 255;
 
@@ -50,7 +54,7 @@ class DatabaseMigrationService extends BaseService
 		$this->ApplyBaselineSchemaWhenNeeded($dialect);
 
 		$migrationCounter = 0;
-		foreach ($this->GetMigrationFiles($dialect) as $migrationNumber => $migrationFile)
+		foreach (self::GetMigrationFiles($dialect) as $migrationNumber => $migrationFile)
 		{
 			if ($migrationFile->getExtension() === 'php')
 			{
@@ -88,7 +92,31 @@ class DatabaseMigrationService extends BaseService
 	 *
 	 * @return \SplFileInfo[]
 	 */
-	private function GetMigrationFiles(DatabaseDialect $dialect): array
+	/**
+	 * The highest migration number that exists for an engine.
+	 *
+	 * Dialect-aware on purpose. A migration can be engine-exclusive — shipped as
+	 * NNNN.sqlite.sql or NNNN.pgsql.sql with no counterpart, because the other engine
+	 * genuinely needs no change — and once one exists, "what number should this
+	 * database be at?" has a different answer per engine. Anything comparing schema
+	 * versions has to ask this rather than assume the two engines count alike.
+	 */
+	public static function GetLatestMigrationNumber(DatabaseDialect $dialect): int
+	{
+		$migrationFiles = self::GetMigrationFiles($dialect);
+
+		// The always-run migrations are fixups rather than schema versions, and they are
+		// deliberately never recorded in the migrations table — counting them would put
+		// every database permanently "behind" a number it can never reach.
+		$numbers = array_filter(
+			array_keys($migrationFiles),
+			fn($number) => $number !== self::DOALWAYS_MIGRATION_ID && $number !== self::EMERGENCY_MIGRATION_ID
+		);
+
+		return empty($numbers) ? 0 : max($numbers);
+	}
+
+	private static function GetMigrationFiles(DatabaseDialect $dialect): array
 	{
 		$generic = [];
 		$specific = [];

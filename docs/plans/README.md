@@ -73,14 +73,22 @@ response is called out explicitly in the plan rather than slipped in.
 **Migrations from 0256 on work on every supported engine** — a portable `NNNN.sql`, a
 per engine pair, or a documented engine-exclusive migration. See `db/pgsql/README.md`.
 
-The third case is new, and [01](01-file-storage.md) is the first to use it: database file
-storage is PostgreSQL-only by design, so it ships `0256.pgsql.sql` with no SQLite
-counterpart rather than a no-op pair that pretends otherwise. The rule for it is that the
-exemption is *recorded* in `db/pgsql/README.md`, not merely taken. One consequence to
-carry: once a number exists on one engine only, "is this database up to date?" is a
-dialect-dependent question — [10](10-cold-start-statelessness.md)'s schema-version check
-resolves it by taking the maximum of `GetMigrationFiles($dialect)` rather than a global
-maximum.
+The third case is new. `0256.sqlite.sql` is the first to use it — a SQLite-only cast fix
+that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping
+`0257.pgsql.sql` with no SQLite counterpart rather than a no-op pair that pretends
+otherwise. The rule for it is that the exemption is *recorded*, in the migration itself
+and in `db/pgsql/README.md`, not merely taken.
+
+The consequence turned out to bite immediately rather than later, and is worth stating
+plainly: once a number exists on one engine only, the two engines sit at different
+migration numbers while both being fully migrated, so nothing may compare one engine's
+number to the other's. `DatabaseImporter` did exactly that and refused every import the
+moment `0256.sqlite.sql` landed. It now checks each side against
+`DatabaseMigrationService::GetLatestMigrationNumber($dialect)` for that side's own engine,
+and no longer copies the `migrations` table into the target — a target carrying the
+source's numbers would skip a future migration of its own believing it had already run.
+Anything else that reasons about schema versions, including
+[10](10-cold-start-statelessness.md)'s boot check, has to do the same.
 
 **Verification.** Schema changes are checked with `.devtools/pgsql/difftest.php` (views)
 and `trigdifftest.php` (trigger behaviour). New views must return identical output on both

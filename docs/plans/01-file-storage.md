@@ -49,11 +49,11 @@ A 60 MB nightly dump is seconds. Ten times wrong is still fine.
 
 ## Proposed change
 
-### Schema — migration `0256.pgsql.sql`, with no SQLite counterpart
+### Schema — migration `0257.pgsql.sql`, with no SQLite counterpart
 
 Settled: this is the first deliberately engine-exclusive migration, and the ground rule is
 amended to match — "portable, per-engine pair, **or** documented engine-exclusive" rather
-than requiring both engines unconditionally. `0256.pgsql.sql` ships PostgreSQL-only, with
+than requiring both engines unconditionally. `0257.pgsql.sql` ships PostgreSQL-only, with
 the exemption recorded in `db/pgsql/README.md` alongside the rule. (The README wording
 itself is another writer's edit; this plan just needs to be consistent with it.)
 

@@ -129,7 +129,8 @@ foreach ($scripts as $script)
 	$failures += $scriptFailures;
 }
 
-echo PHP_EOL . 'Excluded from comparison: row_created_timestamp everywhere (clock), '
+echo PHP_EOL . 'Excluded from comparison: the migrations table (per engine by design), '
+	. 'row_created_timestamp everywhere (clock), '
 	. 'chores.start_date and chores.rescheduled_date, and the dummy id on cache__ tables '
 	. '(both accepted differences, see db/pgsql/README.md).' . PHP_EOL;
 
@@ -209,6 +210,17 @@ function CompareAllTables(PDO $sqlite, PDO $pg): int
 
 	foreach (array_intersect($pgTables, $sqliteTables) as $table)
 	{
+		// The migrations table records how each database's schema was built, which is
+		// per engine by design: PostgreSQL replaces migrations 0001-0255 with a squashed
+		// baseline, and an engine-exclusive migration such as 0256.sqlite.sql applies to
+		// one side only. Two fully migrated databases therefore hold different rows here
+		// and always will. It is bookkeeping, no trigger touches it, and comparing it
+		// would report a difference on every script forever.
+		if ($table === 'migrations')
+		{
+			continue;
+		}
+
 		$columns = array_values(array_intersect(
 			array_map(fn($c) => $c['name'], $sqlite->query('PRAGMA table_info("' . $table . '")')->fetchAll(PDO::FETCH_ASSOC)),
 			$pg->query("SELECT column_name FROM information_schema.columns

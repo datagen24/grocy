@@ -306,9 +306,11 @@ owns that constraint today, so it is recorded in both.
    > later. **What the code's expected number is:** take the maximum of
    > `DatabaseMigrationService::GetMigrationFiles($dialect)`, not a hardcoded
    > constant and not a count. It must be dialect-aware, because
-   > [01](01-file-storage.md) introduces `0256.pgsql.sql` — the first
-   > engine-exclusive migration in the tree — and a dialect-blind maximum would put
-   > the SQLite deployment permanently "behind" a file it is never supposed to run.
+   > engine-exclusive migrations exist — `0256.sqlite.sql` is already in the tree
+   > and [01](01-file-storage.md) adds `0257.pgsql.sql` — and a dialect-blind
+   > maximum would put a deployment permanently "behind" a file it is never
+   > supposed to run. `DatabaseMigrationService::GetLatestMigrationNumber($dialect)`
+   > already exists for this; `DatabaseImporter` was the first caller.
    > **What the failure looks like:** HTTP 503 with a plain-text body naming the
    > database's number, the code's number, `MIGRATE_ON_ROOT_REQUEST` and
    > `bin/grocy-migrate` (per Q4's refinement). 503 rather than 500 because the
