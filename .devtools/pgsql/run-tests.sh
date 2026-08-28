@@ -94,17 +94,21 @@ build_pgsql() {
 	rm -rf "$datapath"
 	mkdir -p "$datapath"
 
-	cat > "$datapath/config.php" <<-PHPCONFIG
+	# The connection settings are read from the environment rather than interpolated
+	# into the file. A password with a quote in it would otherwise produce a config.php
+	# that is either broken or executing something it should not be, and the database
+	# name is the only value this function actually chooses.
+	cat > "$datapath/config.php" <<-'PHPCONFIG'
 		<?php
 		Setting('DB_DRIVER', 'pgsql');
-		Setting('DB_HOST', '$PGHOST');
-		Setting('DB_PORT', $PGPORT);
-		Setting('DB_NAME', '$dbname');
-		Setting('DB_USER', '$PGUSER');
-		Setting('DB_PASSWORD', '$PGPASSWORD');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
 	PHPCONFIG
 
-	GROCY_DATAPATH="$datapath" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
+	GROCY_DATAPATH="$datapath" DIFFTEST_DB_NAME="$dbname" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
 		|| fail "could not migrate $dbname"
 
 	rm -rf "$datapath"

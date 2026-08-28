@@ -90,20 +90,38 @@ class ValueComparison
 	}
 
 	/**
-	 * Whether two values would reach a client as the same JSON type.
+	 * Whether two values would reach a client identically on the wire.
 	 *
-	 * This is the check that catches a view returning the string "1.0" on one engine
-	 * where the other returns the number 1 — numerically equal, but a different thing
-	 * on the wire, and the kind of difference that breaks a client doing arithmetic.
+	 * Callers use this *after* Normalise() has already found the values equal, so it is
+	 * only ever asked about differences a client could still see.
 	 *
-	 * It compares types rather than encoded text on purpose. Two floats that differ in
-	 * the last bit encode differently while being the same type, and that difference is
-	 * already absorbed by Normalise()'s rounding as an accepted engine difference —
-	 * reporting it here as a "type" problem would be a false alarm about the one thing
-	 * db/pgsql/README.md says to expect.
+	 * Two things it must catch, and they need different rules:
+	 *
+	 * - **A different JSON type.** A view returning the string "1.0" on one engine where
+	 *   the other returns the number 1 is numerically equal and a different thing on the
+	 *   wire — the case migrations/0256.sqlite.sql exists to fix.
+	 * - **Two strings that differ in bytes.** "2.50" and "2.5" are both strings and both
+	 *   normalise to 2.5, because Normalise() rounds anything is_numeric(). Comparing
+	 *   only the type class would let that through, and a client reading the field as
+	 *   text would see the difference.
+	 *
+	 * What must NOT be reported is two numbers differing in the last bit, which is the
+	 * accepted engine difference db/pgsql/README.md documents and which Normalise()'s
+	 * rounding already absorbs. So the relaxation applies to numbers only: strings are
+	 * still compared by what they encode to, exactly as before this method existed.
 	 */
 	public static function ComparableTypes($a, $b): bool
 	{
-		return self::JsonTypeOf($a) === self::JsonTypeOf($b);
+		if (self::JsonTypeOf($a) !== self::JsonTypeOf($b))
+		{
+			return false;
+		}
+
+		if (self::JsonTypeOf($a) === 'string')
+		{
+			return json_encode($a) === json_encode($b);
+		}
+
+		return true;
 	}
 }

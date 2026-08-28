@@ -11,13 +11,16 @@
 
 FROM php:8.5-cli-bookworm
 
-# libpq for pdo_pgsql, the image libraries for gd, ICU for intl, and libzip for zip.
-# sqlite3 is the CLI, useful for poking at a failing seed by hand.
+# libpq-dev for building pdo_pgsql, the image libraries for gd, ICU for intl, and libzip
+# for zip. postgresql-client is separate and not optional: libpq-dev ships headers and the
+# shared library, while run-tests.sh calls dropdb and createdb, which live in the client
+# package. sqlite3 is the CLI, useful for poking at a failing seed by hand.
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		git \
 		unzip \
 		sqlite3 \
 		libpq-dev \
+		postgresql-client \
 		libicu-dev \
 		libzip-dev \
 		libpng-dev \
