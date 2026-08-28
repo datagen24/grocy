@@ -1,6 +1,6 @@
 # Development and CI environment for the differential test suite.
 #
-#   docker compose run --rm dev .devtools/pgsql/run-difftests.sh
+#   docker compose run --rm dev .devtools/pgsql/run-tests.sh
 #
 # The `dev` service mounts the working tree over /app so edits are picked up without a
 # rebuild, while keeping the image's `packages/` (composer output) — that directory is
@@ -39,19 +39,19 @@ services:
     environment:
       GROCY_ROOT: /app
 
-      # difftest.php's namespace.
-      DIFFTEST_SQLITE_DSN: sqlite:/scratch/difftest.db
-      DIFFTEST_PGSQL_DSN: pgsql:host=postgres;port=5432;dbname=grocy_full
-      DIFFTEST_PGSQL_USER: grocy
-      DIFFTEST_PGSQL_PASSWORD: grocy
+      # These are the only variables to set. run-tests.sh derives every DIFFTEST_* and
+      # TRIGTEST_* value from them and exports it, which is the whole point of having a
+      # runner — setting the two namespaces here as well would look tidy and be dead, since
+      # the runner overwrites them. PGHOST in particular has to be the service name, or the
+      # runner falls back to 127.0.0.1 and dials a database that is not there.
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: grocy
+      PGPASSWORD: grocy
 
-      # trigdifftest.php's namespace, which is disjoint from the above and has to be
-      # set separately. TRIGTEST_PRISTINE_PATH is produced by bin/grocy-migrate.
-      TRIGTEST_SQLITE_PATH: /scratch/trigtest.db
-      TRIGTEST_PRISTINE_PATH: /scratch/pristine.db
-      TRIGTEST_PGSQL_DSN: pgsql:host=postgres;port=5432;dbname=grocy_trig
-      TRIGTEST_PGSQL_USER: grocy
-      TRIGTEST_PGSQL_PASSWORD: grocy
+      # Where the throwaway databases go. Points at the volume below; without it the
+      # runner uses /tmp inside the container and the volume is never touched.
+      SUITE_SCRATCH: /scratch
     working_dir: /app
 
 volumes:

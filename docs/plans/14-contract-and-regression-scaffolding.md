@@ -292,12 +292,20 @@ it worked.
    > **Response:** Firmer than the hedge: GitHub Actions, with a PostgreSQL service
    > container. This fork's workflow is already PR-driven, and a suite that runs on
    > every PR without local discipline is worth *more* to a solo maintainer — there
-   > is no second person to catch the skipped local run. And the image question is
-   > settled by piece 1: the workflow builds and runs the in-repo `Dockerfile`, the
-   > same one a developer gets from `docker compose`, so CI and local runs are the
-   > same environment by construction rather than by two drifting descriptions of
-   > it. Keep `make check` (or the runner directly) as the local entry point; the
-   > workflow file just calls it. Piece 2 stays local until stable, as planned.
+   > is no second person to catch the skipped local run. Keep the runner as the
+   > local entry point; the workflow file just calls it. Piece 2 stays local until
+   > stable, as planned.
+   >
+   > On the image: an earlier draft of this answer said the workflow would build and
+   > run the in-repo `Dockerfile` so that CI and local use one environment by
+   > construction. It does not, and should not. A runner already has PHP and
+   > PostgreSQL, so building the image on every pull request costs minutes and buys
+   > no coverage; the image exists so a contributor can run the suite without
+   > installing either by hand. What keeps the two honest is not a shared image but
+   > a shared entry point — both call `.devtools/pgsql/run-tests.sh`, so there is
+   > one definition of what the suite is. The cost is real and worth naming: CI runs
+   > PHP 8.4 (the fork's floor) against the image's 8.5, so a version-specific
+   > difference would only show on one of them.
 4. **Do the two accepted engine differences need an exemption at the type level?**
    `products_average_price.price` differs in the last bit, which is a value difference, not
    a type one — so probably not. `chores.start_date` differs in *rendering* of the same
@@ -308,12 +316,21 @@ it worked.
    designing an exemption mechanism nothing needs.
 
    > **Response:** The reachability check is done, and the answer is no: build no
-   > exemption mechanism. `qu_factor_*` appears in exactly three views —
-   > `products_view`, `uihelper_stock_entries` and `uihelper_stock_current_overview`
-   > — and the latter two are read only by `controllers/StockController.php:196` and
-   > `:728`, which are server-rendered pages, not API responses. None of the three
-   > is in `ExposedEntity`, so no route can return the column and the type-level
-   > snapshot never sees it. That closes the question rather than deferring it. The
+   > exemption mechanism — but not for the reason first recorded here, which was
+   > wrong and worth correcting because the decision rests on it.
+   >
+   > The claim was that none of the views is in `ExposedEntity`, so no route can
+   > return the column. Being outside `ExposedEntity` only rules out the generic
+   > `/objects/{entity}` route; a hand-built response can select from any view.
+   > `uihelper_product_details` does exactly that: `services/StockService.php:1076-1077`
+   > returns its `qu_factor_purchase_to_stock` and `qu_factor_price_to_stock` as
+   > `qu_conversion_factor_purchase_to_stock` and `qu_conversion_factor_price_to_stock`
+   > on `/stock/products/{productId}`. Those columns are safe because that view has
+   > always cast them, not because nothing reads them.
+   >
+   > So the real reason no mechanism is needed is that after
+   > `migrations/0256.sqlite.sql` there is no type difference left to exempt: every
+   > view exposing `qu_factor_*` now casts. The
    > standing rule if a type difference ever does surface on a reachable route: the
    > porting rules say that is a port bug — fix the view (a `CAST`), don't exempt
    > it. An exemption mechanism is where wire-format bugs go to become permanent.

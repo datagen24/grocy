@@ -10,6 +10,10 @@
 -- which would make the PostgreSQL side of a differential test unreachable, and its
 -- output is randomised, which is the opposite of what a regression fixture needs.
 --
+-- One trap when writing a seed: every tool here splits statements on a semicolon at end
+-- of line, so a comment whose last character is ";" ends the statement above it. Keep
+-- semicolons out of the ends of comment lines.
+--
 -- What a migrated database already provides, and this file therefore does not repeat:
 --   locations            id 2 "Fridge"           (migrations/0006.sql)
 --   quantity_units       id 2 "Piece", 3 "Pack"  (migrations/0006.sql)

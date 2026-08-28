@@ -45,6 +45,16 @@ if (!defined('GROCY_DATAPATH'))
 
 require_once __DIR__ . '/../packages/autoload.php';
 
+// The data directory is created when it does not exist. The shipped data/ covers the
+// default, but pointing GROCY_DATAPATH somewhere new is the normal way to build a
+// throwaway database, and without this that fails with a raw PDO "unable to open
+// database file" rather than anything a reader could act on.
+if (!is_dir(GROCY_DATAPATH) && !@mkdir(GROCY_DATAPATH, 0755, true) && !is_dir(GROCY_DATAPATH))
+{
+	fwrite(STDERR, 'Could not create the data directory: ' . GROCY_DATAPATH . PHP_EOL);
+	exit(1);
+}
+
 // config.php is optional here in a way it is not for the web application: a migration
 // run against an otherwise untouched checkout is a normal thing to want, and demanding
 // a config file before the defaults can be used would make the test suite carry one

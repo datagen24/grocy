@@ -6,10 +6,14 @@
 -- The difference reaches uihelper_stock_entries and uihelper_stock_current_overview too,
 -- both of which take these columns straight from products_view.
 --
--- PostgreSQL is the conforming side: grocy.openapi.json documents this field as
--- "type: number", and uihelper_product_details has always wrapped the same expression in
--- CAST(... AS REAL) — so the cast below is applying an existing convention to the view
--- that was missed, not inventing one.
+-- PostgreSQL is the conforming side, and the convention is already established here:
+-- uihelper_product_details has always wrapped the same expression in CAST(... AS REAL)
+-- (migrations/0234.sql). So the cast below applies an existing convention to the view it
+-- was missed on, rather than inventing one.
+--
+-- Not an argument from the OpenAPI spec: products_view is not an exposed entity and none
+-- of its columns appear there. The only qu_factor_purchase_to_stock in grocy.openapi.json
+-- is the barcode-plugin field under ExternalBarcodeLookupResponse, which is unrelated.
 --
 -- @engine-exclusive
 -- SQLite only, deliberately, because PostgreSQL is already correct: its baseline defines

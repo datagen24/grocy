@@ -30,13 +30,19 @@ jobs:
       # There is no configured linter in this repository, so this is a syntax sweep
       # rather than a style check. It is cheap and it catches the parse error that
       # would otherwise fail every job below with a much less obvious message.
+      # php -l writes both its success line and its parse errors to stdout, so the
+      # output is captured rather than discarded: discarding it hides the filename and
+      # leaves a failing job showing nothing but an exit code.
       - name: Check PHP syntax
         run: |
-          find . -name '*.php' \
-            -not -path './packages/*' \
-            -not -path './public/packages/*' \
-            -print0 \
-          | xargs -0 -n1 -P4 php -l > /dev/null
+          if ! find . -name '*.php' \
+              -not -path './packages/*' \
+              -not -path './public/packages/*' \
+              -print0 \
+            | xargs -0 -n1 -P4 php -l > lint.log 2>&1; then
+            grep -v '^No syntax errors detected' lint.log
+            exit 1
+          fi
 
   suite:
     runs-on: ubuntu-latest

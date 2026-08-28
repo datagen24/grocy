@@ -20,6 +20,7 @@ require_once (getenv('GROCY_ROOT') ?: '/app') . '/packages/autoload.php';
 
 use Grocy\Services\Database\DatabaseImporter;
 use Grocy\Services\Database\PostgresDialect;
+use Grocy\Services\Database\ValueComparison;
 
 $scripts = array_slice($argv, 1);
 
@@ -245,8 +246,8 @@ function CompareAllTables(PDO $sqlite, PDO $pg): int
 			$rowsB = ProjectReachableRecipeRows($table, $rowsB, RecipeIdentities($pg));
 		}
 
-		$a = array_map('NormaliseRow', $rowsA);
-		$b = array_map('NormaliseRow', $rowsB);
+		$a = array_map([ValueComparison::class, 'NormaliseRow'], $rowsA);
+		$b = array_map([ValueComparison::class, 'NormaliseRow'], $rowsB);
 
 		sort($a);
 		sort($b);
@@ -398,13 +399,3 @@ function IgnoredColumns(string $table): array
 	return $ignored;
 }
 
-function NormaliseRow(array $row): string
-{
-	return json_encode(array_map(function ($v)
-	{
-		if ($v === null) return null;
-		if (is_bool($v)) return $v ? 1 : 0;
-		if (is_numeric($v)) return round((float)$v, 6);
-		return (string)$v;
-	}, $row));
-}

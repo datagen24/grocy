@@ -97,13 +97,34 @@ freezing/thawing due date handling, so getting it wrong changes due dates. See Q
    > **Response:** Don't inherit, v1 — keep the flag literal, and get 90% of the
    > friendliness by defaulting the checkbox from the parent when creating a child
    > location. Inheritance can be revisited if the explicit flag proves annoying.
+   >
+   > The real tree (see Q5) makes the consequence concrete, and it belongs in the
+   > fixtures rather than being discovered later: `UprightFreezer` sits at level 3
+   > while stock points at `Door`, level 4. Under this answer `Door` has to carry
+   > `is_freezer` itself — a freezer compartment whose parent is the freezer is
+   > exactly the case that looks like it should inherit and does not. The fixture
+   > should include that shape so the due-date path is exercised against a child
+   > whose flag is set independently of its parent's.
 4. **Should stock roll up by default anywhere in the UI?** For example, should the stock
    overview's location filter for "Kitchen" include everything beneath it? I would say yes
    for filtering, no for the location content report, but this is a taste call.
 
    > **Response:** Agreed with the lean: roll up for filtering, not for the location
    > content report.
-5. **Depth cap?** Same question as 07 Q3. Floor/room/cabinet/shelf is four, so any cap
+5. **Depth cap?** The real tree is `Floor / Room / SubSpace / Shelf`:
+
+   ```
+   Basement / StorageRoom / Rack1          / Shelf3
+   Basement / StorageRoom / UprightFreezer / Door
+   Main     / Kitchen     / SinkLeftCab    / Shelf1
+   ```
+
+   Four levels, and containment is exactly what `parent_location_id` means — unlike
+   [07](07-nested-products.md), where the equivalent tree turned out to be a taxonomy
+   rather than the relation the column expresses (07 Q6). This one fits the column it
+   is proposed for, which is why 08 stays the simpler of the two.
+
+   Same question as 07 Q3. Floor/room/cabinet/shelf is four, so any cap
    should be comfortably above that.
 
    > **Response:** Share one constant with 07; something like 6 clears
