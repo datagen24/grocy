@@ -125,16 +125,66 @@ compared against a deliberate expectation rather than against whatever falls out
    "brand > variant > size", that is three, and worth designing for concretely rather
    than in the abstract.
 
-   > **Response:** Write the concrete tree down before starting. This is the largest
-   > fixed cost on the roadmap and its value is proportional to how deep the real
-   > data goes — decide on data, not symmetry with 08.
+   > **Response:** Answered — the shape is `MajorClass / SubClass / Item / Variant`,
+   > three levels normally and four where a variant matters:
    >
-   > Unresolved, and deliberately so: this is the one open question on the roadmap
-   > that no amount of code reading answers, because the input is the maintainer's
-   > own catalogue. **07 does not start until a real example tree is written into
-   > this plan** — actual products, actual depth. Until then the plan cannot say
-   > whether it is designing for three levels or for arbitrary recursion, and that
-   > difference is most of its cost. It sits behind 08 anyway, so there is time.
+   > ```
+   > Dairy / Milk   / Whole
+   > Dairy / Creme  / Heavy
+   > Dairy / Cheese / Cheddar / Sharp
+   > ```
+   >
+   > So: **four levels, not arbitrary recursion.** The recursive CTE is still the
+   > right implementation — a fixed four-level join would be worse to read and no
+   > faster — but the plan is sized for a bounded, shallow tree, and the depth cap
+   > in Q3 is a real bound rather than a formality.
+
+   See "What the real tree implies" below: the shape is a taxonomy, and that has
+   consequences for Q1 and Q4 that the earlier answers did not account for.
+
+## What the real tree implies
+
+The example tree in Q5 is a **classification**, not a set of packaging variants. Only
+the leaves are things you buy, hold and consume; `Dairy` and `Dairy/Milk` are labels.
+Upstream's `parent_product_id` means the opposite — a parent and its children are the
+*same* product in different packagings, which is why stock rolls up to the parent and
+why `products_current_substitutions` offers a sibling when a product runs out. Putting a
+taxonomy into that column reuses the mechanism for something it was not built for, and
+three of the answers above change as a result:
+
+- **Q1 (roll-ups over the whole subtree) collides with quantity units.** `stock_current`
+  aggregates in the parent's `qu_id_stock`. `Dairy/Cheese` can plausibly total in grams;
+  `Dairy` cannot total milk in litres, cream in millilitres and cheese in grams. Either
+  intermediate nodes carry a real stock unit and roll-up stops where the units stop
+  agreeing, or roll-up is display-only and never enters `stock_current`. This needs
+  deciding before the recursive view is written — it is the difference between changing
+  `/stock`'s row set and not touching it. Note this also settles the Review note below:
+  if roll-up stays out of `stock_current`, the Home Assistant consumer sees nothing new.
+
+- **Q4 (substitution across the whole subtree) is wrong for a taxonomy.** Nearest-first
+  ordering makes Sharp Cheddar a substitute for Cheddar, which is right. It also makes
+  Heavy Cream a substitute for Whole Milk, because both sit under `Dairy`, which is not.
+  Either substitution is capped at a small relative depth (1, i.e. today's behaviour),
+  or it is opt-in per product, or the taxonomy does not live in `parent_product_id` at
+  all.
+
+- **Q2's mixed middle node is now hypothetical rather than typical.** Nothing in the
+  example tree stocks an intermediate node. The fixture should still cover it — a
+  three-level tree with a stocked middle node is the double-counting case — but it is a
+  robustness fixture, not a model of the real catalogue.
+
+**The prior question this raises:** if the tree is purely a taxonomy, `product_groups`
+(one level today, and the subject of [03](03-category-min-stock.md)) is the closer fit,
+and nesting *that* is a much smaller change than nesting `parent_product_id` — no stock
+aggregation, no substitution, no `cascade_change_qu_id_stock`, none of the audit table at
+the top of this plan. `parent_product_id` earns its cost only if the real requirement is
+that `Dairy/Cheese/Cheddar/Sharp` and a plain `Cheddar` **share stock**. Decide that
+before starting: it is the difference between the largest item on the roadmap and a small
+one.
+
+The locations tree in [08](08-nested-locations.md) has no equivalent problem —
+containment is exactly what `parent_location_id` would mean — which is one more reason 08
+goes first.
 
 ## Review notes
 

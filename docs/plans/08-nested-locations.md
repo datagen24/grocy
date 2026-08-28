@@ -108,6 +108,23 @@ freezing/thawing due date handling, so getting it wrong changes due dates. See Q
 
    > **Response:** Share one constant with 07; something like 6 clears
    > floor/room/cabinet/shelf with headroom.
+   >
+   > Confirmed against the real layout, which is `Floor / Room / SubSpace / Shelf`:
+   >
+   > ```
+   > Basement / StorageRoom / Rack1           / Shelf3
+   > Basement / StorageRoom / UprightFreezer  / Door
+   > Main     / Kitchen     / SinkLeftCab     / Shelf1
+   > ```
+   >
+   > Four levels, so a cap of 6 stands. Two things this makes concrete: the third
+   > level is a *container*, not a room, so `UprightFreezer` and `SinkLeftCab` sit at
+   > the same depth — depth carries no fixed meaning and nothing may key off it. And
+   > `Basement/StorageRoom/UprightFreezer/Door` is the `is_freezer` case from Q3 in
+   > real data: the freezer is level 3 and the thing stock actually points at is
+   > level 4, so with the "don't inherit" answer the `Door` row must have the flag
+   > ticked itself. That is exactly what the default-from-parent behaviour in Q3 is
+   > there to make painless, and it belongs in the fixtures.
 
 ## Effort
 
