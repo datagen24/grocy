@@ -124,17 +124,37 @@ class DatabaseMigrationService extends BaseService
 		foreach (new \FilesystemIterator(__DIR__ . '/../migrations') as $file)
 		{
 			$matches = [];
+			$name = $file->getBasename();
 
-			if (preg_match('/^(\d+)\.(sql|php)$/', $file->getBasename(), $matches))
+			if (preg_match('/^(\d+)\.(sql|php)$/', $name, $matches))
 			{
 				$generic[intval($matches[1])] = $file;
 			}
-			elseif (preg_match('/^(\d+)\.([a-z]+)\.(sql|php)$/', $file->getBasename(), $matches))
+			elseif (preg_match('/^(\d+)\.([a-z]+)\.(sql|php)$/', $name, $matches))
 			{
+				// A suffix that does not name a real engine matches nothing and would
+				// otherwise be skipped in silence on every engine — the migration simply
+				// never runs, and nothing says so. A typo here is indistinguishable from
+				// a deliberate omission at runtime, so refuse to start instead.
+				if (!in_array($matches[2], DatabaseDialect::SUPPORTED_DRIVERS, true))
+				{
+					throw new \Exception('Migration "' . $name . '" is suffixed "' . $matches[2]
+						. '", which is not a supported database driver. Expected one of: '
+						. implode(', ', DatabaseDialect::SUPPORTED_DRIVERS) . '.');
+				}
+
 				if ($matches[2] === $dialect->GetName())
 				{
 					$specific[intval($matches[1])] = $file;
 				}
+			}
+			elseif (preg_match('/\.(sql|php)$/', $name))
+			{
+				// Same failure, different spelling: a migration whose name does not parse
+				// at all is dead weight nobody would notice.
+				throw new \Exception('Migration "' . $name . '" does not follow the naming '
+					. 'convention. Expected NNNN.sql, NNNN.php, or NNNN.<driver>.sql / '
+					. 'NNNN.<driver>.php.');
 			}
 		}
 

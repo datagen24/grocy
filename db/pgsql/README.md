@@ -24,7 +24,21 @@ same number.
 There is a third case, and it needs to be a deliberate one: a migration that applies to a
 single engine because the other genuinely needs no change. `0256.sqlite.sql` is the first,
 fixing a SQLite-only type defect that PostgreSQL never had. Ship one only when you can say
-in the file why the other engine is already correct, and say it there rather than here.
+in the file why the other engine is already correct, and say it there rather than here —
+literally, with an `@engine-exclusive` comment, because `.devtools/pgsql/check-migrations.php`
+refuses a lone engine-specific file that does not carry one. A missing counterpart and a
+deliberate omission look identical in a directory listing; the marker is what tells them
+apart.
+
+The same script rejects an engine-specific file that silently shadows a portable one of the
+same number. Overriding is still legal — the loader prefers the specific file — but it has
+to say `@overrides-generic`, because left implicit it means one engine never runs the
+portable migration while both record the same number. With only two engines, a complete
+per-engine pair is usually the clearer way to write that anyway.
+
+The runtime loader enforces the other half: a migration whose name does not parse, or whose
+suffix is not a real driver, now aborts the migration run instead of being skipped in
+silence. `0256.sqlight.sql` used to be a file that ran nowhere and told nobody.
 
 The consequence to keep in mind is that the two engines then sit at different migration
 numbers while both being fully migrated, so nothing may compare one engine's number to the

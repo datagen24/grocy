@@ -175,6 +175,13 @@ run_trigger_tests() {
 	fi
 }
 
+# Before anything is built: a migration numbering mistake means the two engines are not
+# running the same set of changes, which would make every comparison below meaningless
+# rather than merely wrong.
+say "checking migration numbering"
+php "$SUITE_DIR/check-migrations.php" || fail 'migration numbering check failed'
+
+say ""
 say "building the pristine SQLite database"
 build_pristine
 

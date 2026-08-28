@@ -11,6 +11,7 @@
 -- CAST(... AS REAL) — so the cast below is applying an existing convention to the view
 -- that was missed, not inventing one.
 --
+-- @engine-exclusive
 -- SQLite only, deliberately, because PostgreSQL is already correct: its baseline defines
 -- these columns as COALESCE(quc_purchase.factor::double precision, 1.0::double precision).
 -- Adding a no-op pgsql migration to preserve numbering symmetry would suggest a change
