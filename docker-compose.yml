@@ -1,0 +1,58 @@
+# Development and CI environment for the differential test suite.
+#
+#   docker compose run --rm dev .devtools/pgsql/run-tests.sh
+#
+# The `dev` service mounts the working tree over /app so edits are picked up without a
+# rebuild, while keeping the image's `packages/` (composer output) — that directory is
+# gitignored and does not exist on the host.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: grocy
+      POSTGRES_PASSWORD: grocy
+      POSTGRES_DB: grocy
+    # No persistent volume on purpose: every run of the suite should start from a
+    # database it created itself. A stale volume is how a passing suite starts lying.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grocy -d grocy"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  dev:
+    build:
+      context: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      # Keep the image's vendor directory rather than shadowing it with the host's
+      # (absent) one.
+      - /app/packages
+      # Scratch space for the databases the suite builds and throws away.
+      - suite-scratch:/scratch
+    environment:
+      GROCY_ROOT: /app
+
+      # These are the only variables to set. run-tests.sh derives every DIFFTEST_* and
+      # TRIGTEST_* value from them and exports it, which is the whole point of having a
+      # runner — setting the two namespaces here as well would look tidy and be dead, since
+      # the runner overwrites them. PGHOST in particular has to be the service name, or the
+      # runner falls back to 127.0.0.1 and dials a database that is not there.
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: grocy
+      PGPASSWORD: grocy
+
+      # Where the throwaway databases go. Points at the volume below; without it the
+      # runner uses /tmp inside the container and the volume is never touched.
+      SUITE_SCRATCH: /scratch
+    working_dir: /app
+
+volumes:
+  suite-scratch:

@@ -273,6 +273,16 @@ Against feature plans generally: it blocks none of 01–09 outright.
    > against a ~30 MB database; stream rows with difftest's normalization and
    > compare all of it. If measurement says minutes rather than seconds, that is
    > still fine for a once-ever command.
+   >
+   > "difftest's normalization" is unnamed work, so name it: `normalise()` lives as
+   > a bare function at `.devtools/pgsql/difftest.php:106`, which is neither
+   > autoloaded nor shipped in the image, while `DatabaseImporter` is in
+   > `services/`. It has to move to be shared. It moves to `services/` as part of
+   > [14](14-contract-and-regression-scaffolding.md) piece 1 — which owns that file
+   > and needs the same function for its comparator — with the `.devtools` scripts
+   > calling it there. This plan consumes it; it does not extract it. If 13 somehow
+   > lands first, extract it here and 14 inherits it, but do not duplicate it in
+   > both places.
 6. **Should `InTransaction` be on `DatabaseService` or on the dialect?** It is
    engine-independent as written, which argues for `DatabaseService`. But
    [10](10-cold-start-statelessness.md) proposes a per-engine `WithMigrationLock` on

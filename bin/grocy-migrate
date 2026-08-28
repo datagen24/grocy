@@ -1,0 +1,118 @@
+#!/usr/bin/env php
+<?php
+
+// Brings the configured database up to date, then exits.
+//
+//   php bin/grocy-migrate [--quiet]
+//
+// Which database that is comes from config.php, exactly as it does for the web
+// application: SQLite unless DB_DRIVER says otherwise. Set GROCY_DATAPATH to point the
+// SQLite path somewhere else.
+//
+// This exists so that migrating is something you *do*, rather than something that
+// happens to whoever sends the first request after a deployment. That matters in two
+// places: an initContainer can run it before any pod serves traffic, and the
+// differential test suite can build a schema without standing up a web server. See
+// docs/plans/10-cold-start-statelessness.md.
+//
+// Exit codes: 0 on success (including "already up to date"), 1 on failure.
+
+use Grocy\Services\DatabaseMigrationService;
+use Grocy\Services\DatabaseService;
+
+if (PHP_SAPI !== 'cli')
+{
+	exit('This is a command line script');
+}
+
+$arguments = array_slice($argv, 1);
+$quiet = in_array('--quiet', $arguments, true);
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/grocy-migrate [--quiet]\n\n";
+	echo "  Runs any outstanding migrations against the database configured in config.php\n";
+	echo "  and exits. Safe to run repeatedly; a database that is already up to date is a\n";
+	echo "  no-op.\n\n";
+	echo "  --quiet  Only print errors.\n";
+	exit(0);
+}
+
+if (!defined('GROCY_DATAPATH'))
+{
+	define('GROCY_DATAPATH', getenv('GROCY_DATAPATH') ?: __DIR__ . '/../data');
+}
+
+require_once __DIR__ . '/../packages/autoload.php';
+
+// The data directory is created when it does not exist. The shipped data/ covers the
+// default, but pointing GROCY_DATAPATH somewhere new is the normal way to build a
+// throwaway database, and without this that fails with a raw PDO "unable to open
+// database file" rather than anything a reader could act on.
+if (!is_dir(GROCY_DATAPATH) && !@mkdir(GROCY_DATAPATH, 0755, true) && !is_dir(GROCY_DATAPATH))
+{
+	fwrite(STDERR, 'Could not create the data directory: ' . GROCY_DATAPATH . PHP_EOL);
+	exit(1);
+}
+
+// config.php is optional here in a way it is not for the web application: a migration
+// run against an otherwise untouched checkout is a normal thing to want, and demanding
+// a config file before the defaults can be used would make the test suite carry one
+// around for no reason.
+if (file_exists(GROCY_DATAPATH . '/config.php'))
+{
+	require_once GROCY_DATAPATH . '/config.php';
+}
+
+require_once __DIR__ . '/../config-dist.php';
+
+// Migrations and the always-run 8888.php fixup expect a user context.
+if (!defined('GROCY_USER_ID'))
+{
+	define('GROCY_USER_ID', 1);
+}
+
+try
+{
+	(new Grocy\Helpers\ConfigurationValidator())->validateConfig();
+}
+catch (\Grocy\Helpers\EInvalidConfig $ex)
+{
+	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+	exit(1);
+}
+
+$dialect = DatabaseService::GetInstance()->GetDialect();
+
+if (!$quiet)
+{
+	if ($dialect->GetName() === 'sqlite')
+	{
+		echo 'Database: ' . $dialect->GetDbFilePath() . ' (sqlite)' . PHP_EOL;
+	}
+	else
+	{
+		echo 'Database: ' . GROCY_DB_NAME . ' on ' . GROCY_DB_HOST . ':' . GROCY_DB_PORT
+			. ' (' . $dialect->GetName() . ')' . PHP_EOL;
+	}
+}
+
+try
+{
+	DatabaseMigrationService::GetInstance()->MigrateDatabase();
+}
+catch (\Exception $ex)
+{
+	fwrite(STDERR, 'Migration failed: ' . $ex->getMessage() . PHP_EOL);
+	exit(1);
+}
+
+if (!$quiet)
+{
+	$applied = DatabaseService::GetInstance()->GetDbConnectionRaw()
+		->query('SELECT MAX(migration) FROM migrations')->fetchColumn();
+
+	echo 'Schema is up to date at migration ' . $applied . '.' . PHP_EOL;
+}
+
+exit(0);

@@ -5,6 +5,12 @@
 removes the motivation for shipping barcode data there.
 **Status:** draft for review.
 
+> **Deferred, not cancelled.** This plan is parked pending Q1's experiment: roughly twenty
+> real barcodes off the maintainer's own pantry, run against Open Food Facts and USDA
+> FoodData Central (and ideally one commercial API), to tabulate actual hit rates. All five
+> open questions below stay unanswered until that data exists. Nothing else in the roadmap
+> depends on this plan, so it can sit here indefinitely with no effect on anything else.
+
 ## The problem
 
 `STOCK_BARCODE_LOOKUP_PLUGIN` defaults to `OpenFoodFactsBarcodeLookupPlugin`. Open Food

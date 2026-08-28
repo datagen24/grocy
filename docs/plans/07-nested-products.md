@@ -128,6 +128,62 @@ compared against a deliberate expectation rather than against whatever falls out
    > **Response:** Write the concrete tree down before starting. This is the largest
    > fixed cost on the roadmap and its value is proportional to how deep the real
    > data goes — decide on data, not symmetry with 08.
+   >
+   > **Answered.** The real tree is `MajorClass / SubClass / Item / Variant`:
+   >
+   > ```
+   > Dairy / Milk   / Whole
+   > Dairy / Creme  / Heavy
+   > Dairy / Cheese / Cheddar / Sharp
+   > ```
+   >
+   > Four levels — bounded and shallow, not arbitrary recursion. So the depth
+   > question is settled and it is the *same* depth as 08's locations tree.
+   >
+   > It also raises something larger than depth, which is now question 6.
+
+6. **Is this a classification, or is it what `parent_product_id` means?** The tree in
+   Q5 is a taxonomy: `Dairy` is a kind-of relation, not a packaging relation. Upstream,
+   `parent_product_id` means the opposite — a parent and its children are the *same
+   product in different packagings*, which is precisely why stock rolls up to the parent
+   and why siblings substitute for one another.
+
+   Two answers already recorded above break on the real data:
+
+   - **Q1's whole-subtree roll-up collides with quantity units.** `stock_current`
+     aggregates in the parent's `qu_id_stock`. `Dairy/Cheese` can plausibly total in
+     grams. `Dairy` cannot total milk in litres, cream in millilitres and cheese in
+     grams — there is no unit for the parent to aggregate into.
+   - **Q4's whole-subtree substitution is wrong here.** Nearest-first correctly makes
+     `Sharp` a substitute for `Cheddar`. It also makes `Heavy` cream a substitute for
+     `Whole` milk, because both sit under `Dairy`. That is not a substitution anyone
+     wants offered.
+
+   Neither is a flaw in the recursive mechanics; both say the mechanics are being
+   pointed at the wrong relation.
+
+   > **Response:** Settle this before any of 07 starts — it decides whether 07 is the
+   > largest item on the roadmap or one of the smallest, and it cannot be answered
+   > from the code.
+   >
+   > If the requirement is purely taxonomy — browse and report by class, group the
+   > shopping list by aisle — then **nesting `product_groups` is the right change and
+   > this plan is mostly unnecessary**. That is [03](03-category-min-stock.md)'s
+   > territory, one nullable parent column on a lookup table, and it costs none of
+   > what 07 costs: no stock aggregation, no substitution semantics, no
+   > `cascade_change_qu_id_stock`, none of the one-level audit at the top of this
+   > plan.
+   >
+   > `parent_product_id` earns its cost only if the real requirement is that
+   > `Dairy/Cheese/Cheddar/Sharp` and a plain `Cheddar` **share stock** — one pool
+   > consumed and purchased through either name. That is a packaging relation, and it
+   > is the only thing the existing column is built to express.
+   >
+   > The two are not exclusive. The likely honest answer is nested `product_groups`
+   > for the taxonomy, and `parent_product_id` left at its current depth for the few
+   > genuine same-product-different-packaging cases. If that is where it lands, 07
+   > shrinks to whatever the packaging cases actually need, and Q1 and Q4 above are
+   > rewritten against that narrower relation rather than against the taxonomy.
 
 ## Review notes
 

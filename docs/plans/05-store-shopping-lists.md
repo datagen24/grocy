@@ -3,6 +3,8 @@
 **Goal:** Segregate and sort shopping lists by store, and give products and recipes a
 default list.
 **Upstream:** [grocy/grocy#2702](https://github.com/grocy/grocy/issues/2702)
+**Depends on:** [12](12-frontend-shared-core.md) for the UI pieces (store selector,
+list-filter toggle) — the A + C schema and API work can proceed ahead of it.
 **Status:** draft for review.
 
 ## Today

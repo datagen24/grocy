@@ -13,6 +13,15 @@ namespace Grocy\Services\Database;
 abstract class DatabaseDialect
 {
 	/**
+	 * Every driver name this fork supports, which is also every suffix a migration file
+	 * may carry. Kept here rather than inline in Create() because the migration loader
+	 * needs the same list: a file named NNNN.<something>.sql is only meaningful if
+	 * <something> names a real engine, and a list that exists twice is a list that will
+	 * eventually disagree with itself.
+	 */
+	const SUPPORTED_DRIVERS = ['sqlite', 'pgsql'];
+
+	/**
 	 * "sqlite" or "pgsql", matching the value of the DB_DRIVER setting.
 	 */
 	abstract public function GetName(): string;
@@ -167,7 +176,8 @@ abstract class DatabaseDialect
 				return new PostgresDialect();
 
 			default:
-				throw new \Exception('Unsupported database driver "' . $driver . '", only sqlite and pgsql are supported');
+				throw new \Exception('Unsupported database driver "' . $driver . '", only '
+					. implode(' and ', self::SUPPORTED_DRIVERS) . ' are supported');
 		}
 	}
 }

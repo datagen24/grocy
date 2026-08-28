@@ -16,10 +16,34 @@ installation needs instead.
 they were never part of; `DatabaseMigrationService` then records migrations 1-255 as
 applied and continues from 0256 onwards.
 
-**Every migration from 0256 on has to work on both engines.** Write a portable
+**Every migration from 0256 on has to leave both engines correct.** Write a portable
 `migrations/0256.sql`, or a pair of `migrations/0256.sqlite.sql` and
 `migrations/0256.pgsql.sql` - an engine specific file wins over a generic one with the
 same number.
+
+There is a third case, and it needs to be a deliberate one: a migration that applies to a
+single engine because the other genuinely needs no change. `0256.sqlite.sql` is the first,
+fixing a SQLite-only type defect that PostgreSQL never had. Ship one only when you can say
+in the file why the other engine is already correct, and say it there rather than here —
+literally, with an `@engine-exclusive` comment, because `.devtools/pgsql/check-migrations.php`
+refuses a lone engine-specific file that does not carry one. A missing counterpart and a
+deliberate omission look identical in a directory listing; the marker is what tells them
+apart.
+
+The same script rejects an engine-specific file that silently shadows a portable one of the
+same number. Overriding is still legal — the loader prefers the specific file — but it has
+to say `@overrides-generic`, because left implicit it means one engine never runs the
+portable migration while both record the same number. With only two engines, a complete
+per-engine pair is usually the clearer way to write that anyway.
+
+The runtime loader enforces the other half: a migration whose name does not parse, or whose
+suffix is not a real driver, now aborts the migration run instead of being skipped in
+silence. `0256.sqlight.sql` used to be a file that ran nowhere and told nobody.
+
+The consequence to keep in mind is that the two engines then sit at different migration
+numbers while both being fully migrated, so nothing may compare one engine's number to the
+other's. `DatabaseMigrationService::GetLatestMigrationNumber()` takes a dialect for this
+reason; use it rather than assuming the highest file in `migrations/` applies everywhere.
 
 ## Testing a change
 
@@ -254,12 +278,31 @@ Verified with `trigdifftest.php` that this is the *only* such column left across
 tables.
 
 **`qu_factor_*` in `products_view`, `uihelper_stock_entries` and
-`uihelper_stock_current_overview`.**
-`cache__quantity_unit_conversions_resolved.factor` is `TEXT` upstream, so SQLite returns
-the JSON string `"1.0"` where PostgreSQL returns the number `1`. None of these views is in the
-`ExposedEntity` enum, `uihelper_stock_entries` is only read by a server rendered page, and
-the OpenAPI spec documents this field as `type: number` - so PostgreSQL is the conforming
-side. Nothing on an API surface changes.
+`uihelper_stock_current_overview` - fixed, no longer a difference.**
+`cache__quantity_unit_conversions_resolved.factor` is `TEXT` upstream, so SQLite used to
+return the JSON string `"1.0"` where PostgreSQL returns the number `1`. This was recorded
+here as accepted on the grounds that none of the three views is in the `ExposedEntity`
+enum. That reasoning was too generous: PostgreSQL was already the conforming side (the
+OpenAPI spec documents the field as `type: number`) and `uihelper_product_details` had
+always wrapped the same expression in `CAST(... AS REAL)`, so one view was conforming and
+its siblings were not, for no reason anyone had chosen.
+
+`migrations/0256.sqlite.sql` applies that same cast in `products_view`, which the other
+two inherit the columns from. SQLite now returns a number as well. The differential suite
+covers all three views and would catch a regression.
+
+**The `migrations` table.** Excluded from `trigdifftest.php`'s table comparison, and no
+longer copied by `DatabaseImporter`. It records how a particular database's schema was
+built, which is per engine by design: PostgreSQL replaces migrations 0001-0255 with the
+squashed baseline, and an engine-exclusive migration such as `0256.sqlite.sql` applies to
+one side only. Two fully migrated databases therefore hold different rows here and always
+will.
+
+This is why `DatabaseImporter` checks each side against the latest migration for *its own*
+engine rather than comparing the two numbers to each other, and why it leaves the target's
+migrations table alone. Copying the source's history into the target was harmless only
+while the engines happened to number alike; once they do not, a target carrying the
+source's numbers would skip a future migration of its own believing it had already run.
 
 ## Triggers
 

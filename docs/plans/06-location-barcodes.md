@@ -3,8 +3,8 @@
 **Goal:** Machine readable codes on storage locations, so a future camera based inventory
 system can tell *where* it is looking and keep stock by location current without anyone
 typing anything.
-**Depends on:** nothing. Pairs naturally with [08](08-nested-locations.md) but does not
-need it.
+**Depends on:** [12](12-frontend-shared-core.md), per the README. Pairs naturally with
+[08](08-nested-locations.md) but does not need it.
 **Status:** draft for review.
 
 ## The use case drives the design

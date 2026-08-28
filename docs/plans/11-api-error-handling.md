@@ -12,7 +12,9 @@ hardening set.
 
 ## Today
 
-The route table and `grocy.openapi.json` agree on ~74 routes with a single mismatch, the
+The `/api` route group registers 86 operations across 73 paths and `grocy.openapi.json`
+documents 86 operations across 73 paths — the totals agree, and two individual mismatches
+hide inside them (see [14](14-contract-and-regression-scaffolding.md)). The
 `ExposedEntity` allow-lists are read from the spec at runtime so entity drift is
 impossible by construction, and every controller returns the same
 `{ "error_message": … }` body. The structure is sound. What is not uniform is *which
@@ -22,13 +24,17 @@ status code* that body arrives with, and it is not uniform in four separate ways
 throws a Slim `HttpForbiddenException`. Where the call sits above the `try`
 (`GenericEntityApiController::AddObject`, `UsersApiController::CreateUser`) the exception
 escapes to `ExceptionController` and the client gets 403. Where it sits inside
-(`UsersApiController::AddPermission` before its second catch was added, and others) the
-generic `catch (\Exception)` swallows it and returns 400 with the forbidden message in
-the body. Same failure, two status codes, decided by indentation.
+the generic `catch (\Exception)` swallows it and returns 400 with the forbidden message
+in the body. Same failure, two status codes, decided by indentation. The scale is worth
+being precise about: of the 54 `CheckPermission` call sites, only 7 sit inside a `try` at
+all, and the real 400→403 blast radius is three routes — `POST /chores/{id}/execute`,
+`POST /chores/executions/{id}/undo`, and `GET /print/shoppinglist/thermal`. The
+inconsistency is systemic; the observable change is small.
 
-**`UsersApiController::AddPermission` is the only controller that gets it right**, via a
+**`UsersApiController` is the only controller that gets it right**, via a
 `catch (\Slim\Exception\HttpSpecializedException)` ahead of the generic catch that
-re-emits `$ex->getCode()`. That is the pattern; it exists in exactly one method.
+re-emits `$ex->getCode()`. That is the pattern; it exists in exactly three methods
+(`controllers/UsersApiController.php:35`, `:217`, `:269`) and nowhere else in the tree.
 
 **Query-parse failures are 500s.** `BaseApiController::QueryData` throws a bare
 `\Exception('Invalid sort order …')` and `FilterData` throws `\Exception('Invalid query')`.
@@ -56,6 +62,11 @@ Alongside those, five smaller things on the same surface:
   `Content-Type` and no CORS headers. `OPTIONS` preflights hit auth first and are 401'd
   before `CorsMiddleware` ever runs, which means browser cross-origin API-key use cannot
   work at all despite CORS being implemented.
+- **There is already a workaround for that, sitting outside the group.**
+  `routes.php:271-275` registers a catch-all `$app->any('/api/{routes:.+}', …)` returning
+  an empty response with `CorsMiddleware` attached, commented "For CORS preflight OPTIONS
+  requests". It is a second, parallel CORS path — and because it is `any` rather than
+  `options`, it is also the fallback that answers any unmatched `/api/*` request.
 - **`CorsMiddleware` is unconditionally `Access-Control-Allow-Origin: *`.** Not
   configurable, not disableable.
 
@@ -68,8 +79,10 @@ authenticated request.
 **Errors are not logged anywhere.** Defect 9 gated `displayErrorDetails` on dev mode,
 which stopped serving stack traces to clients. The second and third arguments of
 `addErrorMiddleware` — `logErrors`, `logErrorDetails` — are still `false`, and no logger
-is wired. In production a 500 currently leaves no trace at all. That was deliberately
-deferred out of the defects pass; this is where it lands.
+is wired. In production a 500 currently leaves no trace at all. The socket for this is
+already cut: `ExceptionController::__invoke` takes a `?LoggerInterface $logger`
+parameter and nothing ever passes one. That was deliberately deferred out of the defects
+pass; this is where it lands.
 
 ## Proposed change
 
@@ -110,6 +123,15 @@ Then a 401 carries `Content-Type: application/json`, the standard
 `{ "error_message": "Unauthorized" }` body and CORS headers, and `OPTIONS` is
 short-circuited by `CorsMiddleware` before authentication is attempted.
 
+That move must also settle the `$app->any('/api/{routes:.+}', …)` catch-all at
+`routes.php:271-275`. Once `CorsMiddleware` runs app-level ahead of auth, the catch-all's
+stated reason to exist is gone and it should be deleted — but deleting it changes what an
+unmatched `/api/*` path returns (today: 200 with an empty body from the catch-all;
+after: a 404 from Slim through `ExceptionController`), so it is a behaviour change to
+make deliberately rather than as a side effect. Leaving it in place alongside an
+app-level `CorsMiddleware` means two code paths adding the same headers, which is the
+worse option of the two.
+
 `CorsMiddleware` becomes config-driven: `GROCY_CORS_ALLOWED_ORIGINS`, empty by default,
 meaning no CORS headers at all. Given the deployment target — a household instance behind
 an ingress, with no browser-based third-party client — default-off is the honest default,
@@ -148,13 +170,21 @@ user endpoints, passwords.
 
 ### Schema
 
-One migration, only if Q4 says yes to hashing: `api_keys.api_key` changes meaning from
-plaintext to hash. Portable single file — it is an `UPDATE` over a text column with a
-PHP-side hash, so it is a `NNNN.php` migration rather than SQL, and PHP migrations are
-already engine-agnostic (they run through `ExecutePhpMigrationWhenNeeded` on both). No
-DDL, so no per-engine pair. Note that it is irreversible by construction, which is the
-point, and that it must run under the lock from [10](10-cold-start-statelessness.md) like
-everything else.
+Two migrations, both gated on Q4's yes to hashing, because Q4's answer brings DDL with
+it:
+
+- a per-engine `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair adding the `api_keys.key_hint`
+  column. Adding a column is DDL and DDL is where the two engines diverge, so this
+  follows the same per-engine convention as every other schema change in the fork —
+  the "portable single file" reading only held while the change was a pure `UPDATE`;
+- a `NNNN.php` migration doing the hashing itself: read each row, hash `api_key` in
+  place, populate `key_hint` from its last four characters. This half genuinely is
+  engine-agnostic — it runs through `ExecutePhpMigrationWhenNeeded` on both — and it must
+  be numbered after the DDL pair so the column exists when it runs.
+
+`api_keys.api_key` changes meaning from plaintext to hash. Note that it is irreversible
+by construction, which is the point, and that both files must run under the lock from
+[10](10-cold-start-statelessness.md) like everything else.
 
 ### API
 
@@ -171,19 +201,47 @@ codes, and that needs to be explicit rather than slipped in:
 | `OPTIONS` on an API route | 401 | 204 with CORS headers |
 | Cross-origin `GET` | `Allow-Origin: *` | no CORS header unless configured |
 | API key in a query parameter | accepted | 401 |
+| `POST`/`PUT`/`DELETE` `/api/objects/{userfields\|userentities}` as a non-admin | 200 | 403 |
 
-Response *bodies* are unchanged in shape everywhere: still `{ "error_message": … }`.
+That last row is Q6's answer and is a deliberate behaviour change, not a code
+correction: populating `ExposedEntityEditRequiresAdmin` turns a gate that can never fire
+into one that does, and a non-admin who can edit master data today can create user fields
+today. Accepted — definition-level entities reshape the data model — but it is the one
+row here that denies something that currently succeeds, so it belongs on the
+breaking-changes list with the rest rather than being read as a bug fix.
+
+**One of these rows is a response-shape change, and the ground rule says to say so.**
+The malformed-`?query[]=`/`?order=` row is not only a status code. The nine list
+operations that document a `500` today — `GET /objects/{entity}`, `/users`,
+`/stock/products/{productId}/locations`, `/stock/products/{productId}/entries`,
+`/stock/locations/{locationId}/entries`, `/recipes/fulfillment`, `/chores`,
+`/batteries`, `/tasks` — document it as the `Error500` schema, which carries
+`error_details` (`stack_trace`, `file`, `line`) alongside `error_message`. `Error400`
+carries `error_message` only. So a client that hits an invalid filter parameter moves
+from a documented body with an optional `error_details` object to one without it. That
+is a narrowing, the additive-API rule in the [README](README.md) is about exactly this,
+and it needs two things rather than a shrug: a spec edit removing the `500`/`Error500`
+response from those nine operations as part of this plan (not left for
+[14](14-contract-and-regression-scaffolding.md) to notice), and a changelog entry naming
+the nine.
+
+Response *bodies* are otherwise unchanged in shape: still `{ "error_message": … }`.
 Success responses are untouched.
 
 The Home Assistant integration and the iOS app are the two consumers to think about.
 Neither should be affected by codes that only appear on failure paths — but "should" is
 not evidence, and Q1 exists because of that.
 
-The OpenAPI spec currently documents almost no error responses. Each converted endpoint
-gets its real `4xx` responses added, which also makes the spec the place the contract test
-in [14](14-contract-and-regression-scaffolding.md) reads from. The one known route/spec
-mismatch — `/api/openapi/specification` missing from the spec — is fixed in 14 alongside
-the parity check that would have caught it.
+The OpenAPI spec's error coverage is broad but coarse: 76 operations document a `400`
+(schema `Error400`) and 9 document a `500` (schema `Error500`), and that is the whole of
+it — no operation documents a `403`, a `404` or a `401` anywhere. So the work is not
+adding error responses to a spec that has none; it is adding the codes this plan makes
+real to operations that currently claim `400` is the only way to fail. Each converted
+endpoint gets its real `4xx` responses added, which also makes the spec the place the
+contract test in [14](14-contract-and-regression-scaffolding.md) reads from. The two
+known route/spec mismatches — `/api/openapi/specification` in the route table but not the
+spec, and `/api/recipes/{recipeId}/copy` in the spec with no route behind it — are fixed
+in 14 alongside the parity check that would have caught them.
 
 ## Verification
 
@@ -191,7 +249,7 @@ the parity check that would have caught it.
    call it unauthenticated, with a key lacking the permission, with a malformed
    `?order=zzz`, and against a non-existent id. Record method, path, case, status. The
    before-run is the baseline; the after-run must differ only in the rows of the table
-   above. Doing this by hand across ~74 routes is the argument for landing
+   above. Doing this by hand across 86 operations is the argument for landing
    [14](14-contract-and-regression-scaffolding.md) first and adding this as a case there.
 2. **Success responses byte-identical.** Same harness, happy paths only, both engines:
    the diff must be empty. This is the check that the helper refactor did not change
@@ -254,19 +312,24 @@ every new endpoint written before it is another one to convert afterwards.
    > Home Assistant read first as confirmation, not as a decision gate. Changelog
    > entry, listed with 15's breaking batch for visibility.
 2. **Which permission for `CalculateNextExecutionAssignments`?** It is a write (it
-   assigns chores to users) exposed as a `POST`, so `PERMISSION_CHORES` is the obvious
-   reading. But it is also called by the chores overview page as a refresh, so gating it
-   on the edit permission may lock out users who can see chores but not manage them. The
-   answer depends on who is expected to be able to trigger a recalculation, which is a
-   product question.
+   assigns chores to users) exposed as a `POST` with no check on it at all, so
+   `PERMISSION_CHORES` is the obvious reading. The alternative would be a finer-grained
+   or a laxer gate, and the answer depends on who is expected to be able to trigger a
+   recalculation, which is a product question.
 
-   > **Response:** Resolve the tension by removing it: recompute server-side during
-   > the overview *render* (the page controller does what the JS currently asks the
-   > API to do), and gate the API route on `PERMISSION_CHORES`. Viewers still see
-   > fresh data; only chore managers can force a recompute through the API. If that
-   > is more surgery than wanted, gate on `PERMISSION_CHORES` alone and accept that
-   > read-only users see assignments as of the last tracked execution —
-   > recomputation happens on every track anyway, so the staleness window is small.
+   > **Response:** `PERMISSION_CHORES`, and nothing else — no server-side render
+   > change, no second gate. The two premises that made this look hard both fail on
+   > inspection. First, there is no viewer-lockout tension: all four JS callers
+   > (`choreform.js:39` and `:66`, `choresoverview.js:355` and `:381`) fire
+   > *after* a write the caller has just performed, so none of them is a render
+   > refresh and none of them is reachable by a user who could not already write.
+   > Second, the gate is weak rather than restrictive — `CHORES` is the *parent* of
+   > `CHORE_TRACK_EXECUTION` in the permission hierarchy
+   > (`migrations/0110.sql:52`, `:78`), so anyone holding the feature permission
+   > holds tracking too and this does not carve out a "chore manager" tier. It
+   > excludes exactly one population: a user granted the leaf
+   > `CHORE_TRACK_EXECUTION` without its parent. That is the right amount of gate
+   > for an endpoint that currently has none, and it costs nothing to add.
 3. **CORS default: off, or preserve `*`?** Off is right for the stated deployment and
    makes the setting meaningful. Preserving `*` avoids breaking a browser-based client
    that might exist and that I do not know about. I lean off, on the grounds that
@@ -287,7 +350,12 @@ every new endpoint written before it is another one to convert afterwards.
    > these are 50-character random strings (~250 bits): brute force is not the
    > threat model, a leaked `api_keys` table is. Unsalted SHA-256 gives O(1) lookup
    > and is exactly right for high-entropy secrets. Keep a `key_hint` (last four
-   > characters) column so the manage screen can still identify keys after creation.
+   > characters) column so the manage screen can still identify keys after
+   > creation — and note that `key_hint` is a new column, so this answer brings DDL
+   > with it and the change is no longer a single portable PHP migration. It ships
+   > as a per-engine `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair adding the column,
+   > followed by a `NNNN.php` migration that hashes each key and backfills the
+   > hint. The Schema section above is written to match.
 5. **Mass-assignment: blocklist or spec-derived allowlist?** Blocklisting `id` and the
    timestamps is five minutes and covers the known problem. An allowlist derived from the
    OpenAPI schemas is correct-by-construction and would also catch the next column added
@@ -304,10 +372,15 @@ every new endpoint written before it is another one to convert afterwards.
    there is not, delete the enum and its three call sites. Leaving an empty gate in place
    is the one option that is definitely wrong.
 
-   > **Response:** Populate with `userfields` and `userentities` at minimum —
-   > definition-level entities that reshape the data model, which is a different act
-   > from editing master data. If on reflection nobody should be admin-gated, delete
-   > the enum and its three call sites the same day.
+   > **Response:** Populate with `userfields` and `userentities` — definition-level
+   > entities that reshape the data model, which is a different act from editing
+   > master data. Accept the consequence and record it: a non-admin who can `POST`,
+   > `PUT` or `DELETE` `/api/objects/userfields` or `/api/objects/userentities`
+   > today starts getting 403, which is a new denial of something that currently
+   > succeeds rather than a corrected status code. It is now a row in the change
+   > table above and belongs in the changelog with the rest of the breaking batch.
+   > If on reflection nobody should be admin-gated, delete the enum and its three
+   > call sites the same day and drop the row.
 7. **What is the retention story for the error log?** stderr and let the platform handle
    it is the k3s answer and needs no code. But a household instance with no log
    aggregation gets errors that scroll away. A file with rotation is more work and
@@ -324,5 +397,5 @@ Medium, and it splits cleanly into three sessions that can land separately: the 
 helper plus the mechanical per-controller conversion (the bulk, and the boring part); the
 middleware ordering, CORS setting and error logging (small, self-contained, could go
 first); the API-key and mass-assignment work (small, but Q4 gates it). The verification
-is the part that is easy to underestimate — checks 1 and 2 across ~74 routes on two
+is the part that is easy to underestimate — checks 1 and 2 across 86 operations on two
 engines is not something to do by hand more than once.

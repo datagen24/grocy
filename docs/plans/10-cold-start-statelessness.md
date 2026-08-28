@@ -34,7 +34,7 @@ try/catch, so the race there is unguarded.
 
 | Path | Written by | Needs to survive a restart? |
 |---|---|---|
-| `data/viewcache/*.php` | Blade, on first render of each of the 73 views | No — derivable from the source tree |
+| `data/viewcache/*.php` | Blade, on first render of each of the 96 templates under `views/` (73 at the top level, the rest under `components/`, `layout/` and `errors/`) | No — derivable from the source tree |
 | `data/viewcache/route_cache.php` | Slim (`app.php:120`) | No — derivable from `routes.php` |
 | `data/viewcache/<hash>.txt` | `app.php:68` | No — exists only to drive the redirect |
 | `data/viewcache/` HTMLPurifier serializer | `BaseApiController::GetParsedAndFilteredRequestBody` | No — but it is a runtime write on every JSON write request |
@@ -89,6 +89,16 @@ That is an initContainer in k3s and a one-line `docker exec` elsewhere.
 `DatabaseMigrationService` already works outside a request; nothing about it needs to
 change except the lock.
 
+**This one piece ships ahead of the rest of this plan, in wave 0 with
+[14](14-contract-and-regression-scaffolding.md) piece 1.** `trigdifftest.php` needs
+`TRIGTEST_PRISTINE_PATH` — a migrated SQLite database — and nothing in the tree can
+produce one from a command line today: `bin/grocy-db-import` returns early when
+`DB_DRIVER` is `sqlite` (`bin/grocy-db-import:68`), and migrations otherwise only run
+from `GET /`. So 14's suite cannot run at all until this exists, which inverts the
+roadmap's ordering. Pulling just the CLI forward is the smallest cut that fixes it; the
+lock, the cache work and everything else below stay here in wave 1. When this plan's
+turn comes, `bin/grocy-migrate` already exists and gains the lock.
+
 `SystemController::Root` then stops calling `MigrateDatabase()`. Q4 covers whether a
 web-triggered fallback should remain for people running this fork from a stock
 container image with no init step.
@@ -135,10 +145,23 @@ The request-scoped `define()` constants (`GROCY_USER_ID`, `GROCY_LOCALE`, …) s
 are safe under php-fpm and only rule out worker-mode runtimes, which are not a goal.
 Recording that as a decision is worth more than changing it.
 
+### Record which dialect applied each migration
+
+One column on `migrations`, holding the driver name that supplied the file — or the
+literal `generic` for a portable one. See Q7. The reason it belongs here rather than in a
+plan of its own is that the boot check below has to be dialect-aware anyway, so this is
+the one moment someone is already holding this code with that distinction in mind.
+
+It is diagnostic only. Nothing may start *requiring* it, because a database migrated
+before the column existed cannot supply it, and making it load-bearing would turn an
+older database into an unimportable one.
+
 ### Schema
 
-None. This plan changes when migrations run and how they are serialised, not what they
-do. No new migration file, so no dual-engine migration shape to state.
+One migration, portable: add the `dialect` column to `migrations`, backfilled `generic`
+up to 0255 and left NULL above it (Q7 explains why an honest NULL beats a plausible
+guess). Nothing else here changes what a migration does — only when they run and how
+they are serialised.
 
 ### API
 
@@ -161,10 +184,18 @@ Lint proves nothing here; every check below wants a booted instance.
    /api/stock` as the very first request must return 200 with a JSON body — today it
    returns 302 with an HTML target. Repeat on SQLite.
 2. **Concurrent cold start.** Two `bin/grocy-migrate` processes against the same empty
-   PostgreSQL database, started together; and the same on SQLite. Both must exit 0, the
-   `migrations` table must contain each number exactly once, and `locations` must contain
-   exactly one row with id 1. Run it ten times — the current race is timing-dependent and
-   a single green run means nothing.
+   PostgreSQL database, started together; and the same on SQLite. Both must exit 0 and
+   the `migrations` table must contain each number exactly once. Run it ten times — the
+   current race is timing-dependent and a single green run means nothing.
+
+   Run this check with `FEATURE_FLAG_STOCK_LOCATION_TRACKING=false`. The `locations`
+   row this plan's race is about is inserted by `migrations/8888.php` *inside* an
+   `if (!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)` guard, and `config-dist.php:167`
+   defaults that flag to **true**. On a default install the guard never runs, and the
+   only row in `locations` is the id **2** "Fridge" that `migrations/0006.sql` inserts —
+   so the assertion "exactly one row with id 1" fails for a reason that has nothing to
+   do with concurrency, and the race the plan exists to close is never exercised at all.
+   With the flag off, assert both the `migrations` uniqueness and the id-1 row.
 3. **Racing pods against an already-migrated database.** Five concurrent
    `bin/grocy-migrate` runs must be no-ops and must not deadlock (this is the always-run
    `8888.php` path, which is the one that runs on every start forever).
@@ -196,7 +227,19 @@ Against the other hardening plans it is independent: it touches `app.php`, the m
 service and `PrerequisiteChecker`, none of which [11](11-api-error-handling.md),
 [12](12-frontend-shared-core.md), [13](13-write-path-transactions.md) or
 [14](14-contract-and-regression-scaffolding.md) go near. It can be done in parallel with
-any of them.
+any of them — with the two seams noted below.
+
+`bin/grocy-migrate` is the exception in the other direction: it ships early, in wave 0,
+because [14](14-contract-and-regression-scaffolding.md) piece 1 cannot run without it
+(see *Move migrations out of the request path*).
+
+The second seam is with [13](13-write-path-transactions.md). `DatabaseMigrationService`
+opens raw transactions of its own at lines 163 and 239, and this plan wraps the whole
+migration run in a lock. 13 converts seven service entrypoints to an `InTransaction`
+helper but deliberately leaves these two alone. That is fine as long as the helper
+counts depth rather than assuming it opens the outermost transaction — if a PHP
+migration ever calls a service through it, a depth-blind helper mis-nests. Neither plan
+owns that constraint today, so it is recorded in both.
 
 ## Open questions
 
@@ -211,7 +254,12 @@ any of them.
    > path, serve under another, diff the HTML. Expect "not load-bearing" (the
    > `$U`-closure evidence is strong). If it somehow fails, the fallback is warming
    > in the initContainer per deployment instead of the image — the plan survives,
-   > one layer moves.
+   > one layer moves. Note what that fallback costs, because it collides with Q2:
+   > an initContainer-warmed cache needs a writable `emptyDir` shared with the app
+   > container, so the cache directory can no longer be read-only and the
+   > build-time "did every template compile?" gate becomes a deployment-time one.
+   > The pod still has no *persistent* volume, so 01+10's goal survives, but Q2's
+   > answer would have to be revisited rather than silently kept.
 2. **Should the baked cache directory be read-only, or writable as a fallback?**
    Read-only turns a missed template into a 500 at exactly the moment someone opens that
    page, which is a bad time to find out. Writable hides the problem and quietly
@@ -266,6 +314,62 @@ any of them.
    > database *ahead* of the code (a rollback scenario that would otherwise break
    > unpredictably), and if the per-request cost ever bothers anyone, APCu is the
    > answer then — not now.
+   >
+   > Two things the answer above leaves undefined, settled here because both bite
+   > later. **What the code's expected number is:** take the maximum of
+   > `DatabaseMigrationService::GetMigrationFiles($dialect)`, not a hardcoded
+   > constant and not a count. It must be dialect-aware, because
+   > engine-exclusive migrations exist — `0256.sqlite.sql` is already in the tree
+   > and [01](01-file-storage.md) adds `0257.pgsql.sql` — and a dialect-blind
+   > maximum would put a deployment permanently "behind" a file it is never
+   > supposed to run. `DatabaseMigrationService::GetLatestMigrationNumber($dialect)`
+   > already exists for this; `DatabaseImporter` was the first caller.
+   > **What the failure looks like:** HTTP 503 with a plain-text body naming the
+   > database's number, the code's number, `MIGRATE_ON_ROOT_REQUEST` and
+   > `bin/grocy-migrate` (per Q4's refinement). 503 rather than 500 because the
+   > condition is transient and operational, and it is the one pre-[11](11-api-error-handling.md)
+   > status decision that 11 should inherit rather than revisit.
+7. **Should the `migrations` table record which dialect applied each migration?**
+   Today it stores the number and a timestamp, and nothing else. The number is the
+   migration's *identity*, while the file that supplied it — `0260.sql`,
+   `0260.sqlite.sql`, `0260.pgsql.sql` — is not recorded anywhere. That was
+   unambiguous while every migration applied to every engine. It stopped being so
+   the moment `0256.sqlite.sql` landed: two databases can both hold the row `256`,
+   have run different files, and hold different schemas, and nothing in the data
+   says which happened.
+
+   The guards added with the suite close the gap from the *authoring* side —
+   `check-migrations.php` refuses an unmarked engine-exclusive or shadowing file,
+   and the loader refuses a name that does not parse. Both reason about the
+   repository. Neither can answer the question a running database poses: *this*
+   row 256, in *this* database — what actually ran?
+
+   A `dialect` column (nullable, or the literal `generic`) answers it, and it is a
+   small migration. The cost is not the column, it is the callers: this plan's
+   boot check, `DatabaseImporter`'s two version assertions, and anything else
+   reading `MAX(migration)` would all want to consider it, and the column has to be
+   backfilled for existing rows — where the honest backfill is "unknown", because
+   the information was never recorded.
+
+   > **Response:** Do it, in this plan rather than as its own. The boot check is
+   > already opening this code and already has to be dialect-aware, so the column
+   > lands where someone is holding the file. Two constraints on how.
+   >
+   > **Backfill `generic` for everything up to 0255, and NULL above it.** The
+   > historical migrations genuinely were portable-or-SQLite-only in a way the
+   > baseline already encodes, so `generic` is true rather than convenient. Above
+   > the baseline, a row written before this column existed has no recoverable
+   > answer and NULL should say so — a plausible guess here would be worse than an
+   > admission, because the whole point of the column is to stop two databases
+   > silently disagreeing.
+   >
+   > **The column is diagnostic, not load-bearing.** No comparison may start
+   > *requiring* it, or a pre-column database becomes unimportable. The version
+   > checks stay as they are — each side against
+   > `GetLatestMigrationNumber($dialect)` for its own engine — and the column is
+   > what a human reads when those checks disagree and the reason is not obvious.
+   > It earns its place by making a confusing failure diagnosable, not by adding a
+   > new way to fail.
 
 ## Effort
 

@@ -17,7 +17,7 @@ answer inline as a `> **Response:**` block, so question and answer read together
 | 06 | [Location barcodes](06-location-barcodes.md) | — | — | small |
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium |
-| 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small |
+| 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small, **deferred** |
 
 ## Hardening
 
@@ -50,6 +50,8 @@ the plans noted below start minting more of what they clean up.
   than asserted by hand.
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
+- **10's `bin/grocy-migrate` precedes 14**, not the other way round — the one place the
+  wave order below overrides the plan numbering, and why the CLI is pulled into wave 0.
 - **15 is last**, except its auth refactor, which wants to precede
   [02](02-mcp-endpoint.md), and which carries the parked `shopping_locations` rename.
 
@@ -68,8 +70,25 @@ rather than contorting the design (plan 01 is the first case).
 existing endpoints keep their response shape. Anything that would change an existing
 response is called out explicitly in the plan rather than slipped in.
 
-**Migrations from 0256 on work on every supported engine** — a portable `NNNN.sql`, or a
-per engine pair. See `db/pgsql/README.md`.
+**Migrations from 0256 on work on every supported engine** — a portable `NNNN.sql`, a
+per engine pair, or a documented engine-exclusive migration. See `db/pgsql/README.md`.
+
+The third case is new. `0256.sqlite.sql` is the first to use it — a SQLite-only cast fix
+that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping
+`0257.pgsql.sql` with no SQLite counterpart rather than a no-op pair that pretends
+otherwise. The rule for it is that the exemption is *recorded*, in the migration itself
+and in `db/pgsql/README.md`, not merely taken.
+
+The consequence turned out to bite immediately rather than later, and is worth stating
+plainly: once a number exists on one engine only, the two engines sit at different
+migration numbers while both being fully migrated, so nothing may compare one engine's
+number to the other's. `DatabaseImporter` did exactly that and refused every import the
+moment `0256.sqlite.sql` landed. It now checks each side against
+`DatabaseMigrationService::GetLatestMigrationNumber($dialect)` for that side's own engine,
+and no longer copies the `migrations` table into the target — a target carrying the
+source's numbers would skip a future migration of its own believing it had already run.
+Anything else that reasons about schema versions, including
+[10](10-cold-start-statelessness.md)'s boot check, has to do the same.
 
 **Verification.** Schema changes are checked with `.devtools/pgsql/difftest.php` (views)
 and `trigdifftest.php` (trigger behaviour). New views must return identical output on both
@@ -86,20 +105,41 @@ as parallel sessions.
 
 ### Wave 0 — decisions and scaffolding (one sitting)
 
-- **09-Q1 experiment**: twenty pantry barcodes against each candidate source. Thirty
-  minutes; decides 09's scope and settles 04-Q2 (ship no barcodes) on data.
+- **A dev/CI container, in this repo.** Both `.devtools/pgsql` scripts run under a
+  `grocy-fork-dev` image, and there is no Dockerfile, compose file or Makefile anywhere
+  in the tree — nor a vendored `packages/`. 14's verification 6 ("one command from a
+  clean checkout") is unmeetable until that exists, so it is the first thing built: a
+  Dockerfile (PHP 8.5, `pdo_sqlite` + `pdo_pgsql`, composer install) and a compose file
+  with a PostgreSQL service. [10](10-cold-start-statelessness.md) later bakes its view
+  cache into this same build.
+- **`bin/grocy-migrate`, pulled forward from [10](10-cold-start-statelessness.md).**
+  `trigdifftest.php` needs a migrated SQLite database and nothing in the tree can make
+  one from a command line: `bin/grocy-db-import` returns early on `sqlite`
+  (`bin/grocy-db-import:68`) and migrations otherwise only run from `GET /`. Without
+  this, 14 piece 1 cannot run — the roadmap's own ordering is inverted. Only the CLI
+  moves; the lock and the cache work stay in 10.
 - **14 piece 1**: the runnable diff suite (recover or rewrite the seeds), plus its
   recursive-CTE tool check (14 verification 7) — done now so wave 4 never waits on it.
+  It also extracts `difftest.php`'s `normalise()` into `services/`, which
+  [13](13-write-path-transactions.md) then consumes rather than duplicating.
 - **14 piece 3**: CI (lint + the suite) the same day piece 1 exists.
+- **09-Q1 experiment — deferred, not scheduled.** Twenty pantry barcodes against each
+  candidate source; thirty minutes, but the barcodes have to come off real shelves, so
+  it waits on a trip to the kitchen rather than on a wave. Nothing else depends on it:
+  09 is parked until the data exists, and 04-Q2 (ship no barcodes) already stands on
+  its own reasoning.
 
 ### Wave 1 — platform (three parallel tracks, disjoint files)
 
 - **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
   easier to reason about once cold start no longer rewrites requests. Together they end
   the PVC.
-- **Track B: 12 frontend shared core.** Land steps 1–2 (latent bugs + the `request()`
-  core with default error toast) as their own PR — most of the user-visible value —
-  then the factory conversions.
+- **Track B: 12 frontend shared core.** Land steps 1–2 as their own PR: the four latent
+  bug fixes plus the `request()` core with `timeout`/`onerror`. Note what that PR does
+  *not* deliver — all 148 `console.error` handlers are passed explicitly, so the default
+  error toast cannot fire until they are deleted, and those deletions belong to the
+  files step 3 rewrites wholesale. The handler deletions therefore ride with the factory
+  conversions, per file, so each one is exercised as it lands.
 - **Track C: 13 write-path transactions.** All seven entrypoints, webhook after commit.
 
 ### Wave 2 — API correctness

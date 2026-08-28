@@ -2,6 +2,8 @@
 
 namespace Grocy\Services\Database;
 
+use Grocy\Services\DatabaseMigrationService;
+
 /**
  * Copies the contents of an existing SQLite database into another engine, so that an
  * installation can move without losing its data.
@@ -15,6 +17,20 @@ class DatabaseImporter
 	 * Tables that belong to the target engine alone and have no counterpart in the source.
 	 */
 	const TARGET_ONLY_TABLES = ['user_settings_defaults', 'system_db_changed_time'];
+
+	/**
+	 * Tables that exist on both sides but are deliberately not copied.
+	 *
+	 * "migrations" is the target's own record of how its schema was built, and the
+	 * target has just been migrated for its own engine. Overwriting that with the
+	 * source's history would make a PostgreSQL database claim it had run migrations
+	 * 0001-0255, which are SQLite-only and which it correctly replaced with a baseline.
+	 * That was harmless only while the two engines happened to number alike: an
+	 * engine-exclusive migration such as 0256.sqlite.sql breaks the tie, and a target
+	 * carrying the source's numbers would then skip a future migration of its own with
+	 * the same number, believing it already ran.
+	 */
+	const NOT_COPIED_TABLES = ['migrations'];
 
 	/**
 	 * Rows per multi-row INSERT. 250 keeps the placeholder count well under
@@ -174,7 +190,10 @@ class DatabaseImporter
 		$sourceTables = $this->Source->query("SELECT name FROM sqlite_master
 			WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")->fetchAll(\PDO::FETCH_COLUMN);
 
-		$common = array_values(array_intersect($targetTables, $sourceTables));
+		$common = array_values(array_diff(
+			array_intersect($targetTables, $sourceTables),
+			self::NOT_COPIED_TABLES
+		));
 
 		$missing = array_diff($targetTables, $sourceTables, self::TARGET_ONLY_TABLES);
 		foreach ($missing as $table)
@@ -239,12 +258,33 @@ class DatabaseImporter
 			);
 		}
 
-		if (intval($sourceVersion) !== intval($targetVersion))
+		// Each side is checked against the latest migration for ITS OWN engine, rather
+		// than against the other side's number. A migration can be engine-exclusive —
+		// 0256.sqlite.sql fixes a SQLite-only defect and PostgreSQL correctly never runs
+		// it — so two fully migrated databases legitimately sit at different numbers, and
+		// comparing the two maxima to each other would refuse every import from then on.
+		// Static, and deliberately so: this reads the migrations directory and nothing
+		// else. Going through GetInstance() would drag in BaseService's constructor,
+		// which opens the *configured* database — a connection this class has no use for
+		// and no reason to require, since it is handed both of its connections.
+		$expectedSource = DatabaseMigrationService::GetLatestMigrationNumber(new SqliteDialect());
+		$expectedTarget = DatabaseMigrationService::GetLatestMigrationNumber($this->TargetDialect);
+
+		if (intval($sourceVersion) !== $expectedSource)
 		{
 			throw new \Exception(
-				'Schema versions differ: the source is at migration ' . $sourceVersion
-				. ' and the target at ' . $targetVersion . '. '
+				'The source database is at migration ' . $sourceVersion . ' but SQLite is now at '
+				. $expectedSource . '. '
 				. 'Start the source installation once so it migrates itself up to date, then import again.'
+			);
+		}
+
+		if (intval($targetVersion) !== $expectedTarget)
+		{
+			throw new \Exception(
+				'The target database is at migration ' . $targetVersion . ' but '
+				. $this->TargetDialect->GetName() . ' is now at ' . $expectedTarget . '. '
+				. 'Run bin/grocy-migrate against it first.'
 			);
 		}
 	}

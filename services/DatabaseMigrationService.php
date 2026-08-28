@@ -31,7 +31,11 @@ class DatabaseMigrationService extends BaseService
 	 * rather than replaying a history they were never part of.
 	 *
 	 * Consequently every migration from here on has to work on all supported engines -
-	 * either as a portable NNNN.sql, or as per engine NNNN.sqlite.sql / NNNN.pgsql.sql.
+	 * either as a portable NNNN.sql, as per engine NNNN.sqlite.sql / NNNN.pgsql.sql, or
+	 * as a documented engine-exclusive file where the other engine genuinely needs no
+	 * change. The last case means the two engines can sit at different numbers while
+	 * both being fully migrated, which is why GetLatestMigrationNumber() takes a
+	 * dialect.
 	 */
 	const BASELINE_MIGRATION_ID = 255;
 
@@ -50,7 +54,7 @@ class DatabaseMigrationService extends BaseService
 		$this->ApplyBaselineSchemaWhenNeeded($dialect);
 
 		$migrationCounter = 0;
-		foreach ($this->GetMigrationFiles($dialect) as $migrationNumber => $migrationFile)
+		foreach (self::GetMigrationFiles($dialect) as $migrationNumber => $migrationFile)
 		{
 			if ($migrationFile->getExtension() === 'php')
 			{
@@ -88,7 +92,31 @@ class DatabaseMigrationService extends BaseService
 	 *
 	 * @return \SplFileInfo[]
 	 */
-	private function GetMigrationFiles(DatabaseDialect $dialect): array
+	/**
+	 * The highest migration number that exists for an engine.
+	 *
+	 * Dialect-aware on purpose. A migration can be engine-exclusive — shipped as
+	 * NNNN.sqlite.sql or NNNN.pgsql.sql with no counterpart, because the other engine
+	 * genuinely needs no change — and once one exists, "what number should this
+	 * database be at?" has a different answer per engine. Anything comparing schema
+	 * versions has to ask this rather than assume the two engines count alike.
+	 */
+	public static function GetLatestMigrationNumber(DatabaseDialect $dialect): int
+	{
+		$migrationFiles = self::GetMigrationFiles($dialect);
+
+		// The always-run migrations are fixups rather than schema versions, and they are
+		// deliberately never recorded in the migrations table — counting them would put
+		// every database permanently "behind" a number it can never reach.
+		$numbers = array_filter(
+			array_keys($migrationFiles),
+			fn($number) => $number !== self::DOALWAYS_MIGRATION_ID && $number !== self::EMERGENCY_MIGRATION_ID
+		);
+
+		return empty($numbers) ? 0 : max($numbers);
+	}
+
+	private static function GetMigrationFiles(DatabaseDialect $dialect): array
 	{
 		$generic = [];
 		$specific = [];
@@ -96,17 +124,37 @@ class DatabaseMigrationService extends BaseService
 		foreach (new \FilesystemIterator(__DIR__ . '/../migrations') as $file)
 		{
 			$matches = [];
+			$name = $file->getBasename();
 
-			if (preg_match('/^(\d+)\.(sql|php)$/', $file->getBasename(), $matches))
+			if (preg_match('/^(\d+)\.(sql|php)$/', $name, $matches))
 			{
 				$generic[intval($matches[1])] = $file;
 			}
-			elseif (preg_match('/^(\d+)\.([a-z]+)\.(sql|php)$/', $file->getBasename(), $matches))
+			elseif (preg_match('/^(\d+)\.([a-z]+)\.(sql|php)$/', $name, $matches))
 			{
+				// A suffix that does not name a real engine matches nothing and would
+				// otherwise be skipped in silence on every engine — the migration simply
+				// never runs, and nothing says so. A typo here is indistinguishable from
+				// a deliberate omission at runtime, so refuse to start instead.
+				if (!in_array($matches[2], DatabaseDialect::SUPPORTED_DRIVERS, true))
+				{
+					throw new \Exception('Migration "' . $name . '" is suffixed "' . $matches[2]
+						. '", which is not a supported database driver. Expected one of: '
+						. implode(', ', DatabaseDialect::SUPPORTED_DRIVERS) . '.');
+				}
+
 				if ($matches[2] === $dialect->GetName())
 				{
 					$specific[intval($matches[1])] = $file;
 				}
+			}
+			elseif (preg_match('/\.(sql|php)$/', $name))
+			{
+				// Same failure, different spelling: a migration whose name does not parse
+				// at all is dead weight nobody would notice.
+				throw new \Exception('Migration "' . $name . '" does not follow the naming '
+					. 'convention. Expected NNNN.sql, NNNN.php, or NNNN.<driver>.sql / '
+					. 'NNNN.<driver>.php.');
 			}
 		}
 
