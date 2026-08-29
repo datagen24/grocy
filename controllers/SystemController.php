@@ -86,8 +86,8 @@ class SystemController extends BaseController
 				'type' => 'image/png'
 			]],
 			'start_url' => $data[1],
-			'background_color' => '#333131',
-			'theme_color' => '#333131',
+			'background_color' => '#174B3A',
+			'theme_color' => '#174B3A',
 			'display' => 'standalone'
 		];
 

@@ -136,7 +136,7 @@
 		<a class="navbar-brand py-0"
 			href="{{ $U('/') }}">
 			<img src="{{ $U('/img/logo.svg?v=', true) }}{{ $version }}"
-				width="114"
+				width="75"
 				height="30">
 		</a>
 		<span id="clock-container"

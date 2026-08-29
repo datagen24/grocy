@@ -112,12 +112,13 @@ Counts from the tree as of this plan's writing.
   `Grocy/<version> (https://grocy.info)` — advertising *upstream's* URL on this
   fork's traffic. That misattributes traffic to upstream and should change as
   soon as there is a name to change it to; arguably before.
-- **README, about page, logo** — the README already leads with "hard fork of
-  grocy" and currently hotlinks *upstream's* logo SVG; the about page and
-  `grocy.info` links move to the attribution section (Q5) rather than
-  vanishing. A draft Victual logo exists (bowl-as-V mark with produce, dark
-  green wordmark); once settled it lands in `public/img/` and replaces the
-  hotlink.
+- **README, about page, logo** — **done for the logo**: the Victual branding
+  set (masters in `branding/`, production copies in `public/img/`) replaced
+  the four upstream images and the README's hotlink of upstream's SVG; the
+  three views showing the logo were resized from upstream's 3.8:1 box to the
+  new lockup's 2.5:1, and the PWA manifest colors moved to the brand green
+  `#174B3A`. The about page and `grocy.info` links still move to the
+  attribution section (Q5) with the text rename.
 - **The MCP sidecar repo** — the interface spec already anticipates this plan:
   the repo takes the working name `grocy-mcp` "with the real name settled
   before the first tagged release" ([mcp-interface-spec.md](../mcp-interface-spec.md),
