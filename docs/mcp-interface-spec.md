@@ -365,6 +365,47 @@ Per the roadmap's standard — booted-instance checks, not lint:
 5. **Two-replica soak**: run two sidecar pods behind round-robin with no affinity and
    repeat (2) — any failure means state crept in.
 
+## 12. Repository bootstrap
+
+Per Open question 1's response, the sidecar starts as a **new repository**, importing
+packaging from `datagen24/mcp-grocy` rather than rebasing inside it. The parent fork
+is due to be renamed, so the repo takes a working name (`grocy-mcp`) with the real
+name settled before the first tagged release; `serverInfo.name` (§3) follows the repo
+name at that point and is frozen thereafter.
+
+**Import from mcp-grocy** (all MIT; keep upstream attribution in LICENSE):
+
+- `.github/workflows/test.yml`, `release.yml`, `publish-docker.yml`,
+  `version-checks.yml` and `.releaserc.json` — the semantic-release + GHCR publish
+  pipeline, adjusted for the new package name.
+- `Dockerfile` — the multi-target pattern (plain Alpine vs. HA base via `BUILD_FROM`)
+  survives only if Open question 3 keeps the add-on; otherwise it collapses to the
+  plain Node target, non-root, `tini` entrypoint.
+- The `inspector` npm script (`npx @modelcontextprotocol/inspector`) and the *idea* of
+  `scripts/check-tools.js` — a release gate asserting the tool census matches the
+  spec — rewritten against this spec's registry.
+
+**Skeleton** — one file per concern, mirroring the section that specifies it:
+
+```
+src/
+  main.ts            boot: parse env (§8), wire, listen
+  config.ts          zod env schema; exit non-zero on invalid (§8)
+  server.ts          SDK v2 server + adapter, /mcp + /healthz (§3)
+  auth/resolver.ts   credential→outbound-headers seam (§2, §4) — the IdP swap point
+  grocy/client.ts    REST client: base URL, timeout, §7 status→category mapping
+  grocy/shape.ts     row shaping + unit-name resolution + date sentinels (§5)
+  tools/<name>.ts    one per tool: zod input/output schema + handler (§5, later §6)
+tests/
+  fixtures/          imported from plan 14's response-contract snapshot
+  contract/          replay tests per tool (§11.1)
+  tools/             handler unit tests (mocked client)
+compose.yaml         sidecar + Grocy + PostgreSQL + demo data, for §11.2–11.5
+```
+
+No `build/` artifacts in git, no YAML config file, no stored credentials — the three
+recurring hygiene findings from Appendix A, stated as rules.
+
 ## Open questions
 
 1. **Where does the sidecar live?** The existing `datagen24/mcp-grocy` repo carries
@@ -373,7 +414,9 @@ Per the roadmap's standard — booted-instance checks, not lint:
    repo inheriting the packaging, or a fresh `grocy-mcp` repo importing the packaging
    files. Either satisfies the spec; the repo choice is about release hygiene.
 
-   > **Response:** _pending_
+   > **Response:** New repo (2026-08-29) — the parent Grocy fork is itself being
+   > renamed, so a rewrite branch inside `mcp-grocy` would tie the new server to two
+   > stale names at once. §12 records what gets imported and the naming rule.
 2. **Should `tools/list` reflect the key's capabilities** once writes exist — i.e.
    hide write tools from read-only keys? Requires the sidecar to learn the key's flag
    (a `GET /api/user`-adjacent probe or a header echo), which is a per-request lookup
