@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Provides application level metadata: version information, the changelog and
@@ -77,7 +77,7 @@ class ApplicationService extends BaseService
 	/**
 	 * Collects environment information for the "About" dialog / system info API endpoint.
 	 *
-	 * @return array {grocy_version: object, php_version: string, sqlite_version: string, db_version: int, os: string, client: string}
+	 * @return array {victual_version: object, php_version: string, sqlite_version: string, db_version: int, os: string, client: string}
 	 */
 	public function GetSystemInfo()
 	{
@@ -86,7 +86,7 @@ class ApplicationService extends BaseService
 		$pdo = null;
 
 		return [
-			'grocy_version' => $this->GetInstalledVersion(),
+			'victual_version' => $this->GetInstalledVersion(),
 			'php_version' => phpversion(),
 			'sqlite_version' => $sqliteVersion,
 			'db_version' => $this->DB->migrations()->max('migration'),

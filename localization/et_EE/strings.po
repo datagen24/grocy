@@ -352,8 +352,8 @@ msgstr "See tähendab, et %s eemaldatakse varudest"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "%1$s toodet %2$s varudest eemaldatud"
 
-msgid "About Grocy"
-msgstr "Grocyst"
+msgid "About Victual"
+msgstr "Victualst"
 
 msgid "Close"
 msgstr "Sulge"
@@ -1446,12 +1446,6 @@ msgstr "Selle koostisosa hind korrutatakse selle teguriga"
 msgid "Price factor"
 msgstr "Hinna tegur"
 
-msgid "Do you find Grocy useful?"
-msgstr "Kas leiad, et Grocy on kasulik?"
-
-msgid "Say thanks"
-msgstr "Ütle aitäh"
-
 msgid "Search for recipes containing this product"
 msgstr "Otsi retsepte, mis sisaldavad seda toodet"
 
@@ -1579,7 +1573,7 @@ msgstr "Muuda toodet"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Juurdepääs kaamerale on võimalik ainult siis, kui sinu veebilehitseja seda "
 "toetab ja lubab ning kui Grocyt teenindatakse turvalise (https://) ühenduse "
@@ -2244,7 +2238,7 @@ msgid "Download %s Grocycode"
 msgstr "Laadi alla %s Grocykood"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocykood on unikaalne suunaja sellele %s sinu Grocy seadistuses - prindi "

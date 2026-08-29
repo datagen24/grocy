@@ -8,7 +8,7 @@
 
 @section('content')
 <script>
-	Grocy.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
+	Victual.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
 </script>
 
 <div class="row">
@@ -27,16 +27,16 @@
 <div class="row">
 	<div class="col-12 col-md-6 col-xl-5 pb-3">
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
-			Grocy.EditObjectParentId = {{ $recipe->id }};
-			Grocy.EditObject = {!! json_encode($recipePos) !!};
-			Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-			Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+			Victual.EditMode = '{{ $mode }}';
+			Victual.EditObjectParentId = {{ $recipe->id }};
+			Victual.EditObject = {!! json_encode($recipePos) !!};
+			Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+			Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $recipePos->id }};
+			Victual.EditObjectId = {{ $recipePos->id }};
 		</script>
 		@endif
 
@@ -49,7 +49,7 @@
 			'nextInputSelector' => '#amount'
 			))
 
-			<div class="form-group mb-2 @if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif">
+			<div class="form-group mb-2 @if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
 						&&
@@ -90,7 +90,7 @@
 				</div>
 			</div>
 
-			<div class="form-group @if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif">
+			<div class="form-group @if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
 						&&
@@ -120,7 +120,7 @@
 					name="note">@if($mode == 'edit'){{ $recipePos->note }}@endif</textarea>
 			</div>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			@php if($mode == 'edit') { $value = $recipePos->price_factor; } else { $value = 1; } @endphp
 			@include('components.numberpicker', array(
 			'id' => 'price_factor',

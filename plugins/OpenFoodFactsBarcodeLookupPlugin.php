@@ -1,6 +1,6 @@
 <?php
 
-use Grocy\Helpers\BaseBarcodeLookupPlugin;
+use Victual\Helpers\BaseBarcodeLookupPlugin;
 use GuzzleHttp\Client;
 
 /*
@@ -19,7 +19,7 @@ class OpenFoodFactsBarcodeLookupPlugin extends BaseBarcodeLookupPlugin
 
 	/**
 	 * Queries the Open Food Facts v2 product API for the barcode (digits only),
-	 * requesting the product name (localized to GROCY_LOCALE when available) and
+	 * requesting the product name (localized to VICTUAL_LOCALE when available) and
 	 * image URL.
 	 *
 	 * @param string $barcode The barcode to look up
@@ -31,10 +31,10 @@ class OpenFoodFactsBarcodeLookupPlugin extends BaseBarcodeLookupPlugin
 	 */
 	protected function ExecuteLookup($barcode)
 	{
-		$productNameFieldLocalized = 'product_name_' . substr(GROCY_LOCALE, 0, 2);
+		$productNameFieldLocalized = 'product_name_' . substr(VICTUAL_LOCALE, 0, 2);
 
 		$webClient = new Client(['http_errors' => false]);
-		$response = $webClient->request('GET', 'https://world.openfoodfacts.org/api/v2/product/' . preg_replace('/[^0-9]/', '', $barcode) . '?fields=product_name,image_url,' . $productNameFieldLocalized, ['headers' => ['User-Agent' => 'GrocyOpenFoodFactsBarcodeLookupPlugin/1.0 (https://grocy.info)']]);
+		$response = $webClient->request('GET', 'https://world.openfoodfacts.org/api/v2/product/' . preg_replace('/[^0-9]/', '', $barcode) . '?fields=product_name,image_url,' . $productNameFieldLocalized, ['headers' => ['User-Agent' => 'VictualOpenFoodFactsBarcodeLookupPlugin/1.0 (https://github.com/datagen24/victual)']]);
 		$statusCode = $response->getStatusCode();
 
 		// Guzzle throws exceptions for connection errors, so nothing to do on that here

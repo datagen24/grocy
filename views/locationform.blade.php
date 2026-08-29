@@ -18,12 +18,12 @@
 <div class="row">
 	<div class="col-lg-6 col-12">
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
+			Victual.EditMode = '{{ $mode }}';
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $location->id }};
+			Victual.EditObjectId = {{ $location->id }};
 		</script>
 		@endif
 
@@ -62,7 +62,7 @@
 					name="description">@if($mode == 'edit'){{ $location->description }}@endif</textarea>
 			</div>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
 			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'

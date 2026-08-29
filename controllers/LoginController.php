@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Services\SessionService;
+use Victual\Services\SessionService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -31,12 +31,12 @@ class LoginController extends BaseController
 
 	/**
 	 * Processes a submitted login form (route POST /login) through the configured
-	 * GROCY_AUTH_CLASS; a base64 encoded password (password_base64) is decoded first.
+	 * VICTUAL_AUTH_CLASS; a base64 encoded password (password_base64) is decoded first.
 	 * Redirects to the root page on success, back to /login?invalid=true on failure.
 	 */
 	public function ProcessLogin(Request $request, Response $response, array $args)
 	{
-		$authMiddlewareClass = GROCY_AUTH_CLASS;
+		$authMiddlewareClass = VICTUAL_AUTH_CLASS;
 
 		$postParams = $request->getParsedBody();
 		if (isset($postParams['password_base64']))

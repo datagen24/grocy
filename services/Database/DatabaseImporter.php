@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
-use Grocy\Services\DatabaseMigrationService;
+use Victual\Services\DatabaseMigrationService;
 
 /**
  * Copies the contents of an existing SQLite database into another engine, so that an
@@ -271,14 +271,14 @@ class DatabaseImporter
 
 		if ($sourceVersion === false || $sourceVersion === null)
 		{
-			throw new \Exception('The source database has no migrations recorded, so it is not a Grocy database');
+			throw new \Exception('The source database has no migrations recorded, so it is not a grocy or Victual database');
 		}
 
 		if ($targetVersion === false || $targetVersion === null)
 		{
 			throw new \Exception(
 				'The target database has no schema yet. Run the migrations against it first '
-				. '(bin/grocy-db-import does that for you when it is the configured database).'
+				. '(bin/victual-db-import does that for you when it is the configured database).'
 			);
 		}
 
@@ -308,7 +308,7 @@ class DatabaseImporter
 			throw new \Exception(
 				'The target database is at migration ' . $targetVersion . ' but '
 				. $this->TargetDialect->GetName() . ' is now at ' . $expectedTarget . '. '
-				. 'Run bin/grocy-migrate against it first.'
+				. 'Run bin/victual-migrate against it first.'
 			);
 		}
 	}
@@ -317,7 +317,7 @@ class DatabaseImporter
 	 * Refuses to overwrite a target that already holds data, unless $force. The
 	 * migrations table is exempt - a freshly migrated target always has rows there.
 	 *
-	 * A target migrated by bin/grocy-migrate rather than by this command is not empty
+	 * A target migrated by bin/victual-migrate rather than by this command is not empty
 	 * either: that path seeds the initial data of a fresh installation, which is the
 	 * whole point of it. Hence the second half of the message - the rows are safe to
 	 * lose, but only the operator can say so.
@@ -344,7 +344,7 @@ class DatabaseImporter
 					'The target database already contains data (' . $table . ' has ' . $count . ' rows). '
 					. 'Importing replaces everything in it. Pass --force if that is what you want - '
 					. 'which is also the answer when the only thing in there is the initial data '
-					. 'bin/grocy-migrate seeds into a fresh database.'
+					. 'bin/victual-migrate seeds into a fresh database.'
 				);
 			}
 		}
@@ -400,7 +400,7 @@ class DatabaseImporter
 		// Both sides have to report what is stored, not what their connection makes of
 		// it. The application's connections set PDO::NULL_EMPTY_STRING, so a stored empty
 		// string reads back as null, while the importer's source connection deliberately
-		// does not (see bin/grocy-db-import — Grocy really does store empty strings, the
+		// does not (see bin/victual-db-import — grocy really does store empty strings, the
 		// internal meal plan section being one). Comparing a NULL_NATURAL read against a
 		// NULL_EMPTY_STRING read reports a difference for every empty string in the
 		// database and means nothing. Setting both to NULL_NATURAL keeps the empty
@@ -500,7 +500,7 @@ class DatabaseImporter
 		}
 
 		// ALTER TABLE rather than session_replication_role, which needs superuser -
-		// a Grocy database user normally owns its tables but is not a superuser
+		// a Victual database user normally owns its tables but is not a superuser
 		foreach ($tables as $table)
 		{
 			$this->Target->exec('ALTER TABLE ' . $this->TargetDialect->QuoteIdentifier($table)

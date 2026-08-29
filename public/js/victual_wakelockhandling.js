@@ -2,9 +2,9 @@
 // either always (user setting "keep_screen_on") or only while a fullscreen-card
 // is displayed ("keep_screen_on_when_fullscreen_card"). Loaded on every page.
 
-Grocy.WakeLock = {};
-Grocy.WakeLock.NoSleepJsIntance = null; // Lazily created NoSleep.js instance
-Grocy.WakeLock.InitDone = false; // Whether the wake lock was already enabled once from a user gesture
+Victual.WakeLock = {};
+Victual.WakeLock.NoSleepJsIntance = null; // Lazily created NoSleep.js instance
+Victual.WakeLock.InitDone = false; // Whether the wake lock was already enabled once from a user gesture
 
 // Toggle wake lock live when the settings page checkbox changes
 $("#keep_screen_on").on("change", function()
@@ -12,38 +12,38 @@ $("#keep_screen_on").on("change", function()
 	var value = $(this).is(":checked");
 	if (value)
 	{
-		Grocy.WakeLock.Enable();
+		Victual.WakeLock.Enable();
 	}
 	else
 	{
-		Grocy.WakeLock.Disable();
+		Victual.WakeLock.Disable();
 	}
 });
 
 /** Enables the screen wake lock (creates the NoSleep.js instance on first use). */
-Grocy.WakeLock.Enable = function()
+Victual.WakeLock.Enable = function()
 {
-	if (Grocy.WakeLock.NoSleepJsIntance === null)
+	if (Victual.WakeLock.NoSleepJsIntance === null)
 	{
-		Grocy.WakeLock.NoSleepJsIntance = new NoSleep();
+		Victual.WakeLock.NoSleepJsIntance = new NoSleep();
 	}
-	Grocy.WakeLock.NoSleepJsIntance.enable();
-	Grocy.WakeLock.InitDone = true;
+	Victual.WakeLock.NoSleepJsIntance.enable();
+	Victual.WakeLock.InitDone = true;
 }
 
 /** Disables the screen wake lock (no-op when it was never enabled). */
-Grocy.WakeLock.Disable = function()
+Victual.WakeLock.Disable = function()
 {
-	if (Grocy.WakeLock.NoSleepJsIntance !== null)
+	if (Victual.WakeLock.NoSleepJsIntance !== null)
 	{
-		Grocy.WakeLock.NoSleepJsIntance.disable();
+		Victual.WakeLock.NoSleepJsIntance.disable();
 	}
 }
 
 // Handle "Keep screen on while displaying a fullscreen-card" when the body class "fullscreen-card" has changed
 new MutationObserver(function(mutations)
 {
-	if (BoolVal(Grocy.UserSettings.keep_screen_on_when_fullscreen_card) && !BoolVal(Grocy.UserSettings.keep_screen_on))
+	if (BoolVal(Victual.UserSettings.keep_screen_on_when_fullscreen_card) && !BoolVal(Victual.UserSettings.keep_screen_on))
 	{
 		mutations.forEach(function(mutation)
 		{
@@ -52,11 +52,11 @@ new MutationObserver(function(mutations)
 				var attributeValue = $(mutation.target).prop(mutation.attributeName);
 				if (attributeValue.contains("fullscreen-card"))
 				{
-					Grocy.WakeLock.Enable();
+					Victual.WakeLock.Enable();
 				}
 				else
 				{
-					Grocy.WakeLock.Disable();
+					Victual.WakeLock.Disable();
 				}
 			}
 		});
@@ -70,10 +70,10 @@ new MutationObserver(function(mutations)
 // do this in on the first click on anything
 $(document).click(function()
 {
-	if (Grocy.WakeLock.InitDone === false && BoolVal(Grocy.UserSettings.keep_screen_on))
+	if (Victual.WakeLock.InitDone === false && BoolVal(Victual.UserSettings.keep_screen_on))
 	{
-		Grocy.WakeLock.Enable();
+		Victual.WakeLock.Enable();
 	}
 
-	Grocy.WakeLock.InitDone = true;
+	Victual.WakeLock.InitDone = true;
 });

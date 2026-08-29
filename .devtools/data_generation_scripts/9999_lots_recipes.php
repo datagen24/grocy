@@ -2,7 +2,7 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\RecipesService;
+use Victual\Services\RecipesService;
 
 $recipesService = RecipesService::GetInstance();
 

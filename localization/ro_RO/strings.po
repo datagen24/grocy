@@ -365,7 +365,7 @@ msgstr "Asta înseamnă că %s va fi eliminat din stoc"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Eliminat 1%1$s din 2%2$s din stoc"
 
-msgid "About Grocy"
+msgid "About Victual"
 msgstr ""
 
 msgid "Close"
@@ -1466,12 +1466,6 @@ msgstr "Prețul rezultat al acestui ingredient va fi înmulțit cu acest factor"
 msgid "Price factor"
 msgstr "Factor de preț"
 
-msgid "Do you find Grocy useful?"
-msgstr ""
-
-msgid "Say thanks"
-msgstr "Mulțumește "
-
 msgid "Search for recipes containing this product"
 msgstr "Căutați rețete care conțin acest produs"
 
@@ -1594,7 +1588,7 @@ msgstr "Editați intrarea în stoc"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 
 msgid "Keep screen on"
@@ -2237,7 +2231,7 @@ msgid "Download %s Grocycode"
 msgstr ""
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 

@@ -18,7 +18,7 @@
 		build artifact and is deliberately not committed.
 	-->
 
-	<title>grocy (datagen24 fork)</title>
+	<title>Victual (a hard fork of grocy)</title>
 
 	<paths>
 		<output>.phpdoc/build</output>
@@ -29,8 +29,8 @@
 	<version number="4.6.0">
 		<api>
 			<!--
-				The four PSR-4 roots from composer.json (Grocy\Controllers, Grocy\Services,
-				Grocy\Middleware, Grocy\Helpers), the barcode lookup plugins, and the
+				The four PSR-4 roots from composer.json (Victual\Controllers, Victual\Services,
+				Victual\Middleware, Victual\Helpers), the barcode lookup plugins, and the
 				procedural entry points at the repository root. helpers/extensions.php is a
 				file of global functions rather than a class, and is documented as such.
 

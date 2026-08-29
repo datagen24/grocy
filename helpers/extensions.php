@@ -4,7 +4,7 @@
  * Global helper functions (loaded unconditionally, no namespace):
  * array/object search utilities, type conversion and validation helpers,
  * and the Setting()/DefaultUserSetting() functions used by config-dist.php
- * and data/config.php to define GROCY_* configuration constants.
+ * and data/config.php to define VICTUAL_* configuration constants.
  */
 
 /**
@@ -239,53 +239,53 @@ function ExternalSettingValue(string $value)
 }
 
 /**
- * Defines the configuration constant GROCY_$name with $value as default,
+ * Defines the configuration constant VICTUAL_$name with $value as default,
  * unless it is already defined or overridden by (in order of precedence)
- * a $name.txt file in GROCY_DATAPATH/settingoverrides or an environment
- * variable named GROCY_$name.
+ * a $name.txt file in VICTUAL_DATAPATH/settingoverrides or an environment
+ * variable named VICTUAL_$name.
  *
- * @param string $name Setting name without the GROCY_ prefix
+ * @param string $name Setting name without the VICTUAL_ prefix
  * @param mixed $value Default value
  */
 function Setting(string $name, $value)
 {
-	if (!defined('GROCY_' . $name))
+	if (!defined('VICTUAL_' . $name))
 	{
 		// The content of a $name.txt file in /data/settingoverrides can overwrite the given setting (for embedded mode)
-		$settingOverrideFile = GROCY_DATAPATH . '/settingoverrides/' . $name . '.txt';
+		$settingOverrideFile = VICTUAL_DATAPATH . '/settingoverrides/' . $name . '.txt';
 
 		if (file_exists($settingOverrideFile))
 		{
-			define('GROCY_' . $name, ExternalSettingValue(file_get_contents($settingOverrideFile)));
+			define('VICTUAL_' . $name, ExternalSettingValue(file_get_contents($settingOverrideFile)));
 		}
-		elseif (getenv('GROCY_' . $name) !== false)
+		elseif (getenv('VICTUAL_' . $name) !== false)
 		{
-			// An environment variable with the same name and prefix GROCY_ overwrites the given setting
-			define('GROCY_' . $name, ExternalSettingValue(getenv('GROCY_' . $name)));
+			// An environment variable with the same name and prefix VICTUAL_ overwrites the given setting
+			define('VICTUAL_' . $name, ExternalSettingValue(getenv('VICTUAL_' . $name)));
 		}
 		else
 		{
-			define('GROCY_' . $name, $value);
+			define('VICTUAL_' . $name, $value);
 		}
 	}
 }
 
-global $GROCY_DEFAULT_USER_SETTINGS;
-$GROCY_DEFAULT_USER_SETTINGS = [];
+global $VICTUAL_DEFAULT_USER_SETTINGS;
+$VICTUAL_DEFAULT_USER_SETTINGS = [];
 /**
  * Registers the default value for a per-user setting (collected in the global
- * $GROCY_DEFAULT_USER_SETTINGS array); the first registration of a name wins.
+ * $VICTUAL_DEFAULT_USER_SETTINGS array); the first registration of a name wins.
  *
  * @param string $name User setting name
  * @param mixed $value Default value
  */
 function DefaultUserSetting(string $name, $value)
 {
-	global $GROCY_DEFAULT_USER_SETTINGS;
+	global $VICTUAL_DEFAULT_USER_SETTINGS;
 
-	if (!array_key_exists($name, $GROCY_DEFAULT_USER_SETTINGS))
+	if (!array_key_exists($name, $VICTUAL_DEFAULT_USER_SETTINGS))
 	{
-		$GROCY_DEFAULT_USER_SETTINGS[$name] = $value;
+		$VICTUAL_DEFAULT_USER_SETTINGS[$name] = $value;
 	}
 }
 
@@ -374,18 +374,18 @@ function string_ends_with($haystack, $needle)
 	return (substr($haystack, -$length) === $needle);
 }
 
-global $GROCY_REQUIRED_FRONTEND_PACKAGES;
-$GROCY_REQUIRED_FRONTEND_PACKAGES = [];
+global $VICTUAL_REQUIRED_FRONTEND_PACKAGES;
+$VICTUAL_REQUIRED_FRONTEND_PACKAGES = [];
 /**
  * Marks the given frontend packages (npm package names) as required for the
  * current page, so that their CSS/JS assets get included (collected in the
- * global $GROCY_REQUIRED_FRONTEND_PACKAGES array, deduplicated).
+ * global $VICTUAL_REQUIRED_FRONTEND_PACKAGES array, deduplicated).
  */
 function require_frontend_packages(array $packages)
 {
-	global $GROCY_REQUIRED_FRONTEND_PACKAGES;
+	global $VICTUAL_REQUIRED_FRONTEND_PACKAGES;
 
-	$GROCY_REQUIRED_FRONTEND_PACKAGES = array_unique(array_merge($GROCY_REQUIRED_FRONTEND_PACKAGES, $packages));
+	$VICTUAL_REQUIRED_FRONTEND_PACKAGES = array_unique(array_merge($VICTUAL_REQUIRED_FRONTEND_PACKAGES, $packages));
 }
 
 /**

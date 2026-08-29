@@ -23,7 +23,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	choresOverviewTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Status filter (overdue/due today/due soon/...) - filters the hidden status column (index 5)
 $("#status-filter").on("change", function()
@@ -96,14 +96,14 @@ $(document).on('click', '.track-chore-button', function(e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
 	var choreId = $(e.currentTarget).attr('data-chore-id');
 	var choreName = $(e.currentTarget).attr('data-chore-name');
 	var skipped = $(e.currentTarget).hasClass("skip");
 	var now = $(e.currentTarget).hasClass("now");
 
-	Grocy.Api.Get('chores/' + choreId,
+	Victual.Api.Get('chores/' + choreId,
 		function(choreDetails)
 		{
 			var trackedTime = moment().format('YYYY-MM-DD HH:mm:ss');
@@ -124,11 +124,11 @@ $(document).on('click', '.track-chore-button', function(e)
 				}
 			}
 
-			Grocy.Api.Post('chores/' + choreId + '/execute', { 'tracked_time': trackedTime, 'skipped': skipped },
+			Victual.Api.Post('chores/' + choreId + '/execute', { 'tracked_time': trackedTime, 'skipped': skipped },
 				function()
 				{
 					// Re-fetch the chore to get its newly calculated next execution time/assignee
-					Grocy.Api.Get('chores/' + choreId,
+					Victual.Api.Get('chores/' + choreId,
 						function(result)
 						{
 							var choreRow = $('#chore-' + choreId + '-row');
@@ -185,7 +185,7 @@ $(document).on('click', '.track-chore-button', function(e)
 							$('#chore-' + choreId + '-rescheduled-icon').remove();
 							$('#chore-' + choreId + '-reassigned-icon').remove();
 
-							Grocy.FrontendHelpers.EndUiBusy();
+							Victual.FrontendHelpers.EndUiBusy();
 							toastr.success(__t('Tracked execution of chore %1$s on %2$s', choreName, trackedTime));
 							RefreshStatistics();
 
@@ -198,25 +198,25 @@ $(document).on('click', '.track-chore-button', function(e)
 								// Refresh the DataTable to re-apply filters
 								choresOverviewTable.rows().invalidate().draw(false);
 								$(".input-group-filter").trigger("change");
-							}, Grocy.FormFocusDelay);
+							}, Victual.FormFocusDelay);
 						},
 						function(xhr)
 						{
-							Grocy.FrontendHelpers.EndUiBusy();
+							Victual.FrontendHelpers.EndUiBusy();
 							console.error(xhr);
 						}
 					);
 				},
 				function(xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy();
+					Victual.FrontendHelpers.EndUiBusy();
 					console.error(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy("choretracking-form");
+			Victual.FrontendHelpers.EndUiBusy("choretracking-form");
 			console.error(xhr);
 		}
 	);
@@ -229,11 +229,11 @@ $(document).on('click', '.chore-grocycode-label-print', function(e)
 	e.preventDefault();
 
 	var choreId = $(e.currentTarget).attr('data-chore-id');
-	Grocy.Api.Get('chores/' + choreId + '/printlabel', function(labelData)
+	Victual.Api.Get('chores/' + choreId + '/printlabel', function(labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });
@@ -245,7 +245,7 @@ $(document).on('click', '.chore-grocycode-label-print', function(e)
 function RefreshStatistics()
 {
 	var nextXDays = $("#info-due-soon-chores").data("next-x-days");
-	Grocy.Api.Get('chores',
+	Victual.Api.Get('chores',
 		function(result)
 		{
 			var dueTodayCount = 0;
@@ -274,7 +274,7 @@ function RefreshStatistics()
 					dueSoonCount++;
 				}
 
-				if (element.next_execution_assigned_to_user_id == Grocy.UserId)
+				if (element.next_execution_assigned_to_user_id == Victual.UserId)
 				{
 					assignedToMeCount++;
 				}
@@ -299,8 +299,8 @@ $(document).on("click", ".reschedule-chore-button", function(e)
 	e.preventDefault();
 
 	var choreId = $(e.currentTarget).attr("data-chore-id");
-	Grocy.EditObjectId = choreId;
-	Grocy.Api.Get("chores/" + choreId, function(choreDetails)
+	Victual.EditObjectId = choreId;
+	Victual.Api.Get("chores/" + choreId, function(choreDetails)
 	{
 		var prefillDate = choreDetails.next_estimated_execution_time || moment().format("YYYY-MM-DD HH:mm:ss");
 		if (choreDetails.chore.rescheduled_date)
@@ -310,13 +310,13 @@ $(document).on("click", ".reschedule-chore-button", function(e)
 
 		if (choreDetails.chore.track_date_only == 1)
 		{
-			Grocy.Components.DateTimePicker.ChangeFormat("YYYY-MM-DD");
-			Grocy.Components.DateTimePicker.SetValue(moment(prefillDate).format("YYYY-MM-DD"));
+			Victual.Components.DateTimePicker.ChangeFormat("YYYY-MM-DD");
+			Victual.Components.DateTimePicker.SetValue(moment(prefillDate).format("YYYY-MM-DD"));
 		}
 		else
 		{
-			Grocy.Components.DateTimePicker.ChangeFormat("YYYY-MM-DD HH:mm:ss");
-			Grocy.Components.DateTimePicker.SetValue(moment(prefillDate).format("YYYY-MM-DD HH:mm:ss"));
+			Victual.Components.DateTimePicker.ChangeFormat("YYYY-MM-DD HH:mm:ss");
+			Victual.Components.DateTimePicker.SetValue(moment(prefillDate).format("YYYY-MM-DD HH:mm:ss"));
 		}
 
 		if (typeof choreDetails.chore.next_execution_assigned_to_user_id != "string")
@@ -325,12 +325,12 @@ $(document).on("click", ".reschedule-chore-button", function(e)
 		}
 		if (choreDetails.chore.next_execution_assigned_to_user_id)
 		{
-			Grocy.Components.UserPicker.SetId(choreDetails.chore.next_execution_assigned_to_user_id)
+			Victual.Components.UserPicker.SetId(choreDetails.chore.next_execution_assigned_to_user_id)
 		}
 		else
 		{
-			Grocy.Components.UserPicker.SetValue("");
-			Grocy.Components.UserPicker.SetId(null);
+			Victual.Components.UserPicker.SetValue("");
+			Victual.Components.UserPicker.SetId(null);
 		}
 
 		$("#reschedule-chore-modal-title").text(choreDetails.chore.name);
@@ -344,15 +344,15 @@ $("#reschedule-chore-save-button").on("click", function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("reschedule-chore-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("reschedule-chore-form", true))
 	{
 		return;
 	}
 
-	Grocy.Api.Put('objects/chores/' + Grocy.EditObjectId, { "rescheduled_date": Grocy.Components.DateTimePicker.GetValue(), "rescheduled_next_execution_assigned_to_user_id": Grocy.Components.UserPicker.GetValue() },
+	Victual.Api.Put('objects/chores/' + Victual.EditObjectId, { "rescheduled_date": Victual.Components.DateTimePicker.GetValue(), "rescheduled_next_execution_assigned_to_user_id": Victual.Components.UserPicker.GetValue() },
 		function(result)
 		{
-			Grocy.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Grocy.EditObjectId },
+			Victual.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Victual.EditObjectId },
 				function(result)
 				{
 					window.location.reload();
@@ -365,7 +365,7 @@ $("#reschedule-chore-save-button").on("click", function(e)
 		},
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+			Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 		}
 	);
 });
@@ -375,10 +375,10 @@ $("#reschedule-chore-clear-button").on("click", function(e)
 {
 	e.preventDefault();
 
-	Grocy.Api.Put('objects/chores/' + Grocy.EditObjectId, { "rescheduled_date": null, "rescheduled_next_execution_assigned_to_user_id": null },
+	Victual.Api.Put('objects/chores/' + Victual.EditObjectId, { "rescheduled_date": null, "rescheduled_next_execution_assigned_to_user_id": null },
 		function(result)
 		{
-			Grocy.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Grocy.EditObjectId },
+			Victual.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Victual.EditObjectId },
 				function(result)
 				{
 					window.location.reload();
@@ -391,7 +391,7 @@ $("#reschedule-chore-clear-button").on("click", function(e)
 		},
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+			Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 		}
 	);
 });

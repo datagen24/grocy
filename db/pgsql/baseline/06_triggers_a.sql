@@ -4,7 +4,7 @@
 -- keeping the original SQLite trigger name. See db/pgsql/README.md "Triggers" section for
 -- the general porting rules.
 --
--- Recursion note: SQLite runs with `recursive_triggers` OFF (the default, and Grocy never
+-- Recursion note: SQLite runs with `recursive_triggers` OFF (the default, and Victual never
 -- turns it on). Verified empirically (via .devtools/pgsql/trigdifftest.php) against real
 -- SQLite: this does NOT stop a DML statement issued from inside a trigger body from firing
 -- a *different* trigger on its target table - e.g. products_default_qu_conversions_INS
@@ -274,10 +274,10 @@ FOR EACH ROW EXECUTE FUNCTION trg_products_default_qu_conversions_UPD();
 DROP TRIGGER IF EXISTS quantity_unit_conversions_INS ON quantity_unit_conversions;
 CREATE OR REPLACE FUNCTION trg_quantity_unit_conversions_INS() RETURNS TRIGGER AS $$
 BEGIN
-	IF current_setting('grocy.in_quc_ins', true) = '1' THEN
+	IF current_setting('victual.in_quc_ins', true) = '1' THEN
 		RETURN NULL;
 	END IF;
-	PERFORM set_config('grocy.in_quc_ins', '1', true);
+	PERFORM set_config('victual.in_quc_ins', '1', true);
 
 	-- Create the inverse QU conversion (see note above: plain INSERT is equivalent to the
 	-- original "INSERT OR REPLACE", there being no real unique constraint to trigger on)
@@ -298,7 +298,7 @@ BEGIN
 	WHERE path LIKE '%/' || NEW.to_qu_id::text || '/%'
 		OR path LIKE '%/' || NEW.from_qu_id::text || '/%';
 
-	PERFORM set_config('grocy.in_quc_ins', '0', true);
+	PERFORM set_config('victual.in_quc_ins', '0', true);
 	RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -331,10 +331,10 @@ FOR EACH ROW EXECUTE FUNCTION trg_quantity_unit_conversions_INS();
 DROP TRIGGER IF EXISTS quantity_unit_conversions_UPD ON quantity_unit_conversions;
 CREATE OR REPLACE FUNCTION trg_quantity_unit_conversions_UPD() RETURNS TRIGGER AS $$
 BEGIN
-	IF current_setting('grocy.in_quc_upd', true) = '1' THEN
+	IF current_setting('victual.in_quc_upd', true) = '1' THEN
 		RETURN NULL;
 	END IF;
-	PERFORM set_config('grocy.in_quc_upd', '1', true);
+	PERFORM set_config('victual.in_quc_upd', '1', true);
 
 	-- Update the inverse QU conversion
 	UPDATE quantity_unit_conversions
@@ -357,7 +357,7 @@ BEGIN
 	WHERE path LIKE '%/' || NEW.to_qu_id::text || '/%'
 		OR path LIKE '%/' || NEW.from_qu_id::text || '/%';
 
-	PERFORM set_config('grocy.in_quc_upd', '0', true);
+	PERFORM set_config('victual.in_quc_upd', '0', true);
 	RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -387,10 +387,10 @@ FOR EACH ROW EXECUTE FUNCTION trg_quantity_unit_conversions_UPD();
 DROP TRIGGER IF EXISTS quantity_unit_conversions_DEL ON quantity_unit_conversions;
 CREATE OR REPLACE FUNCTION trg_quantity_unit_conversions_DEL() RETURNS TRIGGER AS $$
 BEGIN
-	IF current_setting('grocy.in_quc_del', true) = '1' THEN
+	IF current_setting('victual.in_quc_del', true) = '1' THEN
 		RETURN NULL;
 	END IF;
-	PERFORM set_config('grocy.in_quc_del', '1', true);
+	PERFORM set_config('victual.in_quc_del', '1', true);
 
 	-- Delete the inverse QU conversion
 	DELETE FROM quantity_unit_conversions
@@ -410,7 +410,7 @@ BEGIN
 	WHERE path LIKE '%/' || OLD.to_qu_id::text || '/%'
 		OR path LIKE '%/' || OLD.from_qu_id::text || '/%';
 
-	PERFORM set_config('grocy.in_quc_del', '0', true);
+	PERFORM set_config('victual.in_quc_del', '0', true);
 	RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;

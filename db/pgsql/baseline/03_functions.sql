@@ -1,15 +1,15 @@
 -- PostgreSQL baseline schema: functions
 --
--- On SQLite, Grocy registers helper functions per connection via PDO::createFunction(),
+-- On SQLite, Victual registers helper functions per connection via PDO::createFunction(),
 -- which calls back into PHP. PostgreSQL cannot do that, so the equivalents live here.
 --
 -- `ceil`, `substr`, `abs`, `round` and friends are native in PostgreSQL and need nothing.
 -- `regexp` is not needed either: the dialect emits the `~` operator instead (see
--- Grocy\Services\Database\PostgresDialect::GetRegexpCondition).
+-- Victual\Services\Database\PostgresDialect::GetRegexpCondition).
 --
--- That leaves grocy_user_setting(), which is used by the stock overview views.
+-- That leaves victual_user_setting(), which is used by the stock overview views.
 
--- Grocy sorts and compares names case insensitively by writing SQLite's built in
+-- Victual sorts and compares names case insensitively by writing SQLite's built in
 -- "COLLATE NOCASE" directly into its queries - 116 times across eleven PHP files, mostly
 -- ORDER BY on list pages and API responses, plus one barcode lookup in StockService.
 --
@@ -39,20 +39,20 @@ CREATE TABLE user_settings_defaults (
 
 -- Resolves a setting for the user the current connection is acting for.
 --
--- The acting user comes from the `grocy.user_id` session variable, which
--- Grocy\Services\DatabaseService::SetCurrentUserId() sets once authentication has
+-- The acting user comes from the `victual.user_id` session variable, which
+-- Victual\Services\DatabaseService::SetCurrentUserId() sets once authentication has
 -- established who is making the request. It falls back to user 1 so that the function
 -- still behaves sensibly on a connection which has not been told yet (during schema
 -- migration, for instance).
 --
 -- Resolution order matches UsersService::GetUserSetting(): the user's own value first,
 -- then the configured default, then NULL.
-CREATE FUNCTION grocy_user_setting(setting_key TEXT) RETURNS TEXT AS $$
+CREATE FUNCTION victual_user_setting(setting_key TEXT) RETURNS TEXT AS $$
 	SELECT COALESCE(
 		(
 			SELECT us.value
 			FROM user_settings us
-			WHERE us.user_id = COALESCE(NULLIF(current_setting('grocy.user_id', true), '')::INTEGER, 1)
+			WHERE us.user_id = COALESCE(NULLIF(current_setting('victual.user_id', true), '')::INTEGER, 1)
 				AND us.key = setting_key
 		),
 		(

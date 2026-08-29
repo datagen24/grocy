@@ -2,8 +2,8 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\DatabaseService;
-use Grocy\Services\StockService;
+use Victual\Services\DatabaseService;
+use Victual\Services\StockService;
 
 $PRODUCTS = [3, 4, 5, 6, 7, 8];
 

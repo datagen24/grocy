@@ -22,7 +22,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	apiKeysTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -62,7 +62,7 @@ $(document).on('click', '.apikey-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/api_keys/' + objectId, {},
+				Victual.Api.Delete('objects/api_keys/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/manageapikeys');
@@ -110,7 +110,7 @@ $("#add-api-key-modal").on("shown.bs.modal", function(e)
 	setTimeout(function()
 	{
 		$("#description").focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 });
 
 $("#new-api-key-button").on("click", function(e)

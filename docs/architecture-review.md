@@ -49,20 +49,20 @@ of what was found and what was decided.
 | 3 | Raw SQLite-only date SQL (`DATE('now', ...)`, `STRFTIME`) bypasses the dialect layer and crashes on PostgreSQL — five page routes **and** the due/expired-products API | `StockController.php:67,72`, `ChoresController.php:74,79`, `BatteriesController.php:87,92`, `StockReportsController.php:24`, `RecipesController.php:30,62`, `services/StockService.php:954,958,970` | ✅ Cutoffs computed in PHP and bound as parameters. **No dialect primitive was added** — every site turned out to be a per-request constant, not a row-correlated expression, so there was nothing for a primitive to do (see the note below) |
 | 4 | Any authenticated user can delete any API key by ID (sequential IDs, no ownership check, `api_keys` not in `ExposedEntityNoDelete`) | `controllers/Api/GenericEntityApiController.php:96-99` | ✅ Own keys only unless admin; another user's key answers the same "Object not found" as a missing one, so IDs can't be enumerated. `ExposedEntityNoDelete` deliberately left alone — the manage-API-keys page deletes through this route |
 | 5 | Session/API keys generated with non-crypto `rand()` | `helpers/extensions.php` (`RandomString`), used by `SessionService.php:79`, `ApiKeyService.php:152` | ✅ `random_int()`. Signature and alphabet kept — API keys travel in the iCal `?secret=` query string and session keys are cookie values, so the alphanumeric alphabet is load-bearing and existing keys stay valid |
-| 6 | `WebhookRunner` catches nonexistent `Grocy\Helpers\RequestException`, so a printer webhook failure 500s the user action instead of being handled | `helpers/WebhookRunner.php` | ✅ Catches `GuzzleHttp\Exception\GuzzleException`, **not** `RequestException` as originally suggested: `ConnectException` extends `TransferException`, so timeouts and DNS failures — the likeliest printer failures given the 2 s timeout — would still have escaped |
+| 6 | `WebhookRunner` catches nonexistent `Victual\Helpers\RequestException`, so a printer webhook failure 500s the user action instead of being handled | `helpers/WebhookRunner.php` | ✅ Catches `GuzzleHttp\Exception\GuzzleException`, **not** `RequestException` as originally suggested: `ConnectException` extends `TransferException`, so timeouts and DNS failures — the likeliest printer failures given the 2 s timeout — would still have escaped |
 | 7 | `/recipes` 500s on a fresh install: unguarded `$selectedRecipe->id` when no recipes exist | `controllers/RecipesController.php:113` | ✅ `recipePositionsResolved` resolved inside the existing guard; the `FindObjectInArrayByPropertyValue` lookup, which can also return null, is guarded too |
 | 8 | LDAP filter injection: raw POST username interpolated into the search filter | `middleware/Auth/LdapAuthMiddleware.php:35` | ✅ `ldap_escape(..., LDAP_ESCAPE_FILTER)`, plus an exact-one-result check before `$result[0]` is dereferenced |
-| 9 | Stack traces served in production: `addErrorMiddleware(true, ...)` hardcoded, so every 500 includes `error_details.stack_trace` | `app.php:115` | ✅ Gated on `GROCY_MODE === 'dev'`. Error *logging* left off deliberately — tracked as its own piece of work |
+| 9 | Stack traces served in production: `addErrorMiddleware(true, ...)` hardcoded, so every 500 includes `error_details.stack_trace` | `app.php:115` | ✅ Gated on `VICTUAL_MODE === 'dev'`. Error *logging* left off deliberately — tracked as its own piece of work |
 | 10 | `FilesService.php:54` tests `$bestFitHeight !== null` twice (second was surely `$bestFitWidth`); `:70` catches an unimported `ImageResizeException` that can never match | `services/FilesService.php` | ✅ Operand fixed (the height-only branch was dead code); `Gumlet\ImageResizeException` imported |
 | 11 | `LogMissingLocalization` returns `null` (→ 500) outside dev mode | `controllers/Api/SystemApiController.php:76-92` | ✅ Returns `EmptyApiResponse` unconditionally |
 | 12 | `LocalizationService` per-locale instance cache never hits: `in_array($locale, self::$InstanceMap)` compares the locale string against the cached *objects*, so every call re-parses the `.po` files from disk | `services/LocalizationService.php:161-174` | ✅ `isset(self::$InstanceMap[$locale])` |
-| 13 | Demo/prerelease mode hard-fails on PostgreSQL: `DemoDataGeneratorService` is unconditionally SQLite-flavored (`sqlite_sequence`, `STRFTIME`, `datetime('now','localtime')`) but is invoked regardless of `DB_DRIVER` | `services/DemoDataGeneratorService.php`, called from `controllers/SystemController.php:51` | ✅ Skipped (with a note on stderr) unless the dialect is SQLite, rather than hard-failing — `GROCY_MODE=dev` stays usable on PostgreSQL. The SQL was **not** ported |
+| 13 | Demo/prerelease mode hard-fails on PostgreSQL: `DemoDataGeneratorService` is unconditionally SQLite-flavored (`sqlite_sequence`, `STRFTIME`, `datetime('now','localtime')`) but is invoked regardless of `DB_DRIVER` | `services/DemoDataGeneratorService.php`, called from `controllers/SystemController.php:51` | ✅ Skipped (with a note on stderr) unless the dialect is SQLite, rather than hard-failing — `VICTUAL_MODE=dev` stays usable on PostgreSQL. The SQL was **not** ported |
 
 ### What the fixing pass turned up beyond the table
 
 - **Defect 2 was leaking more than listed.** The blocklist also let through
-  `GROCY_USER_USERNAME`, `GROCY_USER_PICTURE_FILE_NAME`, `GROCY_LOCALE` and
-  `GROCY_EXTERNALLY_MANAGED_AUTHENTICATION`, alongside every `LDAP_*`, `AUTH_CLASS`,
+  `VICTUAL_USER_USERNAME`, `VICTUAL_USER_PICTURE_FILE_NAME`, `VICTUAL_LOCALE` and
+  `VICTUAL_EXTERNALLY_MANAGED_AUTHENTICATION`, alongside every `LDAP_*`, `AUTH_CLASS`,
   `REVERSE_PROXY_AUTH_HEADER` and `TPRINTER_*` setting. That is the argument for the
   allowlist over a longer blocklist: the endpoint fails open on every setting added
   after it.
@@ -84,7 +84,7 @@ of what was found and what was decided.
   triggers write week recipe names with SQLite's definition, so
   `RecipesService::GetMealPlanWeekRecipeName()` reproduces it exactly (verified
   against SQLite for every day of 2015–2035). This is the PHP-side counterpart of
-  `grocy_sqlite_percent_w()` in the PostgreSQL baseline.
+  `victual_sqlite_percent_w()` in the PostgreSQL baseline.
 - **Defect 13 has a second PostgreSQL hazard even if the SQL is ported one day.**
   `DemoDataGeneratorService` inserts explicit `quantity_units` IDs and never calls
   `DatabaseDialect::ResyncGeneratedIdCounters()`, so a ported generator would still
@@ -115,14 +115,14 @@ touches local mutable state:
   (file storage in the database), which removes `data/storage`.
 - **`data/storage`** — uploaded files; removed by plan 01.
 - **`data/config.php` + `data/settingoverrides/`** — read-only at runtime; a stub
-  config plus `GROCY_*` env vars is already viable, ConfigMap-compatible.
-- **SQLite artifacts** (`data/grocy.db`, file-mtime change tracking) — moot under
+  config plus `VICTUAL_*` env vars is already viable, ConfigMap-compatible.
+- **SQLite artifacts** (`data/victual.db`, file-mtime change tracking) — moot under
   PostgreSQL; the Postgres dialect already replaced mtime tracking with a table.
-- **Request-scoped `define()` constants** (`GROCY_USER_ID`, `GROCY_LOCALE`, …) — safe
+- **Request-scoped `define()` constants** (`VICTUAL_USER_ID`, `VICTUAL_LOCALE`, …) — safe
   under php-fpm, but permanently rule out worker-mode runtimes (FrankenPHP, Swoole).
   Not worth changing unless that becomes a goal.
 - **PrerequisiteChecker requires `pdo_sqlite` ≥ 3.40 and opens `sqlite::memory:` on
-  every request even on pgsql-only deployments** — skip when `GROCY_DB_DRIVER=pgsql`
+  every request even on pgsql-only deployments** — skip when `VICTUAL_DB_DRIVER=pgsql`
   to slim the image and the request path.
 
 ## Backend (controllers, middleware, helpers)
@@ -160,7 +160,7 @@ touches local mutable state:
 **Verdict: structurally sound and spec-honest; per-endpoint error discipline is the
 weak spot.**
 
-- Route table vs `grocy.openapi.json`: of ~74 API routes, the only mismatch is the
+- Route table vs `victual.openapi.json`: of ~74 API routes, the only mismatch is the
   self-referential `/api/openapi/specification` missing from the spec. The
   `ExposedEntity` allow-lists are read from the spec at runtime, so entity drift is
   impossible by construction — a genuinely good mechanism, and the right foundation
@@ -198,32 +198,32 @@ weak spot.**
 enforced by copying, and the copies are drifting.**
 
 - The wiring is exemplary for a no-framework app: layout auto-loads
-  `/viewjs/{view}.js`, all API traffic goes through `Grocy.Api.*` (zero `$.ajax`/
+  `/viewjs/{view}.js`, all API traffic goes through `Victual.Api.*` (zero `$.ajax`/
   `fetch` bypasses), inline Blade scripts are data-injection only, and every
   view/viewjs/route name lines up.
 - **Silent failures are the default error path:** 148 error callbacks in 41 files do
   nothing but `console.error(xhr)` — a failed delete gives the user nothing. The fix
-  is central, not 148-fold: make `Grocy.Api`'s error parameter default to
-  `Grocy.FrontendHelpers.ShowGenericError`.
+  is central, not 148-fold: make `Victual.Api`'s error parameter default to
+  `Victual.FrontendHelpers.ShowGenericError`.
 - **Clone families:** ~14 master-data list scripts and ~15 entity-form scripts are
   byte-identical modulo entity name (~2,300 lines total); the delete-confirm dialog
-  appears 31 times; `Grocy.Api` itself repeats its 30-line XHR handler six times (and
+  appears 31 times; `Victual.Api` itself repeats its 30-line XHR handler six times (and
   has no timeout/`onerror` handling — a dropped connection during save leaves the UI
   busy-locked forever); `datetimepicker2` is a full 344-line clone of
   `datetimepicker` existing only so two pickers can share a page. Drift is already
   observable: sibling lists disagree about the embedded-dialog reload convention,
   `userobjectform.js` lost the Enter-to-submit handler its siblings have,
   `stockjournal.js`/`userpermissions.js` hand-roll `toastr.error(JSON.parse(...))`.
-  **Direction:** three small shared helpers — `GrocyEntityList(entity, opts)`,
-  `GrocyEntityForm(entity, url)`, and a single private `request()` core inside
-  `Grocy.Api` — would collapse ~1,500 lines and end the drift. Do it before plans
+  **Direction:** three small shared helpers — `VictualEntityList(entity, opts)`,
+  `VictualEntityForm(entity, url)`, and a single private `request()` core inside
+  `Victual.Api` — would collapse ~1,500 lines and end the drift. Do it before plans
   05/06/08 add more list/form pairs to copy from.
 - `purchase.js` doubles as an unguarded shared library on three other pages (pulled
   in via `@push` in their Blade views); extract the shared dialog logic instead.
 - Minor: list-page Blade chrome repeats across ~14 templates (partials exist and are
   used elsewhere — apply the idiom); `mealplan`/`recipes` blades inject bare globals
-  instead of namespacing under `Grocy.*`; two components aren't registered under
-  `Grocy.Components`.
+  instead of namespacing under `Victual.*`; two components aren't registered under
+  `Victual.Components`.
 
 ## Services and database layer
 
@@ -231,7 +231,7 @@ enforced by copying, and the copies are drifting.**
 plumbing (`DatabaseService`, migrations, the API's `§` regex operator) — but not yet
 fully honored by its consumers.** `StockService` reached for raw SQLite date SQL
 (defect 3), and `DemoDataGeneratorService` is SQLite-only yet ran whenever
-`GROCY_MODE` is dev/demo/prerelease (defect 13). Both are now fixed — but not the way
+`VICTUAL_MODE` is dev/demo/prerelease (defect 13). Both are now fixed — but not the way
 this section proposed. The review assumed the missing piece was a dialect primitive
 for "today"/"N days from now"; in practice every consumer wanted a *per-request
 constant*, not a per-row expression, so the fix was to compute the cutoff in PHP and
@@ -325,7 +325,7 @@ specifically de-risk them.
 Found while documenting (annotated in-code, deliberately not fixed in a
 comment-only pass):
 
-- `public/viewjs/userform.js` — sets `Grocy.DeleteUserePictureOnSave` (typo, extra
+- `public/viewjs/userform.js` — sets `Victual.DeleteUserePictureOnSave` (typo, extra
   "e") where the submit handler checks `DeleteUserPictureOnSave`: choosing a new
   picture likely fails to cancel a pending "delete current picture" flag.
 - `public/viewjs/tasks.js` — the user-filter handler builds an anchored regex in an

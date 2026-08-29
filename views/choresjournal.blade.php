@@ -92,7 +92,7 @@
 					<th>{{ $__t('Tracked time') }}</th>
 					<th>{{ $__t('Scheduled tracking time') }}</th>
 					<th>{{ $__t('Time of tracking') }}</th>
-					<th class="allow-grouping @if(!GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif">{{ $__t('Done by') }}</th>
+					<th class="allow-grouping @if(!VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif">{{ $__t('Done by') }}</th>
 
 					@include('components.userfields_thead', array(
 					'userfields' => $userfields
@@ -142,7 +142,7 @@
 						<time class="timeago timeago-contextual"
 							datetime="{{ $choreLogEntry->row_created_timestamp }}"></time>
 					</td>
-					<td class="@if(!GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif">
 						@if ($choreLogEntry->done_by_user_id !== null && !empty($choreLogEntry->done_by_user_id))
 						{{ GetUserDisplayName(FindObjectInArrayByPropertyValue($users, 'id', $choreLogEntry->done_by_user_id)) }}
 						@else

@@ -1,9 +1,9 @@
 <?php
 
-use Grocy\Helpers\BaseBarcodeLookupPlugin;
+use Victual\Helpers\BaseBarcodeLookupPlugin;
 
 /*
-	This class must extend BaseBarcodeLookupPlugin (in namespace Grocy\Helpers)
+	This class must extend BaseBarcodeLookupPlugin (in namespace Victual\Helpers)
 */
 class DemoBarcodeLookupPlugin extends BaseBarcodeLookupPlugin
 {

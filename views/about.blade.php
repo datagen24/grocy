@@ -1,6 +1,6 @@
 @extends('layout.default')
 
-@section('title', $__t('About Grocy'))
+@section('title', $__t('About Victual'))
 
 @section('content')
 <div class="row">
@@ -9,7 +9,7 @@
 
 		<hr class="my-2">
 
-		<ul class="nav nav-tabs grocy-tabs justify-content-center mt-3">
+		<ul class="nav nav-tabs victual-tabs justify-content-center mt-3">
 			<li class="nav-item">
 				<a class="nav-link discrete-link active"
 					id="system-info-tab"
@@ -24,7 +24,7 @@
 			</li>
 		</ul>
 
-		<div class="tab-content grocy-tabs mt-3">
+		<div class="tab-content victual-tabs mt-3">
 
 			<div class="tab-pane show active"
 				id="system-info">
@@ -63,13 +63,6 @@
 						</table>
 					</div>
 				</div>
-
-				<p class="border-top pt-3">
-					{{ $__t('Do you find Grocy useful?') }}<br>
-					<a class="btn btn-sm btn-primary text-white mt-1"
-						href="https://grocy.info/#say-thanks"
-						target="_blank">{{ $__t('Say thanks') }} <i class="fa-solid fa-heart"></i></a>
-				</p>
 			</div>
 
 			<div class="tab-pane show"
@@ -99,13 +92,20 @@
 		</div>
 
 		<p class="small text-muted border-top pt-3">
-			<a href="https://grocy.info"
+			Victual is a hard fork of
+			<a href="https://github.com/grocy/grocy"
 				class="text-dark"
-				target="_blank">Grocy</a> is a hobby project by
+				target="_blank">grocy</a>, a hobby project by
 			<a href="https://berrnd.de"
 				class="text-dark"
-				target="_blank">Bernd Bestel</a><br>
-			Created with passion since 2017<br>
+				target="_blank">Bernd Bestel</a>, created with passion since 2017.<br>
+			Code originating from grocy is MIT &copy; Bernd Bestel; this fork's changes are
+			BSD 3-Clause. The fork has deliberately diverged and no longer syncs with
+			upstream in either direction.<br>
+			If grocy is useful to you,
+			<a href="https://grocy.info/#say-thanks"
+				class="text-dark"
+				target="_blank">say thanks to Bernd</a> <i class="fa-solid fa-heart"></i><br>
 			Life runs on Code<br>
 		</p>
 	</div>

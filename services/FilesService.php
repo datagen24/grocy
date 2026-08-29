@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 use Gumlet\ImageResize;
 use Gumlet\ImageResizeException;
@@ -23,18 +23,18 @@ class FilesService extends BaseService
 	{
 		parent::__construct();
 
-		$this->StoragePath = GROCY_DATAPATH . '/storage';
+		$this->StoragePath = VICTUAL_DATAPATH . '/storage';
 		if (!file_exists($this->StoragePath))
 		{
 			mkdir($this->StoragePath);
 		}
 
-		if (GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')
+		if (VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
 		{
-			$dbSuffix = GROCY_DEFAULT_LOCALE;
-			if (defined('GROCY_DEMO_DB_SUFFIX'))
+			$dbSuffix = VICTUAL_DEFAULT_LOCALE;
+			if (defined('VICTUAL_DEMO_DB_SUFFIX'))
 			{
-				$dbSuffix = GROCY_DEMO_DB_SUFFIX;
+				$dbSuffix = VICTUAL_DEMO_DB_SUFFIX;
 			}
 
 			$this->StoragePath = $this->StoragePath . '/' . $dbSuffix;

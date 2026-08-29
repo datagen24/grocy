@@ -351,7 +351,7 @@ msgstr "%s கையிருப்பிலிருந்து விலக�
 msgid "Removed %1$s of %2$s from stock"
 msgstr "கையிருப்பிலிருந்து %2$s இன் %1$s நீக்கப்பட்டது"
 
-msgid "About Grocy"
+msgid "About Victual"
 msgstr ""
 
 msgid "Close"
@@ -1395,12 +1395,6 @@ msgstr ""
 msgid "Price factor"
 msgstr "விலை மடங்கு"
 
-msgid "Do you find Grocy useful?"
-msgstr ""
-
-msgid "Say thanks"
-msgstr "நன்றி கூறு"
-
 msgid "Search for recipes containing this product"
 msgstr "இந்த பொருளினைக் கொண்ட சமையல் குறிப்புகளைத் தேடு"
 
@@ -1522,7 +1516,7 @@ msgstr "கையிருப்பு பதிவினைத் தொகு"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 
 msgid "Keep screen on"
@@ -2134,7 +2128,7 @@ msgid "Download %s Grocycode"
 msgstr ""
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 

@@ -3,7 +3,7 @@
 <div align="center">
 <img alt="Victual logo" height="50" src="public/img/logo.svg" />
 <h2>ERP beyond your fridge</h2>
-<h3>Grocy is a web-based self-hosted groceries & household management solution for your home</h3>
+<h3>Victual is a web-based self-hosted groceries & household management solution for your home</h3>
 <em><h4>A hard fork of <a href="https://github.com/grocy/grocy">grocy</a> by <a href="https://berrnd.de">Bernd Bestel</a>, maintained for one household</h4></em>
 </div>
 
@@ -67,7 +67,7 @@ There is no demo of this fork. Upstream's demos show the shared feature set:
 
 ## How to install
 
-Grocy is technically a pretty simple PHP application:
+Victual is technically a pretty simple PHP application:
 
 - Clone this repository and install Composer and Yarn dependencies
 - Copy `config-dist.php` to `data/config.php` and edit to your needs
@@ -84,7 +84,7 @@ Set `DB_DRIVER` to `pgsql` in `data/config.php` along with the `DB_*` connection
 A fresh, empty database is a valid target — the schema is created on first migration from
 a squashed baseline rather than by replaying grocy's SQLite migration history.
 
-To move an existing SQLite installation across, use `bin/grocy-db-import`, which preserves
+To move an existing SQLite installation across, use `bin/victual-db-import`, which preserves
 row ids exactly. See [db/pgsql/README.md](db/pgsql/README.md) for the porting rules, the
 fifteen documented type-coercion hazards, and the two accepted behavioural differences
 between the engines.
@@ -114,7 +114,7 @@ there.
 
 ## Localization
 
-Grocy is fully localizable; the default language is English, integrated into the code.
+Victual is fully localizable; the default language is English, integrated into the code.
 Translations come from upstream's [Transifex
 project](https://explore.transifex.com/grocy/grocy/) — strings this fork adds are not
 there.

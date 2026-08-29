@@ -357,8 +357,8 @@ msgstr "This means %s will be removed from stock"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Removed %1$s of %2$s from stock"
 
-msgid "About Grocy"
-msgstr "About Grocy"
+msgid "About Victual"
+msgstr "About Victual"
 
 msgid "Close"
 msgstr "Close"
@@ -1450,12 +1450,6 @@ msgstr ""
 msgid "Price factor"
 msgstr "Price factor"
 
-msgid "Do you find Grocy useful?"
-msgstr "Do you find Grocy useful?"
-
-msgid "Say thanks"
-msgstr "Say thanks"
-
 msgid "Search for recipes containing this product"
 msgstr "Search for recipes containing this product"
 
@@ -1583,10 +1577,10 @@ msgstr "Edit stock entry"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 
 msgid "Keep screen on"
 msgstr "Keep screen on"
@@ -2254,10 +2248,10 @@ msgid "Download %s Grocycode"
 msgstr "Download %s Grocycode"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 
 # Abbreviation for "due date"

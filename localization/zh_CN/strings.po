@@ -353,8 +353,8 @@ msgstr "移除%s库存"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "%1$s%2$s已从库存中移除"
 
-msgid "About Grocy"
-msgstr "关于Grocy"
+msgid "About Victual"
+msgstr "关于Victual"
 
 msgid "Close"
 msgstr "关闭"
@@ -1376,12 +1376,6 @@ msgstr "此食材的的最终价格将乘以此系数"
 msgid "Price factor"
 msgstr "价格系数"
 
-msgid "Do you find Grocy useful?"
-msgstr "Grocy对您有帮助吗？"
-
-msgid "Say thanks"
-msgstr "表示感谢"
-
 msgid "Search for recipes containing this product"
 msgstr "搜索含有此产品的菜谱"
 
@@ -1502,8 +1496,8 @@ msgstr "编辑库存条目"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
-msgstr "仅当您的浏览器支持并允许通过安全链接(https://)访问grocy服务时，才能使用摄像头"
+"and when Victual is served via a secure (https://) connection"
+msgstr "仅当您的浏览器支持并允许通过安全链接(https://)访问Victual服务时，才能使用摄像头"
 
 msgid "Keep screen on"
 msgstr "保持屏幕常亮"
@@ -2112,7 +2106,7 @@ msgid "Download %s Grocycode"
 msgstr "下载此%s的Grocycode"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr "Grocycode是Grocy实例中此%s的唯一引用，可以像其他条码一样打印和扫描。"
 

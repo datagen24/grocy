@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Helpers;
+namespace Victual\Helpers;
 
 /**
  * Thrown when a runtime prerequisite (PHP/SQLite version, PHP extension,
@@ -59,9 +59,9 @@ class PrerequisiteChecker
 
 	private function checkForConfigFile()
 	{
-		if (!file_exists(GROCY_DATAPATH . '/config.php'))
+		if (!file_exists(VICTUAL_DATAPATH . '/config.php'))
 		{
-			throw new ERequirementNotMet('config.php in data directory (' . GROCY_DATAPATH . ') not found. Have you copied config-dist.php to the data directory and renamed it to config.php?');
+			throw new ERequirementNotMet('config.php in data directory (' . VICTUAL_DATAPATH . ') not found. Have you copied config-dist.php to the data directory and renamed it to config.php?');
 		}
 	}
 

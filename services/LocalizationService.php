@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 use Gettext\Translation;
 use Gettext\Translations;
@@ -36,11 +36,11 @@ class LocalizationService extends BaseService
 	/**
 	 * Dev mode only: appends $text to localization/strings.pot when it is not yet
 	 * known in any .pot file, so new source strings get collected while developing.
-	 * No-op in any other GROCY_MODE.
+	 * No-op in any other VICTUAL_MODE.
 	 */
 	public function CheckAndAddMissingTranslationToPot($text)
 	{
-		if (GROCY_MODE === 'dev')
+		if (VICTUAL_MODE === 'dev')
 		{
 			if ($this->Pot->find('', $text) === false && empty($text) === false)
 			{
@@ -156,13 +156,13 @@ class LocalizationService extends BaseService
 	}
 
 	/**
-	 * Per-locale singleton; an empty $locale means the configured GROCY_LOCALE.
+	 * Per-locale singleton; an empty $locale means the configured VICTUAL_LOCALE.
 	 */
 	public static function GetInstance(string $locale = '')
 	{
 		if (empty($locale))
 		{
-			$locale = GROCY_LOCALE;
+			$locale = VICTUAL_LOCALE;
 		}
 
 		if (!isset(self::$InstanceMap[$locale]))
@@ -182,7 +182,7 @@ class LocalizationService extends BaseService
 	{
 		$locale = $this->Locale;
 
-		if (GROCY_MODE === 'dev')
+		if (VICTUAL_MODE === 'dev')
 		{
 			$this->PotMain = Translations::fromPoFile(__DIR__ . '/../localization/strings.pot');
 
@@ -234,7 +234,7 @@ class LocalizationService extends BaseService
 			$this->Po = $this->Po->mergeWith(Translations::fromPoFile(__DIR__ . "/../localization/$locale/locales.po"));
 		}
 
-		if (GROCY_MODE !== 'production' && file_exists(__DIR__ . "/../localization/$locale/demo_data.po"))
+		if (VICTUAL_MODE !== 'production' && file_exists(__DIR__ . "/../localization/$locale/demo_data.po"))
 		{
 			$this->Po = $this->Po->mergeWith(Translations::fromPoFile(__DIR__ . "/../localization/$locale/demo_data.po"));
 		}

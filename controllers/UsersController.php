@@ -1,9 +1,9 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Services\UserfieldsService;
+use Victual\Controllers\Users\User;
+use Victual\Services\UserfieldsService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -47,7 +47,7 @@ class UsersController extends BaseController
 		}
 		else
 		{
-			if ($args['userId'] == GROCY_USER_ID)
+			if ($args['userId'] == VICTUAL_USER_ID)
 			{
 				User::CheckPermission($request, User::PERMISSION_USERS_EDIT_SELF);
 			}

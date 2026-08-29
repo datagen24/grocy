@@ -62,8 +62,8 @@ RUN composer install \
 
 COPY . /app
 
-# difftest.php and trigdifftest.php both default GROCY_ROOT to /app; being explicit means
+# difftest.php and trigdifftest.php both default VICTUAL_ROOT to /app; being explicit means
 # the scripts behave the same when invoked from somewhere else in the tree.
-ENV GROCY_ROOT=/app
+ENV VICTUAL_ROOT=/app
 
 CMD ["php", "-v"]

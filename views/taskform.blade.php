@@ -18,12 +18,12 @@
 <div class="row">
 	<div class="col-lg-6 col-12">
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
+			Victual.EditMode = '{{ $mode }}';
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $task->id }};
+			Victual.EditObjectId = {{ $task->id }};
 		</script>
 		@endif
 
@@ -85,7 +85,7 @@
 			</div>
 
 			@php
-			$initUserId = GROCY_USER_ID;
+			$initUserId = VICTUAL_USER_ID;
 			if ($mode == 'edit')
 			{
 			$initUserId = $task->assigned_to_user_id;

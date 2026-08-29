@@ -9,7 +9,7 @@
 		<div class="alert alert-info">
 			{{ $__t('If you think this is a bug, please report it') }}<br>
 			&rarr; <a target="_blank"
-				href="https://github.com/grocy/grocy/issues">https://github.com/grocy/grocy/issues</a>
+				href="https://github.com/datagen24/victual/issues">https://github.com/datagen24/victual/issues</a>
 		</div>
 	</div>
 </div>

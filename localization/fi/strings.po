@@ -362,8 +362,8 @@ msgstr "Tämä tarkoittaa, että %s poistetaan varastosta"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Poistettiin %1$s tuotetta %2$s varastosta "
 
-msgid "About Grocy"
-msgstr "Tietoja Grocysta"
+msgid "About Victual"
+msgstr "Tietoja Victualsta"
 
 msgid "Close"
 msgstr "Sulje"
@@ -1458,12 +1458,6 @@ msgstr "Tämän ainesosan lopullinen hinta kerrotaan tällä kertoimella "
 msgid "Price factor"
 msgstr "Hintakerroin"
 
-msgid "Do you find Grocy useful?"
-msgstr "Onko Grocy mielestäsi hyödyllinen?"
-
-msgid "Say thanks"
-msgstr "Kiitä"
-
 msgid "Search for recipes containing this product"
 msgstr "Etsi tämän tuotteen sisältäviä reseptejä"
 
@@ -1592,7 +1586,7 @@ msgstr "Muokkaa varastomerkintää"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Kameran käyttö on mahdollista vain, jos selaimesi tukee sitä ja se on "
 "sallittuna asetuksista ja kun käytetään suojattua (https://) yhteyttä"
@@ -2267,7 +2261,7 @@ msgid "Download %s Grocycode"
 msgstr "Lataa %s GrocyKoodi"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "GrocyKoodi on uniikki viittaus tähän %s sinun Grocyssäsi - tulosta se "

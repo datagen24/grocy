@@ -16,7 +16,7 @@ $("#metrics-table tbody tr").each(function()
 	data.push(itemTotal);
 	totalAmount += + itemTotal;
 });
-totalAmount = totalAmount.toLocaleString(undefined, { style: "currency", currency: Grocy.Currency });
+totalAmount = totalAmount.toLocaleString(undefined, { style: "currency", currency: Victual.Currency });
 
 // Assign a color to each slice from the Paired12 scheme, cycling (skipping index 0
 // on restart) once there are more items than colors
@@ -124,10 +124,10 @@ $("#daterange-filter").daterangepicker({
 	"cancelButtonClasses": "btn-secondary",
 	"startDate": startDate,
 	"endDate": endDate,
-	"showWeekNumbers": Grocy.CalendarShowWeekNumbers,
+	"showWeekNumbers": Victual.CalendarShowWeekNumbers,
 	"locale": {
 		"format": "YYYY-MM-DD",
-		"firstDay": Grocy.CalendarFirstDayOfWeek
+		"firstDay": Victual.CalendarFirstDayOfWeek
 	},
 	"applyLabel": __t("Apply"),
 	"cancelLabel": __t("Cancel"),

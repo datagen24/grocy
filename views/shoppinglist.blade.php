@@ -24,7 +24,7 @@
 			<h2 class="title mr-2 order-0">
 				@yield('title')
 			</h2>
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			<h2 class="mb-0 mr-auto order-3 order-md-1 width-xs-sm-100">
 				<span class="text-muted small">{!! $__t('%s total value', '<span id="total-value"
 						class="locale-number locale-number-currency"></span>') !!}</span>
@@ -50,7 +50,7 @@
 			</div>
 			<div class="related-links collapse d-md-flex order-2 width-xs-sm-100"
 				id="related-links">
-				@if(GROCY_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS)
+				@if(VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS)
 				<div class="my-auto float-right">
 					<select class="custom-control custom-select bg-light font-weight-bold mt-md-0 mt-1"
 						id="selected-shopping-list">
@@ -99,7 +99,7 @@
 			class="border-top border-bottom my-2 py-1">
 			<div id="table-filter-row"
 				data-status-filter="belowminstockamount"
-				class="collapse normal-message status-filter-message responsive-button @if(!GROCY_FEATURE_FLAG_STOCK) d-none @else d-md-inline-block @endif"><span class="d-block d-md-none">{{count($missingProducts)}} <i class="fa-solid fa-exclamation-circle"></i></span><span class="d-none d-md-block">{{ $__n(count($missingProducts), '%s product is below defined min. stock amount', '%s products are below defined min. stock amount') }}</span></div>
+				class="collapse normal-message status-filter-message responsive-button @if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @else d-md-inline-block @endif"><span class="d-block d-md-none">{{count($missingProducts)}} <i class="fa-solid fa-exclamation-circle"></i></span><span class="d-none d-md-block">{{ $__n(count($missingProducts), '%s product is below defined min. stock amount', '%s products are below defined min. stock amount') }}</span></div>
 			<div id="related-links"
 				class="float-right mt-1 collapse d-md-block">
 				<a class="btn btn-primary responsive-button btn-sm mb-1 show-as-dialog-link d-none d-md-inline-block"
@@ -119,7 +119,7 @@
 					</a>
 				</div>
 
-				@if(GROCY_FEATURE_FLAG_STOCK)
+				@if(VICTUAL_FEATURE_FLAG_STOCK)
 				<div class="dropdown d-inline">
 					<a class="btn btn-sm btn-outline-dark responsive-button mb-1 dropdown-toggle"
 						href="#"
@@ -167,7 +167,7 @@
 			<select class="custom-control custom-select"
 				id="status-filter">
 				<option value="all">{{ $__t('All') }}</option>
-				<option class="@if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif"
+				<option class="@if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif"
 					value="belowminstockamount">{{ $__t('Below min. stock amount') }}</option>
 				<option value="xxDONExx">{{ $__t('Only done items') }}</option>
 				<option value="xxUNDONExx">{{ $__t('Only undone items') }}</option>
@@ -203,9 +203,9 @@
 					<th>{{ $__t('Amount') }}</th>
 					<th class="allow-grouping">{{ $__t('Product group') }}</th>
 					<th class="d-none">Hidden status</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Last price (Unit)') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Last price (Total)') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping">{{ $__t('Default store') }}</th>
+					<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Last price (Unit)') }}</th>
+					<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Last price (Total)') }}</th>
+					<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping">{{ $__t('Default store') }}</th>
 					<th>{{ $__t('Barcodes') }}</th>
 
 					@include('components.userfields_thead', array(
@@ -246,7 +246,7 @@
 							title="{{ $__t('Delete this item') }}">
 							<i class="fa-solid fa-trash"></i>
 						</a>
-						<a class="btn btn-sm btn-primary @if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif @if(empty($listItem->product_id)) disabled @else shopping-list-stock-add-workflow-list-item-button @endif"
+						<a class="btn btn-sm btn-primary @if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif @if(empty($listItem->product_id)) disabled @else shopping-list-stock-add-workflow-list-item-button @endif"
 							href="{{ $U('/purchase?embedded&flow=shoppinglistitemtostock&product=') }}{{ $listItem->product_id }}&amount={{ $listItem->amount }}&listitemid={{ $listItem->id }}&quId={{ $listItem->qu_id }}"
 							@if(!empty($listItem->product_id)) data-toggle="tooltip" title="{{ $__t('Add this item to stock') }}" @endif>
 							<i class="fa-solid fa-box"></i>
@@ -287,13 +287,13 @@
 						@if(FindObjectInArrayByPropertyValue($missingProducts, 'id', $listItem->product_id) !== null) belowminstockamount @endif
 						@if($listItem->done == 1) xxDONExx @else xxUNDONExx @endif
 					</td>
-					<td class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
 						<span class="locale-number locale-number-currency">{{ $listItem->last_price_unit }}</span>
 					</td>
-					<td class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
 						<span class="locale-number locale-number-currency">{{ $listItem->last_price_total }}</span>
 					</td>
-					<td class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
 						{{ $listItem->default_shopping_location_name }}
 					</td>
 					<td>

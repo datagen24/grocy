@@ -1,6 +1,6 @@
 // Implements the NumberPicker widget (views/components/numberpicker.blade.php): a plus/minus
 // stepper wrapped around a number input with dynamic min/max/decimals validation messages.
-// No Grocy.Components.* public API - purely class/selector-driven (".numberpicker",
+// No Victual.Components.* public API - purely class/selector-driven (".numberpicker",
 // ".numberpicker-up-button", ".numberpicker-down-button").
 $(".numberpicker-down-button").unbind('click').on("click", function()
 {
@@ -106,7 +106,7 @@ $(".numberpicker").on("keydown", function(e)
 // plain-digit price entry (e.g. typing "199" with 2 configured decimal places becomes "1.99")
 $(".numberpicker.locale-number-input.locale-number-currency").on("blur", function()
 {
-	if (BoolVal(Grocy.UserSettings.stock_auto_decimal_separator_prices))
+	if (BoolVal(Victual.UserSettings.stock_auto_decimal_separator_prices))
 	{
 		var value = this.value.toString();
 		if (!value || value.includes(".") || value.includes(","))
@@ -114,7 +114,7 @@ $(".numberpicker.locale-number-input.locale-number-currency").on("blur", functio
 			return;
 		}
 
-		var decimalPlaces = Grocy.UserSettings.stock_decimal_places_prices_input;
+		var decimalPlaces = Victual.UserSettings.stock_decimal_places_prices_input;
 		if (value.length <= decimalPlaces)
 		{
 			value = value.padStart(decimalPlaces, "0");

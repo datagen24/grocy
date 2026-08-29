@@ -35,7 +35,7 @@
 	         Unfortunately, this also means the code is blurred on screen. -->
 		<img src="{{ $U('/stockentry/'. $stockEntry->id . '/grocycode?size=100') }}">
 		<span class="productname">{{ $product->name }}</span><br>
-		@if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+		@if (VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 		<span>{{ $__t('DD') }}: {{ $stockEntry->best_before_date }}</span>
 		@endif
 	</p>

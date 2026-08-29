@@ -47,11 +47,11 @@ git checkout helpers/PrerequisiteChecker.php
 
 ```bash
 mkdir -p data && cp config-dist.php data/config.php
-GROCY_MODE=demo GROCY_DATAPATH=$PWD/data php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
+VICTUAL_MODE=demo VICTUAL_DATAPATH=$PWD/data php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
 sleep 2 && curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8085/
 ```
 
-Demo mode seeds a SQLite database (`data/grocy_en.db`) with sample data and
+Demo mode seeds a SQLite database (`data/victual_en.db`) with sample data and
 auto-logs-in as "Demo User" — no credentials needed. First `GET /` runs
 migrations and demo generation, then 302s to the entry page.
 
@@ -59,7 +59,7 @@ migrations and demo generation, then 302s to the entry page.
 very first boot), run migrations directly and retry:
 
 ```bash
-GROCY_MODE=demo GROCY_DATAPATH=$PWD/data php bin/grocy-migrate
+VICTUAL_MODE=demo VICTUAL_DATAPATH=$PWD/data php bin/victual-migrate
 ```
 
 Smoke check — expect 200 with a large HTML body:
@@ -95,7 +95,7 @@ the styling symlink (step 2) failed.
 
 ## Variants
 
-- **Dev mode instead of demo data**: `GROCY_MODE=dev` — empty database,
+- **Dev mode instead of demo data**: `VICTUAL_MODE=dev` — empty database,
   auth also bypassed (user id 1).
 - **PostgreSQL**: `docker-compose.yml` has a PostgreSQL service and the
   `DB_*` settings in `data/config.php` switch the driver; SQLite demo mode

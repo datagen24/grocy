@@ -6,7 +6,7 @@
 --
 -- Recursion note: unlike batch A's products/quantity-unit cluster, nothing in this batch
 -- needs a `pg_trigger_depth() > 1` guard. Verified empirically against the pristine SQLite
--- demo database (recursive_triggers is OFF, Grocy's default) that
+-- demo database (recursive_triggers is OFF, Victual's default) that
 -- `INSERT INTO stock_next_use` -> INSTEAD OF trigger -> `INSERT INTO stock` DOES still fire
 -- `set_products_default_location_if_empty_stock` in SQLite, i.e. recursive_triggers=OFF only
 -- suppresses genuine self/mutual recursion, not a plain onward chain to an unrelated

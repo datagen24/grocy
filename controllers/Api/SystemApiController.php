@@ -1,10 +1,10 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Services\ApplicationService;
-use Grocy\Services\DatabaseService;
-use Grocy\Services\LocalizationService;
+use Victual\Services\ApplicationService;
+use Victual\Services\DatabaseService;
+use Victual\Services\LocalizationService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -24,8 +24,8 @@ class SystemApiController extends BaseApiController
 	 * explicitly need stays out by default; add a name here only after checking
 	 * that it is safe to hand to any API key holder.
 	 *
-	 * The names are stored without the GROCY_ prefix, matching the output shape.
-	 * Additionally all GROCY_FEATURE_FLAG_* constants are exposed (see GetConfig),
+	 * The names are stored without the VICTUAL_ prefix, matching the output shape.
+	 * Additionally all VICTUAL_FEATURE_FLAG_* constants are exposed (see GetConfig),
 	 * those are non-sensitive by construction and the web UI already receives all
 	 * of them anyway.
 	 */
@@ -50,8 +50,8 @@ class SystemApiController extends BaseApiController
 
 	/**
 	 * GET /api/system/config - returns the config settings which are safe to expose
-	 * to clients (self::EXPOSED_SETTINGS plus all GROCY_FEATURE_FLAG_* constants) as
-	 * a key/value map with the GROCY_ prefix stripped. Settings which are not defined
+	 * to clients (self::EXPOSED_SETTINGS plus all VICTUAL_FEATURE_FLAG_* constants) as
+	 * a key/value map with the VICTUAL_ prefix stripped. Settings which are not defined
 	 * are omitted (no null values). 400 error response on failure.
 	 */
 	public function GetConfig(Request $request, Response $response, array $args)
@@ -62,9 +62,9 @@ class SystemApiController extends BaseApiController
 
 			foreach (self::EXPOSED_SETTINGS as $setting)
 			{
-				if (defined('GROCY_' . $setting))
+				if (defined('VICTUAL_' . $setting))
 				{
-					$returnArray[$setting] = constant('GROCY_' . $setting);
+					$returnArray[$setting] = constant('VICTUAL_' . $setting);
 				}
 			}
 
@@ -72,7 +72,7 @@ class SystemApiController extends BaseApiController
 			$constants = get_defined_constants();
 			foreach ($constants as $constant => $value)
 			{
-				if (substr($constant, 0, 19) === 'GROCY_FEATURE_FLAG_')
+				if (substr($constant, 0, 19) === 'VICTUAL_FEATURE_FLAG_')
 				{
 					$returnArray[substr($constant, 6)] = $value;
 				}
@@ -98,7 +98,7 @@ class SystemApiController extends BaseApiController
 	}
 
 	/**
-	 * GET /api/system/info - returns information about the installed grocy version and environment.
+	 * GET /api/system/info - returns information about the installed Victual version and environment.
 	 */
 	public function GetSystemInfo(Request $request, Response $response, array $args)
 	{
@@ -137,12 +137,12 @@ class SystemApiController extends BaseApiController
 	/**
 	 * POST /api/system/log-missing-localization - adds the body field "text" to the
 	 * localization POT file when it is not translated yet. That only happens when
-	 * GROCY_MODE is "dev", in any other mode the request is accepted and ignored.
+	 * VICTUAL_MODE is "dev", in any other mode the request is accepted and ignored.
 	 * Returns 204 on success, 400 on error.
 	 */
 	public function LogMissingLocalization(Request $request, Response $response, array $args)
 	{
-		if (GROCY_MODE === 'dev')
+		if (VICTUAL_MODE === 'dev')
 		{
 			try
 			{

@@ -22,7 +22,7 @@
 				<option value="">{{ $__t('Default') }}</option>
 				@foreach($languages as $lang)
 				<option value="{{ $lang }}"
-					@if(GROCY_LOCALE==$lang)
+					@if(VICTUAL_LOCALE==$lang)
 					checked
 					@endif>{{ $__t($lang) }}</option>
 				@endforeach

@@ -17,7 +17,7 @@
 -- to PostgreSQL MUST reuse this same function (or an expression that produces identical
 -- output) or the join in meal_plan_internal_recipe_relation below will silently stop
 -- matching rows.
-CREATE FUNCTION grocy_sqlite_percent_w(d DATE) RETURNS INTEGER AS $$
+CREATE FUNCTION victual_sqlite_percent_w(d DATE) RETURNS INTEGER AS $$
 	SELECT CASE
 		WHEN d < fm.first_monday THEN 0
 		ELSE (d - fm.first_monday) / 7 + 1
@@ -78,7 +78,7 @@ UNION
 SELECT mp.day, r.id AS recipe_id
 FROM meal_plan mp
 JOIN recipes r
-	ON r.name = LTRIM(EXTRACT(YEAR FROM mp.day)::integer::text || '-' || LPAD(grocy_sqlite_percent_w(mp.day)::text, 2, '0'), '0')
+	ON r.name = LTRIM(EXTRACT(YEAR FROM mp.day)::integer::text || '-' || LPAD(victual_sqlite_percent_w(mp.day)::text, 2, '0'), '0')
 	AND r.type = 'mealplan-week'
 
 UNION

@@ -2,16 +2,16 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseService;
 
 $db = DatabaseService::GetInstance()->GetDbConnection();
 
-if (defined('GROCY_HTTP_USER'))
+if (defined('VICTUAL_HTTP_USER'))
 {
 	// Migrate old user defined in config file to database
 	$newUserRow = $db->users()->createRow([
-		'username' => GROCY_HTTP_USER,
-		'password' => password_hash(GROCY_HTTP_PASSWORD, PASSWORD_ARGON2ID)
+		'username' => VICTUAL_HTTP_USER,
+		'password' => password_hash(VICTUAL_HTTP_PASSWORD, PASSWORD_ARGON2ID)
 	]);
 	$newUserRow->save();
 }

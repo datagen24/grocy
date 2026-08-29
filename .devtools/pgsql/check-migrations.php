@@ -19,15 +19,15 @@
 // Migrations up to the baseline (0001-0255) are SQLite-only history that PostgreSQL
 // replaces wholesale, so they are exempt by definition.
 
-require_once (getenv('GROCY_ROOT') ?: dirname(__DIR__, 2)) . '/packages/autoload.php';
+require_once (getenv('VICTUAL_ROOT') ?: dirname(__DIR__, 2)) . '/packages/autoload.php';
 
-use Grocy\Services\Database\DatabaseDialect;
-use Grocy\Services\DatabaseMigrationService;
+use Victual\Services\Database\DatabaseDialect;
+use Victual\Services\DatabaseMigrationService;
 
 const MARKER_ENGINE_EXCLUSIVE = '@engine-exclusive';
 const MARKER_OVERRIDES_GENERIC = '@overrides-generic';
 
-$migrationsPath = (getenv('GROCY_ROOT') ?: dirname(__DIR__, 2)) . '/migrations';
+$migrationsPath = (getenv('VICTUAL_ROOT') ?: dirname(__DIR__, 2)) . '/migrations';
 
 /** @var array<int, array{generic: ?string, specific: array<string, string>}> */
 $byNumber = [];

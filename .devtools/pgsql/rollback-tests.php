@@ -4,7 +4,7 @@
 //
 //   php rollback-tests.php
 //
-// Runs against whichever engine GROCY_DATAPATH's config.php selects, so the runner can
+// Runs against whichever engine VICTUAL_DATAPATH's config.php selects, so the runner can
 // point it at SQLite and then at PostgreSQL. See run-tests.sh.
 //
 // The other two tools in here compare the two engines against each other. This one asks a
@@ -23,29 +23,29 @@
 // this file is most likely to develop as the code around it changes, so it is checked
 // explicitly rather than assumed.
 
-define('GROCY_ROOT_PATH', getenv('GROCY_ROOT') ?: dirname(__DIR__, 2));
+define('VICTUAL_ROOT_PATH', getenv('VICTUAL_ROOT') ?: dirname(__DIR__, 2));
 
-if (!defined('GROCY_DATAPATH'))
+if (!defined('VICTUAL_DATAPATH'))
 {
-	define('GROCY_DATAPATH', getenv('GROCY_DATAPATH') ?: GROCY_ROOT_PATH . '/data');
+	define('VICTUAL_DATAPATH', getenv('VICTUAL_DATAPATH') ?: VICTUAL_ROOT_PATH . '/data');
 }
 
-require_once GROCY_ROOT_PATH . '/packages/autoload.php';
+require_once VICTUAL_ROOT_PATH . '/packages/autoload.php';
 
-if (file_exists(GROCY_DATAPATH . '/config.php'))
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
 {
-	require_once GROCY_DATAPATH . '/config.php';
+	require_once VICTUAL_DATAPATH . '/config.php';
 }
 
-require_once GROCY_ROOT_PATH . '/config-dist.php';
+require_once VICTUAL_ROOT_PATH . '/config-dist.php';
 
-if (!defined('GROCY_USER_ID'))
+if (!defined('VICTUAL_USER_ID'))
 {
-	define('GROCY_USER_ID', 1);
+	define('VICTUAL_USER_ID', 1);
 }
 
-use Grocy\Services\DatabaseService;
-use Grocy\Services\StockService;
+use Victual\Services\DatabaseService;
+use Victual\Services\StockService;
 
 const INJECTOR = 'probe_fail_after_first_write';
 

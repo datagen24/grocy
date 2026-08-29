@@ -1,5 +1,5 @@
-﻿// Powers the user create/edit form (userform.blade.php). Grocy.EditMode ('create'/'edit')
-// and Grocy.EditObjectId select POST vs PUT. Handles the optional profile picture upload/
+﻿// Powers the user create/edit form (userform.blade.php). Victual.EditMode ('create'/'edit')
+// and Victual.EditObjectId select POST vs PUT. Handles the optional profile picture upload/
 // removal and the password change checkbox in addition to the regular form fields.
 
 /**
@@ -11,20 +11,20 @@
  */
 function SaveUserPicture(result, jsonData)
 {
-	var userId = Grocy.EditObjectId || result.created_object_id;
-	Grocy.Components.UserfieldsForm.Save(() =>
+	var userId = Victual.EditObjectId || result.created_object_id;
+	Victual.Components.UserfieldsForm.Save(() =>
 	{
-		if (jsonData.hasOwnProperty("picture_file_name") && !Grocy.DeleteUserPictureOnSave)
+		if (jsonData.hasOwnProperty("picture_file_name") && !Victual.DeleteUserPictureOnSave)
 		{
-			Grocy.Api.UploadFile($("#user-picture")[0].files[0], 'userpictures', jsonData.picture_file_name,
+			Victual.Api.UploadFile($("#user-picture")[0].files[0], 'userpictures', jsonData.picture_file_name,
 				(result) =>
 				{
 					window.location.href = U('/users');
 				},
 				(xhr) =>
 				{
-					Grocy.FrontendHelpers.EndUiBusy("user-form");
-					Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+					Victual.FrontendHelpers.EndUiBusy("user-form");
+					Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 				}
 			);
 		}
@@ -43,7 +43,7 @@ $('#save-user-button').on('click', function (e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("user-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("user-form", true))
 	{
 		return;
 	}
@@ -54,7 +54,7 @@ $('#save-user-button').on('click', function (e)
 	}
 
 	var jsonData = $('#user-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("user-form");
+	Victual.FrontendHelpers.BeginUiBusy("user-form");
 
 	if ($("#user-picture")[0].files.length > 0)
 	{
@@ -66,13 +66,13 @@ $('#save-user-button').on('click', function (e)
 	delete jsonData.password_confirm;
 	delete jsonData.change_password;
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('users', jsonData,
+		Victual.Api.Post('users', jsonData,
 			(result) => SaveUserPicture(result, jsonData),
 			function (xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("user-form");
+				Victual.FrontendHelpers.EndUiBusy("user-form");
 				console.error(xhr);
 			}
 		);
@@ -80,28 +80,28 @@ $('#save-user-button').on('click', function (e)
 	else
 	{
 		// If the existing picture was flagged for removal, delete the old file server-side
-		if (Grocy.DeleteUserPictureOnSave)
+		if (Victual.DeleteUserPictureOnSave)
 		{
 			jsonData.picture_file_name = null;
 
-			Grocy.Api.DeleteFile(Grocy.UserPictureFileName, 'userpictures',
+			Victual.Api.DeleteFile(Victual.UserPictureFileName, 'userpictures',
 				function (result)
 				{
 					// Nothing to do
 				},
 				function (xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy("user-form");
-					Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+					Victual.FrontendHelpers.EndUiBusy("user-form");
+					Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 				}
 			);
 		}
 
-		Grocy.Api.Put('users/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('users/' + Victual.EditObjectId, jsonData,
 			(result) => SaveUserPicture(result, jsonData),
 			function (xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("user-form");
+				Victual.FrontendHelpers.EndUiBusy("user-form");
 				console.error(xhr);
 			}
 		);
@@ -122,7 +122,7 @@ $('#user-form input').keyup(function (event)
 		element.setCustomValidity("");
 	}
 
-	Grocy.FrontendHelpers.ValidateForm('user-form');
+	Victual.FrontendHelpers.ValidateForm('user-form');
 });
 
 // Enter key submits the form (if valid) instead of doing a default form submit
@@ -132,7 +132,7 @@ $('#user-form input').keydown(function (event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('user-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('user-form'))
 		{
 			return false;
 		}
@@ -144,8 +144,8 @@ $('#user-form input').keydown(function (event)
 });
 
 // A newly chosen picture file replaces the "current picture" preview with the
-// file-chosen label. Note: this sets Grocy.DeleteUserePictureOnSave (misspelled, "Usere")
-// rather than the Grocy.DeleteUserPictureOnSave flag actually checked on submit further
+// file-chosen label. Note: this sets Victual.DeleteUserePictureOnSave (misspelled, "Usere")
+// rather than the Victual.DeleteUserPictureOnSave flag actually checked on submit further
 // below - so picking a new file after clicking "delete current picture" does not clear
 // the pending deletion flag as apparently intended.
 $("#user-picture").on("change", function (e)
@@ -154,15 +154,15 @@ $("#user-picture").on("change", function (e)
 	$("#user-picture-label-none").addClass("d-none");
 	$("#delete-current-user-picture-on-save-hint").addClass("d-none");
 	$("#current-user-picture").addClass("d-none");
-	Grocy.DeleteUserePictureOnSave = false;
+	Victual.DeleteUserePictureOnSave = false;
 });
 
-Grocy.DeleteUserPictureOnSave = false;
+Victual.DeleteUserPictureOnSave = false;
 // Flags the existing picture for deletion on save (actual deletion happens in the submit
 // handler above)
 $("#delete-current-user-picture-button").on("click", function (e)
 {
-	Grocy.DeleteUserPictureOnSave = true;
+	Victual.DeleteUserPictureOnSave = true;
 	$("#current-user-picture").addClass("d-none");
 	$("#delete-current-user-picture-on-save-hint").removeClass("d-none");
 	$("#user-picture-label").addClass("d-none");
@@ -178,7 +178,7 @@ $("#change_password").click(function ()
 	setTimeout(function ()
 	{
 		$("#password").focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 });
 
 // If opened with the "changepw" URI param, immediately reveal the password fields;
@@ -192,9 +192,9 @@ else
 	setTimeout(function ()
 	{
 		$('#username').focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 }
 
 // Initial setup: load userfields, run initial validation
-Grocy.Components.UserfieldsForm.Load();
-Grocy.FrontendHelpers.ValidateForm('user-form');
+Victual.Components.UserfieldsForm.Load();
+Victual.FrontendHelpers.ValidateForm('user-form');

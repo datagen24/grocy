@@ -16,7 +16,7 @@
 		<div id="productpresets">
 			<h4>{{ $__t('Presets for new products') }}</h4>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 			<div class="form-group">
 				<label for="product_presets_location_id">{{ $__t('Location') }}</label>
 				<select class="custom-control custom-select user-setting-control"
@@ -62,7 +62,7 @@
 			'additionalCssClasses' => 'user-setting-control'
 			))
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input type="checkbox"
@@ -77,7 +77,7 @@
 			</div>
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+			@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 			<div class="form-group">
 				<label for="product_presets_default_stock_label_type">{{ $__t('Default stock entry label') }}</label>
 				<select class="custom-control custom-select user-setting-control"
@@ -201,7 +201,7 @@
 		'additionalCssClasses' => 'user-setting-control'
 		))
 
-		@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+		@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 
 		@include('components.numberpicker', array(
 		'id' => 'stock_decimal_places_prices_input',

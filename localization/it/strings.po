@@ -375,8 +375,8 @@ msgstr "Questo vuol dire che %s sarà rimosso dalla dispensa"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Rimosso %1$s di %2$s dalla dispensa"
 
-msgid "About Grocy"
-msgstr "Informazioni su Grocy"
+msgid "About Victual"
+msgstr "Informazioni su Victual"
 
 msgid "Close"
 msgstr "Chiudi"
@@ -1521,12 +1521,6 @@ msgstr ""
 msgid "Price factor"
 msgstr "Fattore prezzo"
 
-msgid "Do you find Grocy useful?"
-msgstr "Trovi Grocy utile?"
-
-msgid "Say thanks"
-msgstr "Ringrazia"
-
 msgid "Search for recipes containing this product"
 msgstr "Cerca ricette contenenti questo prodotto"
 
@@ -1658,10 +1652,10 @@ msgstr "Modifica voce di dispensa"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "L'accesso alla fotocamera è possibile solo se supportato e consentito dal "
-"tuo browser e quando la connessione a Grocy è sicura (https://)"
+"tuo browser e quando la connessione a Victual è sicura (https://)"
 
 msgid "Keep screen on"
 msgstr "Mantieni lo schermo acceso"
@@ -2353,7 +2347,7 @@ msgid "Download %s Grocycode"
 msgstr "Scarica il Grocycode per %s"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocycode è un riferimento univoco a questo %s nell'istanza di Grocy. "

@@ -30,7 +30,7 @@ Grouped by whether they change behaviour anyone can observe.
 | C1 | Auth middlewares instantiate *other* middlewares and call `AuthenticateRequest` cross-instance; visibility drifts (protected in `DefaultAuthMiddleware`, public in three siblings); `ProcessLogin` is an abstract static that three of five subclasses stub with `throw` | `middleware/Auth/` |
 | C2 | `StockReportsController` embeds three hand-written multi-join `SELECT`s — the only controller with raw SQL, and the only place outside services where the dialect boundary could be crossed again | `controllers/StockReportsController.php:71,90,107` |
 | C3 | About dialog reports `sqlite_version` from a throwaway `sqlite::memory:` connection even on a PostgreSQL install | `services/ApplicationService.php:84,114` |
-| C4 | `ExceptionController` has an unreachable duplicate `if (!defined('GROCY_AUTHENTICATED'))` inside its 404 branch, and trusts `$exception->getCode()` as an HTTP status with no clamping | `controllers/ExceptionController.php` |
+| C4 | `ExceptionController` has an unreachable duplicate `if (!defined('VICTUAL_AUTHENTICATED'))` inside its 404 branch, and trusts `$exception->getCode()` as an HTTP status with no clamping | `controllers/ExceptionController.php` |
 | C5 | Unused `EquipmentController::$UserfieldsService` | `controllers/EquipmentController.php` |
 | C6 | `config-dist.php` documents locale precedence as browser → user setting → default; `LocaleMiddleware::GetLocale` actually does user setting → browser → default | `config-dist.php:40-43` vs `middleware/LocaleMiddleware.php:41,52` |
 | C7 | `composer.json` requires PHP `8.5.*` and `PrerequisiteChecker::REQUIRED_PHP_VERSION` is `8.5.0`, while the real language floor in the code is 8.4 | `composer.json`, `helpers/PrerequisiteChecker.php:19` |
@@ -284,9 +284,9 @@ rename separately, exactly as the response to 05's Q4 concluded.
    > `middleware/Auth/`. It also sidesteps the release-cadence problem the stub
    > depends on.
 2. **`SameSite`: `Lax` or `Strict`?** `Lax` is the safe default and keeps normal
-   navigation working. `Strict` is better and would break any flow where grocy is reached
+   navigation working. `Strict` is better and would break any flow where Victual is reached
    from another origin — the iCal feed does not use cookies, but embedded install mode
-   (`GROCY_IS_EMBEDDED_INSTALL`) might. I lean `Lax` unless embedded mode is confirmed
+   (`VICTUAL_IS_EMBEDDED_INSTALL`) might. I lean `Lax` unless embedded mode is confirmed
    unused. `Secure` should be conditional on the request being HTTPS rather than
    unconditional, since local plain-HTTP access is a real use case here.
 

@@ -16,16 +16,16 @@
 // line "-- @expect-error <substring>" must fail on BOTH engines, and both messages must
 // contain <substring>; that is how RAISE(ABORT, ...) constraints are checked.
 
-require_once (getenv('GROCY_ROOT') ?: '/app') . '/packages/autoload.php';
+require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
-use Grocy\Services\Database\DatabaseImporter;
-use Grocy\Services\Database\PostgresDialect;
-use Grocy\Services\Database\ValueComparison;
+use Victual\Services\Database\DatabaseImporter;
+use Victual\Services\Database\PostgresDialect;
+use Victual\Services\Database\ValueComparison;
 
 $scripts = array_slice($argv, 1);
 
 $sqlitePath = getenv('TRIGTEST_SQLITE_PATH') ?: '/data/trigtest.db';
-$pristinePath = getenv('TRIGTEST_PRISTINE_PATH') ?: '/scratch/demodata/grocy_en.db';
+$pristinePath = getenv('TRIGTEST_PRISTINE_PATH') ?: '/scratch/demodata/victual_en.db';
 
 $dialect = new PostgresDialect();
 $failures = 0;
@@ -53,9 +53,9 @@ foreach ($scripts as $script)
 	$sqlite->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 	$pg = new PDO(
-		getenv('TRIGTEST_PGSQL_DSN') ?: 'pgsql:host=grocy-pg;port=5432;dbname=grocy_trig',
-		getenv('TRIGTEST_PGSQL_USER') ?: 'grocy',
-		getenv('TRIGTEST_PGSQL_PASSWORD') ?: 'grocy'
+		getenv('TRIGTEST_PGSQL_DSN') ?: 'pgsql:host=victual-pg;port=5432;dbname=victual_trig',
+		getenv('TRIGTEST_PGSQL_USER') ?: 'victual',
+		getenv('TRIGTEST_PGSQL_PASSWORD') ?: 'victual'
 	);
 	$pg->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -268,7 +268,7 @@ function CompareAllTables(PDO $sqlite, PDO $pg): int
 }
 
 /**
- * The three tables that Grocy's meal plan triggers mint hidden rows in.
+ * The three tables that Victual's meal plan triggers mint hidden rows in.
  */
 function IsInternalRecipeTable(string $table): bool
 {

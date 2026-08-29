@@ -12,7 +12,7 @@
 -- was missed on, rather than inventing one.
 --
 -- Not an argument from the OpenAPI spec: products_view is not an exposed entity and none
--- of its columns appear there. The only qu_factor_purchase_to_stock in grocy.openapi.json
+-- of its columns appear there. The only qu_factor_purchase_to_stock in victual.openapi.json
 -- is the barcode-plugin field under ExternalBarcodeLookupResponse, which is unrelated.
 --
 -- @engine-exclusive

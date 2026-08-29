@@ -38,7 +38,7 @@ installs and merges into an existing one. The importer resolves names to ids as 
 
 ### Import path
 
-`bin/grocy-seed-import <dataset.json> [--dry-run]`, mirroring `bin/grocy-db-import`:
+`bin/victual-seed-import <dataset.json> [--dry-run]`, mirroring `bin/victual-db-import`:
 
 - idempotent — an existing name is skipped, not duplicated or updated
 - `--dry-run` prints what would be created
@@ -66,7 +66,7 @@ about. Barcodes are regional — the same product carries different codes in dif
 markets, so a shipped list is wrong for most users. Worse, a *wrong* barcode is more harmful
 than none, because scanning silently matches the wrong product.
 
-Grocy resolves barcodes at scan time through `STOCK_BARCODE_LOOKUP_PLUGIN`, which is
+Victual resolves barcodes at scan time through `STOCK_BARCODE_LOOKUP_PLUGIN`, which is
 regionally correct and always current. That is the better place to invest — and it needs
 investment, because the default source is weak for US products. See
 [09 barcode lookup sources](09-barcode-lookup-sources.md), which exists largely because of

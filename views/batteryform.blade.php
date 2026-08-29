@@ -19,12 +19,12 @@
 	<div class="col-lg-6 col-12">
 
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
+			Victual.EditMode = '{{ $mode }}';
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $battery->id }}
+			Victual.EditObjectId = {{ $battery->id }}
 		</script>
 		@endif
 
@@ -103,7 +103,7 @@
 				<i class="fa-solid fa-question-circle text-muted"
 					data-toggle="tooltip"
 					data-trigger="hover click"
-					title="{{ $__t('Grocycode is a unique referer to this %s in your Grocy instance - print it onto a label and scan it like any other barcode', $__t('Battery')) }}"></i>
+					title="{{ $__t('Grocycode is a unique referer to this %s in your Victual instance - print it onto a label and scan it like any other barcode', $__t('Battery')) }}"></i>
 			</h4>
 			<p>
 				@if($mode == 'edit')
@@ -115,7 +115,7 @@
 			<p>
 				<a class="btn btn-outline-primary btn-sm"
 					href="{{ $U('/battery/' . $battery->id . '/grocycode?download=true') }}">{{ $__t('Download') }}</a>
-				@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+				@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 				<a class="btn btn-outline-primary btn-sm battery-grocycode-label-print"
 					data-battery-id="{{ $battery->id }}"
 					href="#">

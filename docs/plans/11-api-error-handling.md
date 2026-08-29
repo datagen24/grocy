@@ -12,7 +12,7 @@ hardening set.
 
 ## Today
 
-The `/api` route group registers 86 operations across 73 paths and `grocy.openapi.json`
+The `/api` route group registers 86 operations across 73 paths and `victual.openapi.json`
 documents 86 operations across 73 paths — the totals agree, and two individual mismatches
 hide inside them (see [14](14-contract-and-regression-scaffolding.md)). The
 `ExposedEntity` allow-lists are read from the spec at runtime so entity drift is
@@ -70,7 +70,7 @@ Alongside those, five smaller things on the same surface:
 - **`CorsMiddleware` is unconditionally `Access-Control-Allow-Origin: *`.** Not
   configurable, not disableable.
 
-**API keys.** `ApiKeyAuthMiddleware` accepts the key in the `GROCY-API-KEY` header, in a
+**API keys.** `ApiKeyAuthMiddleware` accepts the key in the `VICTUAL-API-KEY` header, in a
 query parameter of the same name ("not recommended", per its own comment — and it lands
 in every access log and every `Referer`), and, on the iCal route only, in `?secret=`.
 Keys are stored and compared in plaintext. `last_used` is `UPDATE`d on every
@@ -132,7 +132,7 @@ make deliberately rather than as a side effect. Leaving it in place alongside an
 app-level `CorsMiddleware` means two code paths adding the same headers, which is the
 worse option of the two.
 
-`CorsMiddleware` becomes config-driven: `GROCY_CORS_ALLOWED_ORIGINS`, empty by default,
+`CorsMiddleware` becomes config-driven: `VICTUAL_CORS_ALLOWED_ORIGINS`, empty by default,
 meaning no CORS headers at all. Given the deployment target — a household instance behind
 an ingress, with no browser-based third-party client — default-off is the honest default,
 and `*` on an authenticated API was never a good one. Q3 covers whether the default
@@ -140,7 +140,7 @@ should instead preserve today's behaviour.
 
 ### API-key hygiene
 
-- **Drop the query-parameter form** of `GROCY-API-KEY`. The iCal `?secret=` path is
+- **Drop the query-parameter form** of `VICTUAL-API-KEY`. The iCal `?secret=` path is
   separate, is scoped to `API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL`, is the reason that
   affordance exists at all, and stays.
 - **Hash stored keys** (Q4). This is doable without invalidating anything: a migration
@@ -163,7 +163,7 @@ enum with three live call sites.
 ### Error logging
 
 Wire a PSR-3 logger writing to `php://stderr` (the correct sink for a container; the
-platform collects it) and set `addErrorMiddleware(GROCY_MODE === 'dev', true, true)`.
+platform collects it) and set `addErrorMiddleware(VICTUAL_MODE === 'dev', true, true)`.
 Log line carries method, path, status, exception class, message, file and line. It must
 not carry the request body — bodies here contain product notes, user names and, on the
 user endpoints, passwords.
@@ -259,7 +259,7 @@ in 14 alongside the parity check that would have caught them.
    parameter is now rejected, iCal `?secret=` still works, a key created before the
    hashing migration still authenticates afterwards.
 4. **Browser preflight.** From a page on a different origin, with
-   `GROCY_CORS_ALLOWED_ORIGINS` set to that origin: `OPTIONS` returns 204 with the
+   `VICTUAL_CORS_ALLOWED_ORIGINS` set to that origin: `OPTIONS` returns 204 with the
    headers, the subsequent `GET` with a key succeeds. With the setting empty: no CORS
    headers on either, which is the intended default.
 5. **Permission check on the chores endpoint.** `POST

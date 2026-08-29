@@ -1,6 +1,6 @@
 # 12. Frontend shared core
 
-**Goal:** Stop the copy-paste conventions drifting: one request core in `Grocy.Api` with
+**Goal:** Stop the copy-paste conventions drifting: one request core in `Victual.Api` with
 a default error path, factories for the list and form clone families, and the latent bugs
 those copies have already accumulated.
 **Depends on:** nothing. Must land before [05](05-store-shopping-lists.md),
@@ -13,17 +13,17 @@ copy from.
 The wiring is exemplary for a no-framework app. The layout auto-loads
 `/viewjs/{view}.js`, every view/viewjs/route name lines up (72 top-level scripts in
 `public/viewjs`, 73 top-level Blade views — 96 counting the subdirectories), inline
-Blade scripts inject data and nothing else, and every call to grocy's own API goes
-through `Grocy.Api.*`. The one bypass in the tree is `public/js/grocy.js:562`, which uses
+Blade scripts inject data and nothing else, and every call to Victual's own API goes
+through `Victual.Api.*`. The one bypass in the tree is `public/js/victual.js:562`, which uses
 `$.ajax` to fire *outbound webhooks* — a different thing to a different host, with its
 own `.fail()` handler that already calls `ShowGenericError`. It is not a candidate for
 the shared core and does not need converting. That leaves exactly one place to change for
-grocy's own traffic, which is what makes this plan cheap.
+Victual's own traffic, which is what makes this plan cheap.
 
 What is wrong is underneath it.
 
-**`Grocy.Api` repeats itself six times.** `Get`, `Post`, `Put`, `Delete`, `UploadFile`
-and `DeleteFile` (`public/js/grocy.js:18-280`) each contain their own copy of the same
+**`Victual.Api` repeats itself six times.** `Get`, `Post`, `Put`, `Delete`, `UploadFile`
+and `DeleteFile` (`public/js/victual.js:18-280`) each contain their own copy of the same
 ~30-line `onreadystatechange` handler, differing only in method and body. None of the six
 sets a `timeout` or an `onerror` handler, so a dropped connection mid-save never resolves
 either callback: the form stays disabled and the user is left with a spinner and no
@@ -33,7 +33,7 @@ information, forever.
 but `console.error(xhr)`, plus 9 more across 5 files in `public/viewjs/components/`,
 which the counts below and the conversion order should not forget. A failed delete, a
 failed save, a rejected edit — the UI simply does not react.
-`Grocy.FrontendHelpers.ShowGenericError` already exists (`public/js/grocy.js:485`) and
+`Victual.FrontendHelpers.ShowGenericError` already exists (`public/js/victual.js:485`) and
 already renders exactly the right thing, a toast with click-through technical details.
 The catch is that all 157 handlers are passed *explicitly*, so no default in the request
 core can reach them: each one has to be deleted where it stands, which is why this is 41
@@ -66,7 +66,7 @@ pages break at runtime with no static signal.
 
 | Where | What |
 |---|---|
-| `public/viewjs/userform.js:157` | Sets `Grocy.DeleteUserePictureOnSave` (extra "e"); the submit handler at `:83` reads `Grocy.DeleteUserPictureOnSave`. Choosing a new picture does not cancel a pending delete-picture flag |
+| `public/viewjs/userform.js:157` | Sets `Victual.DeleteUserePictureOnSave` (extra "e"); the submit handler at `:83` reads `Victual.DeleteUserPictureOnSave`. Choosing a new picture does not cancel a pending delete-picture flag |
 | `public/viewjs/tasks.js` | The user-filter handler builds an anchored regex in an if/else and never uses it; filtering silently falls back to substring search |
 | `controllers/Api/StockApiController.php:344` | `ConsumeProduct` checks `array_key_exists('transaction_type', …)` then reads `$requestBody['transactiontype']`. Both spellings must be sent for the override to work, so effectively it never does |
 | `public/viewjs/stockoverview.js` | Depends on `purchase.js` being pushed by its Blade view (above) |
@@ -88,7 +88,7 @@ For `transaction_type`/`transactiontype`, accepting both spellings is additive a
 nothing; accepting only the documented one is correct but is a (theoretical) API change.
 See Q1.
 
-### Step 2 — one private `request()` in `Grocy.Api`
+### Step 2 — one private `request()` in `Victual.Api`
 
 ```js
 function request(method, url, body, success, error, opts) { … }
@@ -99,7 +99,7 @@ gains what none of the six has:
 
 - a `timeout` (30 s proposed) and an `ontimeout` handler;
 - an `onerror` handler, so a dropped connection reaches the error callback;
-- `error` defaulting to `Grocy.FrontendHelpers.ShowGenericError` when the caller passes
+- `error` defaulting to `Victual.FrontendHelpers.ShowGenericError` when the caller passes
   nothing.
 
 **Be honest about what that default does on the day it lands: nothing.** All 157
@@ -124,11 +124,11 @@ deleted during the conversion.
 The two hand-rolled `toastr.error(JSON.parse(…))` sites collapse into the same default,
 on the same schedule.
 
-### Step 3 — `GrocyEntityList` and `GrocyEntityForm`
+### Step 3 — `VictualEntityList` and `VictualEntityForm`
 
 ```js
-Grocy.EntityList("locations", { deleteConfirm: __t("…"), afterDelete: … })
-Grocy.EntityForm("locations", "/api/objects/locations")
+Victual.EntityList("locations", { deleteConfirm: __t("…"), afterDelete: … })
+Victual.EntityForm("locations", "/api/objects/locations")
 ```
 
 Each clone script becomes a call plus whatever is genuinely specific to it. The factories
@@ -156,7 +156,7 @@ refreshes on it keep posting it. Q3 has the detail and the reason not to unify f
 ### Step 5 — `purchase.js` and `datetimepicker2`
 
 Extract the functions three other pages need out of `purchase.js` into a properly loaded
-shared file (`public/js/grocy_stock_dialogs.js` or a `Grocy.Components` entry), so
+shared file (`public/js/victual_stock_dialogs.js` or a `Victual.Components` entry), so
 nothing depends on a `@push` side effect. `purchase.js` keeps only what the purchase page
 itself uses.
 
@@ -168,8 +168,8 @@ but it is also the one most likely to have a subtle reason to exist — see Q4.
 
 List-page chrome repeats across ~14 templates while partials for it already exist and are
 used elsewhere; apply the existing idiom. `mealplan` and `recipes` blades inject bare
-globals instead of namespacing under `Grocy.*`. Two components are not registered under
-`Grocy.Components`. All small, all mechanical, all safe to do alongside step 3 since the
+globals instead of namespacing under `Victual.*`. Two components are not registered under
+`Victual.Components`. All small, all mechanical, all safe to do alongside step 3 since the
 same files are open.
 
 ### Schema
@@ -240,7 +240,7 @@ adds a print action to the locations list and form, which is exactly the pair pr
 here as the first conversion.
 
 **Independent of everything else in the hardening set.** It touches
-`public/js/grocy.js`, `public/viewjs/*` and `views/*.blade.php`; only its step-1 consume
+`public/js/victual.js`, `public/viewjs/*` and `views/*.blade.php`; only its step-1 consume
 fix reaches into `controllers/Api/`, and even that does not collide with
 [11](11-api-error-handling.md), which changes error paths rather than request parsing. It
 can be done in parallel with 10, 11, 13 or 14.
@@ -268,7 +268,7 @@ useful when a failed import says so instead of logging to a console nobody has o
 2. **Which callers must keep an explicit no-op error handler?** Making
    `ShowGenericError` the default is right for the 148, but some calls legitimately
    expect failure and must not toast: the `db-changed-time` poller
-   (`grocy_dbchangedhandling.js`), the missing-localization logger, and barcode lookups
+   (`victual_dbchangedhandling.js`), the missing-localization logger, and barcode lookups
    where "not found" is an ordinary outcome. These need `function () { }` passed
    deliberately with a comment saying why. The question is whether that list is those
    three or longer — it needs the grep, not a guess.
@@ -280,7 +280,7 @@ useful when a failed import says so instead of logging to a console nobody has o
    > an expected domain outcome or a background poll* → explicit `function() {}`
    > with a comment; anything user-initiated toasts.
    >
-   > One case the guess misses and the grep must not: `public/js/grocy.js:317` and
+   > One case the guess misses and the grep must not: `public/js/victual.js:317` and
    > `:351` post to `system/log-missing-localization` with **no error argument at
    > all** — not a `console.error`, nothing — so the moment a default exists those
    > two start toasting on any failure. Worse, both calls are made from inside
@@ -290,11 +290,11 @@ useful when a failed import says so instead of logging to a console nobody has o
    > `log-missing-localization` goes on an explicit *silent* list — passed
    > `function () { }` deliberately, with the recursion as the stated reason, not
    > merely "failure is expected here". Anything else in the tree that calls
-   > `Grocy.Api.*` from inside a rendering or translation helper wants the same
+   > `Victual.Api.*` from inside a rendering or translation helper wants the same
    > treatment, and the grep should look for that shape specifically.
 3. **What does the factory do about `CloseLastModal`?** The two "conventions" are not
    two ways of doing one thing. `CloseLastModal` is a *global* mechanism: the Escape
-   key and any `.close-last-modal-button` post it (`public/js/grocy.js:819-830`), and
+   key and any `.close-last-modal-button` post it (`public/js/victual.js:819-830`), and
    the listener at `:841` hides the topmost visible modal. It is the app's close-the-
    dialog message and it cannot be replaced by `Reload`. Layered on top of it, about
    eleven forms post it deliberately after a successful save — `productgroupform`,

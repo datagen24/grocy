@@ -1,6 +1,6 @@
 ﻿// Powers the custom userfield create/edit modal form (userfieldform.blade.php) -
-// defines a custom field attached to a userentity/built-in entity. Grocy.EditMode
-// ('create'/'edit') and Grocy.EditObjectId select POST vs PUT.
+// defines a custom field attached to a userentity/built-in entity. Victual.EditMode
+// ('create'/'edit') and Victual.EditObjectId select POST vs PUT.
 
 // Validates and submits the form, then either postMessages the parent (embedded mode)
 // to reload, or navigates back to the userfields list (scoped to the entity, if the
@@ -9,7 +9,7 @@ $('#save-userfield-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("userfield-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("userfield-form", true))
 	{
 		return;
 	}
@@ -20,7 +20,7 @@ $('#save-userfield-button').on('click', function(e)
 	}
 
 	var jsonData = $('#userfield-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("userfield-form");
+	Victual.FrontendHelpers.BeginUiBusy("userfield-form");
 
 	var redirectUrl = U("/userfields");
 	if (GetUriParam("entity"))
@@ -28,14 +28,14 @@ $('#save-userfield-button').on('click', function(e)
 		redirectUrl = U("/userfields?entity=" + GetUriParam("entity"));
 	}
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/userfields', jsonData,
+		Victual.Api.Post('objects/userfields', jsonData,
 			function(result)
 			{
 				if (GetUriParam("embedded") !== undefined)
 				{
-					window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 				}
 				else
 				{
@@ -44,19 +44,19 @@ $('#save-userfield-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("userfield-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("userfield-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Api.Put('objects/userfields/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/userfields/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
 				if (GetUriParam("embedded") !== undefined)
 				{
-					window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 				}
 				else
 				{
@@ -65,8 +65,8 @@ $('#save-userfield-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("userfield-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("userfield-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -75,12 +75,12 @@ $('#save-userfield-button').on('click', function(e)
 // Live-validates on every keystroke / select change
 $('#userfield-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('userfield-form');
+	Victual.FrontendHelpers.ValidateForm('userfield-form');
 });
 
 $('#userfield-form select').change(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('userfield-form');
+	Victual.FrontendHelpers.ValidateForm('userfield-form');
 });
 
 // Enter key submits the form (if valid) instead of doing a default form submit
@@ -90,7 +90,7 @@ $('#userfield-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('userfield-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('userfield-form'))
 		{
 			return false;
 		}
@@ -133,15 +133,15 @@ if (GetUriParam("entity"))
 	setTimeout(function()
 	{
 		$('#name').focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 }
 else
 {
 	setTimeout(function()
 	{
 		$('#entity').focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 }
 
 $("#type").trigger("change");
-Grocy.FrontendHelpers.ValidateForm('userfield-form');
+Victual.FrontendHelpers.ValidateForm('userfield-form');

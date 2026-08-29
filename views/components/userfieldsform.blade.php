@@ -16,7 +16,7 @@
 
 	@foreach($userfields as $userfield)
 
-	@if($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_SINGLE_LINE_TEXT)
+	@if($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_SINGLE_LINE_TEXT)
 	<div class="form-group">
 		<label>{{ $userfield->caption }}</label>
 		<input type="text"
@@ -25,7 +25,7 @@
 			@if($userfield->input_required == 1) required @endif>
 		<div class="invalid-feedback">{{ $__t('Mandatory Userfield') }}</div>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_SINGLE_MULTILINE_TEXT)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_SINGLE_MULTILINE_TEXT)
 	<div class="form-group">
 		<label for="description">{{ $userfield->caption }}</label>
 		<textarea class="form-control userfield-input"
@@ -34,7 +34,7 @@
 			@if($userfield->input_required == 1) required @endif></textarea>
 		<div class="invalid-feedback">{{ $__t('Mandatory Userfield') }}</div>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_NUMBER_INT)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_NUMBER_INT)
 	@include('components.numberpicker', array(
 	'id' => $userfield->name,
 	'label' => str_replace('%', '%%', $userfield->caption), // Escape % (there are placeholders in Gettext translation strings)
@@ -45,7 +45,7 @@
 	'additionalAttributes' => 'data-userfield-name="' . $userfield->name . '"',
 	'value' => ''
 	))
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_NUMBER_DECIMAL)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_NUMBER_DECIMAL)
 	@include('components.numberpicker', array(
 	'id' => '',
 	'label' => str_replace('%', '%%', $userfield->caption), // Escape % (there are placeholders in Gettext translation strings)
@@ -57,7 +57,7 @@
 	'additionalAttributes' => 'data-userfield-name="' . $userfield->name . '"',
 	'value' => ''
 	))
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_NUMBER_CURRENCY)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_NUMBER_CURRENCY)
 	@include('components.numberpicker', array(
 	'id' => '',
 	'label' => str_replace('%', '%%', $userfield->caption), // Escape % (there are placeholders in Gettext translation strings)
@@ -69,7 +69,7 @@
 	'additionalAttributes' => 'data-userfield-name="' . $userfield->name . '"',
 	'value' => ''
 	))
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_DATE)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_DATE)
 	@include('components.datetimepicker2', array(
 	'id' => $userfield->name,
 	'label' => str_replace('%', '%%', $userfield->caption), // Escape % (there are placeholders in Gettext translation strings)
@@ -83,7 +83,7 @@
 	'additionalCssClasses' => 'userfield-input',
 	'additionalAttributes' => 'data-userfield-name="' . $userfield->name . '"'
 	))
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_DATETIME)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_DATETIME)
 	@include('components.datetimepicker2', array(
 	'id' => $userfield->name,
 	'label' => str_replace('%', '%%', $userfield->caption), // Escape % (there are placeholders in Gettext translation strings)
@@ -96,7 +96,7 @@
 	'additionalCssClasses' => 'userfield-input',
 	'additionalAttributes' => 'data-userfield-name="' . $userfield->name . '"'
 	))
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_CHECKBOX)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_CHECKBOX)
 	<div class="form-group">
 		<div class="custom-control custom-checkbox">
 			<input class="form-check-input custom-control-input userfield-input"
@@ -110,7 +110,7 @@
 			<div class="invalid-feedback">{{ $__t('Mandatory Userfield') }}</div>
 		</div>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_PRESET_LIST)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_PRESET_LIST)
 	<div class="form-group">
 		<label for="{{ $userfield->name }}">{{ $userfield->caption }}</label>
 		<select class="custom-control custom-select userfield-input"
@@ -123,7 +123,7 @@
 		</select>
 		<div class="invalid-feedback">{{ $__t('Mandatory Userfield') }}</div>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_PRESET_CHECKLIST)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_PRESET_CHECKLIST)
 	<div class="form-group">
 		<label for="{{ $userfield->name }}">{{ $userfield->caption }}</label>
 		<select multiple
@@ -138,7 +138,7 @@
 		</select>
 		<div class="invalid-feedback">{{ $__t('Mandatory Userfield') }}</div>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_LINK)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_LINK)
 	<div class="form-group">
 		<label>{{ $userfield->caption }}</label>
 		<input type="link"
@@ -146,7 +146,7 @@
 			data-userfield-name="{{ $userfield->name }}"
 			@if($userfield->input_required == 1) required @endif>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_LINK_WITH_TITLE)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_LINK_WITH_TITLE)
 	<div class="form-group">
 		<label class="d-block">{{ $userfield->caption }}</label>
 		<div class="form-row">
@@ -169,7 +169,7 @@
 				data-userfield-name="{{ $userfield->name }}">
 		</div>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_FILE)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_FILE)
 	<div class="form-group">
 		<label>{{ $userfield->caption }}</label>
 		<div class="input-group">
@@ -194,7 +194,7 @@
 			</div>
 		</div>
 	</div>
-	@elseif($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_IMAGE)
+	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_IMAGE)
 	<div class="form-group">
 		<label>{{ $userfield->caption }}</label>
 		<div class="input-group">

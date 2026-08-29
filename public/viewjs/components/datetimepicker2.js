@@ -3,22 +3,22 @@
 // full behavior description), bound to ".datetimepicker2 input" instead - used on views that
 // need two date/time pickers on the same page (e.g. a date range) without id/class collisions.
 // Public API: GetInputElement/GetValue/SetValue/Clear/ChangeFormat/Init.
-Grocy.Components.DateTimePicker2 = {};
+Victual.Components.DateTimePicker2 = {};
 
 /** @returns {jQuery} The picker's underlying date/time text input */
-Grocy.Components.DateTimePicker2.GetInputElement = function()
+Victual.Components.DateTimePicker2.GetInputElement = function()
 {
 	return $('.datetimepicker2').find('input').not(".form-check-input");
 }
 
 /** @returns {string} The current input value, formatted per the input's configured "format" */
-Grocy.Components.DateTimePicker2.GetValue = function()
+Victual.Components.DateTimePicker2.GetValue = function()
 {
-	return Grocy.Components.DateTimePicker2.GetInputElement().val();
+	return Victual.Components.DateTimePicker2.GetInputElement().val();
 }
 
 /** Sets the input value directly and un-checks the shortcut checkbox if it no longer applies */
-Grocy.Components.DateTimePicker2.SetValue = function(value, inputElement = Grocy.Components.DateTimePicker2.GetInputElement())
+Victual.Components.DateTimePicker2.SetValue = function(value, inputElement = Victual.Components.DateTimePicker2.GetInputElement())
 {
 	// "Click" the shortcut checkbox when the desired value is
 	// not the shortcut value and it is currently set
@@ -32,11 +32,11 @@ Grocy.Components.DateTimePicker2.SetValue = function(value, inputElement = Grocy
 }
 
 /** Re-inits the underlying picker widget and empties the input/shortcut/timeago display */
-Grocy.Components.DateTimePicker2.Clear = function()
+Victual.Components.DateTimePicker2.Clear = function()
 {
-	Grocy.Components.DateTimePicker2.Init(true);
+	Victual.Components.DateTimePicker2.Init(true);
 
-	Grocy.Components.DateTimePicker2.GetInputElement().val("");
+	Victual.Components.DateTimePicker2.GetInputElement().val("");
 
 	// "Click" the shortcut checkbox when the desired value is
 	// not the shortcut value and it is currently set
@@ -51,37 +51,37 @@ Grocy.Components.DateTimePicker2.Clear = function()
 }
 
 /** Destroys and re-inits the picker with a new moment.js display/parse format (e.g. date-only vs date+time) */
-Grocy.Components.DateTimePicker2.ChangeFormat = function(format)
+Victual.Components.DateTimePicker2.ChangeFormat = function(format)
 {
 	$(".datetimepicker2").datetimepicker("destroy");
-	Grocy.Components.DateTimePicker2.GetInputElement().data("format", format);
-	Grocy.Components.DateTimePicker2.Init();
+	Victual.Components.DateTimePicker2.GetInputElement().data("format", format);
+	Victual.Components.DateTimePicker2.Init();
 
 	if (format == "YYYY-MM-DD")
 	{
-		Grocy.Components.DateTimePicker2.GetInputElement().addClass("date-only-datetimepicker2");
+		Victual.Components.DateTimePicker2.GetInputElement().addClass("date-only-datetimepicker2");
 	}
 	else
 	{
-		Grocy.Components.DateTimePicker2.GetInputElement().removeClass("date-only-datetimepicker2");
+		Victual.Components.DateTimePicker2.GetInputElement().removeClass("date-only-datetimepicker2");
 	}
 }
 
 // Determine the initial date shown when opening the picker, from the template's
 // data-init-with-now / data-init-value attributes on the input
 var startDate = null;
-if (Grocy.Components.DateTimePicker2.GetInputElement().data('init-with-now') === true)
+if (Victual.Components.DateTimePicker2.GetInputElement().data('init-with-now') === true)
 {
-	startDate = moment().format(Grocy.Components.DateTimePicker2.GetInputElement().data('format'));
+	startDate = moment().format(Victual.Components.DateTimePicker2.GetInputElement().data('format'));
 }
-if (Grocy.Components.DateTimePicker2.GetInputElement().data('init-value').length > 0)
+if (Victual.Components.DateTimePicker2.GetInputElement().data('init-value').length > 0)
 {
-	startDate = moment(Grocy.Components.DateTimePicker2.GetInputElement().data('init-value')).format(Grocy.Components.DateTimePicker2.GetInputElement().data('format'));
+	startDate = moment(Victual.Components.DateTimePicker2.GetInputElement().data('init-value')).format(Victual.Components.DateTimePicker2.GetInputElement().data('format'));
 }
 
 // data-limit-end-to-now caps the calendar (and later validation) to not go beyond "now"
 var limitDate = moment('2999-12-31 23:59:59');
-if (Grocy.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') === true)
+if (Victual.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') === true)
 {
 	limitDate = moment();
 }
@@ -92,7 +92,7 @@ if (Grocy.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') 
  * destroys any existing instance (used by ChangeFormat/Clear).
  * @param {boolean} [reInit=false] Destroy an existing picker instance before initializing.
  */
-Grocy.Components.DateTimePicker2.Init = function(reInit = false)
+Victual.Components.DateTimePicker2.Init = function(reInit = false)
 {
 	if (reInit)
 	{
@@ -105,10 +105,10 @@ Grocy.Components.DateTimePicker2.Init = function(reInit = false)
 			{
 				format: $(this).find("input").data('format'),
 				buttons: {
-					showToday: Grocy.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') !== true,
+					showToday: Victual.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') !== true,
 					showClose: true
 				},
-				calendarWeeks: Grocy.CalendarShowWeekNumbers,
+				calendarWeeks: Victual.CalendarShowWeekNumbers,
 				maxDate: limitDate,
 				locale: moment.locale(),
 				defaultDate: startDate,
@@ -143,11 +143,11 @@ Grocy.Components.DateTimePicker2.Init = function(reInit = false)
 			});
 	});
 }
-Grocy.Components.DateTimePicker2.Init();
+Victual.Components.DateTimePicker2.Init();
 
 // Core typed-shorthand handling: interprets special input values/arrow-key combos as relative
 // date edits, then re-validates the resulting value (required/limit-end-to-now/limit-start-to-now)
-Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
+Victual.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 {
 	$('.datetimepicker2').datetimepicker('hide');
 
@@ -164,12 +164,12 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 	// If input is empty and any arrow key is pressed, set date to today
 	if (value.length === 0 && (e.keyCode === 38 || e.keyCode === 40 || e.keyCode === 37 || e.keyCode === 39))
 	{
-		Grocy.Components.DateTimePicker2.SetValue(moment(new Date(), format, true).format(format), inputElement);
+		Victual.Components.DateTimePicker2.SetValue(moment(new Date(), format, true).format(format), inputElement);
 		nextInputElement.focus();
 	}
 	else if (value === 'x' || value === 'X') // Shorthand for never overdue
 	{
-		Grocy.Components.DateTimePicker2.SetValue(moment('2999-12-31 23:59:59').format(format), inputElement);
+		Victual.Components.DateTimePicker2.SetValue(moment('2999-12-31 23:59:59').format(format), inputElement);
 		nextInputElement.focus();
 	}
 	else if ((value.startsWith("+") || value.startsWith("-"))) // Shorthand for [+/-]n[d/m/y]
@@ -186,17 +186,17 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 
 			if (lastCharacter == "d")
 			{
-				Grocy.Components.DateTimePicker2.SetValue(moment().add(n, "days").format(format));
+				Victual.Components.DateTimePicker2.SetValue(moment().add(n, "days").format(format));
 				nextInputElement.focus();
 			}
 			else if (lastCharacter == "m")
 			{
-				Grocy.Components.DateTimePicker2.SetValue(moment().add(n, "months").format(format));
+				Victual.Components.DateTimePicker2.SetValue(moment().add(n, "months").format(format));
 				nextInputElement.focus();
 			}
 			else if (lastCharacter == "y")
 			{
-				Grocy.Components.DateTimePicker2.SetValue(moment().add(n, "years").format(format));
+				Victual.Components.DateTimePicker2.SetValue(moment().add(n, "years").format(format));
 				nextInputElement.focus();
 			}
 		}
@@ -208,18 +208,18 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 		{
 			date.add(1, "year");
 		}
-		Grocy.Components.DateTimePicker2.SetValue(date.format(format), inputElement);
+		Victual.Components.DateTimePicker2.SetValue(date.format(format), inputElement);
 		nextInputElement.focus();
 	}
 	else if (value.length === 8 && $.isNumeric(value)) // Shorthand for YYYYMMDD
 	{
-		Grocy.Components.DateTimePicker2.SetValue(value.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'), inputElement);
+		Victual.Components.DateTimePicker2.SetValue(value.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'), inputElement);
 		nextInputElement.focus();
 	}
 	else if (value.length === 7 && $.isNumeric(value.substring(0, 6)) && (value.substring(6, 7).toLowerCase() === "e" || value.substring(6, 7) === "+")) // Shorthand for YYYYMM[e/+]
 	{
 		var date = moment(value.substring(0, 4) + "-" + value.substring(4, 6) + "-01").endOf("month");
-		Grocy.Components.DateTimePicker2.SetValue(date.format(format), inputElement);
+		Victual.Components.DateTimePicker2.SetValue(date.format(format), inputElement);
 		nextInputElement.focus();
 	}
 	else
@@ -233,19 +233,19 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 
 				if (e.keyCode === 38) // Up
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'months').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'months').format(format), inputElement);
 				}
 				else if (e.keyCode === 40) // Down
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(1, 'months').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(1, 'months').format(format), inputElement);
 				}
 				else if (e.keyCode === 37) // Left
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'years').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'years').format(format), inputElement);
 				}
 				else if (e.keyCode === 39) // Right
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(1, 'years').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(1, 'years').format(format), inputElement);
 				}
 			}
 			else
@@ -254,32 +254,32 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 
 				if (e.keyCode === 38) // Up
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'days').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'days').format(format), inputElement);
 				}
 				else if (e.keyCode === 40) // Down
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(1, 'days').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(1, 'days').format(format), inputElement);
 				}
 				else if (e.keyCode === 37) // Left
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'weeks').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(-1, 'weeks').format(format), inputElement);
 				}
 				else if (e.keyCode === 39) // Right
 				{
-					Grocy.Components.DateTimePicker2.SetValue(dateObj.add(1, 'weeks').format(format), inputElement);
+					Victual.Components.DateTimePicker2.SetValue(dateObj.add(1, 'weeks').format(format), inputElement);
 				}
 			}
 		}
 	}
 
-	$('#datetimepicker2-timeago').attr("datetime", Grocy.Components.DateTimePicker2.GetValue());
+	$('#datetimepicker2-timeago').attr("datetime", Victual.Components.DateTimePicker2.GetValue());
 	RefreshContextualTimeago(".datetimepicker2-wrapper");
 
 	// Custom validation: invalid/unparsable dates, and dates violating limit-end-to-now /
 	// limit-start-to-now are flagged via the input's native validity API
-	value = Grocy.Components.DateTimePicker2.GetValue();
+	value = Victual.Components.DateTimePicker2.GetValue();
 	dateObj = moment(value, format, true);
-	var element = Grocy.Components.DateTimePicker2.GetInputElement()[0];
+	var element = Victual.Components.DateTimePicker2.GetInputElement()[0];
 	if (!dateObj.isValid())
 	{
 		if ($(element).hasAttr("required"))
@@ -289,11 +289,11 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 	}
 	else
 	{
-		if (Grocy.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') === true && dateObj.isAfter(moment()))
+		if (Victual.Components.DateTimePicker2.GetInputElement().data('limit-end-to-now') === true && dateObj.isAfter(moment()))
 		{
 			element.setCustomValidity("error");
 		}
-		else if (Grocy.Components.DateTimePicker2.GetInputElement().data('limit-start-to-now') === true && dateObj.isBefore(moment()))
+		else if (Victual.Components.DateTimePicker2.GetInputElement().data('limit-start-to-now') === true && dateObj.isBefore(moment()))
 		{
 			element.setCustomValidity("error");
 		}
@@ -304,7 +304,7 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 
 		// data-earlier-than-limit shows an informational (non-blocking) hint when the chosen
 		// date is earlier than a given reference date (e.g. a related field's value)
-		var earlierThanLimit = Grocy.Components.DateTimePicker2.GetInputElement().data("earlier-than-limit");
+		var earlierThanLimit = Victual.Components.DateTimePicker2.GetInputElement().data("earlier-than-limit");
 		if (earlierThanLimit)
 		{
 			if (moment(value).isBefore(moment(earlierThanLimit)))
@@ -328,25 +328,25 @@ Grocy.Components.DateTimePicker2.GetInputElement().on('keyup', function(e)
 });
 
 // Keeps the contextual "timeago" display in sync with manual edits
-Grocy.Components.DateTimePicker2.GetInputElement().on('input', function(e)
+Victual.Components.DateTimePicker2.GetInputElement().on('input', function(e)
 {
-	$('#datetimepicker2-timeago').attr("datetime", Grocy.Components.DateTimePicker2.GetValue());
+	$('#datetimepicker2-timeago').attr("datetime", Victual.Components.DateTimePicker2.GetValue());
 	RefreshContextualTimeago(".datetimepicker2-wrapper");
 });
 
 // Calendar widget updated its value programmatically -> propagate to our own 'input' handling
 $('.datetimepicker2').on('update.datetimepicker', function(e)
 {
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('input');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('input');
 });
 
 // Calendar closed -> re-run all of our change handling (input/change/keypress/keyup) once more
 $('.datetimepicker2').on('hide.datetimepicker', function(e)
 {
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('input');
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('change');
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('keypress');
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('keyup');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('input');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('change');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('keypress');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('keyup');
 });
 
 // The "shortcut" checkbox snaps the picker to (and locks it at) a preconfigured value
@@ -356,18 +356,18 @@ $("#datetimepicker2-shortcut").on("click", function()
 	if (this.checked)
 	{
 		var value = $("#datetimepicker2-shortcut").data("datetimepicker2-shortcut-value");
-		Grocy.Components.DateTimePicker2.SetValue(value);
-		Grocy.Components.DateTimePicker2.GetInputElement().attr("readonly", "");
-		$(Grocy.Components.DateTimePicker2.GetInputElement().data('next-input-selector')).focus();
+		Victual.Components.DateTimePicker2.SetValue(value);
+		Victual.Components.DateTimePicker2.GetInputElement().attr("readonly", "");
+		$(Victual.Components.DateTimePicker2.GetInputElement().data('next-input-selector')).focus();
 	}
 	else
 	{
-		Grocy.Components.DateTimePicker2.SetValue("");
-		Grocy.Components.DateTimePicker2.GetInputElement().removeAttr("readonly");
-		Grocy.Components.DateTimePicker2.GetInputElement().focus();
+		Victual.Components.DateTimePicker2.SetValue("");
+		Victual.Components.DateTimePicker2.GetInputElement().removeAttr("readonly");
+		Victual.Components.DateTimePicker2.GetInputElement().focus();
 	}
 
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('input');
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('change');
-	Grocy.Components.DateTimePicker2.GetInputElement().trigger('keypress');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('input');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('change');
+	Victual.Components.DateTimePicker2.GetInputElement().trigger('keypress');
 });

@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Fills an empty database with localized sample data (products, stock, chores,
@@ -411,14 +411,14 @@ class DemoDataGeneratorService extends BaseService
 			$batteriesService->TrackChargeCycle(4, date('Y-m-d H:i:s', strtotime('-56 days')));
 
 			// Download demo storage data
-			$storagePath = GROCY_DATAPATH . '/storage';
+			$storagePath = VICTUAL_DATAPATH . '/storage';
 			@mkdir($storagePath);
-			if (GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')
+			if (VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
 			{
-				$dbSuffix = GROCY_DEFAULT_LOCALE;
-				if (defined('GROCY_DEMO_DB_SUFFIX'))
+				$dbSuffix = VICTUAL_DEFAULT_LOCALE;
+				if (defined('VICTUAL_DEMO_DB_SUFFIX'))
 				{
-					$dbSuffix = GROCY_DEMO_DB_SUFFIX;
+					$dbSuffix = VICTUAL_DEMO_DB_SUFFIX;
 				}
 
 				$storagePath = $storagePath . '/' . $dbSuffix;

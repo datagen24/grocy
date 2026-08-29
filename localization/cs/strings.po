@@ -371,8 +371,8 @@ msgstr "Zásoba se zmenší o %s"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Zásoba se snížila o %1$s produktu %2$s"
 
-msgid "About Grocy"
-msgstr "Co je Grocy"
+msgid "About Victual"
+msgstr "Co je Victual"
 
 msgid "Close"
 msgstr "Zavřít"
@@ -1507,12 +1507,6 @@ msgstr ""
 msgid "Price factor"
 msgstr "Násobek ceny ingredience"
 
-msgid "Do you find Grocy useful?"
-msgstr "Je pro vás Grocy užitečné?"
-
-msgid "Say thanks"
-msgstr "Poděkujte za aplikaci"
-
 msgid "Search for recipes containing this product"
 msgstr "Vyhledat recepty obsahující tento produkt"
 
@@ -1647,10 +1641,10 @@ msgstr "Upravit zásobu"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Přístup ke kameře musí být ve vašem internetovém prohlížeči možný a zapnutý."
-" Navíc musí Grocy běžet na zabezpečeném severu (https://)."
+" Navíc musí Victual běžet na zabezpečeném severu (https://)."
 
 msgid "Keep screen on"
 msgstr "Nevypínat displej automaticky"
@@ -2325,7 +2319,7 @@ msgid "Download %s Grocycode"
 msgstr "Stáhnout Grocycode pro %s"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocycode je totéž jako čárový kód z obalu produktu. Označuje produkt %s ve "

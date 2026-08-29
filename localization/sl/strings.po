@@ -364,8 +364,8 @@ msgstr "To pomeni %s bo izbrisan iz zaloge"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Izbrisan %1$s količine %2$s iz zaloge"
 
-msgid "About Grocy"
-msgstr "O Grocy"
+msgid "About Victual"
+msgstr "O Victual"
 
 msgid "Close"
 msgstr "Zapri"
@@ -1456,12 +1456,6 @@ msgstr "Končna cena te sestavine bo pomnožena s tem faktorjem"
 msgid "Price factor"
 msgstr "Faktor cene"
 
-msgid "Do you find Grocy useful?"
-msgstr "Ali se ti zdi grocy uporaben?"
-
-msgid "Say thanks"
-msgstr "Zahvali se"
-
 msgid "Search for recipes containing this product"
 msgstr "Išči recepte ki vsebujejo ta izdelek"
 
@@ -1585,10 +1579,10 @@ msgstr "Uredi zapis zaloge"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Dostop do kamere je mogoč le, če to podpira in dovoljuje vaš brskalnik in ko"
-" je Grocy na voljo preko varne (https://) povezave"
+" je Victual na voljo preko varne (https://) povezave"
 
 msgid "Keep screen on"
 msgstr "Ohrani zaslon vklopljen"
@@ -2217,7 +2211,7 @@ msgid "Download %s Grocycode"
 msgstr "Prenesi %s grocycode"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocycode je unikaten identifikator na %s v tvojem Grocy - natisni ga na "

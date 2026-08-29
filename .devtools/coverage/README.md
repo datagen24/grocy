@@ -28,18 +28,18 @@ deleted. `report.php` takes `--min=NN` if a future change wants one deliberately
 
 The suite is a couple of dozen short-lived PHP processes: `difftest.php` once per seed,
 `migratedifftest.php`, `trigdifftest.php`, `rollback-tests.php` once per engine,
-`bin/grocy-migrate` and
-`bin/grocy-db-import` several times each. Rather than editing each call site — which means
+`bin/victual-migrate` and
+`bin/victual-db-import` several times each. Rather than editing each call site — which means
 remembering to edit the next one too — `run-tests.sh` writes a throwaway `php.ini`
 fragment setting `auto_prepend_file` and puts it on `PHP_INI_SCAN_DIR`. Every PHP process
 the run spawns then loads `prepend.php` first.
 
 - **`prepend.php`** starts a line-coverage driver and registers a shutdown handler that
   writes one `.cov` file named for the process. It returns immediately when
-  `GROCY_COVERAGE_DIR` is unset, so an ordinary run is untouched: no driver, no autoloader,
+  `VICTUAL_COVERAGE_DIR` is unset, so an ordinary run is untouched: no driver, no autoloader,
   no handler.
 - **`report.php`** merges every `.cov` in the directory — no single process can know it is
-  the last one — and prints the summary. It is run with `GROCY_COVERAGE_DIR` unset so it
+  the last one — and prints the summary. It is run with `VICTUAL_COVERAGE_DIR` unset so it
   does not measure itself into the directory it is reading.
 
 The driver is [pcov](https://github.com/krakjoe/pcov): line coverage only, which is all

@@ -1,6 +1,6 @@
 ﻿// View script for the batteries settings page (views/batteriessettings.blade.php):
-// prefills the form from Grocy.UserSettings (saving is handled generically elsewhere)
+// prefills the form from Victual.UserSettings (saving is handled generically elsewhere)
 
-$("#batteries_due_soon_days").val(Grocy.UserSettings.batteries_due_soon_days);
+$("#batteries_due_soon_days").val(Victual.UserSettings.batteries_due_soon_days);
 
 RefreshLocaleNumberInput();

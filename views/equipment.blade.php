@@ -71,7 +71,7 @@
 
 					@include('components.userfields_thead', array(
 					'userfields' => $userfields,
-					'excludeFieldTypes' => [\Grocy\Services\UserfieldsService::USERFIELD_TYPE_FILE]
+					'excludeFieldTypes' => [\Victual\Services\UserfieldsService::USERFIELD_TYPE_FILE]
 					))
 
 				</tr>
@@ -110,7 +110,7 @@
 					@include('components.userfields_tbody', array(
 					'userfields' => $userfields,
 					'userfieldValues' => FindAllObjectsInArrayByPropertyValue($userfieldValues, 'object_id', $equipmentItem->id),
-					'excludeFieldTypes' => [\Grocy\Services\UserfieldsService::USERFIELD_TYPE_FILE]
+					'excludeFieldTypes' => [\Victual\Services\UserfieldsService::USERFIELD_TYPE_FILE]
 					))
 
 				</tr>
@@ -120,7 +120,7 @@
 	</div>
 
 	<div class="col-12 col-md-8">
-		<ul class="nav nav-tabs grocy-tabs mb-1">
+		<ul class="nav nav-tabs victual-tabs mb-1">
 			<li class="nav-item">
 				<a class="nav-link active"
 					data-toggle="tab"
@@ -132,7 +132,7 @@
 					href="#description-tab">{{ $__t('Notes') }}</a>
 			</li>
 			@foreach($userfields as $userfield)
-			@if($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_FILE)
+			@if($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_FILE)
 			<li class="nav-item">
 				<a class="nav-link"
 					data-toggle="tab"
@@ -141,7 +141,7 @@
 			@endif
 			@endforeach
 		</ul>
-		<div class="tab-content grocy-tabs">
+		<div class="tab-content victual-tabs">
 			<div class="tab-pane fade show active"
 				id="instruction-manual-tab">
 				<div class="card selectedEquipmentInstructionManualCard">
@@ -173,7 +173,7 @@
 				</div>
 			</div>
 			@foreach($userfields as $userfield)
-			@if($userfield->type == \Grocy\Services\UserfieldsService::USERFIELD_TYPE_FILE)
+			@if($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_FILE)
 			<div class="tab-pane fade"
 				id="file-userfield-{{$userfield->name}}-tab">
 				<div class="card selectedEquipmentInstructionManualCard">

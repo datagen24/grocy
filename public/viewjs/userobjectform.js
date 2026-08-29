@@ -1,7 +1,7 @@
 ﻿// Powers the create/edit form for a single record ("userobject") of a custom user
 // entity (userobjectform.blade.php). A userobject has no fields of its own beyond its
 // entity link - all visible inputs are userfields, so the form body itself is just the
-// (relabeled) userfields form; Grocy.EditObjectParentId/-Name identify the owning entity.
+// (relabeled) userfields form; Victual.EditObjectParentId/-Name identify the owning entity.
 
 // Creates/updates the bare userobject (linking it to its parent entity), then saves the
 // userfields that carry its actual data, then either postMessages the parent (embedded
@@ -10,7 +10,7 @@ $('#save-userobject-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("userobject-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("userobject-form", true))
 	{
 		return;
 	}
@@ -21,56 +21,56 @@ $('#save-userobject-button').on('click', function(e)
 	}
 
 	var jsonData = {};
-	jsonData.userentity_id = Grocy.EditObjectParentId;
+	jsonData.userentity_id = Victual.EditObjectParentId;
 
-	Grocy.FrontendHelpers.BeginUiBusy("userobject-form");
+	Victual.FrontendHelpers.BeginUiBusy("userobject-form");
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/userobjects', jsonData,
+		Victual.Api.Post('objects/userobjects', jsonData,
 			function(result)
 			{
-				Grocy.EditObjectId = result.created_object_id;
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.EditObjectId = result.created_object_id;
+				Victual.Components.UserfieldsForm.Save(function()
 				{
 					if (GetUriParam("embedded") !== undefined)
 					{
-						window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 					}
 					else
 					{
-						window.location.href = U('/userobjects/' + Grocy.EditObjectParentName);
+						window.location.href = U('/userobjects/' + Victual.EditObjectParentName);
 					}
 				});
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("userobject-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("userobject-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Api.Put('objects/userobjects/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/userobjects/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.Components.UserfieldsForm.Save(function()
 				{
 					if (GetUriParam("embedded") !== undefined)
 					{
-						window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 					}
 					else
 					{
-						window.location.href = U('/userobjects/' + Grocy.EditObjectParentName);
+						window.location.href = U('/userobjects/' + Victual.EditObjectParentName);
 					}
 				});
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("userobject-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("userobject-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -78,10 +78,10 @@ $('#save-userobject-button').on('click', function(e)
 
 // Load userfield values, then strip the userfields form's usual "boxed section" styling
 // and heading since here it IS the whole form rather than an addendum to one
-Grocy.Components.UserfieldsForm.Load();
+Victual.Components.UserfieldsForm.Load();
 $("#userfields-form").removeClass("border").removeClass("border-info").removeClass("p-2").find("h2").addClass("d-none");
 
 setTimeout(function()
 {
 	$(".userfield-input").first().focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);

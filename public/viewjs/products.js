@@ -26,7 +26,7 @@ $("#search").on("keyup", Delay(function ()
 	}
 
 	productsTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Product group filter: exact-match regex search on the (possibly reordered) product group column
 $("#product-group-filter").on("change", function ()
@@ -98,7 +98,7 @@ $(document).on('click', '.product-delete-button', function (e)
 			{
 				jsonData = {};
 				jsonData.active = 0;
-				Grocy.Api.Delete('objects/products/' + objectId, {},
+				Victual.Api.Delete('objects/products/' + objectId, {},
 					function (result)
 					{
 						window.location.href = U('/products');
@@ -168,7 +168,7 @@ $("#merge-products-save-button").on("click", function (e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("merge-products-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("merge-products-form", true))
 	{
 		return;
 	}
@@ -176,14 +176,14 @@ $("#merge-products-save-button").on("click", function (e)
 	var productIdToKeep = $("#merge-products-keep").val();
 	var productIdToRemove = $("#merge-products-remove").val();
 
-	Grocy.Api.Post("stock/products/" + productIdToKeep.toString() + "/merge/" + productIdToRemove.toString(), {},
+	Victual.Api.Post("stock/products/" + productIdToKeep.toString() + "/merge/" + productIdToRemove.toString(), {},
 		function (result)
 		{
 			window.location.href = U('/products');
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.ShowGenericError('Error while merging', xhr.response);
+			Victual.FrontendHelpers.ShowGenericError('Error while merging', xhr.response);
 		}
 	);
 });
