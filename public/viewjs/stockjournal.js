@@ -1,6 +1,6 @@
 ﻿// Powers the stock journal view (stockjournal.blade.php): lists all stock transactions
 // with product/type/location/user/date-range filters, and lets the user undo a booking
-// or print a product's Grocy-code label. Product and date-range filters reload the page
+// or print a product's Grocycode label. Product and date-range filters reload the page
 // (via URI params, since they affect the server-side query); the rest filter client-side.
 var stockJournalTable = $('#stock-journal-table').DataTable({
 	'order': [[3, 'desc']],
@@ -86,7 +86,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	stockJournalTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Resets all filters (leaving the product filter alone when embedded, e.g. opened
 // scoped to one product) and reloads
@@ -135,7 +135,7 @@ $(document).on('click', '.undo-stock-booking-button', function(e)
 		correspondingBookingsRoot = $(".stock-booking-correlation-" + correlationId);
 	}
 
-	Grocy.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
+	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
 		function(result)
 		{
 			correspondingBookingsRoot.addClass("text-muted");
@@ -152,18 +152,18 @@ $(document).on('click', '.undo-stock-booking-button', function(e)
 	);
 });
 
-// Fetches label data for a product's Grocy-code and forwards it to the configured
-// label printer webhook (Grocy.Webhooks.labelprinter), if any is set up
+// Fetches label data for a product's Grocycode and forwards it to the configured
+// label printer webhook (Victual.Webhooks.labelprinter), if any is set up
 $(document).on('click', '.product-grocycode-label-print', function(e)
 {
 	e.preventDefault();
 
 	var productId = $(e.currentTarget).attr('data-product-id');
-	Grocy.Api.Get('stock/products/' + productId + '/printlabel', function(labelData)
+	Victual.Api.Get('stock/products/' + productId + '/printlabel', function(labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });

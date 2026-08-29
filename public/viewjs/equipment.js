@@ -43,7 +43,7 @@ equipmentTable.on('select', function (e, dt, type, indexes)
  */
 function DisplayEquipment(id)
 {
-	Grocy.Api.Get('objects/equipment/' + id,
+	Victual.Api.Get('objects/equipment/' + id,
 		function (equipmentItem)
 		{
 			$(".selected-equipment-name").text(equipmentItem.name);
@@ -73,7 +73,7 @@ function DisplayEquipment(id)
 
 			if (equipmentItem.userfields != null)
 			{
-				Grocy.Api.Get('objects/userfields?query[]=entity=equipment&query[]=type=file',
+				Victual.Api.Get('objects/userfields?query[]=entity=equipment&query[]=type=file',
 					function (result)
 					{
 						$.each(result, function (key, userfield)
@@ -121,7 +121,7 @@ $("#search").on("keyup", Delay(function ()
 	}
 
 	equipmentTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function ()
 {
@@ -153,7 +153,7 @@ $(document).on('click', '.equipment-delete-button', function (e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/equipment/' + objectId, {},
+				Victual.Api.Delete('objects/equipment/' + objectId, {},
 					function (result)
 					{
 						window.location.href = U('/equipment');

@@ -8,8 +8,8 @@
 // Manual night mode radio buttons (on/off/follow-system) on the settings page
 $("input.user-setting-control:radio[name=night-mode]").on("change", function()
 {
-	Grocy.UserSettings.night_mode = $("input.user-setting-control:radio[name=night-mode]:checked").val();
-	Grocy.FrontendHelpers.SaveUserSetting("night_mode", Grocy.UserSettings.night_mode, true);
+	Victual.UserSettings.night_mode = $("input.user-setting-control:radio[name=night-mode]:checked").val();
+	Victual.FrontendHelpers.SaveUserSetting("night_mode", Victual.UserSettings.night_mode, true);
 	CheckNightMode();
 });
 
@@ -20,7 +20,7 @@ $("#auto-night-mode-enabled").on("change", function()
 	$("#auto-night-mode-time-range-from").prop("readonly", !value);
 	$("#auto-night-mode-time-range-to").prop("readonly", !value);
 
-	if (!value && !BoolVal(Grocy.UserSettings.night_mode_enabled_internal))
+	if (!value && !BoolVal(Victual.UserSettings.night_mode_enabled_internal))
 	{
 		$("body").removeClass("night-mode");
 	}
@@ -59,23 +59,23 @@ $("#auto-night-mode-time-range-goes-over-midgnight").on("change", function()
 /**
  * Determines whether night mode should currently be active (manual setting,
  * auto time range or system color scheme) and applies/removes the night mode
- * stylesheet (/css/grocy_night_mode.css) and body class accordingly.
+ * stylesheet (/css/victual_night_mode.css) and body class accordingly.
  * The computed on/off state is persisted as the user setting
  * "night_mode_enabled_internal" (so the server can render the correct theme immediately).
  */
 function CheckNightMode()
 {
-	if (Grocy.UserId === -1) // Not logged in => always use system preferred color scheme
+	if (Victual.UserId === -1) // Not logged in => always use system preferred color scheme
 	{
-		Grocy.UserSettings.night_mode = "follow-system";
+		Victual.UserSettings.night_mode = "follow-system";
 	}
 
-	var nightModeEnabledInternalBefore = Grocy.UserSettings.night_mode_enabled_internal;
+	var nightModeEnabledInternalBefore = Victual.UserSettings.night_mode_enabled_internal;
 
-	if (Grocy.UserSettings.night_mode != "follow-system" && BoolVal(Grocy.UserSettings.auto_night_mode_enabled))
+	if (Victual.UserSettings.night_mode != "follow-system" && BoolVal(Victual.UserSettings.auto_night_mode_enabled))
 	{
-		var start = moment(Grocy.UserSettings.auto_night_mode_time_range_from, "HH:mm", true);
-		var end = moment(Grocy.UserSettings.auto_night_mode_time_range_to, "HH:mm", true);
+		var start = moment(Victual.UserSettings.auto_night_mode_time_range_from, "HH:mm", true);
+		var end = moment(Victual.UserSettings.auto_night_mode_time_range_to, "HH:mm", true);
 		var now = moment();
 
 		if (!start.isValid() || !end.isValid)
@@ -83,43 +83,43 @@ function CheckNightMode()
 			return;
 		}
 
-		if (BoolVal(Grocy.UserSettings.auto_night_mode_time_range_goes_over_midnight))
+		if (BoolVal(Victual.UserSettings.auto_night_mode_time_range_goes_over_midnight))
 		{
 			end.add(1, "day");
 		}
 
 		if (now.isBetween(start, end)) // We're INSIDE of night mode time range
 		{
-			Grocy.UserSettings.night_mode_enabled_internal = true;
+			Victual.UserSettings.night_mode_enabled_internal = true;
 		}
 		else // We're OUTSIDE of night mode time range
 		{
-			Grocy.UserSettings.night_mode_enabled_internal = false;
+			Victual.UserSettings.night_mode_enabled_internal = false;
 		}
 	}
 	else
 	{
-		if (Grocy.UserSettings.night_mode == "on")
+		if (Victual.UserSettings.night_mode == "on")
 		{
-			Grocy.UserSettings.night_mode_enabled_internal = true;
+			Victual.UserSettings.night_mode_enabled_internal = true;
 		}
-		else if (Grocy.UserSettings.night_mode == "off")
+		else if (Victual.UserSettings.night_mode == "off")
 		{
-			Grocy.UserSettings.night_mode_enabled_internal = false;
+			Victual.UserSettings.night_mode_enabled_internal = false;
 		}
-		else if (Grocy.UserSettings.night_mode == "follow-system")
+		else if (Victual.UserSettings.night_mode == "follow-system")
 		{
-			Grocy.UserSettings.night_mode_enabled_internal = window.matchMedia("(prefers-color-scheme: dark)").matches;
+			Victual.UserSettings.night_mode_enabled_internal = window.matchMedia("(prefers-color-scheme: dark)").matches;
 		}
 	}
 
 	// Only persist the internal on/off state when it actually changed
-	if (BoolVal(nightModeEnabledInternalBefore) != BoolVal(Grocy.UserSettings.night_mode_enabled_internal))
+	if (BoolVal(nightModeEnabledInternalBefore) != BoolVal(Victual.UserSettings.night_mode_enabled_internal))
 	{
-		Grocy.FrontendHelpers.SaveUserSetting("night_mode_enabled_internal", BoolVal(Grocy.UserSettings.night_mode_enabled_internal), true);
+		Victual.FrontendHelpers.SaveUserSetting("night_mode_enabled_internal", BoolVal(Victual.UserSettings.night_mode_enabled_internal), true);
 	}
 
-	if (BoolVal(Grocy.UserSettings.night_mode_enabled_internal))
+	if (BoolVal(Victual.UserSettings.night_mode_enabled_internal))
 	{
 		// Lazily add the night mode stylesheet on first activation
 		if (!$("#night-mode-stylesheet").length)
@@ -128,7 +128,7 @@ function CheckNightMode()
 				.appendTo("head")
 				.attr({
 					rel: "stylesheet",
-					href: U("/css/grocy_night_mode.css")
+					href: U("/css/victual_night_mode.css")
 				});
 		}
 
@@ -141,20 +141,20 @@ function CheckNightMode()
 }
 
 // Initialize the settings page controls from the current user settings
-if (Grocy.UserId !== -1)
+if (Victual.UserId !== -1)
 {
-	$("input.user-setting-control:radio[name=night-mode][value=" + Grocy.UserSettings.night_mode + "]").prop("checked", true);
-	$("#auto-night-mode-enabled").prop("checked", BoolVal(Grocy.UserSettings.auto_night_mode_enabled));
-	$("#auto-night-mode-time-range-goes-over-midgnight").prop("checked", BoolVal(Grocy.UserSettings.auto_night_mode_time_range_goes_over_midnight));
+	$("input.user-setting-control:radio[name=night-mode][value=" + Victual.UserSettings.night_mode + "]").prop("checked", true);
+	$("#auto-night-mode-enabled").prop("checked", BoolVal(Victual.UserSettings.auto_night_mode_enabled));
+	$("#auto-night-mode-time-range-goes-over-midgnight").prop("checked", BoolVal(Victual.UserSettings.auto_night_mode_time_range_goes_over_midnight));
 	$("#auto-night-mode-enabled").trigger("change");
-	$("#auto-night-mode-time-range-from").val(Grocy.UserSettings.auto_night_mode_time_range_from);
+	$("#auto-night-mode-time-range-from").val(Victual.UserSettings.auto_night_mode_time_range_from);
 	$("#auto-night-mode-time-range-from").trigger("keyup");
-	$("#auto-night-mode-time-range-to").val(Grocy.UserSettings.auto_night_mode_time_range_to);
+	$("#auto-night-mode-time-range-to").val(Victual.UserSettings.auto_night_mode_time_range_to);
 	$("#auto-night-mode-time-range-to").trigger("keyup");
 }
 
 // Re-check periodically so the auto time range / system scheme is picked up while the page stays open
-if (Grocy.Mode === "production")
+if (Victual.Mode === "production")
 {
 	setInterval(CheckNightMode, 60000);
 }

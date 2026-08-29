@@ -22,7 +22,7 @@
 		href="{{ $U('/manifest') . '?data=' . base64_encode($__env->yieldContent('title') . '#' . $U($_SERVER['REQUEST_URI'])) }}">
 	@endif
 
-	<title>@yield('title') | Grocy</title>
+	<title>@yield('title') | Victual</title>
 
 	<link href="{{ $U('/packages/@fontsource/roboto/400.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
@@ -78,14 +78,14 @@
 		rel="stylesheet">
 	@endif
 
-	<link href="{{ $U('/css/grocy_menu_layout.css?v=', true) }}{{ $version }}"
+	<link href="{{ $U('/css/victual_menu_layout.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
-	<link href="{{ $U('/css/grocy.css?v=', true) }}{{ $version }}"
+	<link href="{{ $U('/css/victual.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 
 	@if(boolval($userSettings['night_mode_enabled_internal']))
 	<link id="night-mode-stylesheet"
-		href="{{ $U('/css/grocy_night_mode.css?v=', true) }}{{ $version }}"
+		href="{{ $U('/css/victual_night_mode.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
 
@@ -95,20 +95,20 @@
 	@php include VICTUAL_DATAPATH . '/custom_css.html' @endphp
 	@endif
 	<script>
-		var Grocy = { };
-		Grocy.Components = { };
-		Grocy.Mode = '{{ VICTUAL_MODE }}';
-		Grocy.BaseUrl = '{{ $U('/') }}';
-		Grocy.CurrentUrlRelative = "/" + window.location.href.split('?')[0].replace(Grocy.BaseUrl, "");
-		Grocy.View = '{{ $viewName }}';
-		Grocy.Currency = '{{ VICTUAL_CURRENCY }}';
-		Grocy.EnergyUnit = '{{ VICTUAL_ENERGY_UNIT }}';
-		Grocy.CalendarFirstDayOfWeek = '{{ VICTUAL_CALENDAR_FIRST_DAY_OF_WEEK }}';
-		Grocy.CalendarShowWeekNumbers = {{ BoolToString(VICTUAL_CALENDAR_SHOW_WEEK_OF_YEAR) }};
-		Grocy.LocalizationStrings = {!! $LocalizationStrings !!};
-		Grocy.LocalizationStringsQu = {!! $LocalizationStringsQu !!};
-		Grocy.FeatureFlags = {!! json_encode($featureFlags) !!};
-		Grocy.Webhooks = {
+		var Victual = { };
+		Victual.Components = { };
+		Victual.Mode = '{{ VICTUAL_MODE }}';
+		Victual.BaseUrl = '{{ $U('/') }}';
+		Victual.CurrentUrlRelative = "/" + window.location.href.split('?')[0].replace(Victual.BaseUrl, "");
+		Victual.View = '{{ $viewName }}';
+		Victual.Currency = '{{ VICTUAL_CURRENCY }}';
+		Victual.EnergyUnit = '{{ VICTUAL_ENERGY_UNIT }}';
+		Victual.CalendarFirstDayOfWeek = '{{ VICTUAL_CALENDAR_FIRST_DAY_OF_WEEK }}';
+		Victual.CalendarShowWeekNumbers = {{ BoolToString(VICTUAL_CALENDAR_SHOW_WEEK_OF_YEAR) }};
+		Victual.LocalizationStrings = {!! $LocalizationStrings !!};
+		Victual.LocalizationStringsQu = {!! $LocalizationStringsQu !!};
+		Victual.FeatureFlags = {!! json_encode($featureFlags) !!};
+		Victual.Webhooks = {
 		@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER && !VICTUAL_LABEL_PRINTER_RUN_SERVER)
 			"labelprinter" : {
 				"hook": "{{ VICTUAL_LABEL_PRINTER_WEBHOOK }}",
@@ -119,12 +119,12 @@
 		};
 
 		@if (VICTUAL_AUTHENTICATED)
-		Grocy.UserId = {{ VICTUAL_USER_ID }};
-		Grocy.UserSettings = {!! json_encode($userSettings) !!};
-		Grocy.UserPermissions = {!! json_encode($permissions) !!};
+		Victual.UserId = {{ VICTUAL_USER_ID }};
+		Victual.UserSettings = {!! json_encode($userSettings) !!};
+		Victual.UserPermissions = {!! json_encode($permissions) !!};
 		@else
-		Grocy.UserId = -1;
-		Grocy.UserSettings = { };
+		Victual.UserId = -1;
+		Victual.UserSettings = { };
 		@endif
 	</script>
 </head>
@@ -753,18 +753,18 @@
 	@endif
 
 	<script src="{{ $U('/js/extensions.js?v=', true) }}{{ $version }}"></script>
-	<script src="{{ $U('/js/grocy_menu_layout.js?v=', true) }}{{ $version }}"></script>
-	<script src="{{ $U('/js/grocy.js?v=', true) }}{{ $version }}"></script>
-	<script src="{{ $U('/js/grocy_dbchangedhandling.js?v=', true) }}{{ $version }}"></script>
-	<script src="{{ $U('/js/grocy_wakelockhandling.js?v=', true) }}{{ $version }}"></script>
-	<script src="{{ $U('/js/grocy_nightmode.js?v=', true) }}{{ $version }}"></script>
-	<script src="{{ $U('/js/grocy_clock.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_menu_layout.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_dbchangedhandling.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_wakelockhandling.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_nightmode.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_clock.js?v=', true) }}{{ $version }}"></script>
 
 	@if(in_array('datatables', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
-	<script src="{{ $U('/js/grocy_datatables.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_datatables.js?v=', true) }}{{ $version }}"></script>
 	@endif
 	@if(in_array('summernote', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
-	<script src="{{ $U('/js/grocy_summernote.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_summernote.js?v=', true) }}{{ $version }}"></script>
 	@endif
 
 	@stack('pageScripts')

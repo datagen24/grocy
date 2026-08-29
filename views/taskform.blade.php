@@ -18,12 +18,12 @@
 <div class="row">
 	<div class="col-lg-6 col-12">
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
+			Victual.EditMode = '{{ $mode }}';
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $task->id }};
+			Victual.EditObjectId = {{ $task->id }};
 		</script>
 		@endif
 

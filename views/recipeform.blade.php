@@ -14,19 +14,19 @@
 		<h2 class="title">@yield('title')</h2>
 
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
-			Grocy.QuantityUnits = {!! json_encode($quantityunits) !!};
-			Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+			Victual.EditMode = '{{ $mode }}';
+			Victual.QuantityUnits = {!! json_encode($quantityunits) !!};
+			Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $recipe->id }};
+			Victual.EditObjectId = {{ $recipe->id }};
 		</script>
 
 		@if(!empty($recipe->picture_file_name))
 		<script>
-			Grocy.RecipePictureFileName = '{{ $recipe->picture_file_name }}';
+			Victual.RecipePictureFileName = '{{ $recipe->picture_file_name }}';
 		</script>
 		@endif
 		@endif

@@ -23,7 +23,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	batteriesTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Reset search and the "show disabled" checkbox
 $("#clear-filter-button").on("click", function()
@@ -57,7 +57,7 @@ $(document).on('click', '.battery-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/batteries/' + objectId, {},
+				Victual.Api.Delete('objects/batteries/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/batteries');

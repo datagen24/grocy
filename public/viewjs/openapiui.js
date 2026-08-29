@@ -1,5 +1,5 @@
 ﻿// View script for the interactive REST API documentation page (views/openapiui.blade.php):
-// boots Swagger UI against grocy's OpenAPI specification.
+// boots Swagger UI against Victual's OpenAPI specification.
 
 /**
  * Swagger UI plugin that hides the default top bar (URL input / explore bar).
@@ -14,9 +14,9 @@ function HideTopbarPlugin()
 	}
 }
 
-// Swagger UI setup - Grocy.OpenApi.SpecUrl (provided by the Blade template) points to the served openapi.json
+// Swagger UI setup - Victual.OpenApi.SpecUrl (provided by the Blade template) points to the served openapi.json
 const swaggerUi = SwaggerUIBundle({
-	url: Grocy.OpenApi.SpecUrl,
+	url: Victual.OpenApi.SpecUrl,
 	dom_id: '#swagger-ui',
 	deepLinking: true,
 	presets: [

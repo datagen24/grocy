@@ -4,8 +4,8 @@
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 </script>
 
 <div class="row">

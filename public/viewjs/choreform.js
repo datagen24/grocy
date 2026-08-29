@@ -2,13 +2,13 @@
 // period/assignment type dependent UI, saves via POST /api/objects/chores or PUT /api/objects/chores/{id}
 // followed by POST /api/chores/executions/calculate-next-assignments; optional product consumption on execution
 
-// Form submit: validate, then create or update depending on Grocy.EditMode; after saving
+// Form submit: validate, then create or update depending on Victual.EditMode; after saving
 // (incl. userfields) the next chore assignments are recalculated server-side
 $('#save-chore-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("chore-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("chore-form", true))
 	{
 		return;
 	}
@@ -19,31 +19,31 @@ $('#save-chore-button').on('click', function(e)
 	}
 
 	var jsonData = $('#chore-form').serializeJSON();
-	jsonData.start_date = Grocy.Components.DateTimePicker.GetValue();
+	jsonData.start_date = Victual.Components.DateTimePicker.GetValue();
 
-	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
+	if (Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
 	{
 		jsonData.assignment_config = $("#assignment_config").val().join(",");
 	}
 
-	Grocy.FrontendHelpers.BeginUiBusy("chore-form");
+	Victual.FrontendHelpers.BeginUiBusy("chore-form");
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/chores', jsonData,
+		Victual.Api.Post('objects/chores', jsonData,
 			function(result)
 			{
-				Grocy.EditObjectId = result.created_object_id;
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.EditObjectId = result.created_object_id;
+				Victual.Components.UserfieldsForm.Save(function()
 				{
-					Grocy.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Grocy.EditObjectId },
+					Victual.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Victual.EditObjectId },
 						function(result)
 						{
 							window.location.href = U('/chores');
 						},
 						function(xhr)
 						{
-							Grocy.FrontendHelpers.EndUiBusy();
+							Victual.FrontendHelpers.EndUiBusy();
 							console.error(xhr);
 						}
 					);
@@ -51,26 +51,26 @@ $('#save-chore-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("chore-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("chore-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Api.Put('objects/chores/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/chores/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.Components.UserfieldsForm.Save(function()
 				{
-					Grocy.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Grocy.EditObjectId },
+					Victual.Api.Post('chores/executions/calculate-next-assignments', { "chore_id": Victual.EditObjectId },
 						function(result)
 						{
 							window.location.href = U('/chores');
 						},
 						function(xhr)
 						{
-							Grocy.FrontendHelpers.EndUiBusy();
+							Victual.FrontendHelpers.EndUiBusy();
 							console.error(xhr);
 						}
 					);
@@ -78,8 +78,8 @@ $('#save-chore-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("chore-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("chore-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -88,7 +88,7 @@ $('#save-chore-button').on('click', function(e)
 // Live re-validation while typing
 $('#chore-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('chore-form');
+	Victual.FrontendHelpers.ValidateForm('chore-form');
 });
 
 // Enter submits the form (when valid) instead of the browser default
@@ -98,7 +98,7 @@ $('#chore-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('chore-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('chore-form'))
 		{
 			return false;
 		}
@@ -120,18 +120,18 @@ for (var i = 0; i < checkboxValues.length; i++)
 }
 
 // Initial setup: load userfield values, validate once and focus the name input
-Grocy.Components.UserfieldsForm.Load();
-Grocy.FrontendHelpers.ValidateForm('chore-form');
+Victual.Components.UserfieldsForm.Load();
+Victual.FrontendHelpers.ValidateForm('chore-form');
 setTimeout(function()
 {
 	$('#name').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // In edit mode the start date is locked once the chore has been executed at least once
 // (checked via GET /api/objects/chores_log)
-if (Grocy.EditMode == "edit")
+if (Victual.EditMode == "edit")
 {
-	Grocy.Api.Get('objects/chores_log?limit=1&query[]=chore_id=' + Grocy.EditObjectId,
+	Victual.Api.Get('objects/chores_log?limit=1&query[]=chore_id=' + Victual.EditObjectId,
 		function(journalEntries)
 		{
 			if (journalEntries.length > 0)
@@ -156,8 +156,8 @@ setTimeout(function()
 	$("#consume_product_on_execution").click();
 	$("#consume_product_on_execution").click();
 
-	Grocy.Components.ProductPicker.GetPicker().trigger('change');
-}, Grocy.FormFocusDelay);
+	Victual.Components.ProductPicker.GetPicker().trigger('change');
+}, Victual.FormFocusDelay);
 
 // Period type handling: show/hide the matching period inputs, keep period_config in sync
 // (weekday list for weekly chores) and update the human-readable schedule explanation
@@ -211,7 +211,7 @@ $('.input-group-chore-period-type').on('change keyup', function(e)
 		$("#period_interval").val(1);
 	}
 
-	Grocy.FrontendHelpers.ValidateForm('chore-form');
+	Victual.FrontendHelpers.ValidateForm('chore-form');
 });
 
 // Assignment type handling: enable/require the user multi-select only for types that need it
@@ -247,7 +247,7 @@ $('.input-group-chore-assignment-type').on('change', function(e)
 		$("#assignment_config").removeAttr("disabled");
 	}
 
-	Grocy.FrontendHelpers.ValidateForm('chore-form');
+	Victual.FrontendHelpers.ValidateForm('chore-form');
 });
 
 // Toggle the product picker + amount inputs depending on "consume product on execution"
@@ -255,26 +255,26 @@ $("#consume_product_on_execution").on("click", function()
 {
 	if (this.checked)
 	{
-		Grocy.Components.ProductPicker.Enable();
+		Victual.Components.ProductPicker.Enable();
 		$("#product_amount").removeAttr("disabled");
 	}
 	else
 	{
-		Grocy.Components.ProductPicker.Disable();
+		Victual.Components.ProductPicker.Disable();
 		$("#product_amount").attr("disabled", "");
 	}
 
-	Grocy.FrontendHelpers.ValidateForm("chore-form");
+	Victual.FrontendHelpers.ValidateForm("chore-form");
 });
 
 // Show the stock quantity unit name next to the amount input for the selected product (GET /api/stock/products/{id})
-Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
+Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 {
 	var productId = $(e.target).val();
 
 	if (productId)
 	{
-		Grocy.Api.Get('stock/products/' + productId,
+		Victual.Api.Get('stock/products/' + productId,
 			function(productDetails)
 			{
 				$('#amount_qu_unit').text(productDetails.quantity_unit_stock.name);
@@ -293,11 +293,11 @@ $(document).on('click', '.chore-grocycode-label-print', function(e)
 	e.preventDefault();
 
 	var choreId = $(e.currentTarget).attr('data-chore-id');
-	Grocy.Api.Get('chores/' + choreId + '/printlabel', function(labelData)
+	Victual.Api.Get('chores/' + choreId + '/printlabel', function(labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });

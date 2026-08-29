@@ -8,8 +8,8 @@
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 </script>
 
 <div class="row">
@@ -23,12 +23,12 @@
 <div class="row">
 	<div class="col-12 col-md-6 col-xl-4 pb-3">
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
+			Victual.EditMode = '{{ $mode }}';
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $listItem->id }};
+			Victual.EditObjectId = {{ $listItem->id }};
 		</script>
 		@endif
 

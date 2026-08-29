@@ -4,7 +4,7 @@
 
 @push('pageScripts')
 <script>
-	Grocy.EditObjectId = {{ $user->id }};
+	Victual.EditObjectId = {{ $user->id }};
 </script>
 @endpush
 

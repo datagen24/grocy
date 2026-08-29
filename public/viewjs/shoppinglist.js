@@ -52,7 +52,7 @@ $("#search").on("keyup", Delay(function ()
 	}
 
 	shoppingListTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Resets the search box and status filter dropdown
 $("#clear-filter-button").on("click", function ()
@@ -118,7 +118,7 @@ $("#delete-selected-shopping-list").on("click", function ()
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/shopping_lists/' + objectId, {},
+				Victual.Api.Delete('objects/shopping_lists/' + objectId, {},
 					function (result)
 					{
 						window.location.href = U('/shoppinglist');
@@ -140,21 +140,21 @@ $(document).on('click', '.shoppinglist-delete-button', function (e)
 	e.preventDefault();
 
 	var shoppingListItemId = $(e.currentTarget).attr('data-shoppinglist-id');
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
-	Grocy.Api.Delete('objects/shopping_list/' + shoppingListItemId, {},
+	Victual.Api.Delete('objects/shopping_list/' + shoppingListItemId, {},
 		function (result)
 		{
 			animateCSS("#shoppinglistitem-" + shoppingListItemId + "-row", "fadeOut", function ()
 			{
-				Grocy.FrontendHelpers.EndUiBusy();
+				Victual.FrontendHelpers.EndUiBusy();
 				$("#shoppinglistitem-" + shoppingListItemId + "-row").addClass("d-none").remove();
 				OnListItemRemoved();
 			});
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);
@@ -163,7 +163,7 @@ $(document).on('click', '.shoppinglist-delete-button', function (e)
 // Adds all products currently below their minimum stock amount to the selected list
 $(document).on('click', '#add-products-below-min-stock-amount', function (e)
 {
-	Grocy.Api.Post('stock/shoppinglist/add-missing-products', { "list_id": $("#selected-shopping-list").val() },
+	Victual.Api.Post('stock/shoppinglist/add-missing-products', { "list_id": $("#selected-shopping-list").val() },
 		function (result)
 		{
 			window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
@@ -178,10 +178,10 @@ $(document).on('click', '#add-products-below-min-stock-amount', function (e)
 // Adds overdue then expired products to the selected list (two sequential API calls)
 $(document).on('click', '#add-overdue-expired-products', function (e)
 {
-	Grocy.Api.Post('stock/shoppinglist/add-overdue-products', { "list_id": $("#selected-shopping-list").val() },
+	Victual.Api.Post('stock/shoppinglist/add-overdue-products', { "list_id": $("#selected-shopping-list").val() },
 		function (result)
 		{
-			Grocy.Api.Post('stock/shoppinglist/add-expired-products', { "list_id": $("#selected-shopping-list").val() },
+			Victual.Api.Post('stock/shoppinglist/add-expired-products', { "list_id": $("#selected-shopping-list").val() },
 				function (result)
 				{
 					window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
@@ -203,7 +203,7 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 $(document).on('click', '#clear-shopping-list', function (e)
 {
 	var confirmMessage = __t('Are you sure you want to empty shopping list "%s"?', $("#selected-shopping-list option:selected").text());
-	if (!BoolVal(Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS))
+	if (!BoolVal(Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS))
 	{
 		confirmMessage = __t('Are you sure you want to empty the shopping list?');
 	}
@@ -225,16 +225,16 @@ $(document).on('click', '#clear-shopping-list', function (e)
 		{
 			if (result === true)
 			{
-				Grocy.FrontendHelpers.BeginUiBusy();
+				Victual.FrontendHelpers.BeginUiBusy();
 
-				Grocy.Api.Post('stock/shoppinglist/clear', { "list_id": $("#selected-shopping-list").val() },
+				Victual.Api.Post('stock/shoppinglist/clear', { "list_id": $("#selected-shopping-list").val() },
 					function (result)
 					{
 						window.location.reload();
 					},
 					function (xhr)
 					{
-						Grocy.FrontendHelpers.EndUiBusy();
+						Victual.FrontendHelpers.EndUiBusy();
 						console.error(xhr);
 					}
 				);
@@ -246,7 +246,7 @@ $(document).on('click', '#clear-shopping-list', function (e)
 // Removes only the items already marked done (done_only flag) from the selected list
 $(document).on("click", "#clear-done-items", function (e)
 {
-	Grocy.Api.Post('stock/shoppinglist/clear', { "list_id": $("#selected-shopping-list").val(), "done_only": true },
+	Victual.Api.Post('stock/shoppinglist/clear', { "list_id": $("#selected-shopping-list").val(), "done_only": true },
 		function (result)
 		{
 			window.location.reload();
@@ -259,7 +259,7 @@ $(document).on("click", "#clear-done-items", function (e)
 });
 
 // "Add to stock" workflow: opens the item's purchase form inside a modal iframe.
-// When used via #add-all-items-to-stock-button below, Grocy.ShoppingListToStockWorkflow*
+// When used via #add-all-items-to-stock-button below, Victual.ShoppingListToStockWorkflow*
 // tracks progress so items can be stepped through one after another
 $(document).on('click', '.shopping-list-stock-add-workflow-list-item-button', function (e)
 {
@@ -270,10 +270,10 @@ $(document).on('click', '.shopping-list-stock-add-workflow-list-item-button', fu
 	$("#shopping-list-stock-add-workflow-purchase-form-frame").attr("src", href);
 	$("#shopping-list-stock-add-workflow-modal").modal("show");
 
-	if (Grocy.ShoppingListToStockWorkflowAll)
+	if (Victual.ShoppingListToStockWorkflowAll)
 	{
 		$("#shopping-list-stock-add-workflow-purchase-item-count").removeClass("d-none");
-		$("#shopping-list-stock-add-workflow-purchase-item-count").text(__t("Adding shopping list item %1$s of %2$s", Grocy.ShoppingListToStockWorkflowCurrent, Grocy.ShoppingListToStockWorkflowCount));
+		$("#shopping-list-stock-add-workflow-purchase-item-count").text(__t("Adding shopping list item %1$s of %2$s", Victual.ShoppingListToStockWorkflowCurrent, Victual.ShoppingListToStockWorkflowCount));
 		$("#shopping-list-stock-add-workflow-skip-button").removeClass("d-none");
 	}
 	else
@@ -284,18 +284,18 @@ $(document).on('click', '.shopping-list-stock-add-workflow-list-item-button', fu
 });
 
 // Global state for the "add all items to stock" bulk workflow (reset on modal close)
-Grocy.ShoppingListToStockWorkflowAll = false;
-Grocy.ShoppingListToStockWorkflowCount = 0;
-Grocy.ShoppingListToStockWorkflowCurrent = 0;
-Grocy.ShoppingListAddToStockButtonList = [];
+Victual.ShoppingListToStockWorkflowAll = false;
+Victual.ShoppingListToStockWorkflowCount = 0;
+Victual.ShoppingListToStockWorkflowCurrent = 0;
+Victual.ShoppingListAddToStockButtonList = [];
 // Kicks off the bulk workflow by simulating a click on the first item's add-to-stock button;
 // subsequent items are triggered by the "Ready"/"AfterItemAdded" postMessage handler below
 $(document).on('click', '#add-all-items-to-stock-button', function (e)
 {
-	Grocy.ShoppingListToStockWorkflowAll = true;
-	Grocy.ShoppingListAddToStockButtonList = $(".shopping-list-stock-add-workflow-list-item-button");
-	Grocy.ShoppingListToStockWorkflowCount = Grocy.ShoppingListAddToStockButtonList.length;
-	Grocy.ShoppingListToStockWorkflowCurrent++;
+	Victual.ShoppingListToStockWorkflowAll = true;
+	Victual.ShoppingListAddToStockButtonList = $(".shopping-list-stock-add-workflow-list-item-button");
+	Victual.ShoppingListToStockWorkflowCount = Victual.ShoppingListAddToStockButtonList.length;
+	Victual.ShoppingListToStockWorkflowCurrent++;
 	$("#shopping-list-stock-add-workflow-modal .modal-footer").removeClass("d-none");
 	$(".shopping-list-stock-add-workflow-list-item-button").first().click();
 });
@@ -303,10 +303,10 @@ $(document).on('click', '#add-all-items-to-stock-button', function (e)
 // Reset bulk-workflow state whenever the modal is closed (manually or after the last item)
 $("#shopping-list-stock-add-workflow-modal").on("hidden.bs.modal", function (e)
 {
-	Grocy.ShoppingListToStockWorkflowAll = false;
-	Grocy.ShoppingListToStockWorkflowCount = 0;
-	Grocy.ShoppingListToStockWorkflowCurrent = 0;
-	Grocy.ShoppingListAddToStockButtonList = [];
+	Victual.ShoppingListToStockWorkflowAll = false;
+	Victual.ShoppingListToStockWorkflowCount = 0;
+	Victual.ShoppingListToStockWorkflowCurrent = 0;
+	Victual.ShoppingListAddToStockButtonList = [];
 	$("#shopping-list-stock-add-workflow-modal .modal-footer").addClass("d-none");
 })
 
@@ -324,16 +324,16 @@ $(window).on("message", function (e)
 	}
 	else if (data.Message === "Ready")
 	{
-		if (!Grocy.ShoppingListToStockWorkflowAll)
+		if (!Victual.ShoppingListToStockWorkflowAll)
 		{
 			$("#shopping-list-stock-add-workflow-modal").modal("hide");
 		}
 		else
 		{
-			Grocy.ShoppingListToStockWorkflowCurrent++;
-			if (Grocy.ShoppingListToStockWorkflowCurrent <= Grocy.ShoppingListToStockWorkflowCount)
+			Victual.ShoppingListToStockWorkflowCurrent++;
+			if (Victual.ShoppingListToStockWorkflowCurrent <= Victual.ShoppingListToStockWorkflowCount)
 			{
-				Grocy.ShoppingListAddToStockButtonList[Grocy.ShoppingListToStockWorkflowCurrent - 1].click();
+				Victual.ShoppingListAddToStockButtonList[Victual.ShoppingListToStockWorkflowCurrent - 1].click();
 			}
 			else
 			{
@@ -348,7 +348,7 @@ $(document).on('click', '#shopping-list-stock-add-workflow-skip-button', functio
 {
 	e.preventDefault();
 
-	window.postMessage(WindowMessageBag("Ready"), Grocy.BaseUrl);
+	window.postMessage(WindowMessageBag("Ready"), Victual.BaseUrl);
 });
 
 // Toggles an item's done/undone state (checkbox-like button), updates the row styling
@@ -357,7 +357,7 @@ $(document).on('click', '.order-listitem-button', function (e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
 	var listItemId = $(e.currentTarget).attr('data-item-id');
 
@@ -369,7 +369,7 @@ $(document).on('click', '.order-listitem-button', function (e)
 
 	$(e.currentTarget).attr('data-item-done', done);
 
-	Grocy.Api.Put('objects/shopping_list/' + listItemId, { 'done': done },
+	Victual.Api.Put('objects/shopping_list/' + listItemId, { 'done': done },
 		function ()
 		{
 			var statusInfoCell = $("#shoppinglistitem-" + listItemId + "-status-info");
@@ -390,11 +390,11 @@ $(document).on('click', '.order-listitem-button', function (e)
 			shoppingListTable.rows().invalidate().draw(false);
 			$("#status-filter").trigger("change");
 
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);
@@ -413,7 +413,7 @@ function OnListItemRemoved()
 		$("#add-all-items-to-stock-button").addClass("disabled");
 	}
 
-	Grocy.Api.Get("objects/uihelper_shopping_list?" + "?query[]=shopping_list_id=" + $("#selected-shopping-list").val(),
+	Victual.Api.Get("objects/uihelper_shopping_list?" + "?query[]=shopping_list_id=" + $("#selected-shopping-list").val(),
 		function (items)
 		{
 			$("#total-value").text(items.reduce((x, { last_price_total }) => x + last_price_total, 0));
@@ -433,20 +433,20 @@ OnListItemRemoved();
 $(document).on("click", "#print-shopping-list-button", function (e)
 {
 	var checkedPrintShowHeader = "";
-	if (BoolVal(Grocy.UserSettings.shopping_list_print_show_header))
+	if (BoolVal(Victual.UserSettings.shopping_list_print_show_header))
 	{
 		checkedPrintShowHeader = "checked";
 	}
 
 	var checkedGroupByProductGroup = "";
-	if (BoolVal(Grocy.UserSettings.shopping_list_print_group_by_product_group))
+	if (BoolVal(Victual.UserSettings.shopping_list_print_group_by_product_group))
 	{
 		checkedGroupByProductGroup = "checked";
 	}
 
 	var checkedLayoutTypeTable = "";
 	var checkedLayoutTypeList = "";
-	if (Grocy.UserSettings.shopping_list_print_layout_type == "table")
+	if (Victual.UserSettings.shopping_list_print_layout_type == "table")
 	{
 		checkedLayoutTypeTable = "checked";
 		checkedLayoutTypeList = "";
@@ -533,7 +533,7 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 				setTimeout(function ()
 				{
 					// Server renders and sends the print job directly to the configured thermal printer
-					Grocy.Api.Get('print/shoppinglist/thermal?list=' + $("#selected-shopping-list").val() + '&printHeader=' + printHeader,
+					Victual.Api.Get('print/shoppinglist/thermal?list=' + $("#selected-shopping-list").val() + '&printHeader=' + printHeader,
 						function (result)
 						{
 							$(".modal").last().modal("hide");
@@ -599,7 +599,7 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 		}
 	}
 
-	if (!Grocy.FeatureFlags["VICTUAL_FEATURE_FLAG_THERMAL_PRINTER"])
+	if (!Victual.FeatureFlags["VICTUAL_FEATURE_FLAG_THERMAL_PRINTER"])
 	{
 		delete printButtons['printtp'];
 		sizePrintDialog = 'small';
@@ -636,7 +636,7 @@ $(document).on("click", "#save-description-button", function (e)
 {
 	e.preventDefault();
 
-	Grocy.Api.Put('objects/shopping_lists/' + $("#selected-shopping-list").val(), { description: $("#description").val() },
+	Victual.Api.Put('objects/shopping_lists/' + $("#selected-shopping-list").val(), { description: $("#description").val() },
 		function (result)
 		{
 			$("#save-description-button").addClass("disabled");
@@ -702,7 +702,7 @@ $("img.barcode").each(function ()
 
 // On small screens or when stock tracking is disabled, the "stock" filter group
 // isn't shown, so drop the border that would otherwise separate it visually
-if ($(window).width() < 768 || !Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK)
+if ($(window).width() < 768 || !Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK)
 {
 	$("#filter-container").removeClass("border-bottom");
 }

@@ -1,14 +1,14 @@
 // Implements the ProductAmountPicker widget (views/components/productamountpicker.blade.php):
 // pairs the #display_amount input (entered in whatever QU the user picks) with the #qu_id
-// select (populated from Grocy.QuantityUnitConversionsResolved for the product) and the hidden
+// select (populated from Victual.QuantityUnitConversionsResolved for the product) and the hidden
 // #amount input holding the amount converted to the destination/stock quantity unit.
 // Public API: Reload(productId, destinationQuId), SetQuantityUnit(quId), AllowAnyQu(), Reset().
-Grocy.Components.ProductAmountPicker = {};
-Grocy.Components.ProductAmountPicker.AllowAnyQuEnabled = false;
+Victual.Components.ProductAmountPicker = {};
+Victual.Components.ProductAmountPicker.AllowAnyQuEnabled = false;
 
 /**
  * (Re)populates the #qu_id dropdown with the quantity units convertible to/from destinationQuId
- * for the given product (based on Grocy.QuantityUnitConversionsResolved), and converts the
+ * for the given product (based on Victual.QuantityUnitConversionsResolved), and converts the
  * currently displayed amount to the newly selected QU on first load.
  * @param {number} productId Product to load QU conversions for.
  * @param {number} destinationQuId The QU the resulting #amount value should be expressed in
@@ -16,11 +16,11 @@ Grocy.Components.ProductAmountPicker.AllowAnyQuEnabled = false;
  * @param {boolean} [forceInitialDisplayQu=false] When true, resets the selection back to the
  *   QU configured as data-initial-qu-id even on a reload.
  */
-Grocy.Components.ProductAmountPicker.Reload = function (productId, destinationQuId, forceInitialDisplayQu = false)
+Victual.Components.ProductAmountPicker.Reload = function (productId, destinationQuId, forceInitialDisplayQu = false)
 {
-	var conversionsForProduct = FindAllObjectsInArrayByPropertyValue(Grocy.QuantityUnitConversionsResolved, 'product_id', productId);
+	var conversionsForProduct = FindAllObjectsInArrayByPropertyValue(Victual.QuantityUnitConversionsResolved, 'product_id', productId);
 
-	if (!Grocy.Components.ProductAmountPicker.AllowAnyQuEnabled)
+	if (!Victual.Components.ProductAmountPicker.AllowAnyQuEnabled)
 	{
 		$("#qu_id").find("option").remove().end();
 		if (!$("#qu_id").hasAttr("required"))
@@ -28,8 +28,8 @@ Grocy.Components.ProductAmountPicker.Reload = function (productId, destinationQu
 			$("#qu_id").append('<option></option>');
 		}
 
-		$("#qu_id").attr("data-destination-qu-name", FindObjectInArrayByPropertyValue(Grocy.QuantityUnits, 'id', destinationQuId).name);
-		$("#qu_id").attr("data-destination-qu-name-plural", FindObjectInArrayByPropertyValue(Grocy.QuantityUnits, 'id', destinationQuId).name_plural);
+		$("#qu_id").attr("data-destination-qu-name", FindObjectInArrayByPropertyValue(Victual.QuantityUnits, 'id', destinationQuId).name);
+		$("#qu_id").attr("data-destination-qu-name-plural", FindObjectInArrayByPropertyValue(Victual.QuantityUnits, 'id', destinationQuId).name_plural);
 
 		conversionsForProduct.forEach(conversion =>
 		{
@@ -47,19 +47,19 @@ Grocy.Components.ProductAmountPicker.Reload = function (productId, destinationQu
 		});
 	}
 
-	if (!Grocy.Components.ProductAmountPicker.InitialValueSet || forceInitialDisplayQu)
+	if (!Victual.Components.ProductAmountPicker.InitialValueSet || forceInitialDisplayQu)
 	{
 		$("#qu_id").val($("#qu_id").attr("data-initial-qu-id"));
 	}
 
-	if (!Grocy.Components.ProductAmountPicker.InitialValueSet)
+	if (!Victual.Components.ProductAmountPicker.InitialValueSet)
 	{
 		var amount = Number.parseFloat($("#display_amount").val());
 		var factor = Number.parseFloat($("#qu_id option:selected").attr("data-qu-factor"));
-		var convertedAmount = (amount * factor).toLocaleString("en", { minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts });
+		var convertedAmount = (amount * factor).toLocaleString("en", { minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts });
 		$("#display_amount").val(convertedAmount);
 
-		Grocy.Components.ProductAmountPicker.InitialValueSet = true;
+		Victual.Components.ProductAmountPicker.InitialValueSet = true;
 	}
 
 	if (conversionsForProduct.length === 1 && !forceInitialDisplayQu)
@@ -80,20 +80,20 @@ Grocy.Components.ProductAmountPicker.Reload = function (productId, destinationQu
 }
 
 /** Selects the given quantity unit in #qu_id (option must already be present) */
-Grocy.Components.ProductAmountPicker.SetQuantityUnit = function (quId)
+Victual.Components.ProductAmountPicker.SetQuantityUnit = function (quId)
 {
 	$("#qu_id").val(quId);
 }
 
 /**
  * Switches the picker into "any quantity unit" mode: replaces #qu_id's options with the full
- * list of Grocy.QuantityUnits (each with a 1:1 factor) instead of only the product's configured
+ * list of Victual.QuantityUnits (each with a 1:1 factor) instead of only the product's configured
  * conversions - used where a specific product isn't known yet (e.g. generic stock entries).
  * @param {boolean} [keepInitialQu=false] When true, re-selects data-initial-qu-id afterwards.
  */
-Grocy.Components.ProductAmountPicker.AllowAnyQu = function (keepInitialQu = false)
+Victual.Components.ProductAmountPicker.AllowAnyQu = function (keepInitialQu = false)
 {
-	Grocy.Components.ProductAmountPicker.AllowAnyQuEnabled = true;
+	Victual.Components.ProductAmountPicker.AllowAnyQuEnabled = true;
 
 	$("#qu_id").find("option").remove().end();
 	if (!$("#qu_id").hasAttr("required"))
@@ -101,14 +101,14 @@ Grocy.Components.ProductAmountPicker.AllowAnyQu = function (keepInitialQu = fals
 		$("#qu_id").append('<option></option>');
 	}
 
-	Grocy.QuantityUnits.forEach(qu =>
+	Victual.QuantityUnits.forEach(qu =>
 	{
 		$("#qu_id").append('<option value="' + qu.id + '" data-qu-factor="1" data-qu-name-plural="' + qu.name_plural + '">' + qu.name + '</option>');
 	});
 
 	if (keepInitialQu)
 	{
-		Grocy.Components.ProductAmountPicker.SetQuantityUnit($("#qu_id").attr("data-initial-qu-id"));
+		Victual.Components.ProductAmountPicker.SetQuantityUnit($("#qu_id").attr("data-initial-qu-id"));
 	}
 
 	$("#qu_id").removeAttr("disabled");
@@ -117,7 +117,7 @@ Grocy.Components.ProductAmountPicker.AllowAnyQu = function (keepInitialQu = fals
 }
 
 /** Clears the QU options and any conversion info hint, e.g. when no product is selected */
-Grocy.Components.ProductAmountPicker.Reset = function ()
+Victual.Components.ProductAmountPicker.Reset = function ()
 {
 	$("#qu_id").find("option").remove();
 	$("#qu-conversion-info").addClass("d-none");
@@ -134,17 +134,17 @@ $(".input-group-productamountpicker").on("change", function ()
 	var destinationAmount = amount / quFactor;
 	var destinationQuName = __n(destinationAmount, $("#qu_id").attr("data-destination-qu-name"), $("#qu_id").attr("data-destination-qu-name-plural"), true);
 
-	if ($("#qu_id").attr("data-destination-qu-name") == selectedQuName || Grocy.Components.ProductAmountPicker.AllowAnyQuEnabled || !amount || !selectedQuName)
+	if ($("#qu_id").attr("data-destination-qu-name") == selectedQuName || Victual.Components.ProductAmountPicker.AllowAnyQuEnabled || !amount || !selectedQuName)
 	{
 		$("#qu-conversion-info").addClass("d-none");
 	}
 	else
 	{
 		$("#qu-conversion-info").removeClass("d-none");
-		$("#qu-conversion-info").text(__t("This equals %1$s %2$s", destinationAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }), destinationQuName));
+		$("#qu-conversion-info").text(__t("This equals %1$s %2$s", destinationAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }), destinationQuName));
 	}
 
-	var n = Grocy.UserSettings.stock_decimal_places_amounts;
+	var n = Victual.UserSettings.stock_decimal_places_amounts;
 	if (n <= 0)
 	{
 		n = 1;

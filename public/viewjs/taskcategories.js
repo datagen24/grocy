@@ -20,7 +20,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	categoriesTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -51,7 +51,7 @@ $(document).on('click', '.task-category-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/task_categories/' + objectId, {},
+				Victual.Api.Delete('objects/task_categories/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/taskcategories');

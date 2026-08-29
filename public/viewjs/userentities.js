@@ -20,7 +20,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	userentitiesTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -51,7 +51,7 @@ $(document).on('click', '.userentity-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/userentities/' + objectId, {},
+				Victual.Api.Delete('objects/userentities/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/userentities');

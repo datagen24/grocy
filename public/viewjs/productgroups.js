@@ -22,7 +22,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	groupsTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -54,7 +54,7 @@ $(document).on('click', '.product-group-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/product_groups/' + objectId, {},
+				Victual.Api.Delete('objects/product_groups/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/productgroups');

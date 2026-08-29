@@ -6,7 +6,7 @@
  * Second step of saving a product: called after the product object itself has been created/updated.
  * Saves the product userfields, then either uploads the newly selected picture file (named
  * jsonData.picture_file_name, computed in the save-button handler) or - if no new picture was
- * selected - just proceeds. Finally redirects the browser according to Grocy.ProductEditFormRedirectUri
+ * selected - just proceeds. Finally redirects the browser according to Victual.ProductEditFormRedirectUri
  * / the closeAfterCreation, returnto and flow URL params, or otherwise to the product's edit/detail page.
  * @param {Object} result The API response from the objects/products POST/PUT call (used for created_object_id on create)
  * @param {string} location Base redirect path ('/products?product=' or '/product/'), with the product id appended
@@ -14,18 +14,18 @@
  */
 function saveProductPicture(result, location, jsonData)
 {
-	var productId = Grocy.EditObjectId || result.created_object_id;
-	Grocy.EditObjectId = productId; // Grocy.EditObjectId is not yet set when adding a product
+	var productId = Victual.EditObjectId || result.created_object_id;
+	Victual.EditObjectId = productId; // Victual.EditObjectId is not yet set when adding a product
 
-	Grocy.Components.UserfieldsForm.Save(() =>
+	Victual.Components.UserfieldsForm.Save(() =>
 	{
-		if (jsonData.hasOwnProperty("picture_file_name") && !Grocy.DeleteProductPictureOnSave)
+		if (jsonData.hasOwnProperty("picture_file_name") && !Victual.DeleteProductPictureOnSave)
 		{
 			// A new picture file was selected: upload it to the productpictures file group, then redirect
-			Grocy.Api.UploadFile($("#product-picture")[0].files[0], 'productpictures', jsonData.picture_file_name,
+			Victual.Api.UploadFile($("#product-picture")[0].files[0], 'productpictures', jsonData.picture_file_name,
 				(result) =>
 				{
-					if (Grocy.ProductEditFormRedirectUri == "reload")
+					if (Victual.ProductEditFormRedirectUri == "reload")
 					{
 						window.location.reload();
 						return;
@@ -56,15 +56,15 @@ function saveProductPicture(result, location, jsonData)
 				},
 				(xhr) =>
 				{
-					Grocy.FrontendHelpers.EndUiBusy("product-form");
-					Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+					Victual.FrontendHelpers.EndUiBusy("product-form");
+					Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 				}
 			);
 		}
 		else
 		{
 			// No new picture to upload (picture unchanged or deleted): redirect right away
-			if (Grocy.ProductEditFormRedirectUri == "reload")
+			if (Victual.ProductEditFormRedirectUri == "reload")
 			{
 				window.location.reload();
 				return
@@ -101,7 +101,7 @@ $('.save-product-button').on('click', function (e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("product-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("product-form", true))
 	{
 		return;
 	}
@@ -111,7 +111,7 @@ $('.save-product-button').on('click', function (e)
 	var parentProductId = jsonData.product_id;
 	delete jsonData.product_id;
 	jsonData.parent_product_id = parentProductId;
-	Grocy.FrontendHelpers.BeginUiBusy("product-form");
+	Victual.FrontendHelpers.BeginUiBusy("product-form");
 
 	if ($("#product-picture")[0].files.length > 0)
 	{
@@ -122,42 +122,42 @@ $('.save-product-button').on('click', function (e)
 	// "Save & continue" keeps editing the same product; "Save & return to products" redirects back to the product list
 	const location = $(e.currentTarget).attr('data-location') == 'return' ? '/products?product=' : '/product/';
 
-	if (Grocy.EditMode == 'create')
+	if (Victual.EditMode == 'create')
 	{
-		Grocy.Api.Post('objects/products', jsonData,
+		Victual.Api.Post('objects/products', jsonData,
 			(result) => saveProductPicture(result, location, jsonData),
 			(xhr) =>
 			{
-				Grocy.FrontendHelpers.EndUiBusy("product-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("product-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			});
 		return;
 	}
 
-	if (Grocy.DeleteProductPictureOnSave)
+	if (Victual.DeleteProductPictureOnSave)
 	{
 		// User marked the current picture for deletion: clear it server-side and delete the file itself
 		jsonData.picture_file_name = null;
 
-		Grocy.Api.DeleteFile(Grocy.ProductPictureFileName, 'productpictures',
+		Victual.Api.DeleteFile(Victual.ProductPictureFileName, 'productpictures',
 			function (result)
 			{
 				// Nothing to do
 			},
 			function (xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("product-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("product-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 
-	Grocy.Api.Put('objects/products/' + Grocy.EditObjectId, jsonData,
+	Victual.Api.Put('objects/products/' + Victual.EditObjectId, jsonData,
 		(result) => saveProductPicture(result, location, jsonData),
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy("product-form");
-			Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+			Victual.FrontendHelpers.EndUiBusy("product-form");
+			Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 		}
 	);
 });
@@ -181,19 +181,19 @@ $('.input-group-qu').on('change', function (e)
 	$("#tare_weight_qu_info").text($("#qu_id_stock option:selected").text());
 	$("#quick_consume_qu_info").text($("#qu_id_stock option:selected").text());
 	$("#quick_open_qu_info").text($("#qu_id_stock option:selected").text());
-	$("#energy_qu_info").text(Grocy.EnergyUnit + " / " + $("#qu_id_stock option:selected").text());
+	$("#energy_qu_info").text(Victual.EnergyUnit + " / " + $("#qu_id_stock option:selected").text());
 
-	Grocy.FrontendHelpers.ValidateForm('product-form');
+	Victual.FrontendHelpers.ValidateForm('product-form');
 });
 
 // Re-validate on every keystroke and enable/disable the (embedded, dialog-only) QU conversion/barcode "Add" buttons accordingly
 $('#product-form input').keyup(function (event)
 {
-	Grocy.FrontendHelpers.ValidateForm('product-form');
+	Victual.FrontendHelpers.ValidateForm('product-form');
 	$(".input-group-qu").trigger("change");
 	$("#product-form select").trigger("select");
 
-	if (!Grocy.FrontendHelpers.ValidateForm('product-form'))
+	if (!Victual.FrontendHelpers.ValidateForm('product-form'))
 	{
 		$("#qu-conversion-add-button").addClass("disabled");
 		$("#barcode-add-button").addClass("disabled");
@@ -206,7 +206,7 @@ $('#product-form input').keyup(function (event)
 
 $('#location_id').change(function (event)
 {
-	Grocy.FrontendHelpers.ValidateForm('product-form');
+	Victual.FrontendHelpers.ValidateForm('product-form');
 });
 
 // Enter key anywhere in the form triggers the primary/default submit button
@@ -216,7 +216,7 @@ $('#product-form input').keydown(function (event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('product-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('product-form'))
 		{
 			return false;
 		}
@@ -239,7 +239,7 @@ $("#enable_tare_weight_handling").on("click", function ()
 		$("#tare_weight").attr("disabled", "");
 	}
 
-	Grocy.FrontendHelpers.ValidateForm("product-form");
+	Victual.FrontendHelpers.ValidateForm("product-form");
 });
 
 // Selecting a new picture file cancels any pending "delete current picture" state and updates the file input label
@@ -249,14 +249,14 @@ $("#product-picture").on("change", function (e)
 	$("#product-picture-label-none").addClass("d-none");
 	$("#delete-current-product-picture-on-save-hint").addClass("d-none");
 	$("#current-product-picture").addClass("d-none");
-	Grocy.DeleteProductPictureOnSave = false;
+	Victual.DeleteProductPictureOnSave = false;
 });
 
-// Grocy.DeleteProductPictureOnSave flags the current picture for deletion on the next save (actually deleted/cleared in the save handlers above)
-Grocy.DeleteProductPictureOnSave = false;
+// Victual.DeleteProductPictureOnSave flags the current picture for deletion on the next save (actually deleted/cleared in the save handlers above)
+Victual.DeleteProductPictureOnSave = false;
 $("#delete-current-product-picture-button").on("click", function (e)
 {
-	Grocy.DeleteProductPictureOnSave = true;
+	Victual.DeleteProductPictureOnSave = true;
 	$("#current-product-picture").addClass("d-none");
 	$("#delete-current-product-picture-on-save-hint").removeClass("d-none");
 	$("#product-picture-label").addClass("d-none");
@@ -289,14 +289,14 @@ $('#barcode-table tbody').removeClass("d-none");
 barcodeTable.columns.adjust().draw();
 
 // Initial page setup: load the products userfields, prime the QU info texts/validation state and focus the name field
-Grocy.Components.UserfieldsForm.Load();
+Victual.Components.UserfieldsForm.Load();
 $("#name").trigger("keyup");
 $('.input-group-qu').trigger('change');
-Grocy.FrontendHelpers.ValidateForm('product-form');
+Victual.FrontendHelpers.ValidateForm('product-form');
 setTimeout(function ()
 {
 	$('#name').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // Print the product's grocycode via the configured label printer webhook
 $(document).on('click', '.product-grocycode-label-print', function (e)
@@ -304,11 +304,11 @@ $(document).on('click', '.product-grocycode-label-print', function (e)
 	e.preventDefault();
 
 	var productId = $(e.currentTarget).attr('data-product-id');
-	Grocy.Api.Get('stock/products/' + productId + '/printlabel', function (labelData)
+	Victual.Api.Get('stock/products/' + productId + '/printlabel', function (labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });
@@ -335,10 +335,10 @@ $(document).on('click', '.qu-conversion-delete-button', function (e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/quantity_unit_conversions/' + objectId, {},
+				Victual.Api.Delete('objects/quantity_unit_conversions/' + objectId, {},
 					function (result)
 					{
-						Grocy.ProductEditFormRedirectUri = "reload";
+						Victual.ProductEditFormRedirectUri = "reload";
 						$('#save-product-button').click();
 					},
 					function (xhr)
@@ -373,10 +373,10 @@ $(document).on('click', '.barcode-delete-button', function (e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/product_barcodes/' + objectId, {},
+				Victual.Api.Delete('objects/product_barcodes/' + objectId, {},
 					function (result)
 					{
-						Grocy.ProductEditFormRedirectUri = "reload";
+						Victual.ProductEditFormRedirectUri = "reload";
 						$('#save-product-button').click();
 					},
 					function (xhr)
@@ -421,7 +421,7 @@ $('#qu_id_stock').change(function (e)
 
 	quIdStockBefore = quIdStock.val();
 
-	Grocy.FrontendHelpers.ValidateForm('product-form');
+	Victual.FrontendHelpers.ValidateForm('product-form');
 });
 
 // Reload the page when a QU-conversion/barcode dialog (opened via show-as-dialog-link, see the related-links buttons in the Blade view) posts back that it changed something
@@ -438,14 +438,14 @@ $(window).on("message", function (e)
 // "Duplicate product" flow (?copy-of=<id> on the create form): fetch the source product and copy
 // its field values into this (still empty) create form. Deliberately omits identity/display fields
 // (name, picture, barcodes, QU conversions) so the user creates a distinct new product.
-if (Grocy.EditMode == "create" && GetUriParam("copy-of") != undefined)
+if (Victual.EditMode == "create" && GetUriParam("copy-of") != undefined)
 {
-	Grocy.Api.Get('objects/products/' + GetUriParam("copy-of"),
+	Victual.Api.Get('objects/products/' + GetUriParam("copy-of"),
 		function (sourceProduct)
 		{
 			if (sourceProduct.parent_product_id != null)
 			{
-				Grocy.Components.ProductPicker.SetId(sourceProduct.parent_product_id);
+				Victual.Components.ProductPicker.SetId(sourceProduct.parent_product_id);
 			}
 			if (sourceProduct.description)
 			{
@@ -454,7 +454,7 @@ if (Grocy.EditMode == "create" && GetUriParam("copy-of") != undefined)
 			$("#location_id").val(sourceProduct.location_id);
 			if (sourceProduct.shopping_location_id != null)
 			{
-				Grocy.Components.ShoppingLocationPicker.SetId(sourceProduct.shopping_location_id);
+				Victual.Components.ShoppingLocationPicker.SetId(sourceProduct.shopping_location_id);
 			}
 			$("#min_stock_amount").val(sourceProduct.min_stock_amount);
 			if (BoolVal(sourceProduct.cumulate_min_stock_amount_of_sub_products))
@@ -509,7 +509,7 @@ if (Grocy.EditMode == "create" && GetUriParam("copy-of") != undefined)
 				$("#treat_opened_as_out_of_stock").prop("checked", true);
 			}
 
-			Grocy.FrontendHelpers.ValidateForm('product-form');
+			Victual.FrontendHelpers.ValidateForm('product-form');
 		},
 		function (xhr)
 		{
@@ -519,48 +519,48 @@ if (Grocy.EditMode == "create" && GetUriParam("copy-of") != undefined)
 }
 // Plain create form (not a copy): apply the user's configured product presets (product_presets_* user
 // settings, "-1"/"0" meaning "no preset") as initial field values
-else if (Grocy.EditMode === 'create')
+else if (Victual.EditMode === 'create')
 {
-	if (Grocy.UserSettings.product_presets_location_id.toString() !== '-1')
+	if (Victual.UserSettings.product_presets_location_id.toString() !== '-1')
 	{
-		$("#location_id").val(Grocy.UserSettings.product_presets_location_id);
+		$("#location_id").val(Victual.UserSettings.product_presets_location_id);
 	}
 
-	if (Grocy.UserSettings.product_presets_product_group_id.toString() !== '-1')
+	if (Victual.UserSettings.product_presets_product_group_id.toString() !== '-1')
 	{
-		$("#product_group_id").val(Grocy.UserSettings.product_presets_product_group_id);
+		$("#product_group_id").val(Victual.UserSettings.product_presets_product_group_id);
 	}
 
-	if (Grocy.UserSettings.product_presets_qu_id.toString() !== '-1')
+	if (Victual.UserSettings.product_presets_qu_id.toString() !== '-1')
 	{
-		$("select.input-group-qu").val(Grocy.UserSettings.product_presets_qu_id);
+		$("select.input-group-qu").val(Victual.UserSettings.product_presets_qu_id);
 	}
 
-	if (Grocy.UserSettings.product_presets_default_due_days.toString() !== '0')
+	if (Victual.UserSettings.product_presets_default_due_days.toString() !== '0')
 	{
-		$("#default_best_before_days").val(Grocy.UserSettings.product_presets_default_due_days);
+		$("#default_best_before_days").val(Victual.UserSettings.product_presets_default_due_days);
 	}
 
-	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+	if (Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 	{
-		$("#treat_opened_as_out_of_stock").prop("checked", BoolVal(Grocy.UserSettings.product_presets_treat_opened_as_out_of_stock));
+		$("#treat_opened_as_out_of_stock").prop("checked", BoolVal(Victual.UserSettings.product_presets_treat_opened_as_out_of_stock));
 	}
 
-	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
+	if (Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 	{
-		$("#default_stock_label_type").val(Grocy.UserSettings.product_presets_default_stock_label_type);
+		$("#default_stock_label_type").val(Victual.UserSettings.product_presets_default_stock_label_type);
 	}
 }
 
 // When a parent product is selected, disable this product's own min_stock_amount field if the parent
 // already cumulates its sub products' min stock amounts (see "cumulate_min_stock_amount_of_sub_products")
-Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
+Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 {
 	var parentProductId = $(e.target).val();
 
 	if (parentProductId)
 	{
-		Grocy.Api.Get('objects/products/' + parentProductId,
+		Victual.Api.Get('objects/products/' + parentProductId,
 			function (parentProduct)
 			{
 				if (BoolVal(parentProduct.cumulate_min_stock_amount_of_sub_products))
@@ -585,12 +585,12 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 	}
 });
 
-Grocy.FrontendHelpers.ValidateForm("product-form");
-Grocy.Components.ProductPicker.GetPicker().trigger("change"); // Apply the min_stock_amount enable/disable state for a preselected parent product
+Victual.FrontendHelpers.ValidateForm("product-form");
+Victual.Components.ProductPicker.GetPicker().trigger("change"); // Apply the min_stock_amount enable/disable state for a preselected parent product
 
 // In edit mode "Save & continue" is no longer the default (Enter-triggered) submit button, since
 // on create it double as "create & then edit further"; on edit both buttons behave the same way
-if (Grocy.EditMode == "edit")
+if (Victual.EditMode == "edit")
 {
 	$(".save-product-button").toggleClass("default-submit-button");
 }

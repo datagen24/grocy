@@ -8,7 +8,7 @@
 
 @section('content')
 <script>
-	Grocy.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
+	Victual.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
 </script>
 
 <div class="row">
@@ -27,16 +27,16 @@
 <div class="row">
 	<div class="col-12 col-md-6 col-xl-5 pb-3">
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
-			Grocy.EditObjectParentId = {{ $recipe->id }};
-			Grocy.EditObject = {!! json_encode($recipePos) !!};
-			Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-			Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+			Victual.EditMode = '{{ $mode }}';
+			Victual.EditObjectParentId = {{ $recipe->id }};
+			Victual.EditObject = {!! json_encode($recipePos) !!};
+			Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+			Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $recipePos->id }};
+			Victual.EditObjectId = {{ $recipePos->id }};
 		</script>
 		@endif
 

@@ -3,14 +3,14 @@
 @section('title', $__t('Purchase'))
 
 @push('pageScripts')
-<script src="{{ $U('/js/grocy_uisound.js?v=', true) }}{{ $version }}"></script>
+<script src="{{ $U('/js/victual_uisound.js?v=', true) }}{{ $version }}"></script>
 @endpush
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
-	Grocy.DefaultMinAmount = '{{ $DEFAULT_MIN_AMOUNT }}';
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.DefaultMinAmount = '{{ $DEFAULT_MIN_AMOUNT }}';
 </script>
 
 <div class="row">
@@ -39,7 +39,7 @@
 					@endif>
 				@else
 				<script>
-					Grocy.UserSettings.scan_mode_purchase_enabled = false;
+					Victual.UserSettings.scan_mode_purchase_enabled = false;
 				</script>
 				@endif
 			</div>

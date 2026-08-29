@@ -20,7 +20,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	userobjectsTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -50,7 +50,7 @@ $(document).on('click', '.userobject-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/userobjects/' + objectId, {},
+				Victual.Api.Delete('objects/userobjects/' + objectId, {},
 					function(result)
 					{
 						window.location.reload();

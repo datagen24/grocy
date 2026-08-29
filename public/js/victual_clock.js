@@ -18,36 +18,36 @@ function RefreshHeaderClock()
 	$("#clock-big").text(moment().format("LLLL"));
 }
 
-Grocy.HeaderClockInterval = null;
+Victual.HeaderClockInterval = null;
 /**
  * Shows/hides the header clock based on the user setting "show_clock_in_header"
  * and starts/stops the 1 second refresh interval accordingly.
- * Does nothing when not logged in (Grocy.UserId === -1).
+ * Does nothing when not logged in (Victual.UserId === -1).
  */
 function CheckHeaderClockEnabled()
 {
-	if (Grocy.UserId === -1)
+	if (Victual.UserId === -1)
 	{
 		return;
 	}
 
 	// Refresh the clock in the header every second when enabled
-	if (BoolVal(Grocy.UserSettings.show_clock_in_header))
+	if (BoolVal(Victual.UserSettings.show_clock_in_header))
 	{
 		RefreshHeaderClock();
 		$("#clock-container").removeClass("d-none");
 
-		Grocy.HeaderClockInterval = setInterval(function()
+		Victual.HeaderClockInterval = setInterval(function()
 		{
 			RefreshHeaderClock();
 		}, 1000);
 	}
 	else
 	{
-		if (Grocy.HeaderClockInterval !== null)
+		if (Victual.HeaderClockInterval !== null)
 		{
-			clearInterval(Grocy.HeaderClockInterval);
-			Grocy.HeaderClockInterval = null;
+			clearInterval(Victual.HeaderClockInterval);
+			Victual.HeaderClockInterval = null;
 		}
 
 		$("#clock-container").addClass("d-none");
@@ -56,7 +56,7 @@ function CheckHeaderClockEnabled()
 CheckHeaderClockEnabled();
 
 // Reflect the current setting in the settings page checkbox (if present on this page)
-if (Grocy.UserId !== -1 && BoolVal(Grocy.UserSettings.show_clock_in_header))
+if (Victual.UserId !== -1 && BoolVal(Victual.UserSettings.show_clock_in_header))
 {
 	$("#show-clock-in-header").prop("checked", true);
 }

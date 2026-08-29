@@ -2,28 +2,28 @@
 // saves a meal plan section via the objects/meal_plan_sections API endpoints.
 
 // Form submit: POST /api/objects/meal_plan_sections on create or PUT .../{id} on edit
-// (mode/id from Grocy.EditMode / Grocy.EditObjectId); when embedded in a dialog iframe
+// (mode/id from Victual.EditMode / Victual.EditObjectId); when embedded in a dialog iframe
 // (?embedded), the parent window is told to reload instead of navigating
 $('#save-mealplansection-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("mealplansection-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("mealplansection-form", true))
 	{
 		return;
 	}
 
 	var jsonData = $('#mealplansection-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("mealplansection-form");
+	Victual.FrontendHelpers.BeginUiBusy("mealplansection-form");
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/meal_plan_sections', jsonData,
+		Victual.Api.Post('objects/meal_plan_sections', jsonData,
 			function(result)
 			{
 				if (GetUriParam("embedded") !== undefined)
 				{
-					window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 				}
 				else
 				{
@@ -32,19 +32,19 @@ $('#save-mealplansection-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("mealplansection-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("mealplansection-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Api.Put('objects/meal_plan_sections/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/meal_plan_sections/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
 				if (GetUriParam("embedded") !== undefined)
 				{
-					window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 				}
 				else
 				{
@@ -53,8 +53,8 @@ $('#save-mealplansection-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("mealplansection-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("mealplansection-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -63,7 +63,7 @@ $('#save-mealplansection-button').on('click', function(e)
 // Live-validate on any input; Enter submits the form when valid
 $('#mealplansection-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('mealplansection-form');
+	Victual.FrontendHelpers.ValidateForm('mealplansection-form');
 });
 
 $('#mealplansection-form input').keydown(function(event)
@@ -72,7 +72,7 @@ $('#mealplansection-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('mealplansection-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('mealplansection-form'))
 		{
 			return false;
 		}
@@ -84,8 +84,8 @@ $('#mealplansection-form input').keydown(function(event)
 });
 
 // Initial state: validate once and focus the name field
-Grocy.FrontendHelpers.ValidateForm('mealplansection-form');
+Victual.FrontendHelpers.ValidateForm('mealplansection-form');
 setTimeout(function()
 {
 	$('#name').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);

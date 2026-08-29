@@ -23,7 +23,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	choresTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Reset search and the "show disabled" checkbox
 $("#clear-filter-button").on("click", function()
@@ -57,7 +57,7 @@ $(document).on('click', '.chore-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/chores/' + objectId, {},
+				Victual.Api.Delete('objects/chores/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/chores');
@@ -104,7 +104,7 @@ $("#merge-chores-save-button").on("click", function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("merge-chores-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("merge-chores-form", true))
 	{
 		return;
 	}
@@ -112,14 +112,14 @@ $("#merge-chores-save-button").on("click", function(e)
 	var choreIdToKeep = $("#merge-chores-keep").val();
 	var choreIdToRemove = $("#merge-chores-remove").val();
 
-	Grocy.Api.Post("chores/" + choreIdToKeep.toString() + "/merge/" + choreIdToRemove.toString(), {},
+	Victual.Api.Post("chores/" + choreIdToKeep.toString() + "/merge/" + choreIdToRemove.toString(), {},
 		function(result)
 		{
 			window.location.href = U('/chores');
 		},
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.ShowGenericError('Error while merging', xhr.response);
+			Victual.FrontendHelpers.ShowGenericError('Error while merging', xhr.response);
 		}
 	);
 });

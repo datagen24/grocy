@@ -1,54 +1,54 @@
 // Implements the RecipePicker widget (views/components/recipepicker.blade.php): a combobox of
 // recipes, driven by a hidden #recipe_id select plus #recipe_id_text_input, which also resolves
-// scanned/typed Grocycodes (grcy:r:<id>) and "Grocy.BarcodeScanned" events targeted at it.
+// scanned/typed Grocycodes (grcy:r:<id>) and "Victual.BarcodeScanned" events targeted at it.
 // Public API: GetPicker/GetInputElement/GetValue/SetValue/SetId/Clear.
-Grocy.Components.RecipePicker = {};
+Victual.Components.RecipePicker = {};
 
 /** @returns {jQuery} The hidden select backing the combobox (#recipe_id) */
-Grocy.Components.RecipePicker.GetPicker = function ()
+Victual.Components.RecipePicker.GetPicker = function ()
 {
 	return $('#recipe_id');
 }
 
 /** @returns {jQuery} The visible text input of the combobox (#recipe_id_text_input) */
-Grocy.Components.RecipePicker.GetInputElement = function ()
+Victual.Components.RecipePicker.GetInputElement = function ()
 {
 	return $('#recipe_id_text_input');
 }
 
 /** @returns {string} The currently selected recipe id */
-Grocy.Components.RecipePicker.GetValue = function ()
+Victual.Components.RecipePicker.GetValue = function ()
 {
 	return $('#recipe_id').val();
 }
 
 /** Sets the visible text and triggers change (does not itself resolve it to an option) */
-Grocy.Components.RecipePicker.SetValue = function (value)
+Victual.Components.RecipePicker.SetValue = function (value)
 {
-	Grocy.Components.RecipePicker.GetInputElement().val(value);
-	Grocy.Components.RecipePicker.GetInputElement().trigger('change');
+	Victual.Components.RecipePicker.GetInputElement().val(value);
+	Victual.Components.RecipePicker.GetInputElement().trigger('change');
 }
 
 /** Selects the option with the given recipe id directly, refreshing the combobox display */
-Grocy.Components.RecipePicker.SetId = function (value)
+Victual.Components.RecipePicker.SetId = function (value)
 {
-	Grocy.Components.RecipePicker.GetPicker().val(value);
-	Grocy.Components.RecipePicker.GetPicker().data('combobox').refresh();
-	Grocy.Components.RecipePicker.GetInputElement().trigger('change');
+	Victual.Components.RecipePicker.GetPicker().val(value);
+	Victual.Components.RecipePicker.GetPicker().data('combobox').refresh();
+	Victual.Components.RecipePicker.GetInputElement().trigger('change');
 }
 
 /** Clears both the text and the selected id */
-Grocy.Components.RecipePicker.Clear = function ()
+Victual.Components.RecipePicker.Clear = function ()
 {
-	Grocy.Components.RecipePicker.SetValue('');
-	Grocy.Components.RecipePicker.SetId(null);
+	Victual.Components.RecipePicker.SetValue('');
+	Victual.Components.RecipePicker.SetId(null);
 }
 
 $(".recipe-combobox").combobox(BootstrapComboboxDefaults);
 
 // Prefill by recipe name (from the template's data-prefill-by-name attribute on the wrapper),
 // then focus the configured next input (data-next-input-selector)
-var prefillByName = Grocy.Components.RecipePicker.GetPicker().parent().data('prefill-by-name').toString();
+var prefillByName = Victual.Components.RecipePicker.GetPicker().parent().data('prefill-by-name').toString();
 if (typeof prefillByName !== "undefined")
 {
 	possibleOptionElement = $("#recipe_id option:contains(\"" + prefillByName + "\")").first();
@@ -59,20 +59,20 @@ if (typeof prefillByName !== "undefined")
 		$('#recipe_id').data('combobox').refresh();
 		$('#recipe_id').trigger('change');
 
-		var nextInputElement = $(Grocy.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(Victual.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 }
 
 // Prefill by recipe id (from the template's data-prefill-by-id attribute on the wrapper)
-var prefillById = Grocy.Components.RecipePicker.GetPicker().parent().data('prefill-by-id').toString();
+var prefillById = Victual.Components.RecipePicker.GetPicker().parent().data('prefill-by-id').toString();
 if (typeof prefillById !== "undefined")
 {
 	$('#recipe_id').val(prefillById);
 	$('#recipe_id').data('combobox').refresh();
 	$('#recipe_id').trigger('change');
 
-	var nextInputElement = $(Grocy.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
+	var nextInputElement = $(Victual.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
 	nextInputElement.focus();
 }
 
@@ -115,7 +115,7 @@ $('#recipe_id_text_input').on('blur', function (e)
 
 // Handles a scanned barcode/Grocycode targeted at the recipe picker (from CameraBarcodeScanner
 // or an external scanner), routing it into the text input as if typed, which then triggers blur handling
-$(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
+$(document).on("Victual.BarcodeScanned", function (e, barcode, target)
 {
 	if (!(target == "@recipepicker" || target == "undefined" || target == undefined)) // Default target
 	{
@@ -123,16 +123,16 @@ $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
 	}
 
 	// Don't know why the blur event does not fire immediately ... this works...
-	Grocy.Components.RecipePicker.GetInputElement().focusout();
-	Grocy.Components.RecipePicker.GetInputElement().focus();
-	Grocy.Components.RecipePicker.GetInputElement().blur();
+	Victual.Components.RecipePicker.GetInputElement().focusout();
+	Victual.Components.RecipePicker.GetInputElement().focus();
+	Victual.Components.RecipePicker.GetInputElement().blur();
 
-	Grocy.Components.RecipePicker.GetInputElement().val(barcode);
+	Victual.Components.RecipePicker.GetInputElement().val(barcode);
 
 	setTimeout(function ()
 	{
-		Grocy.Components.RecipePicker.GetInputElement().focusout();
-		Grocy.Components.RecipePicker.GetInputElement().focus();
-		Grocy.Components.RecipePicker.GetInputElement().blur();
-	}, Grocy.FormFocusDelay);
+		Victual.Components.RecipePicker.GetInputElement().focusout();
+		Victual.Components.RecipePicker.GetInputElement().focus();
+		Victual.Components.RecipePicker.GetInputElement().blur();
+	}, Victual.FormFocusDelay);
 });

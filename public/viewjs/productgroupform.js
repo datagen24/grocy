@@ -1,13 +1,13 @@
 ﻿// Powers the product group create/edit form (views/productgroupform.blade.php), usually shown embedded in a modal:
 // saves the product group via the objects/product_groups API and closes the modal.
 
-// Form submit: POSTs objects/product_groups (create) or PUTs objects/product_groups/{id} (edit, id from Grocy.EditObjectId),
+// Form submit: POSTs objects/product_groups (create) or PUTs objects/product_groups/{id} (edit, id from Victual.EditObjectId),
 // then saves userfields and asks the parent window to close the modal
 $('#save-product-group-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("product-group-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("product-group-form", true))
 	{
 		return;
 	}
@@ -18,40 +18,40 @@ $('#save-product-group-button').on('click', function(e)
 	}
 
 	var jsonData = $('#product-group-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("product-group-form");
+	Victual.FrontendHelpers.BeginUiBusy("product-group-form");
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/product_groups', jsonData,
+		Victual.Api.Post('objects/product_groups', jsonData,
 			function(result)
 			{
-				Grocy.EditObjectId = result.created_object_id;
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.EditObjectId = result.created_object_id;
+				Victual.Components.UserfieldsForm.Save(function()
 				{
-					window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 				});
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("product-group-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("product-group-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Api.Put('objects/product_groups/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/product_groups/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.Components.UserfieldsForm.Save(function()
 				{
-					window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 				});
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("product-group-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("product-group-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -60,7 +60,7 @@ $('#save-product-group-button').on('click', function(e)
 // Live validation while typing
 $('#product-group-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('product-group-form');
+	Victual.FrontendHelpers.ValidateForm('product-group-form');
 });
 
 // Enter submits the form (when valid)
@@ -70,7 +70,7 @@ $('#product-group-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('product-group-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('product-group-form'))
 		{
 			return false;
 		}
@@ -82,9 +82,9 @@ $('#product-group-form input').keydown(function(event)
 });
 
 // Initial setup: load userfields, focus the name field, validate once
-Grocy.Components.UserfieldsForm.Load();
+Victual.Components.UserfieldsForm.Load();
 setTimeout(function()
 {
 	$('#name').focus();
-}, Grocy.FormFocusDelay);
-Grocy.FrontendHelpers.ValidateForm('product-group-form');
+}, Victual.FormFocusDelay);
+Victual.FrontendHelpers.ValidateForm('product-group-form');

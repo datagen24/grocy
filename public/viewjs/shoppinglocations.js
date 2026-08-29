@@ -20,7 +20,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	locationsTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -51,7 +51,7 @@ $(document).on('click', '.shoppinglocation-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/shopping_locations/' + objectId, {},
+				Victual.Api.Delete('objects/shopping_locations/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/shoppinglocations');

@@ -120,7 +120,7 @@
 	</div>
 
 	<div class="col-12 col-md-8">
-		<ul class="nav nav-tabs grocy-tabs mb-1">
+		<ul class="nav nav-tabs victual-tabs mb-1">
 			<li class="nav-item">
 				<a class="nav-link active"
 					data-toggle="tab"
@@ -141,7 +141,7 @@
 			@endif
 			@endforeach
 		</ul>
-		<div class="tab-content grocy-tabs">
+		<div class="tab-content victual-tabs">
 			<div class="tab-pane fade show active"
 				id="instruction-manual-tab">
 				<div class="card selectedEquipmentInstructionManualCard">

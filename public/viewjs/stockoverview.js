@@ -124,20 +124,20 @@ $("#search").on("keyup", Delay(function ()
 	}
 
 	stockOverviewTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
-// Fetches label data for a product's Grocy-code and forwards it to the configured
-// label printer webhook (Grocy.Webhooks.labelprinter), if any is set up
+// Fetches label data for a product's Grocycode and forwards it to the configured
+// label printer webhook (Victual.Webhooks.labelprinter), if any is set up
 $(document).on('click', '.product-grocycode-label-print', function (e)
 {
 	e.preventDefault();
 
 	var productId = $(e.currentTarget).attr('data-product-id');
-	Grocy.Api.Get('stock/products/' + productId + '/printlabel', function (labelData)
+	Victual.Api.Get('stock/products/' + productId + '/printlabel', function (labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });
@@ -151,17 +151,17 @@ $(document).on('click', '.product-consume-button', function (e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
 	var productId = $(e.currentTarget).attr('data-product-id');
 	var consumeAmount = Number.parseFloat($(e.currentTarget).attr('data-consume-amount'));
 	var originalTotalStockAmount = Number.parseFloat($(e.currentTarget).attr('data-original-total-stock-amount'));
 	var wasSpoiled = $(e.currentTarget).hasClass("product-consume-button-spoiled");
 
-	Grocy.Api.Post('stock/products/' + productId + '/consume', { 'amount': consumeAmount, 'spoiled': wasSpoiled, 'allow_subproduct_substitution': true },
+	Victual.Api.Post('stock/products/' + productId + '/consume', { 'amount': consumeAmount, 'spoiled': wasSpoiled, 'allow_subproduct_substitution': true },
 		function (bookingResponse)
 		{
-			Grocy.Api.Get('stock/products/' + productId,
+			Victual.Api.Get('stock/products/' + productId,
 				function (result)
 				{
 					// For tare-weight-handled products, the toast reports the original total
@@ -169,11 +169,11 @@ $(document).on('click', '.product-consume-button', function (e)
 					// text itself is otherwise identical to the else-branch below
 					if (result.product.enable_tare_weight_handling == 1)
 					{
-						var toastMessage = __t('Removed %1$s of %2$s from stock', originalTotalStockAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						var toastMessage = __t('Removed %1$s of %2$s from stock', originalTotalStockAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 					else
 					{
-						var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 
 					if (wasSpoiled)
@@ -181,21 +181,21 @@ $(document).on('click', '.product-consume-button', function (e)
 						toastMessage += " (" + __t("Spoiled") + ")";
 					}
 
-					Grocy.FrontendHelpers.EndUiBusy();
+					Victual.FrontendHelpers.EndUiBusy();
 					toastr.success(toastMessage);
 					RefreshStatistics();
 					RefreshProductRow(productId);
 				},
 				function (xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy();
+					Victual.FrontendHelpers.EndUiBusy();
 					console.error(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);
@@ -207,7 +207,7 @@ $(document).on('click', '.product-open-button', function (e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
 	var productId = $(e.currentTarget).attr('data-product-id');
 	var productName = $(e.currentTarget).attr('data-product-name');
@@ -215,14 +215,14 @@ $(document).on('click', '.product-open-button', function (e)
 	var amount = Number.parseFloat($(e.currentTarget).attr('data-open-amount'));
 	var button = $(e.currentTarget);
 
-	Grocy.Api.Post('stock/products/' + productId + '/open', { 'amount': amount, 'allow_subproduct_substitution': true },
+	Victual.Api.Post('stock/products/' + productId + '/open', { 'amount': amount, 'allow_subproduct_substitution': true },
 		function (bookingResponse)
 		{
-			Grocy.Api.Get('stock/products/' + productId,
+			Victual.Api.Get('stock/products/' + productId,
 				function (result)
 				{
-					Grocy.FrontendHelpers.EndUiBusy();
-					toastr.success(__t('Marked %1$s of %2$s as opened', amount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + productQuName, productName) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
+					Victual.FrontendHelpers.EndUiBusy();
+					toastr.success(__t('Marked %1$s of %2$s as opened', amount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + productQuName, productName) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
 
 					if (result.product.move_on_open == 1 && result.default_consume_location != null)
 					{
@@ -234,14 +234,14 @@ $(document).on('click', '.product-open-button', function (e)
 				},
 				function (xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy();
+					Victual.FrontendHelpers.EndUiBusy();
 					console.error(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);
@@ -256,10 +256,10 @@ $(document).on('click', '.product-open-button', function (e)
  */
 function RefreshStatistics()
 {
-	Grocy.Api.Get('stock',
+	Victual.Api.Get('stock',
 		function (result)
 		{
-			if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			if (!Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			{
 				$("#info-current-stock").text(__n(result.filter(x => !BoolVal(x.product.hide_on_stock_overview)).length, '%s Product', '%s Products'));
 			}
@@ -271,7 +271,7 @@ function RefreshStatistics()
 					valueSum += element.value;
 				});
 
-				$("#info-current-stock").text(__n(result.filter(x => !BoolVal(x.product.hide_on_stock_overview)).length, '%s Product', '%s Products') + ", " + __t('%s total value', valueSum.toLocaleString(undefined, { style: "currency", currency: Grocy.Currency })));
+				$("#info-current-stock").text(__n(result.filter(x => !BoolVal(x.product.hide_on_stock_overview)).length, '%s Product', '%s Products') + ", " + __t('%s total value', valueSum.toLocaleString(undefined, { style: "currency", currency: Victual.Currency })));
 			}
 		},
 		function (xhr)
@@ -281,7 +281,7 @@ function RefreshStatistics()
 	);
 
 	var nextXDays = $("#info-duesoon-products").data("next-x-days");
-	Grocy.Api.Get('stock/volatile?due_soon_days=' + nextXDays,
+	Victual.Api.Get('stock/volatile?due_soon_days=' + nextXDays,
 		function (result)
 		{
 			var dueProducts = result.due_products.filter(x => !BoolVal(x.product.hide_on_stock_overview));
@@ -315,7 +315,7 @@ function RefreshProductRow(productId)
 {
 	productId = productId.toString();
 
-	Grocy.Api.Get('stock/products/' + productId,
+	Victual.Api.Get('stock/products/' + productId,
 		function (result)
 		{
 			// Also refresh the parent product, if any
@@ -360,7 +360,7 @@ function RefreshProductRow(productId)
 				productRow.addClass("table-info");
 			}
 
-			if (!BoolVal(Grocy.UserSettings.stock_overview_show_all_out_of_stock_products) && result.stock_amount == 0 && result.stock_amount_aggregated == 0 && result.product.min_stock_amount == 0)
+			if (!BoolVal(Victual.UserSettings.stock_overview_show_all_out_of_stock_products) && result.stock_amount == 0 && result.stock_amount_aggregated == 0 && result.product.min_stock_amount == 0)
 			{
 				animateCSS("#product-" + productId + "-row", "fadeOut", function ()
 				{
@@ -436,11 +436,11 @@ function RefreshProductRow(productId)
 			{
 				RefreshContextualTimeago("#product-" + productId + "-row");
 				RefreshLocaleNumberDisplay("#product-" + productId + "-row");
-			}, Grocy.FormFocusDelay);
+			}, Victual.FormFocusDelay);
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);

@@ -9,7 +9,7 @@
 
 		<hr class="my-2">
 
-		<ul class="nav nav-tabs grocy-tabs justify-content-center mt-3">
+		<ul class="nav nav-tabs victual-tabs justify-content-center mt-3">
 			<li class="nav-item">
 				<a class="nav-link discrete-link active"
 					id="system-info-tab"
@@ -24,7 +24,7 @@
 			</li>
 		</ul>
 
-		<div class="tab-content grocy-tabs mt-3">
+		<div class="tab-content victual-tabs mt-3">
 
 			<div class="tab-pane show active"
 				id="system-info">

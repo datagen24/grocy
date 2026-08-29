@@ -4,7 +4,7 @@
 setTimeout(function ()
 {
 	$('#username').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // The server redirects back with ?invalid=true when the credentials were wrong
 

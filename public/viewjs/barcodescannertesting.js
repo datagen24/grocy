@@ -2,8 +2,8 @@
 // compares scanned barcodes against an expected value and keeps hit/miss counters (no API calls involved)
 
 // Global hit/miss counters for this testing session
-Grocy.BarCodeScannerTestingHitCount = 0;
-Grocy.BarCodeScannerTestingMissCount = 0;
+Victual.BarCodeScannerTestingHitCount = 0;
+Victual.BarCodeScannerTestingMissCount = 0;
 
 // Evaluate the scanned barcode when the input loses focus (e.g. after a hardware scanner "typed" it)
 $("#scanned_barcode").on("blur", function(e)
@@ -44,7 +44,7 @@ setTimeout(function()
 	$("#camerabarcodescanner-start-button").attr("disabled", "");
 	$("#camerabarcodescanner-start-button").addClass("disabled");
 	$("#expected_barcode").focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // Prefill the expected barcode from the "barcode" URI parameter and jump straight to scanning
 if (GetUriParam("barcode") !== undefined)
@@ -54,7 +54,7 @@ if (GetUriParam("barcode") !== undefined)
 	{
 		$("#expected_barcode").keyup();
 		$("#scanned_barcode").focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 }
 
 /**
@@ -72,18 +72,18 @@ function OnBarcodeScanned(barcode)
 	var bgClass = "";
 	if (barcode != $("#expected_barcode").val())
 	{
-		Grocy.BarCodeScannerTestingMissCount++;
+		Victual.BarCodeScannerTestingMissCount++;
 		bgClass = "bg-danger";
 
-		$("#miss-count").text(Grocy.BarCodeScannerTestingMissCount);
+		$("#miss-count").text(Victual.BarCodeScannerTestingMissCount);
 		animateCSS("#miss-count", "flash");
 	}
 	else
 	{
-		Grocy.BarCodeScannerTestingHitCount++;
+		Victual.BarCodeScannerTestingHitCount++;
 		bgClass = "bg-success";
 
-		$("#hit-count").text(Grocy.BarCodeScannerTestingHitCount);
+		$("#hit-count").text(Victual.BarCodeScannerTestingHitCount);
 		animateCSS("#hit-count", "flash");
 	}
 
@@ -96,11 +96,11 @@ function OnBarcodeScanned(barcode)
 		{
 			$("#scanned_barcode").focus();
 		}
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 }
 
 // Camera barcode scanner hook: handle scans coming from the camera scanner component targeted at #scanned_barcode
-$(document).on("Grocy.BarcodeScanned", function(e, barcode, target)
+$(document).on("Victual.BarcodeScanned", function(e, barcode, target)
 {
 	if (target !== "#scanned_barcode")
 	{

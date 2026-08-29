@@ -33,8 +33,8 @@
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 </script>
 
 <div class="row">
@@ -105,7 +105,7 @@
 			</div>
 		</div>
 
-		<ul class="nav nav-tabs grocy-tabs">
+		<ul class="nav nav-tabs victual-tabs">
 			<li class="nav-item">
 				<a class="nav-link active"
 					id="list-tab"
@@ -120,7 +120,7 @@
 			</li>
 		</ul>
 
-		<div class="tab-content grocy-tabs">
+		<div class="tab-content victual-tabs">
 			<div class="tab-pane show active"
 				id="list">
 				<table id="recipes-table"
@@ -302,10 +302,10 @@
 	@endphp
 	<div class="col-12 col-md-6 print-view">
 		<div id="selectedRecipeCard"
-			class="card grocy-card">
+			class="card victual-card">
 			@if(count($allRecipes) > 1)
 			<div class="card-header card-header-fullscreen mb-1 pt-0 d-print-none">
-				<ul class="nav nav-tabs grocy-tabs card-header-tabs">
+				<ul class="nav nav-tabs victual-tabs card-header-tabs">
 					@foreach($allRecipes as $index=>$recipe)
 					<li class="nav-item">
 						<a class="nav-link @if($index == 0) active @endif"
@@ -317,7 +317,7 @@
 			</div>
 			@endif
 
-			<div class="tab-content grocy-tabs print break">
+			<div class="tab-content victual-tabs print break">
 				@foreach($allRecipes as $index=>$recipe)
 				<div class="tab-pane @if($index == 0) active @endif"
 					id="recipe-{{ $index + 1 }}"
@@ -454,7 +454,7 @@
 						$recipePositionsFiltered = FindAllObjectsInArrayByPropertyValue($allRecipePositions[$recipe->id], 'recipe_id', $recipe->id);
 						@endphp
 
-						<ul class="nav nav-tabs grocy-tabs mb-3 d-print-none hide-on-fullscreen-card"
+						<ul class="nav nav-tabs victual-tabs mb-3 d-print-none hide-on-fullscreen-card"
 							role="tablist">
 							@if(count($recipePositionsFiltered) > 0)
 							<li class="nav-item">
@@ -474,7 +474,7 @@
 							@endif
 						</ul>
 
-						<div class="tab-content grocy-tabs p-2 print recipe-content-container">
+						<div class="tab-content victual-tabs p-2 print recipe-content-container">
 							@if(count($recipePositionsFiltered) > 0)
 							<div class="tab-pane active ingredients"
 								id="ingredients-{{ $index }}"

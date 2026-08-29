@@ -4,8 +4,8 @@
 // - plain create/edit of a "shopping_list" object (free-text or product-linked item)
 // - "updateexistingproduct" -> POST stock/shoppinglist/add-product (merges into an existing entry)
 // - "flow=InplaceAddBarcodeToExistingProduct" -> also links a scanned barcode to the picked product
-// Grocy.EditMode ('create'/'edit') and Grocy.EditObjectId select POST vs PUT.
-Grocy.ShoppingListItemFormInitialLoadDone = false;
+// Victual.EditMode ('create'/'edit') and Victual.EditObjectId select POST vs PUT.
+Victual.ShoppingListItemFormInitialLoadDone = false;
 
 // Main submit handler: validates, normalizes amount fields, then dispatches to the
 // correct API call/mode; on success either postMessages the parent (embedded mode)
@@ -14,7 +14,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("shoppinglist-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("shoppinglist-form", true))
 	{
 		return;
 	}
@@ -32,7 +32,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 	}
 	delete jsonData.display_amount;
 
-	Grocy.FrontendHelpers.BeginUiBusy("shoppinglist-form");
+	Victual.FrontendHelpers.BeginUiBusy("shoppinglist-form");
 
 	// Barcode-scan flow: additionally link the scanned barcode to the selected product
 	if (GetUriParam("flow") === "InplaceAddBarcodeToExistingProduct")
@@ -41,7 +41,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 		jsonDataBarcode.barcode = GetUriParam("barcode");
 		jsonDataBarcode.product_id = jsonData.product_id;
 
-		Grocy.Api.Post('objects/product_barcodes', jsonDataBarcode,
+		Victual.Api.Post('objects/product_barcodes', jsonDataBarcode,
 			function(result)
 			{
 				$("#flow-info-InplaceAddBarcodeToExistingProduct").addClass("d-none");
@@ -50,8 +50,8 @@ $('#save-shoppinglist-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("shoppinglist-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("shoppinglist-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -66,24 +66,24 @@ $('#save-shoppinglist-button').on('click', function(e)
 		jsonData.list_id = jsonData.shopping_list_id;
 		delete jsonData.shopping_list_id;
 
-		Grocy.Api.Post('stock/shoppinglist/add-product', jsonData,
+		Victual.Api.Post('stock/shoppinglist/add-product', jsonData,
 			function(result)
 			{
-				Grocy.EditObjectId = result.created_object_id;
-				Grocy.Components.UserfieldsForm.Save();
+				Victual.EditObjectId = result.created_object_id;
+				Victual.Components.UserfieldsForm.Save();
 
 				if (GetUriParam("embedded") !== undefined)
 				{
-					Grocy.Api.Get('stock/products/' + jsonData.product_id,
+					Victual.Api.Get('stock/products/' + jsonData.product_id,
 						function(productDetails)
 						{
 							if (GetUriParam("product") !== undefined)
 							{
-								window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Grocy.BaseUrl);
+								window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Victual.BaseUrl);
 							}
 
-							window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Grocy.BaseUrl);
-							window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+							window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
+							window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 						},
 						function(xhr)
 						{
@@ -98,34 +98,34 @@ $('#save-shoppinglist-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("shoppinglist-form");
+				Victual.FrontendHelpers.EndUiBusy("shoppinglist-form");
 				console.error(xhr);
 			}
 		);
 	}
 	// Plain create of a new shopping_list row
-	else if (Grocy.EditMode === 'create')
+	else if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/shopping_list', jsonData,
+		Victual.Api.Post('objects/shopping_list', jsonData,
 			function(result)
 			{
-				Grocy.EditObjectId = result.created_object_id;
-				Grocy.Components.UserfieldsForm.Save();
+				Victual.EditObjectId = result.created_object_id;
+				Victual.Components.UserfieldsForm.Save();
 
 				if (GetUriParam("embedded") !== undefined)
 				{
 					if (jsonData.product_id)
 					{
-						Grocy.Api.Get('stock/products/' + jsonData.product_id,
+						Victual.Api.Get('stock/products/' + jsonData.product_id,
 							function(productDetails)
 							{
 								if (GetUriParam("product") !== undefined)
 								{
-									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Grocy.BaseUrl);
+									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Victual.BaseUrl);
 								}
 
-								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Grocy.BaseUrl);
-								window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
+								window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 							},
 							function(xhr)
 							{
@@ -135,8 +135,8 @@ $('#save-shoppinglist-button').on('click', function(e)
 					}
 					else
 					{
-						window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Grocy.BaseUrl);
-						window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 					}
 				}
 				else
@@ -146,7 +146,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("shoppinglist-form");
+				Victual.FrontendHelpers.EndUiBusy("shoppinglist-form");
 				console.error(xhr);
 			}
 		);
@@ -154,25 +154,25 @@ $('#save-shoppinglist-button').on('click', function(e)
 	// Plain edit of an existing shopping_list row
 	else
 	{
-		Grocy.Api.Put('objects/shopping_list/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/shopping_list/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
-				Grocy.Components.UserfieldsForm.Save();
+				Victual.Components.UserfieldsForm.Save();
 
 				if (GetUriParam("embedded") !== undefined)
 				{
 					if (jsonData.product_id)
 					{
-						Grocy.Api.Get('stock/products/' + jsonData.product_id,
+						Victual.Api.Get('stock/products/' + jsonData.product_id,
 							function(productDetails)
 							{
 								if (GetUriParam("product") !== undefined)
 								{
-									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Grocy.BaseUrl);
+									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Victual.BaseUrl);
 								}
 
-								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Grocy.BaseUrl);
-								window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
+								window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 							},
 							function(xhr)
 							{
@@ -182,8 +182,8 @@ $('#save-shoppinglist-button').on('click', function(e)
 					}
 					else
 					{
-						window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Grocy.BaseUrl);
-						window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 					}
 				}
 				else
@@ -193,7 +193,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("shoppinglist-form");
+				Victual.FrontendHelpers.EndUiBusy("shoppinglist-form");
 				console.error(xhr);
 			}
 		);
@@ -204,23 +204,23 @@ $('#save-shoppinglist-button').on('click', function(e)
 // unit (and defaults it to the purchase QU on subsequent changes, but not the initial
 // load which should keep the stock QU), defaults the amount to 1 if empty, and
 // re-validates the form
-Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
+Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 {
 	var productId = $(e.target).val();
 
 	if (productId)
 	{
-		Grocy.Api.Get('stock/products/' + productId,
+		Victual.Api.Get('stock/products/' + productId,
 			function(productDetails)
 			{
-				if (!Grocy.ShoppingListItemFormInitialLoadDone)
+				if (!Victual.ShoppingListItemFormInitialLoadDone)
 				{
-					Grocy.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id, true);
+					Victual.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id, true);
 				}
 				else
 				{
-					Grocy.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id);
-					Grocy.Components.ProductAmountPicker.SetQuantityUnit(productDetails.default_quantity_unit_purchase.id);
+					Victual.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id);
+					Victual.Components.ProductAmountPicker.SetQuantityUnit(productDetails.default_quantity_unit_purchase.id);
 				}
 
 				if (!$("#display_amount").val())
@@ -232,9 +232,9 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 				setTimeout(function()
 				{
 					$('#display_amount').focus();
-				}, Grocy.FormFocusDelay);
-				Grocy.FrontendHelpers.ValidateForm('shoppinglist-form');
-				Grocy.ShoppingListItemFormInitialLoadDone = true;
+				}, Victual.FormFocusDelay);
+				Victual.FrontendHelpers.ValidateForm('shoppinglist-form');
+				Victual.ShoppingListItemFormInitialLoadDone = true;
 			},
 			function(xhr)
 			{
@@ -248,16 +248,16 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function(e)
 });
 
 // Initial form state: in edit mode, load the already-selected product's details
-Grocy.FrontendHelpers.ValidateForm('shoppinglist-form');
+Victual.FrontendHelpers.ValidateForm('shoppinglist-form');
 
-if (Grocy.EditMode === "edit")
+if (Victual.EditMode === "edit")
 {
-	Grocy.Components.ProductPicker.GetPicker().trigger('change');
+	Victual.Components.ProductPicker.GetPicker().trigger('change');
 }
 
-if (Grocy.EditMode == "create")
+if (Victual.EditMode == "create")
 {
-	Grocy.ShoppingListItemFormInitialLoadDone = true;
+	Victual.ShoppingListItemFormInitialLoadDone = true;
 }
 
 // Selects the amount field's content on focus for quick overtyping
@@ -269,7 +269,7 @@ $('#display_amount').on('focus', function(e)
 // Live-validates on every keystroke
 $('#shoppinglist-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('shoppinglist-form');
+	Victual.FrontendHelpers.ValidateForm('shoppinglist-form');
 });
 
 // Enter key submits the form (if valid) instead of doing a default form submit
@@ -279,7 +279,7 @@ $('#shoppinglist-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('shoppinglist-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('shoppinglist-form'))
 		{
 			return false;
 		}
@@ -301,43 +301,43 @@ if (GetUriParam("amount") !== undefined)
 	$("#display_amount").val(Number.parseFloat(GetUriParam("amount")));
 	RefreshLocaleNumberInput();
 	$(".input-group-productamountpicker").trigger("change");
-	Grocy.FrontendHelpers.ValidateForm('shoppinglist-form');
+	Victual.FrontendHelpers.ValidateForm('shoppinglist-form');
 }
 
 // Focus management: put the cursor in the most useful field depending on whether a
 // product picker "flow" (e.g. barcode scan / product modify) is in progress
-if (!Grocy.Components.ProductPicker.InAnyFlow())
+if (!Victual.Components.ProductPicker.InAnyFlow())
 {
-	if (GetUriParam("product") !== undefined || Grocy.EditMode == "edit")
+	if (GetUriParam("product") !== undefined || Victual.EditMode == "edit")
 	{
 		if (GetUriParam("updateexistingproduct") != null)
 		{
-			Grocy.Components.ProductPicker.GetPicker().trigger('change');
+			Victual.Components.ProductPicker.GetPicker().trigger('change');
 		}
 
 		setTimeout(function()
 		{
 			$("#display_amount").focus();
-		}, Grocy.FormFocusDelay);
+		}, Victual.FormFocusDelay);
 	}
 	else
 	{
 		setTimeout(function()
 		{
-			Grocy.Components.ProductPicker.GetInputElement().focus();
-		}, Grocy.FormFocusDelay);
+			Victual.Components.ProductPicker.GetInputElement().focus();
+		}, Victual.FormFocusDelay);
 	}
 }
 else
 {
-	Grocy.Components.ProductPicker.GetPicker().trigger('change');
+	Victual.Components.ProductPicker.GetPicker().trigger('change');
 
-	if (Grocy.Components.ProductPicker.InProductModifyWorkflow())
+	if (Victual.Components.ProductPicker.InProductModifyWorkflow())
 	{
 		setTimeout(function()
 		{
-			Grocy.Components.ProductPicker.GetInputElement().focus();
-		}, Grocy.FormFocusDelay);
+			Victual.Components.ProductPicker.GetInputElement().focus();
+		}, Victual.FormFocusDelay);
 	}
 }
 
@@ -348,14 +348,14 @@ eitherRequiredFields.prop('required', "");
 eitherRequiredFields.on('input', function()
 {
 	eitherRequiredFields.not(this).prop('required', !$(this).val().length);
-	Grocy.FrontendHelpers.ValidateForm('shoppinglist-form');
+	Victual.FrontendHelpers.ValidateForm('shoppinglist-form');
 });
 eitherRequiredFields.trigger("input");
 
 if (GetUriParam("product-name") != null)
 {
-	Grocy.Components.ProductPicker.GetPicker().trigger('change');
+	Victual.Components.ProductPicker.GetPicker().trigger('change');
 }
 
 // Load values for any configured custom userfields
-Grocy.Components.UserfieldsForm.Load();
+Victual.Components.UserfieldsForm.Load();

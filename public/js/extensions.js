@@ -1,6 +1,6 @@
 // Generic helper extensions: String/jQuery prototype additions and small global
 // utility functions (URI parameter handling, array searching, debouncing, etc.)
-// used throughout the frontend; loaded on every page before all other Grocy scripts.
+// used throughout the frontend; loaded on every page before all other Victual scripts.
 
 /**
  * Clears the text of the given element when it exactly equals the given text.

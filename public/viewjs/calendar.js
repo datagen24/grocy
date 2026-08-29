@@ -2,14 +2,14 @@
 // FullCalendar setup fed by the server-rendered fullcalendarEventSources global,
 // iCal sharing link retrieval via GET /api/calendar/ical/sharing-link and event color configuration modal
 
-// First day of week comes from the Grocy.CalendarFirstDayOfWeek user setting (empty = locale default)
+// First day of week comes from the Victual.CalendarFirstDayOfWeek user setting (empty = locale default)
 var firstDay = null;
-if (Grocy.CalendarFirstDayOfWeek)
+if (Victual.CalendarFirstDayOfWeek)
 {
-	firstDay = Number.parseInt(Grocy.CalendarFirstDayOfWeek);
+	firstDay = Number.parseInt(Victual.CalendarFirstDayOfWeek);
 }
 
-// FullCalendar setup; clicking an event navigates to its associated Grocy page (info.link)
+// FullCalendar setup; clicking an event navigates to its associated Victual page (info.link)
 var calendar = $("#calendar").fullCalendar({
 	"themeSystem": "bootstrap4",
 	"header": {
@@ -17,7 +17,7 @@ var calendar = $("#calendar").fullCalendar({
 		"center": "title",
 		"right": "prev,today,next"
 	},
-	"weekNumbers": Grocy.CalendarShowWeekNumbers,
+	"weekNumbers": Victual.CalendarShowWeekNumbers,
 	"defaultView": ($(window).width() < 768) ? "agendaDay" : "month",
 	"firstDay": firstDay,
 	"eventLimit": false,
@@ -35,7 +35,7 @@ $("#ical-button").on("click", function(e)
 {
 	e.preventDefault();
 
-	Grocy.Api.Get('calendar/ical/sharing-link',
+	Victual.Api.Get('calendar/ical/sharing-link',
 		function(result)
 		{
 			bootbox.alert({

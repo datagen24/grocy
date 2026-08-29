@@ -23,7 +23,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	mealplanSectionsTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -55,7 +55,7 @@ $(document).on('click', '.mealplansection-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/meal_plan_sections/' + objectId, {},
+				Victual.Api.Delete('objects/meal_plan_sections/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/mealplansections');
