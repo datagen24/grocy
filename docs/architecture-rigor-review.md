@@ -1,0 +1,176 @@
+# Architectural rigor review — 2026-08-29
+
+A second-pass review, run against `master` at `c998aaf5`, of two things together: the
+codebase as it stands after the wave-0 tooling, the transaction work and the rename, and
+the plan corpus (`docs/plans/01–17`, `docs/plans/README.md`, `docs/architecture-review.md`,
+`docs/mcp-interface-spec.md`, `db/pgsql/README.md`) that is supposed to describe it.
+The question is not "is the design good" — the 2026-08-27 review answered that and the
+answer holds — but whether the plans are rigorous *as instruments*: internally
+consistent, consistent with each other, consistent with the code, and honest about what
+has and has not happened. Every claim below was checked against the tree or the git
+history; the "Where" columns are what to open.
+
+One housekeeping note first, because it was raised alongside the request. The
+`.phpdoc/` directories are phpDocumentor output — ephemeral, regenerated on demand
+with `phpdoc.dist.xml`, and deliberately never committed. That is the right policy and
+`phpdoc.dist.xml` says so in its own comment. But the ignore rule is anchored
+(`/.phpdoc`), so it only covers the repository root; `branding/.phpdoc/` exists in the
+working tree today and shows up as untracked. See finding H1.
+
+## Executive summary
+
+The plan corpus is unusually rigorous for a one-household fork: every plan carries a
+numbered open-questions section with inline review answers, a schema section that names
+the migration shape, an API section that says whether a response changes, and a
+verification section that demands a booted instance rather than lint. Several plans
+correct their own earlier reasoning in place and say why (14-Q3 on the CI image, 14-Q4
+on the exemption mechanism, 07-Q6 on what `parent_product_id` means). The ground rules
+(additive API, dual-engine migrations from 0256, verification on a real database) are
+stated once and enforced by tooling — `check-migrations.php`, the four-phase
+differential suite, the rollback tests in CI. That is the strong half.
+
+The weak half is that **the corpus has fallen behind the code it governs, and behind
+itself, in the last three days.** Specifically:
+
+1. **Status drift.** Plan 13 is fully implemented (`782289b8`, `7abfd2fa`, `96f9ec99`)
+   and wave 0 is complete (`40e1f57f`, `d80a88f0`, `fd506a85`), yet 13 and 14 still read
+   "draft for review" and the README status table shows neither as done. Anyone
+   working from the README would re-plan finished work.
+2. **The rename broke the clients that plan 17 was written to protect, in the order
+   the README says not to.** The README's own sequencing rule is "17 before 11, 16 and
+   10". 16 landed first, renamed the `GROCY-API-KEY` header and the `grocy_version`
+   response field on the explicit premise that "no client exists", and 17 — written
+   the same day — documents two external clients that use both. 17's three open
+   questions are unanswered and its coupling analysis still describes a pre-rename
+   server.
+3. **A factual error underpins a design argument in two plans.** 14 and 11 both state
+   that `/api/recipes/{recipeId}/copy` is "documented in the spec with no route behind
+   it" and use it to argue for a two-way parity assertion. The route exists at
+   `routes.php:237` and has since 2021. The parity assertion is still worth building;
+   the argument for it is half wrong.
+4. **The three-way migration rule is documented in one place and contradicted in
+   three.** `db/pgsql/README.md` defines portable / per-engine pair / documented
+   engine-exclusive (with mandatory `@engine-exclusive` and `@overrides-generic`
+   markers). `CONTRIBUTING.md`, `PULL_REQUEST_TEMPLATE.md` and plan 05's schema section
+   all present only the first two.
+5. **Plan 07 is scheduled as wave 4's centrepiece while its own Q6 response says it may
+   not need to exist.** The README's order of operations was not updated after Q6.
+
+None of these is a code defect. All of them are the kind of thing a plan corpus exists
+to prevent, which is why they matter more here than the same slips would in a wiki.
+
+## Method
+
+Read all seventeen plans, the README, the prior review, the MCP spec, the PostgreSQL
+port README, CONTRIBUTING, the PR template and the coverage README in full. For every
+`file:line` or "X exists / does not exist" claim that a design decision rests on, opened
+the file. Checked plan status against `git log` on `master`. Did not boot an instance —
+this is a review of the plans' rigor, not a re-verification of the plans' verification
+sections, and the one place that distinction matters is called out (F6).
+
+## A. Plan-versus-code drift
+
+| # | Finding | Where | Consequence |
+|---|---|---|---|
+| A1 | **Plan 13 is done and undeclared.** `DatabaseService::InTransaction()` exists; all seven stock entrypoints (`AddProduct`, `ConsumeProduct`, `InventoryProduct`, `OpenProduct`, `TransferProduct`, `UndoBooking`, `UndoTransaction`) plus the four pre-existing sites use it; label webhooks are collected and fired after commit exactly per Q1's response; `DatabaseImporter::Import` wraps truncate, trigger toggling and copy in one target-side transaction; `rollback-tests.php` runs in CI as the fourth suite phase, which is 13's verification item 3 "committed rather than run once". | `services/DatabaseService.php:221`, `services/StockService.php:290–2291`, `services/Database/DatabaseImporter.php:90`, `.devtools/pgsql/run-tests.sh` | Plan 13 still says "Status: draft for review" and has no Executed section. README table row 13 has no status. 15-C10 ("revisit after 13") is now unblocked and nothing says so. |
+| A2 | **Wave 0 is done and undeclared.** Dockerfile, compose file, `bin/victual-migrate`, `run-tests.sh` with committed view seeds (`view-tests/01–05`), `migratedifftest.php`, and `.github/workflows/tests.yml` all exist. This is 14 piece 1, piece 3, piece 4 and 10's pulled-forward CLI. | `Dockerfile`, `docker-compose.yml`, `bin/`, `.devtools/pgsql/`, `.github/workflows/tests.yml` | Plan 14 says "draft for review"; its Today section still opens with "the fork has exactly one safety net and it is entirely manual". Plan 10's Today section still says migrations "only run from `GET /`" without noting the CLI exists. |
+| A3 | **13-Q2's recorded decision does not match the implementation, and the implementation is better.** Q2 chose "depth counting"; the code asks `PDO::inTransaction()` instead, with a docblock explaining that a counter would be blind to `DatabaseMigrationService`'s own raw transactions. Plan 10's "second seam" paragraph still warns that the helper must "count depth rather than assume it opens the outermost transaction". | `services/DatabaseService.php:207–215`, `docs/plans/13:242–254`, `docs/plans/10:236–242` | The decision record says one thing, the code another. Update Q2's response and 10's seam note to the mechanism that shipped; it resolves 10's worry outright. |
+| A4 | **`InTransaction`'s docblock forward-references a dialect method that does not exist.** "See `DatabaseDialect` for the per-engine locking used around migrations." `DatabaseDialect` has no `WithMigrationLock` or any lock method; that is plan 10 work not yet started. | `services/DatabaseService.php:213–215`, `services/Database/DatabaseDialect.php` | A reader following the pointer finds nothing. Either reword to "will live on the dialect (plan 10)" or leave a `@see` that resolves. |
+| A5 | **The `/api/recipes/{recipeId}/copy` mismatch is not a mismatch.** 14 and 11 state it is in the spec with no route. `routes.php:237` registers it, `RecipesApiController::CopyRecipe` implements it, and `git log -S` traces it to a 2021 upstream commit. The only real route/spec gap is `/api/openapi/specification`, absent from the spec — that one is confirmed. | `routes.php:154,237`, `victual.openapi.json:3548`, `docs/plans/14:59–66,176–181`, `docs/plans/11:242–244` | 14's "two mismatches in opposite directions" argument for a set-comparison parity check loses one direction. Keep the check (it is right regardless), fix the prose, and fix the spec for `/openapi/specification`. |
+| A6 | **Plan 12 has not started, and the code confirms every one of its premises.** 157 `console.error` handlers (12's count, exactly); no `request()` core, no `timeout`, no `onerror` in `public/js/victual.js`; the `DeleteUserePictureOnSave` typo and the `transaction_type`/`transactiontype` mismatch are both still present, each annotated in-code as known. | `public/js/victual.js`, `public/viewjs/userform.js:157`, `controllers/Api/StockApiController.php:344` | Nothing wrong — this is wave 1 track B and the plan is accurate. Recorded so the next reader knows the four "latent bugs" are still latent, not fixed by the defects pass. |
+| A7 | **Plan 11 has not started; `ExposedEntityEditRequiresAdmin` is still an empty enum with live call sites.** `UsersApiController` remains the only controller catching `HttpSpecializedException`. | `victual.openapi.json:6003`, `controllers/Api/UsersApiController.php:35,217,269` | Accurate to the plan. The empty enum is the one item 11-Q6 called "definitely wrong" to leave; it is a five-minute change that does not need the rest of 11 and could land now. |
+| A8 | **PHP floor: three declarations, two values, and the resolution is decided but not applied.** `composer.json` pins `8.5.*`, `PrerequisiteChecker::REQUIRED_PHP_VERSION` is `8.5.0`, the Dockerfile is `php:8.5`, CI runs 8.4 with `--ignore-platform-req=php`, and the `run-app` skill patches the constant with `sed` on every boot. 15-Q4 decided 8.4. | `composer.json:3`, `helpers/PrerequisiteChecker.php:19`, `Dockerfile:12`, `.github/workflows/tests.yml`, `.claude/skills/run-app/SKILL.md` | A decided one-liner that every tool in the repo works around instead. 15-C7 should be pulled out of 15 and landed alone — it is the cheapest rigor win in the tree. |
+| A9 | **14 piece 3 specifies `node --check` over every `.js`; CI does not run it.** | `docs/plans/14:185`, `.github/workflows/tests.yml` | Minor. Either add it or amend the plan. |
+| A10 | **`version.json` says `4.6.0` and the OpenAPI document's `info.version` is the literal `"xxx"`.** 17-Q1 (what version string does the fork ship) is unanswered; 16 did not touch it. | `version.json`, `victual.openapi.json:6` | The iOS client's version gate is the only consumer, and after A/B2 below it cannot reach this field anyway. Still: the spec's version should not be a placeholder in a tree that now runs a contract suite. |
+
+## B. Cross-plan contradictions
+
+| # | Finding | Where | Consequence |
+|---|---|---|---|
+| B1 | **16's breaking renames rest on "no client exists"; 17 names two.** `GROCY-API-KEY` → `VICTUAL-API-KEY` and `grocy_version` → `victual_version` are recorded in 16's Executed section as justified "since no client exists". 17 measures Grocy-SwiftUI at 47 of 48 endpoints working and the Home Assistant integration fully covered, both sending `GROCY-API-KEY`, the iOS app reading `grocy_version.Version`. 17 also states "both clients work against the fork today", which stopped being true when 16 merged. | `docs/plans/16:290–296`, `docs/plans/17:20–22,61,88–96`, `app.php:96` | Every request from either stock client now answers 401. 17's coupling 2 analysis ("one warning banner") assumed the key still existed; a missing key is a decode question in Swift, not a banner. 17 needs a reconciliation section against 16's Executed section, and 16 needs its justification corrected. Cheapest mitigation, if wanted: accept `GROCY-API-KEY` as an alias and emit both version keys until 17 decides per client. |
+| B2 | **The README's own sequencing rule was violated by the corpus.** "17 before 11, 16 and 10 — the first two break third-party clients and 17 is where the cost of each candidate decision is written down." 16 landed with 17's three questions blank. | `docs/plans/README.md:70–75`, `docs/plans/17:263,275,286` | The rule is right; it was not followed. Either answer 17-Q1–Q3 now, or record in the README that 16 pre-empted 17 and what that cost. |
+| B3 | **Wave 4 schedules 07 as written; 07-Q6 says 07 may collapse into 03.** Q6's response: "settle this before any of 07 starts — it decides whether 07 is the largest item on the roadmap or one of the smallest", and the likely answer is nested `product_groups` (03's territory) with `parent_product_id` left at depth one. The README's Wave 4 text, 07's "large" sizing, and 03's scope were not revisited. | `docs/plans/07:177–202`, `docs/plans/README.md:184–190`, `docs/plans/03` | The largest item on the roadmap has an unresolved scope gate that the roadmap does not show. Add the gate to Wave 4 explicitly, and give 03 a note that it may inherit a `parent_product_group_id` column. |
+| B4 | **Plan 03's body describes the design its Q1 response rejected.** The Views and API sections still specify a third `UNION` branch in `stock_missing_products`; Q1's response moves group shortfalls to a new view, and the MCP spec (§4, `missing_products`) relies on the response's version. | `docs/plans/03:34–40,53–55` vs `:78–82`; `docs/mcp-interface-spec.md:225–227` | An implementer reading top-down builds the rejected design. Rewrite the two sections. |
+| B5 | **Migration shapes: one rule, three stale restatements.** `db/pgsql/README.md` (§Supported ways) defines three forms and two mandatory markers. `CONTRIBUTING.md:35–36`, `PULL_REQUEST_TEMPLATE.md` ("a portable `NNNN.sql`, or a per engine pair") and plan 05's schema section (no shape stated at all for four `ALTER`s and a new table) know only two. The repo's own `0256.sqlite.sql` is the third form. | `db/pgsql/README.md:63–90`, `.github/CONTRIBUTING.md:35`, `.github/PULL_REQUEST_TEMPLATE.md`, `docs/plans/05:31–52` | A contributor following CONTRIBUTING or the PR template will ship a lone engine file without the marker and be refused by `check-migrations.php` with no idea why. Update both, and have 05 state its shape. |
+| B6 | **The suite is described as three-phase in the document that owns it.** `db/pgsql/README.md:96` lists `[migrate\|views\|triggers]`; `run-tests.sh:6` has four selectors including `rollback`, and the README's claim that "the other three all populate PostgreSQL by copying" is false for the rollback phase, which migrates PostgreSQL independently. The coverage README has it right. | `db/pgsql/README.md:96–101`, `.devtools/pgsql/run-tests.sh:6,250,284` | Stale by one commit; fix the two sentences. |
+| B7 | **`docs/grocycode.md` contradicts the code and plan 06 on the format it is the authority for.** It says three entity types (code has four, `RECIPE = 'r'`); it mandates object ids match `[0-9]+` (06-Q1's accepted answer puts a UUID there); it says parts are "double-colon separated" while every example uses one colon; and it argues for DataMatrix over QR while 06 adds QR. `docs/label-printing.md:31` spells the magic `grocy:x:xxx` where the code emits `grcy`. | `docs/grocycode.md:20–35,61–63`, `docs/label-printing.md:31`, `helpers/Grocycode.php:22–34` | Tier 0 of the rename says the grocycode format is the one thing that must never drift, and its own documentation has. Fix before 06 extends the format, and add the Tier 0 reasoning's cross-reference to 06. |
+| B8 | **The MCP spec uses the vocabulary 15-Q5 declined.** `purchase_product` takes `store_id`; the deferred `list` descriptor is `(id, name, store)`. 05-Q4 and 15-Q5 both decline `shopping_locations` → `stores`, and 17 notes Grocy-SwiftUI reads `objects/shopping_locations` by name. | `docs/mcp-interface-spec.md:252,276` | A sidecar parameter named `store_id` mapping to a REST field named `shopping_location_id` is exactly the two-names-forever cost 15-Q5 refused. Pick one name in the spec. |
+| B9 | **Plan 02's body is superseded and still describes the integrated design.** The status line says so, but the Mount point, Where the code goes and API sections still specify `/api/mcp`, `controllers/Api/McpController.php` and `services/Mcp/`. The spec's gate line cites "15 C1" without the spec ever explaining what C1 is. | `docs/plans/02:37–48,108–117`, `docs/mcp-interface-spec.md:8–10` | Low risk because the status line is prominent, but the body should be struck through or trimmed to the decision record it claims to be. |
+| B10 | **README dependency table disagrees with README prose and with the plans.** Table rows 05, 06 and 08 show "Depends on: —"; the README's own blocking list and the plans' headers say 12 (and 14 for 08). | `docs/plans/README.md:16–19` vs `:55–56` | Whoever reads only the table schedules 05/06/08 ahead of 12. |
+| B11 | **Plan 04 and `bin/victual-db-import` take opposite trigger stances, unacknowledged.** 04's importer is designed to "go through LessQL so triggers fire"; the existing importer deliberately disables triggers because it replays already-shaped rows. Both are correct for their purpose; 04 should say why it differs from the tool it claims to mirror. | `docs/plans/04:41–45`, `db/pgsql/README.md:409` | Prevents the next author from "fixing" one to match the other. |
+
+## C. Where the rigor is genuinely strong
+
+Worth recording so the findings above are read in proportion.
+
+- **Self-correction is written down.** 14-Q3 reverses an earlier answer about the CI
+  image and says what the reversal costs (8.4 in CI vs 8.5 in the image). 14-Q4
+  corrects a wrong reachability claim and names the real reason the decision stands.
+  07-Q6 is a plan questioning its own premise, at the right moment. 13's verification
+  item 3 corrects an earlier wording that overclaimed what `trigdifftest.php` proves.
+  This is rarer than it should be and it is the single best property of the corpus.
+- **Ground rules have teeth.** The additive-API rule, the dual-engine migration rule,
+  and "verification means a booted instance" are each enforced by something that fails:
+  `check-migrations.php`, the four-phase suite in CI, and the rollback tests that go
+  through `StockService` on each engine. 14's "which of its inputs does each phase take
+  on trust" question produced `migratedifftest.php`, which found a real defect the day
+  it ran.
+- **The transaction work matched its plan and improved on it.** Seven entrypoints,
+  webhooks after commit with payloads built eagerly, validation outside the
+  transaction, importer atomic — every Q1–Q6 answer is visible in the code, and the one
+  deviation (A3) is documented in the code with a better reason than the plan had.
+- **16 is the model for an Executed section.** What landed, what the survey missed,
+  what deliberately did not move, verification actually run, and an outstanding list
+  with reasons. Plans 13 and 14 should get the same treatment (A1, A2).
+- **The MCP spec's "no state, no credentials at rest, two replicas indistinguishable"
+  constraints** are the right ones for the k3s target and are stated as testable
+  properties rather than aspirations.
+
+## D. Rigor gaps that are structural rather than stale
+
+| # | Finding | Recommendation |
+|---|---|---|
+| D1 | **Verification sections specify what to run; only plan 16 records what was run.** 13's seven checks were evidently executed (the rollback tests exist, the suite passes) but the plan carries no results, no dates, no engine versions. The PR template asks for "what was actually run", so the evidence exists in PR bodies — but the plan is where the next person looks. | Adopt 16's Executed/Verification pattern as mandatory at close-out: one section per landed plan, results not intentions. |
+| D2 | **17's "each plan carries a client-impact line" mechanism has no adopters.** Not one of the sixteen other plans has one, including 16, which is the plan with the largest client impact. | Add the line to every plan's API section now, even where it reads "none"; 17 says absent is not the same as none, and 16 proved it. |
+| D3 | **The README status table has no "done" state for hardening plans.** The Meta table has one ("done in the codebase"); the Hardening table's Size column doubles as status and cannot express completion. | Add a Status column to all three tables; populate from `git log`. |
+| D4 | **Plan 09 is the one plan with all questions unanswered, by design, and it is fine.** Its deferral note says exactly why and what data would unblock it. Recorded here as the counter-example: an unanswered question with a stated reason is rigorous; 17's three unanswered questions with a landed dependency (B2) are not. | None. |
+| D5 | **Line-number references are already rotting.** The prior review said this of itself ("the column names the file rather than a location to trust"); the plans did not inherit the caveat. The MCP spec's `ApiKeyAuthMiddleware.php:50` is already `:49`. | Prefer symbol names over line numbers in plans (`ApiKeyAuthMiddleware::IsValidApiKey` call, not `:50`). Where a line is quoted, quote the code alongside it so the reference survives a shift. |
+
+## E. Housekeeping
+
+| # | Finding | Fix |
+|---|---|---|
+| H1 | `branding/.phpdoc/` is untracked and not ignored: `.gitignore:5` is `/.phpdoc`, anchored to the root. The intent (phpDocumentor output is generated on demand and never committed) is stated in `phpdoc.dist.xml` and `CONTRIBUTING.md`. | Change the rule to `.phpdoc/` (unanchored, directory-only) so any nested run is ignored. Consider also `/phpdoc.xml` → already present. Nothing to delete from history; nothing has been committed. |
+| H2 | Two stale worktrees under `.claude/worktrees/` (`git worktree list` marks both prunable); `.claude/` is partially tracked (skills) and partially ignored (settings). | `git worktree prune`. Not a rigor issue. |
+| H3 | `update.sh` and `.devtools/create_release_package.bat` ship in a fork that cuts no releases; 16 routed the deletion question to 15, which does not list it. | Add to 15's non-breaking table so it stops being homeless. |
+
+## Recommended order
+
+1. **Reconcile 16 and 17** (B1, B2): answer 17-Q1–Q3, add a reconciliation section to
+   17 against 16's Executed list, and decide today whether `GROCY-API-KEY` and
+   `grocy_version` get compatibility aliases. This is the only item with a live
+   external consequence.
+2. **Close out 13 and 14** (A1, A2, A3, A4, D1, D3): Executed sections, README status,
+   the two docblock/plan text fixes. One documentation commit.
+3. **Fix the factual errors that carry design weight** (A5, B4, B7): the recipe-copy
+   claim, 03's body, `docs/grocycode.md` and `docs/label-printing.md`.
+4. **Unify the migration-shape rule** (B5, B6): CONTRIBUTING, PR template, 05, and the
+   two stale sentences in `db/pgsql/README.md`.
+5. **Land the decided one-liners that everything works around** (A7, A8): the PHP floor
+   to 8.4 in both places, and `ExposedEntityEditRequiresAdmin` populated or deleted.
+6. **Gate wave 4 on 07-Q6** (B3) in the README, and add client-impact lines everywhere
+   (D2).
+7. **`.gitignore` for nested `.phpdoc/`** (H1).
+
+Items 2–7 are documentation and one-line code changes; together they are a single short
+session. Item 1 is a decision.
+
+## What this review did not do
+
+It did not boot an instance or re-run the suite; it trusted CI's green on `c998aaf5`.
+It did not evaluate the MCP spec's description of the `2026-07-28` protocol revision
+against the protocol's published text — every downstream design choice in that spec
+rests on that description, and it carries no citation, so that check is worth doing
+before the sidecar is built. It did not read the two external clients' source; 17's
+claims about them were taken as written, except where the fork's own tree contradicts
+them (B1).
