@@ -46,6 +46,96 @@ abstract class DatabaseDialect
 	abstract public function GetRegexpCondition(string $field): string;
 
 	/**
+	 * The SQL condition implementing the API's "~" and "!~" (substring match) query
+	 * operators, with a single positional placeholder for the pattern.
+	 *
+	 * This exists for the same reason GetRegexpCondition() does, and is easier to miss:
+	 * the operator is spelled differently per engine because the obvious spelling does not
+	 * mean the same thing on both. SQLite's LIKE ignores ASCII case by default, PostgreSQL's
+	 * does not, so a literal LIKE in the controller answers the same request with different
+	 * rows depending on the engine - silently, since the response shape is identical either
+	 * way. SQLite's case insensitivity is the documented behaviour of this API, so the
+	 * PostgreSQL side matches it rather than the other way round.
+	 *
+	 * The agreement is guaranteed for ASCII and only for ASCII. SQLite's LIKE folds A-Z and
+	 * nothing else; PostgreSQL's ILIKE folds per the database collation, so on a UTF-8
+	 * database a pattern of "æ" also matches "Æ" where SQLite would not. That residual is
+	 * deliberate - the alternative is reimplementing one engine's folding table in the
+	 * other - and it is what `run-tests.sh filter` measures and prints on every run rather
+	 * than leaving to be rediscovered. The API documents the same limit.
+	 *
+	 * @param bool $negated The "!~" form, which must negate the match rather than be wrapped
+	 *                      in NOT by the caller - the two are the same here but only because
+	 *                      both engines treat NULL identically, and that is worth pinning
+	 *                      down in one place instead of at every call site.
+	 */
+	abstract public function GetLikeCondition(string $field, bool $negated): string;
+
+	/**
+	 * The declared/reported type of every column of $table, keyed by column name.
+	 *
+	 * Used to validate the fields a caller names in "query[]" and "order" before they reach
+	 * SQL, so an unusable one is a 400 rather than whatever the engine happens to do with
+	 * it. Works for views as well as tables, because most of what this API lists is a view.
+	 *
+	 * @return array<string, string> Empty when the table is unknown to the engine.
+	 */
+	abstract public function GetColumnTypes(\PDO $pdo, string $table): array;
+
+	/**
+	 * The types to validate against: the engine's own catalogue, with
+	 * ColumnTypeManifest filling only the columns the catalogue could not type.
+	 *
+	 * This is the method callers want; GetColumnTypes() is the per-engine half of it. It is
+	 * concrete and lives here rather than on either dialect precisely because the manifest
+	 * has to be applied the same way on both - the whole point of it is that "may I search
+	 * this field" stops depending on which engine is answering.
+	 *
+	 * The manifest fills gaps and never overrides. A catalogue that reports a real type is
+	 * describing what the engine will actually do with the column, and no entry here can be
+	 * more right about that than the engine is.
+	 *
+	 * @return array<string, string>
+	 */
+	final public function GetValidationColumnTypes(\PDO $pdo, string $table): array
+	{
+		$types = $this->GetColumnTypes($pdo, $table);
+
+		foreach (ColumnTypeManifest::For($table) as $column => $semanticType)
+		{
+			if (array_key_exists($column, $types) && trim($types[$column]) === '')
+			{
+				$types[$column] = $semanticType;
+			}
+		}
+
+		return $types;
+	}
+
+	/**
+	 * Whether a column of the given declared type can be substring-matched.
+	 *
+	 * Deliberately one rule for both engines rather than one per dialect, because the
+	 * point of it is that the two agree. It is SQLite's own TEXT-affinity rule - a declared
+	 * type containing CHAR, CLOB or TEXT - which also happens to select exactly
+	 * PostgreSQL's "text", "character varying" and "character" out of information_schema.
+	 *
+	 * Everything else is rejected on both engines, including timestamps. SQLite stores
+	 * those as text and would happily match "2026-08" against one; PostgreSQL cannot,
+	 * because a TIMESTAMP is not a string there. Rendering one to text so both could match
+	 * is a real feature and a real decision - which format, in which time zone, with which
+	 * precision - and it is not one to arrive at by accident through whatever CAST each
+	 * engine happens to implement. Until that is designed, the honest answer is that this
+	 * API does not offer substring matching on a timestamp, on either engine.
+	 */
+	public static function IsTextMatchableType(string $declaredType): bool
+	{
+		$type = strtoupper($declaredType);
+
+		return str_contains($type, 'CHAR') || str_contains($type, 'CLOB') || str_contains($type, 'TEXT');
+	}
+
+	/**
 	 * An SQL expression yielding the current local (not UTC) timestamp.
 	 */
 	abstract public function GetNowExpression(): string;

@@ -70,7 +70,7 @@ class RecipesApiController extends BaseApiController
 		{
 			if (!isset($args['recipeId']))
 			{
-				return $this->FilteredApiResponse($response, RecipesService::GetInstance()->GetRecipesResolved(), $request->getQueryParams());
+				return $this->FilteredApiResponse($request, $response, RecipesService::GetInstance()->GetRecipesResolved(), $request->getQueryParams());
 			}
 
 			$recipeResolved = FindObjectInArrayByPropertyValue(RecipesService::GetInstance()->GetRecipesResolved(), 'recipe_id', $args['recipeId']);

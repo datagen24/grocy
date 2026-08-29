@@ -301,6 +301,242 @@ comparison behave the same as SQLite.
 It needs a PostgreSQL built with ICU, which the official images are. Without ICU the
 migration fails at that statement, which is the right place to find out.
 
+### Hazard 16: `LIKE` is case insensitive on SQLite and case sensitive on PostgreSQL
+**Fixed in the dialect - kept here because the shape recurs.** This was the one hazard on
+the list that produced a wrong *answer* rather than an error, on a public endpoint, with
+nothing to notice it.
+
+SQLite's `LIKE` ignores ASCII case by default (`PRAGMA case_sensitive_like` is off).
+PostgreSQL's `LIKE` is case sensitive; `ILIKE` is the case insensitive form. The two engines
+therefore disagree on every `LIKE` the application emits, and the application emits it in
+exactly one place - `BaseApiController::FilterData()`, for the `~` and `!~` operators of the
+generic list filter:
+
+```php
+case '~':
+    $data = $data->where($matches['field'] . ' LIKE ?', '%' . $matches['value'] . '%');
+```
+
+That reaches every `GET /api/objects/{entity}` and everything else routed through
+`FilteredApiResponse`. Measured on a three row table (`Milk`, `milk chocolate`, `Butter`)
+with `name LIKE '%milk%'`:
+
+| Engine | Rows returned |
+|---|---|
+| SQLite | `Milk`, `milk chocolate` |
+| PostgreSQL | `milk chocolate` |
+| PostgreSQL with `ILIKE` | `Milk`, `milk chocolate` |
+
+No error, no log line, no failing view diff - the differential suite drives SQL at each
+engine and never enters `BaseApiController`, which is the blind spot
+[14](../../docs/plans/14-contract-and-regression-scaffolding.md)'s coverage section was
+added to make visible.
+
+**Fixed.** The fix is the one `GetRegexpCondition()` already models:
+`GetLikeCondition(string $field, bool $negated)` on the dialect, returning `LIKE` /
+`NOT LIKE` on SQLite and `ILIKE` / `NOT ILIKE` on PostgreSQL, with `FilterData` calling it
+instead of spelling the operator itself. SQLite's behaviour is the reference and PostgreSQL
+now matches it, because SQLite's is what the API has always documented and what any existing
+client was written against.
+
+Verified by instantiating both dialects and running the SQL they actually emit against a
+real SQLite and a real PostgreSQL 16, on the fixture above plus a `NULL` row:
+
+| Operator | SQLite | PostgreSQL before | PostgreSQL after |
+|---|---|---|---|
+| `~` | 1, 2 | 2 | 1, 2 |
+| `!~` | 3 | - | 3 |
+
+The `!~` row is the one worth having checked rather than assumed: `NOT ILIKE` leaves the
+`NULL` name out on both engines, so negation did not quietly become three-valued on one side.
+
+**The agreement is ASCII only, and that is the interesting part of this hazard.** SQLite's
+`LIKE` folds `A-Z` and nothing else; `ILIKE` folds according to the database collation, so
+the two still part company past ASCII:
+
+| Pattern | SQLite | PostgreSQL (`C.UTF-8`) |
+|---|---|---|
+| `milk` against `Milk` / `milk chocolate` | both | both |
+| `æ` against `ÆBLE` / `æble` | `æble` | both |
+
+Closing that would mean reimplementing one engine's folding table inside the other, which
+is a great deal of machinery for a case no fixture in this repository contains. It is not
+closed, so it is measured: the `filter` phase of `run-tests.sh` prints both engines' answers
+and the database collation on every run, and asserts the invariant that actually holds -
+identical on ASCII, and beyond ASCII PostgreSQL may fold *more* than SQLite but never less.
+An exact non-ASCII assertion would be wrong to write, because which characters fold is a
+property of the database's collation rather than of this code: the same test would fail on a
+`C`-locale database for something that is not a defect.
+
+The OpenAPI spec described these operators as "LIKE" and "not LIKE", which was the SQLite
+spelling rather than the contract. It now says "contains, case insensitive for ASCII", and
+spells the non-ASCII limit out, because "case insensitive" unqualified would have promised
+the agreement this section has just said does not hold.
+
+**The operator is now restricted to text columns, on both engines.** That was the second
+half of this hazard and it needed a different kind of fix. `?query[]=id~2` used to be
+answered by SQLite, which coerces the integer to text and matches, and by PostgreSQL with
+`operator does not exist: integer ~~* unknown` on the 500 path - a divergence in both the
+result and the status.
+
+Casting on the PostgreSQL side would have closed it and was the obvious move; it is the
+wrong one. Measured across the two engines:
+
+| column | SQLite as text | PostgreSQL as text |
+|---|---|---|
+| `INTEGER 2` | `2` | `2` |
+| `REAL 1.0` | **`1.0`** | **`1`** |
+| timestamp | `2026-08-29 18:08:32` | same |
+
+So a cast agrees on integers and timestamps and silently disagrees on floats, which trades
+a loud error for a wrong answer - the exact failure this hazard already is. A canonical
+cross-engine stringification is a real design (which format, which precision, which time
+zone) and is worth having one day, but it has to be designed, not fall out of whatever
+`CAST` each engine happens to implement.
+
+So the fields are validated instead, before any SQL is built:
+`DatabaseDialect::GetColumnTypes()` per engine, and one shared rule,
+`DatabaseDialect::IsTextMatchableType()`, deciding what may be matched. The rule is
+SQLite's own TEXT-affinity rule - a declared type containing `CHAR`, `CLOB` or `TEXT` -
+which also selects exactly `text`, `character varying` and `character` out of
+PostgreSQL's `information_schema`. Anything else, timestamps included, is `400` on both
+engines. A field the entity does not have is `400` on both engines too, which is what
+closes hazard 17 below.
+
+**Two catalogues cannot answer for a computed view column, so a manifest does.** SQLite
+does not type a view column that is an expression: `PRAGMA table_info` returns an empty
+string for a `GROUP_CONCAT`, a `COALESCE` or a concatenation, where PostgreSQL resolves the
+expression and reports what it came out as. Comparing catalogues therefore leaves the
+verdict engine-dependent on exactly those columns - which is the same category of silent
+divergence as the operator bug itself, so it is not something to leave documented and
+unfixed.
+
+`ColumnTypeManifest` holds the answer for them: 13 entries, semantic types (`text`, not
+`TEXT` or `character varying`) so that neither engine's vocabulary becomes the contract by
+default, applied to both engines identically by
+`DatabaseDialect::GetValidationColumnTypes()`. Three rules keep it honest, and the `filter`
+phase enforces all three against the real schema on both engines:
+
+1. **It fills gaps and never overrides.** An entry applies only where the catalogue has
+   nothing to say, so a wrong entry cannot make an engine accept something it will then
+   fail on.
+2. **Entries must name real columns** - a stale one is a failure, because it reads as a
+   deliberate classification of something that is not there.
+3. **Silence means rejected.** A computed column nobody has classified stays unsearchable
+   on both engines; adding one to a view does not quietly make it searchable on one.
+
+Result: **731 of 731 columns across 82 shared tables and views reach the same verdict on
+both engines**, and the phase fails if that ever stops being true. The columns worth
+searching are searchable again on SQLite as well as PostgreSQL -
+`stock_missing_products.name`, `users_dto.display_name`,
+`recipes_resolved.product_names_comma_separated` and the comma-separated barcode lists the
+UI helper views build.
+
+The alternative to the manifest was to keep rejecting all 113 untyped columns, which had
+the smaller *count* of divergences (13 against the 100 that allowing them blindly would
+leave) but was still 13 engine-dependent answers, on the most useful columns.
+
+**Catalogue failure is not silent.** If the columns of an entity cannot be read at all, a
+request that named a field in `query[]` or `order` is answered `500` and the failure is
+logged, rather than being run unvalidated: failing open there would restore the very
+200-on-one-engine / 500-on-the-other divergence this exists to remove, intermittently and
+with nothing saying so. A request that named no field needs no validation and is served
+normally, so a catalogue problem costs filtering rather than availability.
+
+**The suite can see all of this**, which was not true when the first half of the fix
+landed. The `filter` phase of `run-tests.sh` asks each dialect for the condition it emits,
+runs both against their own engine and compares the rows, then compares the two engines'
+verdicts on every column of every shared table and view. It is the first phase that
+compares *application* behaviour rather than SQL, and it was checked the way
+[14](../../docs/plans/14-contract-and-regression-scaffolding.md) asks - by putting the
+defect back and confirming the phase fails (three ASCII cases, `[1,2] vs [2]`). It earned
+its place immediately: it is what caught the untyped-view-column residual above, before
+that shipped as a silent divergence.
+
+Do not reach for the `nocase` collation of hazard 15 to solve this. It is nondeterministic,
+and PostgreSQL rejects `LIKE` against a nondeterministic collation outright.
+
+### Hazard 17: an identifier that reaches LessQL is quoted, and quoting is case sensitive
+**Fixed by validating the field - kept here because the mechanism is still live for any
+identifier that reaches LessQL from somewhere else.**
+`PostgresDialect::GetIdentifierDelimiter()` returns `"` with the comment "Victual's tables
+and columns are all lower case, so quoting them is safe". That is true of the schema - all
+37 tables, all their columns and all 45 views are lower case, verified by parsing every
+migration and the whole baseline - and it is not true of the *inputs*.
+
+LessQL quotes every identifier it is handed:
+
+```php
+// Result::orderBy()
+$clone->orderBy[] = $this->db->quoteIdentifier($column) . " " . $direction;
+```
+
+and `BaseApiController::QueryData()` hands it a request parameter verbatim:
+
+```php
+$data = $data->orderBy($parts[0]);   // $parts[0] is ?order=<field>
+```
+
+So `?order=Name` becomes `` ORDER BY `Name` `` on SQLite, where backtick quoting still
+resolves case insensitively, and `ORDER BY "Name"` on PostgreSQL, where it does not:
+
+    ERROR: column "Name" does not exist
+    HINT: Perhaps you meant to reference the column "t.name".
+
+Same request, 200 on one engine and 500 on the other. The frontend never sends `order=`, so
+this is reachable only by an API client - which is to say by both of the clients
+[17](../../docs/plans/17-ecosystem-clients.md) tracks.
+
+The `query[]` filter is *not* affected, and the reason is worth knowing because it is
+accidental: `FilterData` interpolates the field into a raw condition string
+(`$matches['field'] . ' = ?'`) rather than passing it as an identifier, so LessQL never
+quotes it and PostgreSQL folds it to lower case like any other bare identifier.
+`?query[]=Name=Milk` works on both engines. One code path is safe because it builds SQL by
+string concatenation and the other is broken because it does the tidier thing.
+
+**Fixed, by rejecting rather than by widening the quoting.** The field named in `order` is
+checked against the entity's real columns before it reaches LessQL, so `?order=Name` is now
+`400 Invalid query: unknown field "Name"` on both engines instead of a sort on one and a 500
+on the other. `?order=nope` was a 500 on *both* engines and is now the same 400 on both.
+
+Note what this costs on SQLite: `?order=Name` used to work there, because backtick quoting
+resolves case-insensitively. It does not any more. Accepting a field name in a case the
+entity does not actually use was never a documented behaviour, and keeping it would have
+meant either case-folding field names into the schema's spelling - which is the identifier
+equivalent of the cast rejected under hazard 16 - or leaving the two engines disagreeing.
+
+The same check covers `query[]`, so an unknown field is a `400` there too rather than a
+`no such column` 500 on SQLite. Both are `400 Invalid query`, which is the status
+[11](../../docs/plans/11-api-error-handling.md) wanted for this surface.
+
+## What was checked and found clean
+
+The audit behind hazards 16 and 17 swept the whole tree for case sensitivity differences.
+The negative results are recorded here so the next person does not repeat them:
+
+- **No mixed case tables, views or columns exist on either engine.** Every `CREATE TABLE`,
+  `CREATE VIEW` and `ALTER TABLE … ADD COLUMN` across all 256 migrations and the baseline was
+  parsed; every identifier is lower case. The premise `GetIdentifierDelimiter()` relies on
+  holds for the schema.
+- **Trigger names are mixed case and it does not matter.** `products_INS`,
+  `trg_stock_log_DEL` and the rest are created unquoted, so PostgreSQL folds them, and
+  nothing ever names one: `DatabaseImporter::SetTriggersEnabled()` uses
+  `ALTER TABLE … DISABLE TRIGGER USER`, which names no trigger at all.
+- **`newest_Id`** (`migrations/0054.sql`) is the only mixed case alias in any SQL. It is a
+  derived table's output column, joined as `slg.newest_id`, unquoted on both sides, in a
+  migration that runs on SQLite only. Harmless, and it would stop being harmless the moment
+  someone quoted either spelling.
+- **`sl.NAME`** (`StockReportsController.php:118`) is the only upper case column reference in
+  PHP. Unquoted, so it folds. Cosmetic.
+- **Hazard 15's `nocase` collation does what it claims.** `deterministic = false` makes `=`
+  case insensitive, so `StockService`'s barcode lookup matches the same rows as SQLite -
+  checked directly, not assumed.
+- **The `§` regexp operator agrees across engines.** SQLite's `REGEXP` is backed by
+  `mb_ereg`, which is case sensitive; PostgreSQL's `~` is case sensitive. Consistent, and
+  `~*` was correctly not used.
+- **User defined entity and userfield names are values, not identifiers.** They are compared
+  with `=` against a column with no `COLLATE`, so both engines are case sensitive and agree.
+
 ## Accepted differences
 
 Two differences are known, deliberate and judged harmless. Do not try to "fix" them.

@@ -37,7 +37,7 @@ class BatteriesApiController extends BaseApiController
 	 */
 	public function Current(Request $request, Response $response, array $args)
 	{
-		return $this->FilteredApiResponse($response, BatteriesService::GetInstance()->GetCurrent(), $request->getQueryParams());
+		return $this->FilteredApiResponse($request, $response, BatteriesService::GetInstance()->GetCurrent(), $request->getQueryParams());
 	}
 
 	/**

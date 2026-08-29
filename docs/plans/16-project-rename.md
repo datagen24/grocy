@@ -294,6 +294,22 @@ four are the same category as items that were, and all four landed with them:
   the whole API surface carrying the name, now `victual_version`. This is a
   breaking API change and is called out as one per the roadmap's ground rules,
   not slipped in; the justification is Tier 1's, since no client exists.
+
+  > **Correction, recorded after the fact.** "Since no client exists" is true of
+  > *deployed instances of this fork* — which is what Tier 1 is about, and why
+  > everything else in it was free — and false of *clients*.
+  > [17](17-ecosystem-clients.md) tracks two, Grocy-SwiftUI and
+  > custom-components/grocy, and both use both of these. The header is the worse
+  > of the two: it is the only API authentication grocy has, so an unmodified
+  > client does not get a warning banner, it fails to authenticate at all. The
+  > roadmap's sequencing rule is "17 before 11, 16 and 10" precisely so that this
+  > cost is written down before the decision; 17 was written the same day and
+  > read after. Nothing was deployed, so no one lost anything — what was lost is
+  > that the compatibility decision got taken by a rename sweep instead of on
+  > purpose. It is now [17](17-ecosystem-clients.md)'s Q4, with the options and
+  > their costs, and the shim it discusses is a single string in the
+  > `ApiKeyHeaderName` container binding if it is wanted. Nothing here needs
+  > reverting; the record needed correcting.
 - **User-visible strings**: the PWA manifest `name`/`short_name`, the iCal
   export's `PRODID` and its `Grocy.ics` attachment filename, the thermal
   printer banner, page titles, and the "Unable to run Grocy" boot message.

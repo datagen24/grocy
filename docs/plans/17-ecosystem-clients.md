@@ -6,7 +6,14 @@ standing decision for each about whether this fork forks it, replaces it, or let
 [11](11-api-error-handling.md) and [16](16-project-rename.md) are the two plans that break
 clients hardest, and both are early. [10](10-cold-start-statelessness.md) has a conflict
 with the Home Assistant integration that is not an API-compatibility problem at all.
-**Status:** draft for review.
+**Status:** draft for review — **and already overtaken on [16](16-project-rename.md)**,
+which landed on 2026-08-29, the day this was written, ahead of the roadmap's own
+"17 before 11, 16 and 10" rule. Two of the breaks below are therefore past tense: the API
+key header and the `/system/info` version field are renamed in the tree today. Coupling 0
+records what that costs and what the options are; the three open questions at the end are
+all still unanswered, and Q1 is now being asked after the event rather than before it. The
+rule still holds for [11](11-api-error-handling.md) and
+[10](10-cold-start-statelessness.md), which are both still ahead.
 
 ## Why this is a plan and not a wiki page
 
@@ -18,8 +25,11 @@ the roadmap's plans reach them without breaking a single response shape:
 - [11](11-api-error-handling.md) changes status codes on ~74 routes and drops
   `error_details` from nine list operations. Response *shapes* survive; error *contracts*
   do not.
-- [16](16-project-rename.md) renames the project. `/system/info` reports
-  `grocy_version.Version`, and the iOS client gates on that string.
+- [16](16-project-rename.md) renamed the project, and did it *before* this document was
+  read. It moved the API key header from `GROCY-API-KEY` to `VICTUAL-API-KEY` and the
+  `/system/info` field from `grocy_version` to `victual_version`. Neither changes a
+  response *shape* in the sense the additive rule polices; the first stops both clients
+  authenticating at all. Coupling 0.
 - [10](10-cold-start-statelessness.md) makes the pod scale to zero. The Home Assistant
   integration polls every thirty seconds and would keep it awake forever. Nothing about
   that is visible in an API contract.
@@ -58,12 +68,75 @@ endpoints, 47 of which exist here. The Home Assistant integration uses a narrow 
 stock, volatile stock, chores, tasks, batteries, meal plan, shopping list — plus
 `/api/files/{picture_type}/{filename}` for product and recipe pictures, all present.
 
-Coverage is not the risk. Both clients work against the fork today. The risk is in
-couplings a path list does not show.
+Coverage is not the risk, and it never was. What a path list does not show is the
+couplings — and as of 2026-08-29 the first of them has stopped being a risk and become a
+fact. Neither client authenticates against the fork any more.
+
+## Coupling 0 — the rename already broke both clients
+
+This section is written after the event, which is the thing it is chiefly evidence of.
+[16](16-project-rename.md) landed on 2026-08-29 and its "What the survey missed" section
+records two renames whose justification is, verbatim, "the justification is Tier 1's,
+since no client exists". That premise is true of *deployed instances of this fork* — there
+are none, which is what Tier 1 is about — and false of *clients*, of which this document
+names two. The roadmap's own sequencing rule ("17 before 11, 16 and 10") exists precisely
+to put this document in front of that decision, and it did not happen.
+
+Two things changed, and they are not the same size:
+
+**The API key header, `GROCY-API-KEY` → `VICTUAL-API-KEY`** (`app.php:96`). This is the
+transport, not a field. `ApiKeyAuthMiddleware` looks for exactly one header name, resolved
+from the `ApiKeyHeaderName` container binding, plus a query parameter of the same name.
+Both tracked clients send `GROCY-API-KEY` on every request, because it is the only API
+authentication grocy has. Against the current tree every one of those requests is
+unauthenticated: not a warning banner, not a degraded feature — Grocy-SwiftUI cannot log
+in and the Home Assistant integration's config flow cannot complete. This is the hardest
+break either client has ever been handed by this fork, and it was taken in a commit whose
+reasoning says no client exists.
+
+The mitigation, if one is wanted, is unusually cheap and that is worth writing down before
+the decision is made rather than after: the header name is a single string in a DI binding
+and the middleware already reads it from there, so accepting a legacy name alongside the
+canonical one is a contained change in one file, not a compatibility layer. The cost is
+that it keeps upstream's name alive in the auth path indefinitely, which is the sort of
+thing that is easy to add and never removed. See Q4.
+
+**`grocy_version` → `victual_version` in `GET /api/system/info`** (`ApplicationService.php:89`).
+16 correctly calls this out as the only response *field* in the whole API surface carrying
+the name, and correctly calls it a breaking API change. Coupling 2 below was written about
+the version *value*; this is the *key*, and it is the harder of the two, because a client
+that gates on a value it cannot find is in a different situation from one that finds an
+unfamiliar value. Grocy-SwiftUI reads `grocy_version.Version`; that key is now absent.
+Whether that surfaces as a decode failure on `SystemInfo` or as a silently-nil version
+depends on how the Swift model declares it, and this plan should not guess — Verification 5
+below is the check that answers it, and it is now a check on something that has already
+happened rather than a rehearsal for something that has not.
+
+The Home Assistant integration reads `/system/info` through `pygrocy2` for its version
+sensor and is subject to the same key rename, though it is moot while the header break
+stops it reaching the endpoint at all.
+
+**What this costs, and what it does not.** Nothing is deployed and no household member has
+lost anything, which is exactly what 16's Tier 1 reasoning gets right. What was lost is the
+*ordering*: the decision about how much upstream compatibility to keep in the auth path was
+taken implicitly, by a rename sweep, instead of explicitly here with its cost written down.
+That decision is now Q4's, taken after the fact. The three older questions below are still
+unanswered.
+
+**What it says about the mechanism.** "How this plan stays current" proposes client
+endpoint manifests asserted against 14's snapshot, and notes that a manifest would fail CI
+with the client named. A path manifest would not have caught either of these: `/system/info`
+is still there and still a `GET`, and the API key header does not appear in a path list at
+all. So the manifest is necessary and not sufficient, in the same way the additive rule is.
+Whatever piece 2 builds needs to cover the request headers a client sends and the response
+*keys* it reads, not only the routes it calls.
+
+The couplings below are the ones still ahead.
 
 ## Coupling 1 — the Home Assistant integration defeats scale-to-zero
 
-This is the largest finding and it is not about the API.
+The largest of the findings still ahead, and the only one that is not about the API at all.
+Coupling 0 is worse today, but it is a decision to take rather than a design to change.
 
 `GrocyCoordinator._async_update_data` iterates every enabled entity and awaits one HTTP
 round trip per entity, **sequentially**, on a `SCAN_INTERVAL` of thirty seconds. With the
@@ -85,20 +158,26 @@ interval stretch to minutes without the entities going stale in practice.
 This matters to question 2 more than anything else in this document. Rebasing upstream's
 integration inherits the poll design; reworking it is where the actual value is.
 
-## Coupling 2 — `/system/info` and the version gate
+## Coupling 2 — `/system/info` and the version *value*
+
+This is about the string, not the key; the key rename is Coupling 0 and has already
+happened.
 
 Grocy-SwiftUI exact-matches `grocy_version.Version` against `["4.4.0", "4.5.0", "4.6.0"]`.
 Outside that set it warns — "the server version is currently unsupported by the app, you
 can use it anyways, but there can be problems" — and continues. It is a banner, not a
 refusal.
 
-`version.json` currently reads `4.6.0`, the last value in that list, which is why nothing
-warns today. That is luck rather than design, and it is already fragile: the iOS app's most
-recent commit is a fix for upstream 4.7.0, which this fork is not.
+`version.json` still reads `4.6.0`, the last value in that list. [16](16-project-rename.md)
+landed without touching it, so the version *string* is unchanged and this gate is exactly
+where it was; what moved is the field it is read from. That is luck rather than design, and
+it was already fragile before the rename: the iOS app's most recent commit is a fix for
+upstream 4.7.0, which this fork is not.
 
-[16](16-project-rename.md) is the plan that touches this, and its question 6 already asks
-whether the rename coincides with a version change. The ecosystem cost of that decision is
-now small — one warning banner, in an app this fork is taking over anyway. See Q1.
+So Q1 — what version string the rename ships — is still genuinely open, and is now asked
+about a rename that has already shipped without deciding it. The ecosystem cost of the
+answer is unchanged and still small: one warning banner, in an app this fork is taking over
+anyway, and one that is moot until the client can read the field again at all. See Q1.
 
 ## Coupling 3 — the error contract
 
@@ -115,6 +194,27 @@ defect in that integration worth fixing in the fork regardless of plan 11.
 Error *message* text is not a tracked coupling. No client in scope matches on it, so
 [14](14-contract-and-regression-scaffolding.md)'s snapshot has no reason to freeze message
 strings, and plan 11 stays free to reword them.
+
+**One thing on this surface was a client-visible decision rather than a status code, and it
+was decided the cheap way round while it was still cheap.** `db/pgsql/README.md`'s hazard 16:
+the `~` operator of the generic list filter emitted `LIKE`, so `?query[]=name~milk` matched
+"Milk" on SQLite and did not on PostgreSQL. Making the engines agree necessarily changes the
+answers some client gets on one of them, so the direction mattered: SQLite's case-insensitive
+behaviour was taken as the reference and PostgreSQL was moved to `ILIKE`. That is the choice
+that costs a client nothing it can observe — SQLite is what every existing client has ever
+been pointed at, and it is what the spec documented — and it was taken before the forked
+Home Assistant integration exists to be written against the other behaviour. Deciding it
+after would have meant changing a client this household maintains.
+
+Two things to carry forward from it, both of which sharpen "How this plan stays current":
+
+- **The endpoint manifest of item 1 would not have caught this.** The path, the method and
+  the response shape were all unchanged; only the rows differed. Same lesson as Coupling 0,
+  from the opposite direction — a path list is not the contract.
+- **The client-impact line of item 2 is what caught it**, in the sense that writing one for
+  this change is what forced the direction to be chosen rather than defaulted. The line here
+  reads: no observable change for either tracked client, because both are SQLite-era clients
+  and SQLite is the side that did not move.
 
 ## Coupling 4 — hierarchies presented to a client that assumes flatness
 
@@ -221,13 +321,16 @@ knowing before deciding how much to trust the codebase:
 2. `/system/log-missing/localization` does not exist. The route is
    `/system/log-missing-localization`. It 404s against upstream grocy too.
 
-Neither is caught by anything, which tells us what the test coverage is worth. Fixing both
-is the fork's first commit; the version gate is the second.
+Neither is caught by anything, which tells us what the test coverage is worth.
 
-Posture: fork. Order of work — version gate, then the two latent 404s, then hierarchical
-pickers when [07](07-nested-products.md)/[08](08-nested-locations.md) land. Track upstream
-and rebase; a single-maintainer app is easier to follow than to diverge from. See Q3 on
-distribution, which is the real cost here and is not a code problem.
+Posture: fork. **The order of work changed when [16](16-project-rename.md) landed**: the
+first commit is now the API key header, because without it the app cannot authenticate and
+nothing else in the list is reachable to test. Then the `victual_version` key, then the
+version gate's value, then the two latent 404s above, then hierarchical pickers when
+[07](07-nested-products.md)/[08](08-nested-locations.md) land. Track upstream and rebase; a
+single-maintainer app is easier to follow than to diverge from. See Q3 on distribution,
+which is the real cost here and is not a code problem, and Q4 on whether the server meets
+the client half way on the header so this fork is not the only way to reach the server.
 
 ## How this plan stays current
 
@@ -243,14 +346,26 @@ opening it. The mechanism, not the list, is the deliverable:
 2. **Each plan carries a client-impact line.** One row, even when it reads "none". Absent
    is not the same as none.
 3. **This document is reviewed at [16](16-project-rename.md)** — the rename is the largest
-   client-facing event on the roadmap and the one with the least code in it.
+   client-facing event on the roadmap and the one with the least code in it. *This did not
+   happen*: 16 landed first, on the same day this was written. Item 2 above is what would
+   have caught it — a client-impact line on 16 could not have been written as "none" — and
+   item 1 would not have, since neither break shows up in a path manifest. That is the
+   argument for making item 2 a checklist row in the pull request template rather than a
+   convention, and for widening item 1 from paths to request headers and response keys.
 4. **Fork repositories live under the same owner**, each with an `UPSTREAM.md` recording
    the upstream commit last rebased onto and the divergence held. No fork is created
    before there is a change to put in it.
 
 ## Open questions
 
-1. **What version string does the rename ship?** With the iOS app the only version gate
+All four are unanswered. Q1 is now asked after the rename it was written to precede, and
+Q4 exists because that rename took a decision this document was supposed to hold.
+
+1. **What version string does the rename ship?** ***Asked after the fact.***
+   [16](16-project-rename.md) landed on 2026-08-29 without changing `version.json`, so the
+   fork still reports `4.6.0` — from `victual_version` rather than `grocy_version`, but the
+   same string. The question is therefore live and unchanged, only later than it should
+   be; nothing has foreclosed any of the answers. With the iOS app the only version gate
    left, and a soft one, this is no longer constrained by the ecosystem. I lean to
    resetting the version at the rename rather than continuing upstream's `4.x.y` line: the
    fork stops being 4.x in any meaningful sense around [07](07-nested-products.md), and a
@@ -285,15 +400,50 @@ opening it. The mechanism, not the list, is the deliverable:
 
    > **Response:**
 
+4. **Does the server keep accepting `GROCY-API-KEY`, and for how long?** New, and forced
+   by Coupling 0 rather than chosen. Three answers, and the roadmap needs one of them
+   written down rather than arrived at by default:
+
+   - **No shim.** The forked clients set the new header and no unmodified client ever
+     reaches this server. Cleanest, and consistent with the hard-fork posture — but it
+     means the *only* way to talk to this fork from iOS or Home Assistant is through
+     software this household also maintains, and it forecloses anyone else's client
+     before there is anyone else. It also makes the Q3 distribution problem load-bearing:
+     if the forked iOS app cannot be got onto a device, there is no iOS access at all.
+   - **Accept both, indefinitely.** One extra string in the `ApiKeyHeaderName` binding and
+     one extra lookup in `ApiKeyAuthMiddleware`. Cheap to write, and the sort of
+     compatibility shim that is never removed — upstream's name stays in the auth path
+     forever, which is precisely the outcome [16](16-project-rename.md)'s Tier 0/Tier 1
+     split exists to make deliberate rather than accidental.
+   - **Accept both, with an expiry.** Same change plus a deprecation window and a log line
+     on the legacy header, removed at a stated point — most plausibly when the forked
+     clients ship, since after that nothing this household runs needs it. This is the
+     answer I lean to, because it makes the shim's removal a scheduled item rather than a
+     someday.
+
+   Whichever is chosen, note that the same question does *not* arise for
+   `grocy_version` → `victual_version`: a client reading a missing key needs its own fix
+   regardless, and answering `/system/info` with both keys would be adding a field to a
+   response purely to keep an old name alive, which the additive rule permits and the
+   hard-fork posture argues against.
+
+   > **Response:**
+
 ## Verification
 
 Verification here is a booted instance and a real client, per the standard the rest of the
 roadmap is held to. Lint is not verification, and neither is reading a client's source.
 
-1. **Baseline, before anything changes.** Point both tracked clients at a booted fork
-   instance on both engines and record what works: Grocy-SwiftUI logging in and reaching
-   stock, Home Assistant's config flow completing and its sensors populating. This is the
-   before-picture that every later claim of "still works" is measured against.
+1. **Baseline, before anything changes** — ***and it has to be taken on a pre-rename
+   checkout now.*** Point both tracked clients at a booted fork instance on both engines
+   and record what works: Grocy-SwiftUI logging in and reaching stock, Home Assistant's
+   config flow completing and its sensors populating. This is the before-picture that
+   every later claim of "still works" is measured against, and against the current head it
+   is not obtainable — both clients fail at authentication per Coupling 0. Take it at
+   `93605da`, the last commit before [16](16-project-rename.md) merged, which is the state
+   this document was written about. Losing the ability to take a baseline on `master` is
+   the concrete cost of the ordering breach, and it is small only because the checkout is
+   still there.
 2. **The manifest matches reality.** The extracted endpoint manifests are diffed against
    the fork's `victual.openapi.json` and every mismatch is explained — the two found while
    writing this plan are client-side bugs, and any future mismatch must be classified as
@@ -310,11 +460,29 @@ roadmap is held to. Lint is not verification, and neither is reading a client's 
    `POST /chores/{id}/execute` is reachable from both clients and is the case to check
    first, along with confirming that one failing entity no longer marks the whole Home
    Assistant coordinator unavailable.
-5. **[16](16-project-rename.md)'s version string is tested before it is chosen.** Set the
-   candidate value in `version.json` on a disposable instance and confirm what the iOS
-   client does with it, with the stock app rather than the forked one — the stock app is
-   the honest test of what an unmodified client sees.
-6. **After [07](07-nested-products.md)/[08](08-nested-locations.md), look at the pickers.**
+5. **[16](16-project-rename.md)'s renames are tested against a stock client — the version
+   *key* now, the version *string* before it is chosen.** Two checks, in that order, both
+   with the stock app rather than the forked one, because the stock app is the honest test
+   of what an unmodified client sees:
+
+   a. *After the fact, and overdue.* On the current head, with the legacy
+      `GROCY-API-KEY` header temporarily accepted so the app can get far enough to ask,
+      confirm what Grocy-SwiftUI does when `/system/info` answers `victual_version` and
+      not `grocy_version` — a decode failure on `SystemInfo`, or a nil version and a
+      warning banner. Coupling 0 declines to guess, and this is the check that stops it
+      being a guess. Repeat for the Home Assistant integration's version sensor.
+
+   b. *Before it is chosen, as originally written.* Set the candidate version value in
+      `version.json` on a disposable instance and confirm what the client does with it.
+      This one is still genuinely ahead of the decision: Q1 is unanswered and
+      `version.json` still reads `4.6.0`.
+
+6. **Q4's answer is tested as a pair.** Whichever shim answer Q4 lands on, exercise a stock
+   client against a booted instance with the legacy header and with the new one, and
+   confirm both the accepted and the rejected case behave as the answer says — including,
+   if the answer has an expiry, that the deprecation log line fires. A shim nobody has
+   watched reject a request is a shim nobody knows the shape of.
+7. **After [07](07-nested-products.md)/[08](08-nested-locations.md), look at the pickers.**
    Screenshot Grocy-SwiftUI's product-group and location pickers against a seeded tree
    three levels deep. The failure mode is visual and correct-looking, so it has to be
    looked at rather than asserted.

@@ -31,10 +31,18 @@ judged against here, and they are stricter than they look:
 - **Additive API.** Existing endpoints keep their response shape. Nearly every response is
   a database row serialised as-is, so a schema change *is* an API change; anything that
   alters an existing response is called out explicitly rather than slipped in.
-- **Migrations from 0256 on work on every supported engine** — a portable `NNNN.sql`, or a
-  per engine `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair. See
-  [db/pgsql/README.md](../db/pgsql/README.md), which also documents fifteen porting hazards
-  worth reading before writing SQL for both engines.
+- **Migrations from 0256 on work on every supported engine** — a portable `NNNN.sql`, a
+  per engine `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair, or a documented engine-exclusive
+  migration. The third shape is the one that is easy to get wrong: ship a lone
+  `NNNN.sqlite.sql` or `NNNN.pgsql.sql` only when you can say in the file itself why the
+  other engine is already correct, and say it with an `@engine-exclusive` comment —
+  `.devtools/pgsql/check-migrations.php` refuses one without it, because a missing
+  counterpart and a deliberate omission look identical in a directory listing. An
+  engine-specific file that shadows a portable one of the same number likewise has to say
+  `@overrides-generic`. See [db/pgsql/README.md](../db/pgsql/README.md), which holds the
+  full rule and also documents seventeen porting hazards worth reading before writing SQL
+  for both engines — hazards 16 and 17 are case sensitivity, and are the two that bite PHP
+  rather than SQL.
 - **Verification means a booted instance**, not a lint pass and not "it loads cleanly".
   Schema changes are checked with `.devtools/pgsql/difftest.php` for views and
   `trigdifftest.php` for trigger behaviour; new views must return identical output on both

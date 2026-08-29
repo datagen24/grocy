@@ -71,6 +71,39 @@ class PostgresDialect extends DatabaseDialect
 	}
 
 	/**
+	 * ILIKE, not LIKE - PostgreSQL's LIKE is case sensitive where SQLite's is not.
+	 */
+	public function GetLikeCondition(string $field, bool $negated): string
+	{
+		// ILIKE folds case using the database collation, so it agrees with SQLite's ASCII
+		// only folding on ASCII and is more correct beyond it - the same trade this port
+		// already makes for COLLATE NOCASE (hazard 15 in db/pgsql/README.md)
+		return $field . ($negated ? ' NOT ILIKE ?' : ' ILIKE ?');
+	}
+
+	/**
+	 * information_schema.columns, which covers views as well as tables. Restricted to the
+	 * search path so a same-named table in another schema cannot answer for this one.
+	 */
+	public function GetColumnTypes(\PDO $pdo, string $table): array
+	{
+		$statement = $pdo->prepare(
+			'SELECT column_name, data_type FROM information_schema.columns '
+			. 'WHERE table_name = ? AND table_schema = ANY(current_schemas(false))'
+		);
+		$statement->execute([$table]);
+
+		$types = [];
+
+		foreach ($statement->fetchAll(\PDO::FETCH_ASSOC) as $column)
+		{
+			$types[$column['column_name']] = $column['data_type'];
+		}
+
+		return $types;
+	}
+
+	/**
 	 * LOCALTIMESTAMP truncated to seconds, equivalent to SQLite's
 	 * datetime('now', 'localtime') given the SET TIME ZONE in OnConnected().
 	 */

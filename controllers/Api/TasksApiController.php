@@ -18,7 +18,7 @@ class TasksApiController extends BaseApiController
 	 */
 	public function Current(Request $request, Response $response, array $args)
 	{
-		return $this->FilteredApiResponse($response, TasksService::GetInstance()->GetCurrent(), $request->getQueryParams());
+		return $this->FilteredApiResponse($request, $response, TasksService::GetInstance()->GetCurrent(), $request->getQueryParams());
 	}
 
 	/**

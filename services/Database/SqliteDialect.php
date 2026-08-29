@@ -66,6 +66,34 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
+	 * Plain LIKE, which SQLite already applies case insensitively for ASCII
+	 * (PRAGMA case_sensitive_like is off by default). This is the reference behaviour the
+	 * PostgreSQL dialect mimics with ILIKE.
+	 */
+	public function GetLikeCondition(string $field, bool $negated): string
+	{
+		return $field . ($negated ? ' NOT LIKE ?' : ' LIKE ?');
+	}
+
+	/**
+	 * PRAGMA table_info, which reports the type as it was declared in the CREATE statement
+	 * and works on views as well as tables.
+	 */
+	public function GetColumnTypes(\PDO $pdo, string $table): array
+	{
+		$types = [];
+
+		// PRAGMA takes no placeholders, hence the quoting; $table is never caller supplied
+		// (it is the Result's own table) but quoting it is what makes that safe to say.
+		foreach ($pdo->query('PRAGMA table_info(' . $this->QuoteIdentifier($table) . ')') as $column)
+		{
+			$types[$column['name']] = $column['type'];
+		}
+
+		return $types;
+	}
+
+	/**
 	 * Local (process time zone) timestamp with second precision - the reference
 	 * behaviour the PostgreSQL dialect mimics.
 	 */

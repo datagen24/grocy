@@ -12,9 +12,12 @@ hardening set.
 
 ## Today
 
-The `/api` route group registers 86 operations across 73 paths and `victual.openapi.json`
-documents 86 operations across 73 paths — the totals agree, and two individual mismatches
-hide inside them (see [14](14-contract-and-regression-scaffolding.md)). The
+The `/api` route group registers 87 operations across 74 paths and `victual.openapi.json`
+documents 86 across 73 — one mismatch, `GET /openapi/specification`, which is routed and
+undocumented (see [14](14-contract-and-regression-scaffolding.md)). The earlier reading
+here, that the totals agreed at 86 apiece with two mismatches hidden inside them, was
+wrong in both halves: it dropped one route on the way in and invented one spec-only path.
+The
 `ExposedEntity` allow-lists are read from the spec at runtime so entity drift is
 impossible by construction, and every controller returns the same
 `{ "error_message": … }` body. The structure is sound. What is not uniform is *which
@@ -41,6 +44,59 @@ re-emits `$ex->getCode()`. That is the pattern; it exists in exactly three metho
 Neither is caught by the list endpoints, so a malformed `?order=` or `?query[]=` — client
 error, entirely — reaches `ExceptionController` as an unclassified throwable and is
 answered 500.
+
+> **Landed early — this plan's validation approach, applied to the `query[]`/`order`
+> surface only.** The rest of the plan is unbuilt. What is in the tree is the piece the
+> hazard-16/17 work needed, and it is recorded here because this plan is its home:
+>
+> - `Invalid sort order` and `Invalid query` are `HttpException(400)` rather than bare
+>   `\Exception`, so they no longer arrive as 500s.
+> - **The field is validated before any SQL is built.** `DatabaseDialect::GetColumnTypes()`
+>   reports the entity's columns per engine, and an unknown field is
+>   `400 Invalid query: unknown field "x"` on both. That is hazard 17's fix as well as this
+>   plan's: `?order=Name` used to sort on SQLite and 500 on PostgreSQL, and `?order=nope`
+>   was a 500 on both.
+> - **`~`, `!~` and `§` are restricted to text columns**, by one shared rule
+>   (`DatabaseDialect::IsTextMatchableType()`) rather than one per engine, so both give the
+>   same answer. `?query[]=id~2` used to match on SQLite, which coerces, and 500 on
+>   PostgreSQL, which has no such operator for the type. Both now answer `400`.
+> - **`ColumnTypeManifest` closes what two catalogues cannot.** SQLite does not type a
+>   computed view column, so eligibility would otherwise be engine-dependent on exactly the
+>   columns worth searching. 13 semantic entries, applied identically to both engines,
+>   gap-filling only, and enforced by the suite. All 731 columns across 82 shared
+>   tables/views now reach the same verdict on both engines.
+> - **`MaterialiseFiltered()` is the backstop**: the filtered query is run where it can be
+>   caught, and a PDO failure on a request that carried caller-supplied `query[]`/`order`
+>   becomes a `400` rather than an unclassified 500.
+> - **A catalogue that cannot be read is a `500`, not a silent pass.** Validation that
+>   cannot be performed is refused rather than skipped — failing open would restore the
+>   200/500 divergence intermittently and invisibly. An unfiltered request needs no
+>   validation and is unaffected, so this costs filtering rather than availability.
+>
+> The failure log is `error_log()` because this fork has no logger. That is this plan's
+> other half — "error logging" is in its title — and this line is one of the things that
+> wants it.
+>
+> The direction was deliberate and is worth keeping in view when the rest of this plan
+> lands: casting the column to text on PostgreSQL would also have made `id~2` work on both,
+> and was rejected because the two engines render a float differently (`1.0` against `1`),
+> which would have replaced a loud error with a silent wrong answer. See hazard 16 in
+> `db/pgsql/README.md` for the measurements and for the one residual this leaves.
+>
+> **Client-visible, and so belongs in this plan's breaking-changes list**: three request
+> shapes that used to return `200` on SQLite now return `400` on both engines —
+> `~`/`!~`/`§` on a non-text column, an unknown field in `query[]`, and `order` naming a
+> field in the wrong case. Nothing that was already `400` moved, and no successful response
+> changed shape.
+
+**A related divergence in the same method was *not* a status-code question, and has since
+been fixed** — noted here because it is the reason `FilterData` no longer spells its own
+operators. `FilterData`'s `~` and `!~` emitted `LIKE`, which is case-insensitive on SQLite
+and case-sensitive on PostgreSQL, so the same filter returned different rows on the two
+engines with no error at all (hazard 16). It now calls `GetLikeCondition()` on the dialect,
+mirroring `GetRegexpCondition()`, and PostgreSQL gets `ILIKE`. SQLite's behaviour was taken
+as the reference, so no client pointed at a SQLite instance sees any change; a client
+pointed at PostgreSQL now gets the rows the API always documented.
 
 **Missing objects are 404 or 400 depending on the verb.** `GetObject` throws a Slim
 `HttpNotFoundException`; `EditObject` and `DeleteObject` return
@@ -174,9 +230,11 @@ Two migrations, both gated on Q4's yes to hashing, because Q4's answer brings DD
 it:
 
 - a per-engine `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair adding the `api_keys.key_hint`
-  column. Adding a column is DDL and DDL is where the two engines diverge, so this
-  follows the same per-engine convention as every other schema change in the fork —
-  the "portable single file" reading only held while the change was a pure `UPDATE`;
+  column. Adding a column is DDL and DDL is where the two engines diverge, so a pair is
+  the right one of the three shapes here — the "portable single file" reading only held
+  while the change was a pure `UPDATE`, and the third shape does not apply because both
+  engines genuinely need the column, which is what would have to be true to write
+  `@engine-exclusive` and mean it;
 - a `NNNN.php` migration doing the hashing itself: read each row, hash `api_key` in
   place, populate `key_hint` from its last four characters. This half genuinely is
   engine-agnostic — it runs through `ExecutePhpMigrationWhenNeeded` on both — and it must
@@ -238,10 +296,13 @@ it — no operation documents a `403`, a `404` or a `401` anywhere. So the work 
 adding error responses to a spec that has none; it is adding the codes this plan makes
 real to operations that currently claim `400` is the only way to fail. Each converted
 endpoint gets its real `4xx` responses added, which also makes the spec the place the
-contract test in [14](14-contract-and-regression-scaffolding.md) reads from. The two
-known route/spec mismatches — `/api/openapi/specification` in the route table but not the
-spec, and `/api/recipes/{recipeId}/copy` in the spec with no route behind it — are fixed
-in 14 alongside the parity check that would have caught them.
+contract test in [14](14-contract-and-regression-scaffolding.md) reads from. There is one
+route/spec mismatch, not the two this plan previously listed — `/api/openapi/specification`
+is in the route table and not the spec, and is fixed in 14 alongside the parity check that
+would have caught it. `/api/recipes/{recipeId}/copy` was *not* the second: **corrected
+2026-08-29**, the route exists at `routes.php:237`, written `$group->Post(` with a capital
+`P` that a case-sensitive grep for `$group->post(` steps straight over. See 14's Today
+section for the corrected counts and for what it means for the parity assertion.
 
 ## Verification
 
@@ -249,7 +310,7 @@ in 14 alongside the parity check that would have caught them.
    call it unauthenticated, with a key lacking the permission, with a malformed
    `?order=zzz`, and against a non-existent id. Record method, path, case, status. The
    before-run is the baseline; the after-run must differ only in the rows of the table
-   above. Doing this by hand across 86 operations is the argument for landing
+   above. Doing this by hand across 87 operations is the argument for landing
    [14](14-contract-and-regression-scaffolding.md) first and adding this as a case there.
 2. **Success responses byte-identical.** Same harness, happy paths only, both engines:
    the diff must be empty. This is the check that the helper refactor did not change
@@ -397,5 +458,5 @@ Medium, and it splits cleanly into three sessions that can land separately: the 
 helper plus the mechanical per-controller conversion (the bulk, and the boring part); the
 middleware ordering, CORS setting and error logging (small, self-contained, could go
 first); the API-key and mass-assignment work (small, but Q4 gates it). The verification
-is the part that is easy to underestimate — checks 1 and 2 across 86 operations on two
+is the part that is easy to underestimate — checks 1 and 2 across 87 operations on two
 engines is not something to do by hand more than once.

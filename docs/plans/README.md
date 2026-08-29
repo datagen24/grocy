@@ -1,23 +1,27 @@
 # Fork roadmap
 
-Action plans for the work this fork exists to do. Each is a draft for review, not a
-commitment — the **Open questions** sections are numbered, and each carries its review
-answer inline as a `> **Response:**` block, so question and answer read together.
+Action plans for the work this fork exists to do. Most are drafts for review, not
+commitments — the **Open questions** sections are numbered, and each carries its review
+answer inline as a `> **Response:**` block, so question and answer read together. Some
+have since been built; the **Status** column below is the authority on which, and a plan
+that has landed carries an **Executed** section recording what actually shipped, including
+where it diverged from the plan above it. A landed plan's body is kept in the present
+tense it was written in — the Executed section, not the prose, is the record of the code.
 
 ## Status
 
-| # | Plan | Upstream | Depends on | Size |
-|---|---|---|---|---|
-| — | [Database abstraction / PostgreSQL](../../db/pgsql/README.md) | — | — | **done** |
-| 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small |
-| 02 | [MCP endpoint](02-mcp-endpoint.md) ([interface spec](../mcp-interface-spec.md)) | — | — | medium |
-| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small |
-| 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium |
-| 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | — | medium |
-| 06 | [Location barcodes](06-location-barcodes.md) | — | — | small |
-| 07 | [Deeply nested products](07-nested-products.md) | — | — | **large** |
-| 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium |
-| 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small, **deferred** |
+| # | Plan | Upstream | Depends on | Size | Status |
+|---|---|---|---|---|---|
+| — | [Database abstraction / PostgreSQL](../../db/pgsql/README.md) | — | — | — | **landed** |
+| 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small | draft |
+| 02 | [MCP endpoint](02-mcp-endpoint.md) ([interface spec](../mcp-interface-spec.md)) | — | — | medium | draft |
+| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft |
+| 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium | draft |
+| 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | — | medium | draft |
+| 06 | [Location barcodes](06-location-barcodes.md) | — | — | small | draft |
+| 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
+| 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium | draft |
+| 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
 
 ## Hardening
 
@@ -26,21 +30,21 @@ own defects table (items 1–13) is already fixed in `36650cd`; these are everyt
 found. They add no features and block no feature plan, but 12 and 14 should land before
 the plans noted below start minting more of what they clean up.
 
-| # | Plan | From | Depends on | Size |
-|---|---|---|---|---|
-| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium |
-| 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium |
-| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list | — | medium |
-| 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small |
-| 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium |
-| 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4 | 11, 13, 14 (per item) | small + one large open question |
+| # | Plan | From | Depends on | Size | Status |
+|---|---|---|---|---|---|
+| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0) |
+| 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
+| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list | — | medium | draft |
+| 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
+| 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
+| 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4 | 11, 13, 14 (per item) | small + one large open question | draft |
 
 ## Meta
 
-| # | Plan | Upstream | Depends on | Size |
-|---|---|---|---|---|
-| 16 | [Project rename](16-project-rename.md) | — | before first deployment | **done in the codebase** |
-| 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; read before 11 and 16 | small, ongoing |
+| # | Plan | Upstream | Depends on | Size | Status |
+|---|---|---|---|---|---|
+| 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
+| 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **draft, and overtaken by 16** — see below |
 
 The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
 so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
@@ -73,6 +77,16 @@ rename and the registry claims happen at announcement time, not in a commit.
   reason: the Home Assistant integration polls every thirty seconds, so scale-to-zero is not
   achieved by 10 alone. 17 also asks 14 for client endpoint manifests asserted against the
   snapshot, so it wants reading before 14 piece 2 is built.
+
+  **This rule was broken, on 16.** Both landed 2026-08-29; 16 went first and renamed the
+  `GROCY-API-KEY` header and the `grocy_version` response field on the recorded premise
+  that "no client exists", while 17 — written the same day — documents two external
+  clients that use both. The premise was true of *deployed instances of this fork* and
+  false of *clients*, and 17 is exactly the document that would have said so. Nothing is
+  deployed, so the cost is a decision deferred rather than an outage; the decision is
+  now 17's, taken after the fact instead of before it, and is written up under
+  "Coupling 0" there. The rule stands unchanged for 11 and 10, both of which are still
+  ahead.
 - **15 is last**, except its auth refactor, which wants to precede
   [02](02-mcp-endpoint.md), and which carries the parked `shopping_locations` rename.
 
@@ -124,21 +138,29 @@ proves the recursive pattern before 07 spends it; 10 then 01 produce the volume-
 pod. Waves are strictly ordered; tracks inside a wave touch disjoint files and can run
 as parallel sessions.
 
-### Wave 0 — decisions and scaffolding (one sitting)
+Wave 0 is complete and wave 1's track C is done; the rest is unstarted. Wave 4's shape
+is no longer settled — see 07-Q6 there.
 
-- **A dev/CI container, in this repo.** Both `.devtools/pgsql` scripts run under a
-  `victual-dev` image, and there is no Dockerfile, compose file or Makefile anywhere
+### Wave 0 — decisions and scaffolding (one sitting) — **complete**
+
+Landed 2026-08-27 to 2026-08-29: `40e1f57f` (container + `bin/victual-migrate`),
+`d80a88f0` (14 piece 1), `fd506a85` (14 piece 3), plus `31401f0`, `4ae6990`, `d2524a3`
+and `36a3032` for the phases the suite grew in the doing. The 09-Q1 experiment is still
+unscheduled, as this wave always said it would be. See 14's Executed section.
+
+- **A dev/CI container, in this repo.** Both `.devtools/pgsql` scripts ran under a
+  `victual-dev` image, and there was no Dockerfile, compose file or Makefile anywhere
   in the tree — nor a vendored `packages/`. 14's verification 6 ("one command from a
-  clean checkout") is unmeetable until that exists, so it is the first thing built: a
+  clean checkout") was unmeetable until that existed, so it was the first thing built: a
   Dockerfile (PHP 8.5, `pdo_sqlite` + `pdo_pgsql`, composer install) and a compose file
   with a PostgreSQL service. [10](10-cold-start-statelessness.md) later bakes its view
   cache into this same build.
 - **`bin/victual-migrate`, pulled forward from [10](10-cold-start-statelessness.md).**
-  `trigdifftest.php` needs a migrated SQLite database and nothing in the tree can make
+  `trigdifftest.php` needs a migrated SQLite database and nothing in the tree could make
   one from a command line: `bin/victual-db-import` returns early on `sqlite`
-  (`bin/victual-db-import:68`) and migrations otherwise only run from `GET /`. Without
-  this, 14 piece 1 cannot run — the roadmap's own ordering is inverted. Only the CLI
-  moves; the lock and the cache work stay in 10.
+  (`bin/victual-db-import:68`) and migrations otherwise only ran from `GET /`. Without
+  this, 14 piece 1 could not run — the roadmap's own ordering inverted. Only the CLI
+  moved; the lock and the cache work stay in 10.
 - **14 piece 1**: the runnable diff suite (recover or rewrite the seeds), plus its
   recursive-CTE tool check (14 verification 7) — done now so wave 4 never waits on it.
   It also extracts `difftest.php`'s `normalise()` into `services/`, which
@@ -161,7 +183,9 @@ as parallel sessions.
   error toast cannot fire until they are deleted, and those deletions belong to the
   files step 3 rewrites wholesale. The handler deletions therefore ride with the factory
   conversions, per file, so each one is exercised as it lands.
-- **Track C: 13 write-path transactions.** All seven entrypoints, webhook after commit.
+- **Track C: 13 write-path transactions** — **done**, ahead of the rest of this wave
+  (`7abfd2fa`, `782289b8`, `96f9ec99`, 2026-08-29). All seven entrypoints, webhook after
+  commit, and the importer made atomic. Tracks A and B are still open.
 
 ### Wave 2 — API correctness
 
@@ -184,11 +208,26 @@ as parallel sessions.
 ### Wave 4 — the hierarchy work
 
 - **08 nested locations** — recursive pattern on the simpler tree, fixtures in 14's
-  suite first.
-- **07 nested products** — only after 08 is merged and used. Fixtures before any
-  change, per its own verification section; this is the largest item on the roadmap
-  and the one to be careful with — it is an audit of every one-level assumption, not
-  "make the view recursive".
+  suite first. Unconditional: containment is exactly what `parent_location_id` would
+  mean, so 08 has none of 07's modelling doubt.
+- **07-Q6, answered before anything in this wave is scheduled.** 07's own question 6
+  asks whether the requirement is a taxonomy or a packaging relation, and its recorded
+  response says plainly that if it is a taxonomy then **nesting `product_groups` is the
+  right change and 07 is mostly unnecessary** — one nullable parent column on a lookup
+  table, in [03](03-category-min-stock.md)'s territory, costing none of 07's stock
+  aggregation, substitution semantics or one-level audit. This wave was written before
+  that response existed and still treats 07 as its centrepiece. It is not one until Q6
+  says so. The question cannot be answered from the code; it needs the real catalogue.
+- **Then whichever of these Q6 selects:**
+  - *Taxonomy* — nested `product_groups` folds into **03**, which moves to wave 3 with
+    a parent column added to its scope, and 07 shrinks to whatever genuine
+    same-product-different-packaging cases remain. Wave 4 stops being the large wave.
+  - *Packaging relation* — **07 nested products** as written: only after 08 is merged
+    and used, fixtures before any change per its own verification section, the largest
+    item on the roadmap and the one to be careful with — an audit of every one-level
+    assumption, not "make the view recursive". Note that 07's Q1 and Q4 responses are
+    written against the taxonomy reading and are rewritten against the narrower relation
+    if this is where it lands.
 
 ### Wave 5 — the assistant and the lists
 

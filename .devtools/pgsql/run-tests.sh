@@ -3,9 +3,9 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter]
 #
-# Four kinds of check, for four reasons. Views are compared by what they return, because
+# Five kinds of check, for five reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -24,6 +24,14 @@
 # operation halfway, and check the ledger is where it started — on each engine in turn
 # rather than against the other.
 #
+# The fifth closes the gap the other four leave between them: application code that
+# builds SQL differently per engine. The rollback phase enters the application but asks
+# one engine at a time; the first three compare engines but never enter the application.
+# Hazard 16 lived in exactly that hole — the "~" filter operator meant "case insensitive"
+# on SQLite and "case sensitive" on PostgreSQL for as long as the controller spelled LIKE
+# itself, with an identical response shape either way. The filter phase asks both engines
+# the same question through the dialects and compares the rows.
+#
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
 # difftest.php, trigdifftest.php and migratedifftest.php, which share their normalisation
@@ -38,6 +46,7 @@
 #   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default victual_trig)
 #   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default victual_migrate)
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
+#   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
 #   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
@@ -65,6 +74,7 @@ VIEW_DB="${SUITE_PGSQL_VIEW_DB:-victual_full}"
 TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-victual_trig}"
 MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
+FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
 
 WHICH="${1:-all}"
 
@@ -326,6 +336,38 @@ run_rollback_tests() {
 	rm -f "$sqlite_db"
 }
 
+# --- Filter operator tests --------------------------------------------------------
+#
+# The one phase that compares application behaviour rather than SQL. It asks each dialect
+# for the condition it would emit for the API's "~" and "!~" operators, runs both against
+# their own engine, and compares the rows - so it fails if the two ever stop meaning the
+# same thing again, which is what hazard 16 was.
+#
+# Both databases are migrated ones rather than bare scratch databases, deliberately:
+# PostgreSQL's ILIKE folds case according to the database's collation, so the answer
+# depends on how the database was created, and the database this suite creates the way
+# bin/victual-migrate creates one is the honest thing to measure.
+
+run_filter_tests() {
+	build_pgsql "$FILTER_DB"
+
+	# A copy, not the pristine database itself: this phase creates and drops a scratch
+	# table, and the pristine database is the template every other phase starts from.
+	local sqlite_db="$SUITE_SCRATCH/filter-source.db"
+	cp "$PRISTINE" "$sqlite_db" || fail 'could not copy the pristine database for the filter tests'
+
+	export FILTERDIFF_SQLITE_PATH="$sqlite_db"
+	export FILTERDIFF_PGSQL_DSN="pgsql:host=$PGHOST;port=$PGPORT;dbname=$FILTER_DB"
+	export FILTERDIFF_PGSQL_USER="$PGUSER"
+	export FILTERDIFF_PGSQL_PASSWORD="$PGPASSWORD"
+
+	if ! php "$SUITE_DIR/filterdifftest.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -f "$sqlite_db"
+}
+
 # --- Trigger tests ----------------------------------------------------------------
 
 run_trigger_tests() {
@@ -364,8 +406,9 @@ case "$WHICH" in
 	views) run_view_tests ;;
 	triggers) run_trigger_tests ;;
 	rollback) run_rollback_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback or all)" ;;
+	filter) run_filter_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then
