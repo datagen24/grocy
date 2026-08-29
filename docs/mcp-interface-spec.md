@@ -137,6 +137,14 @@ and it is small:
    ground rules.
 4. **Key management UI**: the existing `/manageapikeys` screen grows a type selector
    (default/MCP) and the read-only checkbox for MCP keys.
+5. **A self-describing capabilities endpoint**, `GET /api/user/capabilities`: returns
+   `{ key_type, read_only, permissions: [...] }` for the *acting* credential, callable
+   by any authenticated key about itself. This exists because capability-reflecting
+   tool listing (§5, Open question 2) needs it and nothing provides it today —
+   `GET /api/users/{id}/permissions` is ADMIN-gated
+   (`controllers/Api/UsersApiController.php:210`), so an ordinary key cannot learn its
+   own permission set. New endpoint rather than new fields on `GET /api/user`, per the
+   roadmap's additive-API ground rule.
 
 Scoping and revocation therefore live in exactly one place, the key row — no new
 `PERMISSION_*` constant, per 02-Q3.
@@ -159,9 +167,24 @@ Six tools, the plan's table made concrete. Shared conventions first:
 - **Amounts** are numbers in the product's stock unit, with the unit's display name
   resolved via one `GET /api/objects/quantity_units` per request (id→name map built
   per call; it is small).
-- **`tools/list`** returns tools in a fixed, deterministic order with
-  `ttlMs: 3600000`, `cacheScope: "private"` — the list is static per deployment
-  (config-gated, §8) but sits behind auth. Tool results carry no cache hints.
+- **`tools/list` reflects what the key can actually do** (Open question 2, adopted).
+  Serving the list, the sidecar calls `GET /api/user/capabilities` (§4.2 item 5) with
+  the request's credential and filters the config-enabled tools by a static tool →
+  permission map: a tool is listed only when the key's user holds its permission, and
+  write tools (§6) additionally require the key not be `read_only`. The map for this
+  spec's nine tools: `STOCK` for `stock_overview`/`expiring_soon`/`missing_products`/
+  `find_product`, `SHOPPINGLIST` for `shopping_list`, `RECIPES` for
+  `recipes_i_can_cook`, `SHOPPINGLIST_ITEMS_ADD` for `add_to_shopping_list`,
+  `STOCK_CONSUME` for `consume_product`, `STOCK_PURCHASE` for `purchase_product`
+  (constants from `controllers/Users/User.php`). One probe per `tools/list` request —
+  stateless, nothing cached across requests. `tools/call` does *not* probe: Grocy
+  enforces on the forwarded call, and a race (permission revoked between list and
+  call) surfaces as an honest `forbidden` (§7).
+- **`tools/list` order and caching**: fixed, deterministic order; `ttlMs: 300000`,
+  `cacheScope: "private"` — the list now varies per key, so it is private by
+  necessity, and five minutes bounds how long a revoked permission or flipped
+  read-only flag keeps a stale tool visible in a client. Tool results carry no cache
+  hints.
 
 ### 5.1 `stock_overview`
 
@@ -254,9 +277,11 @@ write wave is an implementation task, not a design task:
 
 Write-tool rules, fixed now:
 
-- Registered only when the deployment enables them in config (§8) — a read-only
-  deployment does not even list them. The hard boundary remains the per-key
-  `read_only` flag in Grocy (§4.2); the config gate is UX, not security.
+- Listed only when the deployment enables them in config (§8) **and** the presenting
+  key clears the §5 capability filter (not `read_only`, user holds the tool's
+  permission) — a read-only key never sees them at all. The hard boundary remains the
+  per-key `read_only` flag enforced inside Grocy (§4.2); the config gate and the list
+  filter are UX, not security.
 - `consume_product` and `purchase_product` return the stock `transaction_id` in
   `structuredContent`, and the `text` block says how to undo ("this can be undone in
   Grocy's stock journal") — the REST undo endpoints exist and an assistant that just
@@ -350,13 +375,18 @@ Per the roadmap's standard — booted-instance checks, not lint:
    response-shape change breaks the sidecar's CI, not a household conversation.
 2. **MCP Inspector** against a compose stack (sidecar + Grocy + PostgreSQL, demo
    dataset): `server/discover` reports both protocol revisions; `tools/list` matches
-   `MCP_ENABLED_TOOLS`, ordered deterministically, with cache hints; each §5 tool
+   `MCP_ENABLED_TOOLS` filtered by the presenting key's capabilities (§5), ordered
+   deterministically, with cache hints; each §5 tool
    returns schema-valid `structuredContent`; results carry `resultType` and
    `serverInfo`.
-3. **Auth matrix** on the same stack: no header → 401 pre-JSON-RPC; garbage key →
-   `unauthorized` tool error; valid default-type key → rejected (only MCP-type keys
-   pass, proving §4.2 item 2); MCP-type read-only key + (future) write tool → 403 from
-   Grocy surfacing as `forbidden`.
+3. **Auth and capability matrix** on the same stack: no header → 401 pre-JSON-RPC;
+   garbage key → `unauthorized` tool error; valid default-type key → rejected (only
+   MCP-type keys pass, proving §4.2 item 2); MCP-type read-only key + (future) write
+   tool → 403 from Grocy surfacing as `forbidden`. For the §5 listing filter: two keys
+   whose users differ in one permission (e.g. `RECIPES`) get `tools/list` responses
+   differing in exactly that tool; revoking a permission is reflected in the next
+   `tools/list`, and a `tools/call` on the now-hidden tool still answers `forbidden`
+   rather than anything worse.
 4. **The actual client** (02-Q1's standing instruction): connect the Claude client in
    real use with the bearer header, ask the two motivating questions — "what is
    expiring this week", "what can I cook tonight" — and read the transcripts for
@@ -378,9 +408,11 @@ name at that point and is frozen thereafter.
 - `.github/workflows/test.yml`, `release.yml`, `publish-docker.yml`,
   `version-checks.yml` and `.releaserc.json` — the semantic-release + GHCR publish
   pipeline, adjusted for the new package name.
-- `Dockerfile` — the multi-target pattern (plain Alpine vs. HA base via `BUILD_FROM`)
-  survives only if Open question 3 keeps the add-on; otherwise it collapses to the
-  plain Node target, non-root, `tini` entrypoint.
+- `Dockerfile` — per Open question 3's response the Home Assistant add-on is retired,
+  so the multi-target `BUILD_FROM` machinery is *not* imported: the Dockerfile
+  collapses to the plain Node/Alpine target, non-root, `tini` entrypoint. The add-on
+  files (`config.yaml`, `build.yaml`, `rootfs/`, `scripts/update-ha-addon-version.js`)
+  stay behind in mcp-grocy.
 - The `inspector` npm script (`npx @modelcontextprotocol/inspector`) and the *idea* of
   `scripts/check-tools.js` — a release gate asserting the tool census matches the
   spec — rewritten against this spec's registry.
@@ -422,13 +454,21 @@ recurring hygiene findings from Appendix A, stated as rules.
    (a `GET /api/user`-adjacent probe or a header echo), which is a per-request lookup
    in a stateless server. Cheap enough, but deferred with the writes themselves.
 
-   > **Response:** _pending_
+   > **Response:** Adopted (2026-08-29), and promoted from "once writes exist" to a
+   > v1 behavior: the design is in §5 (per-request probe of
+   > `GET /api/user/capabilities`, static tool→permission map, 5-minute private
+   > cache hint) and the enabling Grocy endpoint is §4.2 item 5. From day one a key
+   > whose user lacks `RECIPES` simply doesn't see `recipes_i_can_cook`; when writes
+   > land their filtering costs nothing new.
 3. **Does the Home Assistant add-on shape survive?** It is a packaging of the stdio/
    stored-key model this spec removes (§8). If HA is still a consumer, it would need
    the HTTP+bearer shape like every other client — worth deciding before porting the
    add-on config forward.
 
-   > **Response:** _pending_
+   > **Response:** Retired (2026-08-29). The sidecar lives alongside the Grocy
+   > instance in the k3s cluster; anything (Home Assistant included) that wants it
+   > speaks HTTP+bearer to that one deployment like every other client. §12's import
+   > list drops the add-on scaffolding accordingly.
 
 ---
 
@@ -493,8 +533,8 @@ architecture at every layer that matters.
 
 ### What to carry forward
 
-1. **Packaging**: Dockerfile structure, semantic-release setup, HA add-on scaffolding
-   (pending Open question 3), the MCP Inspector npm script.
+1. **Packaging**: Dockerfile structure (plain target only — the HA add-on is retired
+   per Open question 3), semantic-release setup, the MCP Inspector npm script.
 2. **Test discipline**: per-handler unit tests with mocked REST are the right shape
    for §11's fixture-driven contract tests; the coverage habit transfers even though
    the tests themselves mostly don't.
