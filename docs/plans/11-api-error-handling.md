@@ -60,11 +60,22 @@ answered 500.
 >   (`DatabaseDialect::IsTextMatchableType()`) rather than one per engine, so both give the
 >   same answer. `?query[]=id~2` used to match on SQLite, which coerces, and 500 on
 >   PostgreSQL, which has no such operator for the type. Both now answer `400`.
+> - **`ColumnTypeManifest` closes what two catalogues cannot.** SQLite does not type a
+>   computed view column, so eligibility would otherwise be engine-dependent on exactly the
+>   columns worth searching. 13 semantic entries, applied identically to both engines,
+>   gap-filling only, and enforced by the suite. All 731 columns across 82 shared
+>   tables/views now reach the same verdict on both engines.
 > - **`MaterialiseFiltered()` is the backstop**: the filtered query is run where it can be
 >   caught, and a PDO failure on a request that carried caller-supplied `query[]`/`order`
->   becomes a `400` rather than an unclassified 500. Validation is the primary mechanism;
->   this catches the cases it cannot see, including any entity whose columns cannot be
->   introspected.
+>   becomes a `400` rather than an unclassified 500.
+> - **A catalogue that cannot be read is a `500`, not a silent pass.** Validation that
+>   cannot be performed is refused rather than skipped — failing open would restore the
+>   200/500 divergence intermittently and invisibly. An unfiltered request needs no
+>   validation and is unaffected, so this costs filtering rather than availability.
+>
+> The failure log is `error_log()` because this fork has no logger. That is this plan's
+> other half — "error logging" is in its title — and this line is one of the things that
+> wants it.
 >
 > The direction was deliberate and is worth keeping in view when the rest of this plan
 > lands: casting the column to text on PostgreSQL would also have made `id~2` work on both,

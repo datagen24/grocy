@@ -403,25 +403,45 @@ PostgreSQL's `information_schema`. Anything else, timestamps included, is `400` 
 engines. A field the entity does not have is `400` on both engines too, which is what
 closes hazard 17 below.
 
-**One residual, and it is measured rather than described.** SQLite's catalogue does not
-type a view column that is a computed expression: `PRAGMA table_info` returns an empty
+**Two catalogues cannot answer for a computed view column, so a manifest does.** SQLite
+does not type a view column that is an expression: `PRAGMA table_info` returns an empty
 string for a `GROUP_CONCAT`, a `COALESCE` or a concatenation, where PostgreSQL resolves the
-expression and reports what it came out as. Where SQLite has no type to offer, comparing
-catalogues cannot make the two agree. Across this schema, 731 columns in 82 shared
-tables and views:
+expression and reports what it came out as. Comparing catalogues therefore leaves the
+verdict engine-dependent on exactly those columns - which is the same category of silent
+divergence as the operator bug itself, so it is not something to leave documented and
+unfixed.
 
-- **718 agree**, and the `filter` phase fails if any of them ever stops agreeing.
-- **13 do not**, all of them view expressions PostgreSQL resolves to `text`. They are
-  rejected on SQLite and accepted on PostgreSQL, and the phase lists them by name on every
-  run. Rejecting is the smaller residual: allowing untyped columns instead would leave
-  **100** disagreeing, because 100 of the 113 untyped columns are numeric or temporal on
-  PostgreSQL. Neither number is zero, and the thing that would make it zero is a type for
-  these columns that does not come from asking two catalogues the same question.
+`ColumnTypeManifest` holds the answer for them: 13 entries, semantic types (`text`, not
+`TEXT` or `character varying`) so that neither engine's vocabulary becomes the contract by
+default, applied to both engines identically by
+`DatabaseDialect::GetValidationColumnTypes()`. Three rules keep it honest, and the `filter`
+phase enforces all three against the real schema on both engines:
 
-The practical cost of the 13 is worth naming: `stock_missing_products.name`,
-`users_dto.display_name` and `recipes_resolved.product_names_comma_separated` are among
-them, and they are exactly the sort of column somebody would want to substring match. On
-SQLite they now answer `400`.
+1. **It fills gaps and never overrides.** An entry applies only where the catalogue has
+   nothing to say, so a wrong entry cannot make an engine accept something it will then
+   fail on.
+2. **Entries must name real columns** - a stale one is a failure, because it reads as a
+   deliberate classification of something that is not there.
+3. **Silence means rejected.** A computed column nobody has classified stays unsearchable
+   on both engines; adding one to a view does not quietly make it searchable on one.
+
+Result: **731 of 731 columns across 82 shared tables and views reach the same verdict on
+both engines**, and the phase fails if that ever stops being true. The columns worth
+searching are searchable again on SQLite as well as PostgreSQL -
+`stock_missing_products.name`, `users_dto.display_name`,
+`recipes_resolved.product_names_comma_separated` and the comma-separated barcode lists the
+UI helper views build.
+
+The alternative to the manifest was to keep rejecting all 113 untyped columns, which had
+the smaller *count* of divergences (13 against the 100 that allowing them blindly would
+leave) but was still 13 engine-dependent answers, on the most useful columns.
+
+**Catalogue failure is not silent.** If the columns of an entity cannot be read at all, a
+request that named a field in `query[]` or `order` is answered `500` and the failure is
+logged, rather than being run unvalidated: failing open there would restore the very
+200-on-one-engine / 500-on-the-other divergence this exists to remove, intermittently and
+with nothing saying so. A request that named no field needs no validation and is served
+normally, so a catalogue problem costs filtering rather than availability.
 
 **The suite can see all of this**, which was not true when the first half of the fix
 landed. The `filter` phase of `run-tests.sh` asks each dialect for the condition it emits,

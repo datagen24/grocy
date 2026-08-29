@@ -83,6 +83,36 @@ abstract class DatabaseDialect
 	abstract public function GetColumnTypes(\PDO $pdo, string $table): array;
 
 	/**
+	 * The types to validate against: the engine's own catalogue, with
+	 * ColumnTypeManifest filling only the columns the catalogue could not type.
+	 *
+	 * This is the method callers want; GetColumnTypes() is the per-engine half of it. It is
+	 * concrete and lives here rather than on either dialect precisely because the manifest
+	 * has to be applied the same way on both - the whole point of it is that "may I search
+	 * this field" stops depending on which engine is answering.
+	 *
+	 * The manifest fills gaps and never overrides. A catalogue that reports a real type is
+	 * describing what the engine will actually do with the column, and no entry here can be
+	 * more right about that than the engine is.
+	 *
+	 * @return array<string, string>
+	 */
+	final public function GetValidationColumnTypes(\PDO $pdo, string $table): array
+	{
+		$types = $this->GetColumnTypes($pdo, $table);
+
+		foreach (ColumnTypeManifest::For($table) as $column => $semanticType)
+		{
+			if (array_key_exists($column, $types) && trim($types[$column]) === '')
+			{
+				$types[$column] = $semanticType;
+			}
+		}
+
+		return $types;
+	}
+
+	/**
 	 * Whether a column of the given declared type can be substring-matched.
 	 *
 	 * Deliberately one rule for both engines rather than one per dialect, because the

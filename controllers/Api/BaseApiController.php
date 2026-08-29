@@ -111,20 +111,22 @@ class BaseApiController extends BaseController
 		}
 	}
 
-	/** @var array<string, array<string, string>> Column types per table, for this request only */
+	/** @var array<string, array<string, string>|null> Column types per table, for this request only; null = unreadable */
 	private static $ColumnTypeCache = [];
 
 	/**
-	 * The column types of the table or view $data reads from, keyed by column name, or an
-	 * empty array when they cannot be determined.
+	 * The column types to validate a caller's fields against, keyed by column name.
 	 *
-	 * Empty is not a failure and must not be treated as "no columns exist": a Result whose
-	 * table the engine does not know about is a case for letting the query run and be
-	 * caught by MaterialiseFiltered, not for rejecting every field the caller named.
+	 * Returns null when the catalogue could not be read. That is deliberately distinct from
+	 * an empty array: "I do not know this entity's columns" is not "this entity has no
+	 * columns", and it must not be quietly treated as "validated fine". Failing open here
+	 * would restore exactly the divergence this validation exists to remove - an invalid
+	 * operator answered 200 on SQLite and 500 on PostgreSQL - only now intermittently and
+	 * without anything saying so. Callers refuse the request instead; see AssertCanValidate().
 	 *
-	 * @return array<string, string>
+	 * @return array<string, string>|null
 	 */
-	private function ColumnTypesOf(Result $data): array
+	private function ColumnTypesOf(Result $data): ?array
 	{
 		$table = $data->getTable();
 
@@ -134,21 +136,41 @@ class BaseApiController extends BaseController
 
 			try
 			{
-				self::$ColumnTypeCache[$table] = $database->GetDialect()->GetColumnTypes($database->GetDbConnectionRaw(), $table);
+				self::$ColumnTypeCache[$table] = $database->GetDialect()
+					->GetValidationColumnTypes($database->GetDbConnectionRaw(), $table);
 			}
 			catch (\PDOException $ex)
 			{
-				// Introspection is an improvement on letting the engine complain, never a
-				// new way to fail: a request that would have worked must not start
-				// returning 500 because the catalogue lookup did. SQLite's PRAGMA compiles
-				// the view it is asked about, for instance, so it can fail for reasons that
-				// have nothing to do with the caller's filter. Fall back to no validation
-				// and let MaterialiseFiltered classify whatever the query itself does.
-				self::$ColumnTypeCache[$table] = [];
+				// Loud, because this should not happen and silence is what made the
+				// original defect survive. error_log rather than a logger because the fork
+				// has none yet - that is plan 11's "error logging" half, and this line is
+				// one of the things that wants it.
+				error_log('Victual: could not read the column types of "' . $table . '" to validate a query filter: ' . $ex->getMessage());
+
+				self::$ColumnTypeCache[$table] = null;
 			}
 		}
 
 		return self::$ColumnTypeCache[$table];
+	}
+
+	/**
+	 * Refuses a request whose filter or sort cannot be validated, rather than running it
+	 * unvalidated.
+	 *
+	 * 500 and not 400: the caller has done nothing wrong, the server cannot do its job.
+	 * Only reached when the caller actually supplied something needing validation - an
+	 * unfiltered list has nothing to check and is served normally whatever the catalogue
+	 * is doing.
+	 */
+	private function AssertCanValidate(Request $request, ?array $columnTypes): array
+	{
+		if ($columnTypes === null)
+		{
+			throw new HttpException($request, 'Cannot validate the query: the entity\'s columns are unavailable', 500);
+		}
+
+		return $columnTypes;
 	}
 
 	/**
@@ -157,7 +179,7 @@ class BaseApiController extends BaseController
 	 */
 	private function AssertFieldExists(Request $request, array $columnTypes, string $field): void
 	{
-		if (!empty($columnTypes) && !array_key_exists($field, $columnTypes))
+		if (!array_key_exists($field, $columnTypes))
 		{
 			throw new HttpException($request, 'Invalid query: unknown field "' . $field . '"', 400);
 		}
@@ -188,7 +210,7 @@ class BaseApiController extends BaseController
 		if (isset($query['order']))
 		{
 			$parts = explode(':', $query['order']);
-			$this->AssertFieldExists($request, $this->ColumnTypesOf($data), $parts[0]);
+			$this->AssertFieldExists($request, $this->AssertCanValidate($request, $this->ColumnTypesOf($data)), $parts[0]);
 
 			if (count($parts) == 1)
 			{
@@ -216,7 +238,7 @@ class BaseApiController extends BaseController
 	 */
 	protected function FilterData(Request $request, Result $data, array $query): Result
 	{
-		$columnTypes = $this->ColumnTypesOf($data);
+		$columnTypes = $this->AssertCanValidate($request, $this->ColumnTypesOf($data));
 
 		foreach ($query as $q)
 		{
@@ -244,7 +266,6 @@ class BaseApiController extends BaseController
 			// silently means different things per engine is the worse outcome of the two.
 			// See DatabaseDialect::IsTextMatchableType() for why timestamps are in here too.
 			if (in_array($matches['op'], ['~', '!~', '§'], true)
-				&& !empty($columnTypes)
 				&& !DatabaseDialect::IsTextMatchableType($columnTypes[$matches['field']]))
 			{
 				throw new HttpException(

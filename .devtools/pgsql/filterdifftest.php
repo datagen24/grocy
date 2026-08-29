@@ -37,6 +37,7 @@
 
 require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
+use Victual\Services\Database\ColumnTypeManifest;
 use Victual\Services\Database\DatabaseDialect;
 use Victual\Services\Database\PostgresDialect;
 use Victual\Services\Database\SqliteDialect;
@@ -205,15 +206,52 @@ $pgsqlTables = $pgsql->query(
 
 $shared = array_values(array_intersect($sqliteTables, $pgsqlTables));
 
+$manifestEntries = array_sum(array_map('count', ColumnTypeManifest::TYPES));
+
 $checked = 0;
 $disagreements = [];
 $untyped = [];
+$manifestProblems = [];
 $samples = [];
 
 foreach ($shared as $table)
 {
-	$sqliteTypes = $dialects['sqlite']->GetColumnTypes($sqlite, $table);
-	$pgsqlTypes = $dialects['pgsql']->GetColumnTypes($pgsql, $table);
+	$sqliteTypes = $dialects['sqlite']->GetValidationColumnTypes($sqlite, $table);
+	$pgsqlTypes = $dialects['pgsql']->GetValidationColumnTypes($pgsql, $table);
+
+	// Rule 1 of the manifest: an entry must name a column that exists. A stale entry is
+	// worse than a missing one - it reads as a deliberate classification of something that
+	// is not there any more, and it would silently stop applying if the column came back
+	// under a different name.
+	$rawSqlite = $dialects['sqlite']->GetColumnTypes($sqlite, $table);
+	$rawPgsql = $dialects['pgsql']->GetColumnTypes($pgsql, $table);
+
+	foreach (ColumnTypeManifest::For($table) as $column => $semanticType)
+	{
+		if (!array_key_exists($column, $rawSqlite) && !array_key_exists($column, $rawPgsql))
+		{
+			$manifestProblems[] = $table . '.' . $column . ': declared in the manifest, but neither engine has such a column';
+
+			continue;
+		}
+
+		// Rule 2: the manifest fills gaps and must not contradict an engine that does know.
+		// Checked on both engines, because the entry exists precisely because one of them
+		// does not know - and the other one is the corroboration for what was written down.
+		foreach (['sqlite' => $rawSqlite, 'pgsql' => $rawPgsql] as $engine => $raw)
+		{
+			if (!isset($raw[$column]) || trim($raw[$column]) === '')
+			{
+				continue;
+			}
+
+			if (DatabaseDialect::IsTextMatchableType($raw[$column]) !== DatabaseDialect::IsTextMatchableType($semanticType))
+			{
+				$manifestProblems[] = $table . '.' . $column . ': manifest says ' . $semanticType
+					. ', but ' . $engine . ' reports ' . $raw[$column];
+			}
+		}
+	}
 
 	foreach ($sqliteTypes as $column => $sqliteType)
 	{
@@ -283,8 +321,8 @@ echo PHP_EOL;
 
 if (empty($disagreements))
 {
-	echo '  ok     ' . ($checked - count($untyped)) . ' of ' . $checked . ' columns across '
-		. count($shared) . ' shared tables/views: both engines agree wherever SQLite has a type' . PHP_EOL;
+	echo '  ok     ' . $checked . ' columns across ' . count($shared)
+		. ' shared tables/views: both engines reach the same verdict on every one' . PHP_EOL;
 }
 else
 {
@@ -297,12 +335,29 @@ else
 
 if (!empty($untyped))
 {
-	echo '  note   ' . count($untyped) . ' view columns SQLite reports no type for, so the two engines'
-		. ' cannot be compared there; rejected on SQLite, and:' . PHP_EOL;
+	echo '  DIFFER ' . count($untyped) . ' column(s) the two engines disagree about and the manifest'
+		. ' does not classify:' . PHP_EOL;
 
 	foreach ($untyped as $line)
 	{
 		echo '           - ' . $line . PHP_EOL;
+		$failures++;
+	}
+
+	echo '           Classify them in ColumnTypeManifest, or leave them rejected on both engines.' . PHP_EOL;
+}
+
+if (empty($manifestProblems))
+{
+	echo '  ok     manifest: ' . $manifestEntries . ' entries, every one on a real column and'
+		. ' consistent with both catalogues' . PHP_EOL;
+}
+else
+{
+	foreach ($manifestProblems as $line)
+	{
+		echo '  DIFFER manifest ' . $line . PHP_EOL;
+		$failures++;
 	}
 }
 
