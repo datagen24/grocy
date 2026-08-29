@@ -3,15 +3,26 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback]
 #
-# Three kinds of check, for three reasons. Views are compared by what they return, because
+# Four kinds of check, for four reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
-# compared afterwards. And before either of those means anything, the two engines have to
-# start from the same place: the migration check compares two databases that have been
-# migrated and nothing else, which is the one thing the other two phases cannot see,
-# since both populate PostgreSQL by copying an already-migrated SQLite database.
+# compared afterwards.
+#
+# Before either of those means anything, though, the two engines have to start from the
+# same place. The migration check compares two databases that have been migrated and
+# nothing else, which is precisely what the other three cannot see: every one of them
+# populates PostgreSQL by copying an already-migrated SQLite database, so all of them
+# start from a state that was constructed rather than migrated. That blind spot hid a
+# real defect — the PostgreSQL baseline being schema only, so a fresh database had no
+# admin user and no quantity units — so this phase runs first.
+#
+# The fourth asks something none of the others can. The first three drive SQL straight at
+# each engine and never enter the application, so none would notice if a write path
+# stopped being transactional. The rollback tests go through StockService, fail an
+# operation halfway, and check the ledger is where it started — on each engine in turn
+# rather than against the other.
 #
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
@@ -26,7 +37,13 @@
 #   SUITE_PGSQL_VIEW_DB                  database for the view tests    (default grocy_full)
 #   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default grocy_trig)
 #   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default grocy_migrate)
+#   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default grocy_rollback)
 #   SUITE_SCRATCH                        where the throwaway databases go
+#   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
+#   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
+#   SUITE_COVERAGE_CLOVER                also write a Clover XML report to this path
+#
+# The coverage variables are documented in full in .devtools/coverage/README.md.
 #
 # Under docker compose all of these are already set; see docker-compose.yml.
 
@@ -47,6 +64,7 @@ export PGHOST PGPORT PGUSER PGPASSWORD
 VIEW_DB="${SUITE_PGSQL_VIEW_DB:-grocy_full}"
 TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-grocy_trig}"
 MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-grocy_migrate}"
+ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-grocy_rollback}"
 
 WHICH="${1:-all}"
 
@@ -58,6 +76,46 @@ command -v php >/dev/null || fail 'php not found on PATH'
 [ -f "$GROCY_ROOT/packages/autoload.php" ] || fail 'packages/ is missing — run composer install first'
 
 mkdir -p "$SUITE_SCRATCH"
+
+# --- Coverage ---------------------------------------------------------------------
+#
+# The suite is a dozen short-lived PHP processes, so it is hooked at the interpreter
+# rather than at each call site: an extra ini directory sets auto_prepend_file, and
+# .devtools/coverage/prepend.php starts a driver in every process that then runs. Nothing
+# below this point knows coverage exists, which is the point — a phase added later is
+# measured without being told to be.
+#
+# The leading colon in PHP_INI_SCAN_DIR means "the usual directory, and then this one", so
+# the platform's own extension ini files still load.
+
+COVERAGE_DIR=""
+
+if [ "${SUITE_COVERAGE:-0}" = "1" ]; then
+	COVERAGE_DIR="${SUITE_COVERAGE_DIR:-$SUITE_SCRATCH/coverage}"
+
+	php -r 'exit(extension_loaded("pcov") || extension_loaded("xdebug") ? 0 : 1);' \
+		|| fail 'SUITE_COVERAGE=1 but neither pcov nor xdebug is loaded'
+
+	# Cleared, not appended to: merging this run's data with the last one would report
+	# lines as covered that this run never reached.
+	rm -rf "$COVERAGE_DIR"
+	mkdir -p "$COVERAGE_DIR"
+
+	COVERAGE_INI_DIR="$SUITE_SCRATCH/coverage-ini"
+	rm -rf "$COVERAGE_INI_DIR"
+	mkdir -p "$COVERAGE_INI_DIR"
+
+	cat > "$COVERAGE_INI_DIR/99-grocy-coverage.ini" <<-INI
+		auto_prepend_file=$GROCY_ROOT/.devtools/coverage/prepend.php
+		pcov.directory=$GROCY_ROOT
+		pcov.enabled=1
+	INI
+
+	export PHP_INI_SCAN_DIR=":$COVERAGE_INI_DIR"
+	export GROCY_COVERAGE_DIR="$COVERAGE_DIR"
+
+	say "measuring coverage into $COVERAGE_DIR"
+fi
 
 # --- The pristine SQLite database -------------------------------------------------
 #
@@ -187,6 +245,87 @@ run_view_tests() {
 	done
 }
 
+# --- Rollback tests ---------------------------------------------------------------
+#
+# Unlike the three phases above, this one runs against one engine at a time: the question
+# is whether a failed operation leaves that engine's ledger intact, which has no
+# cross-engine comparison in it.
+
+run_rollback_tests() {
+	local datapath="$SUITE_SCRATCH/rollback-sqlite"
+	local sqlite_db="$SUITE_SCRATCH/rollback-source.db"
+
+	# SQLite first, from a fresh database with the base fixture, exactly as the pristine
+	# database is built.
+	rm -rf "$datapath"
+	mkdir -p "$datapath"
+
+	GROCY_DATAPATH="$datapath" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
+		|| fail 'could not migrate the rollback test database'
+	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/grocy.db" "$SUITE_DIR/fixtures/00_base.sql" \
+		|| fail 'could not apply the base fixture for the rollback tests'
+
+	# Kept aside before the tests run, so PostgreSQL starts from the same rows rather
+	# than from whatever the SQLite cases left behind.
+	cp "$datapath/grocy.db" "$sqlite_db"
+
+	say ""
+	if ! GROCY_DATAPATH="$datapath" php "$SUITE_DIR/rollback-tests.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$datapath"
+
+	# Then PostgreSQL, which is the half that was never covered before: the injector has
+	# to be written twice because RAISE(ABORT) has no PostgreSQL equivalent outside a
+	# function, and a rollback is exactly the sort of thing two engines can differ on.
+	build_pgsql "$ROLLBACK_DB"
+
+	local pgdatapath="$SUITE_SCRATCH/rollback-pgsql"
+	rm -rf "$pgdatapath"
+	mkdir -p "$pgdatapath"
+
+	cat > "$pgdatapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+
+	# The PostgreSQL side is populated by importing the SQLite database just used, rather
+	# than by applying the fixture again. That is the supported way an existing
+	# installation's data reaches PostgreSQL, so it is the state worth testing against —
+	# and it keeps this phase's subject to rollback alone rather than also to whether
+	# inserts behave identically on both engines, which the other three phases answer.
+	#
+	# An earlier version of this comment said applying the fixture straight to PostgreSQL
+	# fails, and blamed products_ins for leaving cache__quantity_unit_conversions_resolved
+	# empty. Both halves were wrong. The trigger was a faithful port; what was missing was
+	# the seed data the PostgreSQL baseline never inserted, so quantity_units was empty and
+	# the view the trigger copies from had nothing in it for any product. With that fixed
+	# the fixture does apply directly. The import stays because it is the more
+	# representative state, not because the alternative is broken.
+	#
+	# --force because build_pgsql above ran bin/grocy-migrate, which seeds a fresh database
+	# with the initial data of a new installation, and the import refuses a target that
+	# holds rows unless told. Those particular rows are exactly what this import replaces —
+	# it truncates before it copies — so overwriting them is the intent, not a risk.
+	DIFFTEST_DB_NAME="$ROLLBACK_DB" GROCY_DATAPATH="$pgdatapath" \
+		php "$GROCY_ROOT/bin/grocy-db-import" "$sqlite_db" --force > /dev/null \
+		|| fail 'could not import the rollback fixture into PostgreSQL'
+
+	say ""
+	if ! GROCY_DATAPATH="$pgdatapath" DIFFTEST_DB_NAME="$ROLLBACK_DB" php "$SUITE_DIR/rollback-tests.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$pgdatapath"
+	rm -f "$sqlite_db"
+}
+
 # --- Trigger tests ----------------------------------------------------------------
 
 run_trigger_tests() {
@@ -224,9 +363,31 @@ case "$WHICH" in
 	migrate) run_migration_tests ;;
 	views) run_view_tests ;;
 	triggers) run_trigger_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers or all)" ;;
+	rollback) run_rollback_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback or all)" ;;
 esac
+
+if [ -n "$COVERAGE_DIR" ]; then
+	say ""
+	say "== coverage"
+
+	# Reported whether or not the suite passed: when a phase fails, what it did and did
+	# not reach is part of reading the failure.
+	report_args=("$COVERAGE_DIR")
+
+	if [ -n "${SUITE_COVERAGE_CLOVER:-}" ]; then
+		report_args+=("--clover=$SUITE_COVERAGE_CLOVER")
+	fi
+
+	# The report is itself a PHP process, and hooking it would have it measure its own
+	# run and write a further .cov into the directory it is reading. Unsetting the
+	# variable is enough — prepend.php returns immediately without it — and is what has
+	# to be done rather than clearing PHP_INI_SCAN_DIR, which would also drop the
+	# platform's own ini directory and with it every extension the report needs.
+	env -u GROCY_COVERAGE_DIR php "$GROCY_ROOT/.devtools/coverage/report.php" "${report_args[@]}" \
+		|| failures=$((failures + 1))
+fi
 
 say ""
 if [ "$failures" -eq 0 ]; then

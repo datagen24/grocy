@@ -72,6 +72,9 @@ jobs:
         with:
           php-version: '8.4'
           extensions: pdo_sqlite, pdo_pgsql, gd, intl, zip, mbstring, fileinfo, ctype
+          # pcov rather than the default none, so the run below can report what the
+          # suite reached. It only collects when a process asks it to.
+          coverage: pcov
 
       - name: Cache Composer packages
         uses: actions/cache@v4
@@ -85,10 +88,27 @@ jobs:
       # The workflow calls the same entry point a contributor runs locally, rather than
       # restating the commands. A suite that drifts from the one people run by hand is
       # a suite nobody trusts.
+      #
+      # Coverage is measured but nothing is gated on it. What the suite reaches is
+      # worth seeing in the log of every run — it is how a phase that silently stopped
+      # exercising something gets noticed — but a threshold nobody has chosen would
+      # only ever be tuned until it stopped failing.
       - name: Run the differential test suite
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
           PGUSER: grocy
           PGPASSWORD: grocy
+          SUITE_COVERAGE: 1
+          SUITE_COVERAGE_CLOVER: clover.xml
         run: .devtools/pgsql/run-tests.sh
+
+      # Uploaded even when the suite fails: which code a failing run did and did not
+      # reach is part of reading the failure.
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-clover
+          path: clover.xml
+          if-no-files-found: warn

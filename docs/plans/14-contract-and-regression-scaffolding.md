@@ -65,11 +65,11 @@ compares the two — and the pair matters for the parity assertion in piece 2: a
 written as "every route is in the spec" passes on the second one, and a check written as
 a set comparison fails immediately on both until they are fixed.
 
-**Both tools measure from a state that is copied, not migrated.** `difftest.php` and
-`trigdifftest.php` each populate PostgreSQL with `bin/grocy-db-import` from an
-already-migrated SQLite database, so every case starts from a PostgreSQL database whose
-rows came across from the other engine. Nothing has ever asserted anything about what
-`bin/grocy-migrate` produces on its own. That blind spot hid a real defect for the whole
+**Every tool measures from a state that is copied, not migrated.** `difftest.php`,
+`trigdifftest.php` and the rollback phase each populate PostgreSQL with
+`bin/grocy-db-import` from an already-migrated SQLite database, so every case starts from
+a PostgreSQL database whose rows came across from the other engine. Nothing has ever
+asserted anything about what `bin/grocy-migrate` produces on its own. That blind spot hid a real defect for the whole
 life of the port: the PostgreSQL baseline is DDL only, while a third of the migrations it
 stands in for also insert rows, so a freshly migrated PostgreSQL database had no admin
 user, an empty permission hierarchy and no quantity units — and exited zero. It surfaced
@@ -130,8 +130,8 @@ Then `.devtools/pgsql/run-tests.sh` (or a small PHP runner — Q1) that:
 - generates the pristine SQLite database with `bin/grocy-migrate` rather than expecting
   one at an operator-known path;
 - compares a freshly migrated database on each engine against the other, before any
-  fixture is applied to either — the one thing the view and trigger phases cannot check,
-  since both build their PostgreSQL side by importing from SQLite;
+  fixture is applied to either — the one thing no other phase can check, since every one
+  of them builds its PostgreSQL side by importing from SQLite;
 - runs every committed view seed against its declared view list;
 - runs every script in `trigger-tests/`;
 - exits non-zero if any comparison differs;
@@ -192,6 +192,19 @@ about the CI shape (Q3).
 Piece 2 in CI needs a booted instance, not just two databases, which is a step up in
 complexity. It may be right to run it locally first and add it to CI once it has proven
 stable.
+
+### 4. Coverage of the suite itself (added after the plan was written)
+
+Not part of the original plan and not a fourth kind of test: a way to see what pieces 1
+and 3 actually reach. `SUITE_COVERAGE=1` on the runner hooks every PHP process the run
+spawns and prints a line-coverage summary at the end; CI does this on every run and keeps
+the Clover file. Nothing is gated on the number.
+
+The reason it is worth having here specifically is the blind spot this plan's own suite
+had, and which cost three PostgreSQL defects to find: the view and trigger phases drive
+SQL at each engine and never enter application code, so for a while nothing in the suite
+executed a single line of `StockService` against PostgreSQL and no report said so. A
+coverage figure would have. See [.devtools/coverage/README.md](../../.devtools/coverage/README.md).
 
 ### Schema
 

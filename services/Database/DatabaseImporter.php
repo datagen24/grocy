@@ -76,13 +76,27 @@ class DatabaseImporter
 
 		$report = [];
 
-		// Triggers exist to maintain data as the application changes it. Replaying rows
-		// that were already shaped by the source's triggers has to leave them alone,
-		// otherwise cascades fire and derived values get computed a second time.
-		$this->SetTriggersEnabled($tables, false);
+		// One transaction around the truncate, the trigger toggling and the copy, so a
+		// failure leaves the target exactly as it was. Without it, the truncate has
+		// already happened by the time anything can go wrong, and there is nothing to go
+		// back to: the target is emptied and half-repopulated, which is worse than either
+		// end state. PostgreSQL — the only target engine — handles TRUNCATE and ALTER
+		// TABLE ... DISABLE TRIGGER transactionally, so this genuinely rolls back rather
+		// than merely appearing to.
+		//
+		// The trigger toggling has to be inside it for the same reason. A failure between
+		// disabling and re-enabling would otherwise leave the target with its triggers
+		// off, which is a database that looks fine and quietly stops maintaining itself.
+		$this->Target->beginTransaction();
 
 		try
 		{
+			// Triggers exist to maintain data as the application changes it. Replaying
+			// rows that were already shaped by the source's triggers has to leave them
+			// alone, otherwise cascades fire and derived values get computed a second
+			// time.
+			$this->SetTriggersEnabled($tables, false);
+
 			$this->Target->exec('TRUNCATE TABLE '
 				. implode(', ', array_map(fn($t) => $this->TargetDialect->QuoteIdentifier($t), $tables))
 				. ' RESTART IDENTITY CASCADE');
@@ -91,17 +105,27 @@ class DatabaseImporter
 			{
 				$report[$table] = $this->CopyTable($table);
 			}
-		}
-		finally
-		{
+
 			$this->SetTriggersEnabled($tables, true);
 		}
+		catch (\Throwable $ex)
+		{
+			if ($this->Target->inTransaction())
+			{
+				$this->Target->rollBack();
+			}
+
+			throw $ex;
+		}
+
+		$this->Target->commit();
 
 		// The source's ids came across verbatim, so the target's generated id counters are
 		// still sitting at the bottom of the range
 		$this->TargetDialect->ResyncGeneratedIdCounters($this->Target);
 
 		$this->AssertRowCountsMatch($report);
+		$this->AssertValuesMatch($tables);
 
 		return $report;
 	}
@@ -350,6 +374,117 @@ class DatabaseImporter
 		{
 			throw new \Exception('Row counts do not match after import: ' . implode('; ', $mismatches));
 		}
+	}
+
+	/**
+	 * Compares every copied row, column by column, between source and target.
+	 *
+	 * AssertRowCountsMatch() answers "did everything arrive?" and nothing else. The
+	 * failure this guards against arrives with the right number of rows and the wrong
+	 * values in them: every one of the fifteen type-coercion hazards in
+	 * db/pgsql/README.md — a TINYINT id read back as a boolean, an INTEGER that lost its
+	 * fraction — passes a count check untouched.
+	 *
+	 * Everything is compared rather than a sample. A sample is cheaper and can miss the
+	 * single coerced value, which is the only thing this is looking for; the import runs
+	 * once in a deployment's lifetime, so the runtime is affordable in a way it would not
+	 * be on a hot path.
+	 *
+	 * Rows are compared through ValueComparison, the same normalisation the differential
+	 * test suite uses, so "equal" means one thing across this fork rather than two.
+	 * Ordering is by normalised content rather than by id, because a table need not have
+	 * one and the question here is whether the same multiset of rows arrived.
+	 */
+	private function AssertValuesMatch(array $tables)
+	{
+		// Both sides have to report what is stored, not what their connection makes of
+		// it. The application's connections set PDO::NULL_EMPTY_STRING, so a stored empty
+		// string reads back as null, while the importer's source connection deliberately
+		// does not (see bin/grocy-db-import — Grocy really does store empty strings, the
+		// internal meal plan section being one). Comparing a NULL_NATURAL read against a
+		// NULL_EMPTY_STRING read reports a difference for every empty string in the
+		// database and means nothing. Setting both to NULL_NATURAL keeps the empty
+		// string-versus-null distinction visible, which is a coercion worth catching.
+		$sourceNulls = $this->Source->getAttribute(\PDO::ATTR_ORACLE_NULLS);
+		$targetNulls = $this->Target->getAttribute(\PDO::ATTR_ORACLE_NULLS);
+
+		$this->Source->setAttribute(\PDO::ATTR_ORACLE_NULLS, \PDO::NULL_NATURAL);
+		$this->Target->setAttribute(\PDO::ATTR_ORACLE_NULLS, \PDO::NULL_NATURAL);
+
+		try
+		{
+			$mismatches = $this->CollectValueMismatches($tables);
+		}
+		finally
+		{
+			$this->Source->setAttribute(\PDO::ATTR_ORACLE_NULLS, $sourceNulls);
+			$this->Target->setAttribute(\PDO::ATTR_ORACLE_NULLS, $targetNulls);
+		}
+
+		if (!empty($mismatches))
+		{
+			throw new \Exception('Values differ after import: ' . implode('; ', $mismatches));
+		}
+	}
+
+	/**
+	 * The per-table comparison behind AssertValuesMatch, split out so the null-handling
+	 * override around it has a single exit.
+	 *
+	 * @return string[] One human-readable description per differing table
+	 */
+	private function CollectValueMismatches(array $tables): array
+	{
+		$mismatches = [];
+
+		foreach ($tables as $table)
+		{
+			$columns = $this->GetCommonColumns($table);
+
+			if (empty($columns))
+			{
+				continue;
+			}
+
+			$list = implode(', ', array_map(fn($c) => $this->TargetDialect->QuoteIdentifier($c), $columns));
+			$sourceList = implode(', ', array_map(fn($c) => '"' . $c . '"', $columns));
+
+			$sourceRows = array_map(
+				[ValueComparison::class, 'NormaliseRow'],
+				$this->Source->query('SELECT ' . $sourceList . ' FROM "' . $table . '"')->fetchAll(\PDO::FETCH_ASSOC)
+			);
+			$targetRows = array_map(
+				[ValueComparison::class, 'NormaliseRow'],
+				$this->Target->query('SELECT ' . $list . ' FROM ' . $this->TargetDialect->QuoteIdentifier($table))->fetchAll(\PDO::FETCH_ASSOC)
+			);
+
+			sort($sourceRows);
+			sort($targetRows);
+
+			if ($sourceRows === $targetRows)
+			{
+				continue;
+			}
+
+			$onlySource = array_slice(array_diff($sourceRows, $targetRows), 0, 3);
+			$onlyTarget = array_slice(array_diff($targetRows, $sourceRows), 0, 3);
+
+			$detail = $table;
+
+			foreach ($onlySource as $row)
+			{
+				$detail .= "\n    only in the source: " . $row;
+			}
+
+			foreach ($onlyTarget as $row)
+			{
+				$detail .= "\n    only in the target: " . $row;
+			}
+
+			$mismatches[] = $detail;
+		}
+
+		return $mismatches;
 	}
 
 	/**

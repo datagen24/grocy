@@ -2,8 +2,8 @@
 
 // Differential test for the migration path itself.
 //
-// The other two phases both start from a PostgreSQL database that was populated by
-// copying an already-migrated SQLite one, so neither has ever looked at what
+// The suite's other phases all start from a PostgreSQL database that was populated by
+// copying an already-migrated SQLite one, so none of them has ever looked at what
 // bin/grocy-migrate produces on its own. That blind spot hid a real defect: the
 // PostgreSQL baseline is schema only, while a third of the migrations it stands in for
 // also insert rows, so a freshly migrated PostgreSQL database had no admin user, no
