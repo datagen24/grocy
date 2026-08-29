@@ -342,9 +342,69 @@ four are the same category as items that were, and all four landed with them:
   `bin/victual-db-import` under the renamed identifiers, which is the migration
   path the Constraints protect.
 
-### Still outstanding, outside the repository
+## Outstanding — for later review
 
-Q3's claims, which the plan itself says are made at announcement time and not
-before: renaming `datagen24/grocy` to `datagen24/victual` on GitHub (the old
-path auto-redirects), registering `victual.io` with the `-er`/`-ller` variants
-as redirects, and claiming npm `victual` and Docker/GitHub `victualer`.
+Everything below is deliberately not done. Each line says why, and where it
+goes instead. Nothing here blocks the codebase rename, which is complete.
+
+### Outside the repository — announcement time, not a commit
+
+Q3 answers these and says explicitly to claim them *at announcement time, not
+before*, so they are not oversights and there is nothing to do in code:
+
+- [ ] **Rename `datagen24/grocy` to `datagen24/victual` on GitHub.** GitHub
+      auto-redirects the old path, so nothing breaks and no clone has to be
+      re-pointed. Do it first — the rest reference it. This is the one ordering
+      dependency the rename leaves behind: four places already write
+      `https://github.com/datagen24/victual` — the two barcode-lookup
+      User-Agents, the 500 page's issue link, and the OpenAPI `license.url` —
+      and none of them resolves until the repository actually carries that
+      name. Nothing in the application depends on them resolving, so this is a
+      dangling link rather than a defect, but it is why the repo rename is the
+      first of these to do rather than the last.
+- [ ] **Register `victual.io`**, with `victualer`/`victualler` as redirects per
+      Q2. Q3 verified nine-for-nine unregistered on .io/.app/.dev, with the two
+      caveats it records (registry-reserved names also NXDOMAIN, and Google
+      Registry prices dictionary-word .app/.dev at premium tiers).
+- [ ] **Claim npm `victual`, and Docker Hub / GitHub `victualer`.** The squats
+      Q3 found (GitHub `Victual` and `Victualler`, an idle Docker Hub
+      `victual`) rule out a vanity `victual` org but block nothing: the image
+      lives under the maintainer's own namespace either way.
+
+### Deferred to another plan
+
+- [ ] **The Victualer actor** (Q1). "Automated processes write log entries as
+      the Victualer" is an actor identity in the audit trail, not a rename:
+      it needs a writer to attribute and a column to attribute it in. It
+      belongs with [02](02-mcp-endpoint.md), whose sidecar already needs
+      exactly such an identity when MCP writes arrive and already owns the
+      credential→user seam. Landing it here would have meant inventing the
+      write path it describes.
+- [ ] **`update.sh`.** Kept verbatim, now with a header saying it is
+      upstream's release-based updater and not this fork's update path.
+      Whether a fork that tracks no release schedule should ship an updater
+      that overwrites the installation with *upstream's* release at all is a
+      deletion question, which is [15](15-deliberate-cleanup.md)'s business,
+      not a rename's. Same for `.devtools/create_release_package.bat`, which
+      packages a release this fork does not cut.
+
+### Accepted costs, recorded rather than fixed
+
+- **Stale translations of the name.** Where the brand stood as its own word the
+  translation was carried across, in 14 locales. Where it is inflected or
+  compounded it was left: Estonian "Grocyt", Finnish "Grocyssäsi", and the
+  app-name mentions embedded inside the Grocycode description in Russian,
+  Hungarian, Hebrew and Lithuanian. This is precisely the cost the Tier 2 note
+  predicted; fixing it means inventing grammar in languages nobody here reads,
+  and there is no live Transifex feed to route it through. Revisit only if a
+  translation workflow ever comes back.
+- **`.tx/config` still points at upstream's Transifex project**
+  (`o:grocy:p:grocy:*`), and `transifex_*.bat` still pulls `grocy.strings`.
+  That is correct as long as translations come *from* upstream, which
+  README.md says they do. It becomes wrong the day this fork runs its own
+  localization project — at which point the config is rewritten, not renamed.
+- **`VICTUAL_GROCYCODE_TYPE`.** The setting configures the Tier 0 wire format,
+  so it keeps the format's stem. Reads oddly, is accurate, and renaming the
+  stem would be exactly the sweep Tier 0 warns against.
+- **The working copy and git remote still say `grocy`.** Both follow the GitHub
+  rename above; neither is repository content.
