@@ -41,7 +41,7 @@ $('#permission-save').click(
 				return $(this).data('perm-id');
 			}).toArray();
 
-		Grocy.Api.Put('users/' + Grocy.EditObjectId + '/permissions', { 'permissions': permission_list },
+		Victual.Api.Put('users/' + Victual.EditObjectId + '/permissions', { 'permissions': permission_list },
 			function(result)
 			{
 				toastr.success(__t("Permissions saved"));
@@ -57,7 +57,7 @@ $('#permission-save').click(
 // Extra safety net when editing your own permissions: unchecking your own ADMIN
 // permission asks for confirmation and reverts the checkbox if declined, so you can't
 // accidentally lock yourself out
-if (Grocy.EditObjectId == Grocy.UserId)
+if (Victual.EditObjectId == Victual.UserId)
 {
 	$('input.permission-cb[name=ADMIN]').click(function()
 	{

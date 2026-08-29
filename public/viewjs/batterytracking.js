@@ -8,7 +8,7 @@ $('#save-batterytracking-button').on('click', function (e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("batterytracking-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("batterytracking-form", true))
 	{
 		return;
 	}
@@ -19,39 +19,39 @@ $('#save-batterytracking-button').on('click', function (e)
 	}
 
 	var jsonForm = $('#batterytracking-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("batterytracking-form");
+	Victual.FrontendHelpers.BeginUiBusy("batterytracking-form");
 
-	Grocy.Api.Get('batteries/' + jsonForm.battery_id,
+	Victual.Api.Get('batteries/' + jsonForm.battery_id,
 		function (batteryDetails)
 		{
-			Grocy.Api.Post('batteries/' + jsonForm.battery_id + '/charge', { 'tracked_time': $('#tracked_time').find('input').val() },
+			Victual.Api.Post('batteries/' + jsonForm.battery_id + '/charge', { 'tracked_time': $('#tracked_time').find('input').val() },
 				function (result)
 				{
-					Grocy.EditObjectId = result.id;
-					Grocy.Components.UserfieldsForm.Save(function ()
+					Victual.EditObjectId = result.id;
+					Victual.Components.UserfieldsForm.Save(function ()
 					{
-						Grocy.FrontendHelpers.EndUiBusy("batterytracking-form");
+						Victual.FrontendHelpers.EndUiBusy("batterytracking-form");
 						toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', batteryDetails.battery.name, $('#tracked_time').find('input').val()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoChargeCycle(' + result.id + ')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
-						Grocy.Components.BatteryCard.Refresh($('#battery_id').val());
+						Victual.Components.BatteryCard.Refresh($('#battery_id').val());
 
 						$('#battery_id').val('');
 						$('#battery_id_text_input').focus();
 						$('#battery_id_text_input').val('');
 						$('#tracked_time').find('input').val(moment().format('YYYY-MM-DD HH:mm:ss'));
 						$('#battery_id_text_input').trigger('change');
-						Grocy.FrontendHelpers.ValidateForm('batterytracking-form');
+						Victual.FrontendHelpers.ValidateForm('batterytracking-form');
 					});
 				},
 				function (xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy("batterytracking-form");
+					Victual.FrontendHelpers.EndUiBusy("batterytracking-form");
 					console.error(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy("batterytracking-form");
+			Victual.FrontendHelpers.EndUiBusy("batterytracking-form");
 			console.error(xhr);
 		}
 	);
@@ -67,14 +67,14 @@ $('#battery_id').on('change', function (e)
 	var batteryId = $(e.target).val();
 	if (batteryId)
 	{
-		Grocy.Components.BatteryCard.Refresh(batteryId);
+		Victual.Components.BatteryCard.Refresh(batteryId);
 
 		setTimeout(function ()
 		{
 			$('#tracked_time').find('input').focus();
-		}, Grocy.FormFocusDelay);
+		}, Victual.FormFocusDelay);
 
-		Grocy.FrontendHelpers.ValidateForm('batterytracking-form');
+		Victual.FrontendHelpers.ValidateForm('batterytracking-form');
 	}
 });
 
@@ -84,17 +84,17 @@ $(".combobox").combobox(BootstrapComboboxDefaults);
 $('#battery_id').val('');
 $('#battery_id_text_input').val('');
 $('#battery_id_text_input').trigger('change');
-Grocy.Components.DateTimePicker.GetInputElement().trigger('input');
-Grocy.FrontendHelpers.ValidateForm('batterytracking-form');
+Victual.Components.DateTimePicker.GetInputElement().trigger('input');
+Victual.FrontendHelpers.ValidateForm('batterytracking-form');
 setTimeout(function ()
 {
 	$('#battery_id_text_input').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // Live re-validation while typing
 $('#batterytracking-form input').keyup(function (event)
 {
-	Grocy.FrontendHelpers.ValidateForm('batterytracking-form');
+	Victual.FrontendHelpers.ValidateForm('batterytracking-form');
 });
 
 // Enter submits the form (when valid) instead of the browser default
@@ -104,7 +104,7 @@ $('#batterytracking-form input').keydown(function (event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('batterytracking-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('batterytracking-form'))
 		{
 			return false;
 		}
@@ -117,12 +117,12 @@ $('#batterytracking-form input').keydown(function (event)
 
 $('#tracked_time').find('input').on('keypress', function (e)
 {
-	Grocy.FrontendHelpers.ValidateForm('batterytracking-form');
+	Victual.FrontendHelpers.ValidateForm('batterytracking-form');
 });
 
 // Barcode scanner hook: put the scanned code into the battery text input and let the
 // blur handler below resolve it (e.g. a battery grocycode)
-$(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
+$(document).on("Victual.BarcodeScanned", function (e, barcode, target)
 {
 	if (!(target == "@batterypicker" || target == "undefined" || target == undefined)) // Default target
 	{
@@ -142,7 +142,7 @@ $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
 		$("#battery_id_text_input").focus();
 		$("#battery_id_text_input").blur();
 		$('#tracked_time').find('input').focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 });
 
 /**
@@ -152,7 +152,7 @@ $(document).on("Grocy.BarcodeScanned", function (e, barcode, target)
  */
 function UndoChargeCycle(chargeCycleId)
 {
-	Grocy.Api.Post('batteries/charge-cycles/' + chargeCycleId.toString() + '/undo', {},
+	Victual.Api.Post('batteries/charge-cycles/' + chargeCycleId.toString() + '/undo', {},
 		function (result)
 		{
 			toastr.success(__t("Charge cycle successfully undone"));

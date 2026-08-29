@@ -1,13 +1,13 @@
 ﻿// Powers the product barcode create/edit form (views/productbarcodeform.blade.php), embedded in a modal from the product edit form:
 // saves a barcode (with optional default amount/quantity unit/store/note) via the objects/product_barcodes API.
 
-// Form submit: POSTs objects/product_barcodes (create) or PUTs objects/product_barcodes/{id} (edit, id from Grocy.EditObjectId);
+// Form submit: POSTs objects/product_barcodes (create) or PUTs objects/product_barcodes/{id} (edit, id from Victual.EditObjectId);
 // display_amount (the amount in the selected purchase unit) is sent as "amount", then the parent window is told to refresh and close the modal
 $('#save-barcode-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("barcode-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("barcode-form", true))
 	{
 		return;
 	}
@@ -22,39 +22,39 @@ $('#save-barcode-button').on('click', function(e)
 	delete jsonData.display_amount;
 	jsonData.qu_id = $("#qu_id").val();
 
-	Grocy.FrontendHelpers.BeginUiBusy("barcode-form");
+	Victual.FrontendHelpers.BeginUiBusy("barcode-form");
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/product_barcodes', jsonData,
+		Victual.Api.Post('objects/product_barcodes', jsonData,
 			function(result)
 			{
-				Grocy.EditObjectId = result.created_object_id;
-				Grocy.Components.UserfieldsForm.Save()
+				Victual.EditObjectId = result.created_object_id;
+				Victual.Components.UserfieldsForm.Save()
 
-				window.parent.postMessage(WindowMessageBag("ProductBarcodesChanged"), Grocy.BaseUrl);
-				window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+				window.parent.postMessage(WindowMessageBag("ProductBarcodesChanged"), Victual.BaseUrl);
+				window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("barcode-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("barcode-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Components.UserfieldsForm.Save();
-		Grocy.Api.Put('objects/product_barcodes/' + Grocy.EditObjectId, jsonData,
+		Victual.Components.UserfieldsForm.Save();
+		Victual.Api.Put('objects/product_barcodes/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
-				window.parent.postMessage(WindowMessageBag("ProductBarcodesChanged"), Grocy.BaseUrl);
-				window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+				window.parent.postMessage(WindowMessageBag("ProductBarcodesChanged"), Victual.BaseUrl);
+				window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("barcode-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("barcode-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -63,17 +63,17 @@ $('#save-barcode-button').on('click', function(e)
 // Live validation on the relevant inputs
 $('#barcode').on('keyup', function(e)
 {
-	Grocy.FrontendHelpers.ValidateForm('barcode-form');
+	Victual.FrontendHelpers.ValidateForm('barcode-form');
 });
 
 $('#qu_id').on('change', function(e)
 {
-	Grocy.FrontendHelpers.ValidateForm('barcode-form');
+	Victual.FrontendHelpers.ValidateForm('barcode-form');
 });
 
 $('#display_amount').on('keyup', function(e)
 {
-	Grocy.FrontendHelpers.ValidateForm('barcode-form');
+	Victual.FrontendHelpers.ValidateForm('barcode-form');
 });
 
 // Enter submits the form (when valid)
@@ -83,7 +83,7 @@ $('#barcode-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('barcode-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('barcode-form'))
 		{
 			return false;
 		}
@@ -95,29 +95,29 @@ $('#barcode-form input').keydown(function(event)
 });
 
 // Initial setup: load the amount/quantity unit picker for the product this barcode belongs to
-// (Grocy.EditObjectProduct is provided by the template) and prefill amount/unit in edit mode
-Grocy.Components.ProductAmountPicker.Reload(Grocy.EditObjectProduct.id, Grocy.EditObjectProduct.qu_id_purchase);
-if (Grocy.EditMode == "edit")
+// (Victual.EditObjectProduct is provided by the template) and prefill amount/unit in edit mode
+Victual.Components.ProductAmountPicker.Reload(Victual.EditObjectProduct.id, Victual.EditObjectProduct.qu_id_purchase);
+if (Victual.EditMode == "edit")
 {
-	$("#display_amount").val(Grocy.EditObject.amount);
+	$("#display_amount").val(Victual.EditObject.amount);
 	$(".input-group-productamountpicker").trigger("change");
 
-	if (Grocy.EditObject.qu_id)
+	if (Victual.EditObject.qu_id)
 	{
-		Grocy.Components.ProductAmountPicker.SetQuantityUnit(Grocy.EditObject.qu_id);
+		Victual.Components.ProductAmountPicker.SetQuantityUnit(Victual.EditObject.qu_id);
 	}
 }
 
-Grocy.FrontendHelpers.ValidateForm('barcode-form');
+Victual.FrontendHelpers.ValidateForm('barcode-form');
 setTimeout(function()
 {
 	$('#barcode').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 RefreshLocaleNumberInput();
-Grocy.Components.UserfieldsForm.Load()
+Victual.Components.UserfieldsForm.Load()
 
-// Barcode scanner hook: when the camera scanner (Grocy.BarcodeScanned event) targets this form's field, fill it in
-$(document).on("Grocy.BarcodeScanned", function(e, barcode, target)
+// Barcode scanner hook: when the camera scanner (Victual.BarcodeScanned event) targets this form's field, fill it in
+$(document).on("Victual.BarcodeScanned", function(e, barcode, target)
 {
 	if (target !== "#barcode")
 	{

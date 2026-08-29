@@ -1,14 +1,14 @@
 <?php
 
-namespace Grocy\Middleware\Auth;
+namespace Victual\Middleware\Auth;
 
-use Grocy\Services\DatabaseService;
-use Grocy\Services\SessionService;
+use Victual\Services\DatabaseService;
+use Victual\Services\SessionService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
- * The default authentication middleware (GROCY_AUTH_CLASS default value):
- * authenticates against the users created in Grocy itself. Accepts a session
+ * The default authentication middleware (VICTUAL_AUTH_CLASS default value):
+ * authenticates against the users created in Victual itself. Accepts a session
  * cookie for all routes and additionally an API key for API routes; logins
  * are verified against the password hash in the users table (rehashing to
  * Argon2id when necessary).

@@ -66,7 +66,7 @@ templates rather than several changes.
 ## Interaction with `is_freezer`
 
 `is_freezer` is per location today. In a tree, a freezer compartment inside a freezer
-inside a kitchen raises the question of whether the flag inherits. Grocy uses it for
+inside a kitchen raises the question of whether the flag inherits. Victual uses it for
 freezing/thawing due date handling, so getting it wrong changes due dates. See Q3.
 
 ## Open questions

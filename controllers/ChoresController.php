@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Helpers\Grocycode;
-use Grocy\Services\ChoresService;
-use Grocy\Services\UserfieldsService;
-use Grocy\Services\UsersService;
+use Victual\Helpers\Grocycode;
+use Victual\Services\ChoresService;
+use Victual\Services\UserfieldsService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -31,10 +31,10 @@ class ChoresController extends BaseController
 		if ($args['choreId'] == 'new')
 		{
 			return $this->RenderPage($response, 'choreform', [
-				'periodTypes' => GetClassConstants('\Grocy\Services\ChoresService', 'CHORE_PERIOD_TYPE_'),
+				'periodTypes' => GetClassConstants('\Victual\Services\ChoresService', 'CHORE_PERIOD_TYPE_'),
 				'mode' => 'create',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('chores'),
-				'assignmentTypes' => GetClassConstants('\Grocy\Services\ChoresService', 'CHORE_ASSIGNMENT_TYPE_'),
+				'assignmentTypes' => GetClassConstants('\Victual\Services\ChoresService', 'CHORE_ASSIGNMENT_TYPE_'),
 				'users' => $users,
 				'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE')
 			]);
@@ -43,10 +43,10 @@ class ChoresController extends BaseController
 		{
 			return $this->RenderPage($response, 'choreform', [
 				'chore' => $this->DB->chores($args['choreId']),
-				'periodTypes' => GetClassConstants('\Grocy\Services\ChoresService', 'CHORE_PERIOD_TYPE_'),
+				'periodTypes' => GetClassConstants('\Victual\Services\ChoresService', 'CHORE_PERIOD_TYPE_'),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('chores'),
-				'assignmentTypes' => GetClassConstants('\Grocy\Services\ChoresService', 'CHORE_ASSIGNMENT_TYPE_'),
+				'assignmentTypes' => GetClassConstants('\Victual\Services\ChoresService', 'CHORE_ASSIGNMENT_TYPE_'),
 				'users' => $users,
 				'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE')
 			]);
@@ -126,7 +126,7 @@ class ChoresController extends BaseController
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$nextXDays = $usersService->GetUserSettings(GROCY_USER_ID)['chores_due_soon_days'];
+		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['chores_due_soon_days'];
 
 		$chores = $this->DB->chores()->orderBy('name', 'COLLATE NOCASE');
 		$currentChores = ChoresService::GetInstance()->GetCurrent();

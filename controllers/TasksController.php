@@ -1,10 +1,10 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Services\TasksService;
-use Grocy\Services\UserfieldsService;
-use Grocy\Services\UsersService;
+use Victual\Services\TasksService;
+use Victual\Services\UserfieldsService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -25,7 +25,7 @@ class TasksController extends BaseController
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$nextXDays = $usersService->GetUserSettings(GROCY_USER_ID)['tasks_due_soon_days'];
+		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['tasks_due_soon_days'];
 
 		if (isset($request->getQueryParams()['include_done']))
 		{

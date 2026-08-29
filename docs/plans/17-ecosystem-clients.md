@@ -53,7 +53,7 @@ Out, and recorded so the boundary is deliberate rather than an oversight:
 | [Grocy-SwiftUI](https://github.com/supergeorg/Grocy-SwiftUI) | Swift | **GPL-3.0** | 2026-08-29 | active, single maintainer | fork |
 | [custom-components/grocy](https://github.com/custom-components/grocy) | Python | Apache-2.0 | 2025-07-23 | stale, dead dependency, poll design incompatible with the deployment | fork, and rework rather than rebase |
 
-Measured against this fork's `grocy.openapi.json` (73 paths): Grocy-SwiftUI uses 48
+Measured against this fork's `victual.openapi.json` (73 paths): Grocy-SwiftUI uses 48
 endpoints, 47 of which exist here. The Home Assistant integration uses a narrow slice —
 stock, volatile stock, chores, tasks, batteries, meal plan, shopping list — plus
 `/api/files/{picture_type}/{filename}` for product and recipe pictures, all present.
@@ -295,7 +295,7 @@ roadmap is held to. Lint is not verification, and neither is reading a client's 
    stock, Home Assistant's config flow completing and its sensors populating. This is the
    before-picture that every later claim of "still works" is measured against.
 2. **The manifest matches reality.** The extracted endpoint manifests are diffed against
-   the fork's `grocy.openapi.json` and every mismatch is explained — the two found while
+   the fork's `victual.openapi.json` and every mismatch is explained — the two found while
    writing this plan are client-side bugs, and any future mismatch must be classified as
    client bug or fork divergence, not left in the diff.
 3. **Request count per poll interval is measured, not assumed.** Instrument the server and

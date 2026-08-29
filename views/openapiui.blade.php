@@ -14,19 +14,19 @@
 		sizes="32x32"
 		href="{{ $U('/img/icon-32.png?v=', true) }}{{ $version }}">
 
-	<title>{{ $__t('REST API browser') }} | Grocy</title>
+	<title>{{ $__t('REST API browser') }} | Victual</title>
 
 	<link href="{{ $U('/packages/swagger-ui-dist/swagger-ui.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 
-	@if(file_exists(GROCY_DATAPATH . '/custom_css.html'))
-	@php include GROCY_DATAPATH . '/custom_css.html' @endphp
+	@if(file_exists(VICTUAL_DATAPATH . '/custom_css.html'))
+	@php include VICTUAL_DATAPATH . '/custom_css.html' @endphp
 	@endif
 
 	<script>
-		var Grocy = { };
-		Grocy.OpenApi = { };
-		Grocy.OpenApi.SpecUrl = '{{ $U('/api/openapi/specification') }}';
+		var Victual = { };
+		Victual.OpenApi = { };
+		Victual.OpenApi.SpecUrl = '{{ $U('/api/openapi/specification') }}';
 	</script>
 
 	<style>
@@ -59,8 +59,8 @@
 	<script src="{{ $U('/packages/swagger-ui-dist/swagger-ui-standalone-preset.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/viewjs', true) }}/openapiui.js?v={{ $version }}"></script>
 
-	@if(file_exists(GROCY_DATAPATH . '/custom_js.html'))
-	@php include GROCY_DATAPATH . '/custom_js.html' @endphp
+	@if(file_exists(VICTUAL_DATAPATH . '/custom_js.html'))
+	@php include VICTUAL_DATAPATH . '/custom_js.html' @endphp
 	@endif
 </body>
 

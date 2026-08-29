@@ -25,7 +25,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	batteriesOverviewTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Reset search and status filter
 $("#clear-filter-button").on("click", function()
@@ -66,16 +66,16 @@ $(document).on('click', '.track-charge-cycle-button', function(e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
 	var batteryId = $(e.currentTarget).attr('data-battery-id');
 	var batteryName = $(e.currentTarget).attr('data-battery-name');
 	var trackedTime = moment().format('YYYY-MM-DD HH:mm:ss');
 
-	Grocy.Api.Post('batteries/' + batteryId + '/charge', { 'tracked_time': trackedTime },
+	Victual.Api.Post('batteries/' + batteryId + '/charge', { 'tracked_time': trackedTime },
 		function()
 		{
-			Grocy.Api.Get('batteries/' + batteryId,
+			Victual.Api.Get('batteries/' + batteryId,
 				function(result)
 				{
 					var batteryRow = $('#battery-' + batteryId + '-row');
@@ -104,21 +104,21 @@ $(document).on('click', '.track-charge-cycle-button', function(e)
 						$('#battery-' + batteryId + '-next-charge-time-timeago').attr('datetime', result.next_estimated_charge_time);
 					}
 
-					Grocy.FrontendHelpers.EndUiBusy();
+					Victual.FrontendHelpers.EndUiBusy();
 					toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', batteryName, trackedTime));
 					RefreshContextualTimeago("#battery-" + batteryId + "-row");
 					RefreshStatistics();
 				},
 				function(xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy();
+					Victual.FrontendHelpers.EndUiBusy();
 					console.error(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);
@@ -130,11 +130,11 @@ $(document).on('click', '.battery-grocycode-label-print', function(e)
 	e.preventDefault();
 
 	var batteryId = $(e.currentTarget).attr('data-battery-id');
-	Grocy.Api.Get('batteries/' + batteryId + '/printlabel', function(labelData)
+	Victual.Api.Get('batteries/' + batteryId + '/printlabel', function(labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });
@@ -147,7 +147,7 @@ $(document).on('click', '.battery-grocycode-label-print', function(e)
 function RefreshStatistics()
 {
 	var nextXDays = $("#info-due-soon-batteries").data("next-x-days");
-	Grocy.Api.Get('batteries',
+	Victual.Api.Get('batteries',
 		function(result)
 		{
 			var dueTodayCount = 0;

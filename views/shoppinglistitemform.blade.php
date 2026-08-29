@@ -8,8 +8,8 @@
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 </script>
 
 <div class="row">
@@ -23,19 +23,19 @@
 <div class="row">
 	<div class="col-12 col-md-6 col-xl-4 pb-3">
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
+			Victual.EditMode = '{{ $mode }}';
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $listItem->id }};
+			Victual.EditObjectId = {{ $listItem->id }};
 		</script>
 		@endif
 
 		<form id="shoppinglist-form"
 			novalidate>
 
-			@if(GROCY_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS)
+			@if(VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS)
 			<div class="form-group">
 				<label for="shopping_list_id">{{ $__t('Shopping list') }}</label>
 				<select class="custom-control custom-select"

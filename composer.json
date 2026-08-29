@@ -29,10 +29,10 @@
 	],
 	"autoload": {
 		"psr-4": {
-			"Grocy\\Services\\": "services/",
-			"Grocy\\Controllers\\": "controllers/",
-			"Grocy\\Middleware\\": "middleware/",
-			"Grocy\\Helpers\\": "helpers/"
+			"Victual\\Services\\": "services/",
+			"Victual\\Controllers\\": "controllers/",
+			"Victual\\Middleware\\": "middleware/",
+			"Victual\\Helpers\\": "helpers/"
 		},
 		"files": [
 			"helpers/extensions.php"

@@ -1,9 +1,9 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Services\UsersService;
+use Victual\Controllers\Users\User;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -103,7 +103,7 @@ class UsersApiController extends BaseApiController
 	 */
 	public function EditUser(Request $request, Response $response, array $args)
 	{
-		if ($args['userId'] == GROCY_USER_ID)
+		if ($args['userId'] == VICTUAL_USER_ID)
 		{
 			User::CheckPermission($request, User::PERMISSION_USERS_EDIT_SELF);
 		}
@@ -139,7 +139,7 @@ class UsersApiController extends BaseApiController
 	{
 		try
 		{
-			$value = UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, $args['settingKey']);
+			$value = UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, $args['settingKey']);
 			return $this->ApiResponse($response, ['value' => $value]);
 		}
 		catch (\Exception $ex)
@@ -156,7 +156,7 @@ class UsersApiController extends BaseApiController
 	{
 		try
 		{
-			return $this->ApiResponse($response, UsersService::GetInstance()->GetUserSettings(GROCY_USER_ID));
+			return $this->ApiResponse($response, UsersService::GetInstance()->GetUserSettings(VICTUAL_USER_ID));
 		}
 		catch (\Exception $ex)
 		{
@@ -190,7 +190,7 @@ class UsersApiController extends BaseApiController
 	{
 		try
 		{
-			return $this->ApiResponse($response, UsersService::GetInstance()->GetUsersAsDto()->where('id', GROCY_USER_ID));
+			return $this->ApiResponse($response, UsersService::GetInstance()->GetUsersAsDto()->where('id', VICTUAL_USER_ID));
 		}
 		catch (\Exception $ex)
 		{
@@ -244,7 +244,7 @@ class UsersApiController extends BaseApiController
 				->delete();
 
 			$perms = [];
-			if (GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')
+			if (VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
 			{
 				// For demo mode always all users have and keep the ADMIN permission
 				$perms[] = [
@@ -286,7 +286,7 @@ class UsersApiController extends BaseApiController
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-			$value = UsersService::GetInstance()->SetUserSetting(GROCY_USER_ID, $args['settingKey'], $requestBody['value']);
+			$value = UsersService::GetInstance()->SetUserSetting(VICTUAL_USER_ID, $args['settingKey'], $requestBody['value']);
 			return $this->EmptyApiResponse($response);
 		}
 		catch (\Exception $ex)
@@ -303,7 +303,7 @@ class UsersApiController extends BaseApiController
 	{
 		try
 		{
-			$value = UsersService::GetInstance()->DeleteUserSetting(GROCY_USER_ID, $args['settingKey']);
+			$value = UsersService::GetInstance()->DeleteUserSetting(VICTUAL_USER_ID, $args['settingKey']);
 			return $this->EmptyApiResponse($response);
 		}
 		catch (\Exception $ex)

@@ -3,14 +3,14 @@
 @section('title', $__t('Consume'))
 
 @push('pageScripts')
-<script src="{{ $U('/js/grocy_uisound.js?v=', true) }}{{ $version }}"></script>
+<script src="{{ $U('/js/victual_uisound.js?v=', true) }}{{ $version }}"></script>
 @endpush
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
-	Grocy.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
 </script>
 
 <div class="row">
@@ -39,7 +39,7 @@
 					@endif>
 				@else
 				<script>
-					Grocy.UserSettings.scan_mode_consume_enabled = false;
+					Victual.UserSettings.scan_mode_consume_enabled = false;
 				</script>
 				@endif
 			</div>
@@ -77,7 +77,7 @@
 				class="text-info font-italic d-none">' . $__t('Tare weight handling enabled - please weigh the whole container, the amount to be posted will be automatically calculcated') . '</div>'
 			))
 
-			<div class="form-group @if(!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
+			<div class="form-group @if(!VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
 				<label for="location_id">{{ $__t('Location') }}</label>
 				<select required
 					class="custom-control custom-select location-combobox"
@@ -127,7 +127,7 @@
 				</select>
 			</div>
 
-			@if (GROCY_FEATURE_FLAG_RECIPES)
+			@if (VICTUAL_FEATURE_FLAG_RECIPES)
 			@include('components.recipepicker', array(
 			'recipes' => $recipes,
 			'isRequired' => false,
@@ -138,7 +138,7 @@
 			<button id="save-consume-button"
 				class="btn btn-success">{{ $__t('OK') }}</button>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 			<button id="save-mark-as-open-button"
 				class="btn btn-secondary permission-STOCK_OPEN">{{ $__t('Mark as opened') }}</button>
 			@endif

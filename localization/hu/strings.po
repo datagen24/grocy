@@ -366,8 +366,8 @@ msgstr "Ez azt jelenti, %s el lesz távolítva a készletből"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "%1$s %2$s készletről levéve"
 
-msgid "About Grocy"
-msgstr "A Grocyról"
+msgid "About Victual"
+msgstr "A Victualról"
 
 msgid "Close"
 msgstr "Bezár"
@@ -1467,12 +1467,6 @@ msgstr "Ennyivel lesz megszorozva a hozzávaló végső ára"
 msgid "Price factor"
 msgstr "Ár szorzó"
 
-msgid "Do you find Grocy useful?"
-msgstr "Hasznosnak találod a Grocyt?"
-
-msgid "Say thanks"
-msgstr "Köszönd meg"
-
 msgid "Search for recipes containing this product"
 msgstr "Receptek keresése, amelyek ezt a terméket tartalmazzák"
 
@@ -1600,10 +1594,10 @@ msgstr "Készlet bejegyzés szerkesztése"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "A kamera hozzáférés csak akkor lehetséges, ha a böngésződ által támogatott "
-"és engedélyezett, valamint ha a Grocy egy biztonságos (https://) kapcsolaton"
+"és engedélyezett, valamint ha a Victual egy biztonságos (https://) kapcsolaton"
 " keresztül van kiszolgálva"
 
 msgid "Keep screen on"
@@ -2267,7 +2261,7 @@ msgid "Download %s Grocycode"
 msgstr "%s Grocy kód nyomtatása"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "A Grocy kód egy egyedi vonalkód, amely a(z) %s Grocy-n belüli egyértelmű "

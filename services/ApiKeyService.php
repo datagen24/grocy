@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Manages API keys: creation, validation and lookup, including the special purpose
@@ -28,7 +28,7 @@ class ApiKeyService extends BaseService
 
 		$apiKeyRow = $this->DB->api_keys()->createRow([
 			'api_key' => $newApiKey,
-			'user_id' => GROCY_USER_ID,
+			'user_id' => VICTUAL_USER_ID,
 			'expires' => '2999-12-31 23:59:59', // Default is that API keys never expire
 			'key_type' => $keyType,
 			'description' => $description

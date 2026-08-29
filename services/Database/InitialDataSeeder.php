@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
-use Grocy\Services\LocalizationService;
+use Victual\Services\LocalizationService;
 
 /**
- * The rows a brand new Grocy database needs before anyone can log into it.
+ * The rows a brand new Victual database needs before anyone can log into it.
  *
  * On SQLite these arrive as a side effect of replaying the migration history: 0027.php
  * creates the admin user, 0031.php the default quantity units and location, 0062/0063
@@ -103,13 +103,13 @@ class InitialDataSeeder
 	 * @param \PDO $db An already migrated, empty database
 	 * @param DatabaseDialect $dialect Dialect matching $db (quoting, id counter resync)
 	 * @param LocalizationService|null $localizationService Supplies the translated default
-	 *                                                      names; defaults to GROCY_DEFAULT_LOCALE
+	 *                                                      names; defaults to VICTUAL_DEFAULT_LOCALE
 	 */
 	public function __construct(\PDO $db, DatabaseDialect $dialect, ?LocalizationService $localizationService = null)
 	{
 		$this->Db = $db;
 		$this->Dialect = $dialect;
-		$this->LocalizationService = $localizationService ?? LocalizationService::GetInstance(GROCY_DEFAULT_LOCALE);
+		$this->LocalizationService = $localizationService ?? LocalizationService::GetInstance(VICTUAL_DEFAULT_LOCALE);
 	}
 
 	/**
@@ -138,8 +138,8 @@ class InitialDataSeeder
 	 */
 	private function SeedAdminUser(): void
 	{
-		$username = defined('GROCY_HTTP_USER') ? GROCY_HTTP_USER : 'admin';
-		$password = defined('GROCY_HTTP_USER') ? GROCY_HTTP_PASSWORD : 'admin';
+		$username = defined('VICTUAL_HTTP_USER') ? VICTUAL_HTTP_USER : 'admin';
+		$password = defined('VICTUAL_HTTP_USER') ? VICTUAL_HTTP_PASSWORD : 'admin';
 
 		$this->Insert('users', [
 			'username' => $username,

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Upstream grocy's release-based updater, kept as inherited and deliberately NOT renamed
+# with the rest of the project (plan 16): it overwrites the installation with a release
+# downloaded from upstream's server, which is not this fork's code. This fork tracks no
+# release schedule and updates by pulling the repository. See README.md, "How to update".
+
 GROCY_RELEASE_URL=https://releases.grocy.info/latest
 
 

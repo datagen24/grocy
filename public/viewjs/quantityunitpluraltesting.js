@@ -46,4 +46,4 @@ if (GetUriParam("qu") !== undefined)
 setTimeout(function()
 {
 	$("#amount").focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);

@@ -72,10 +72,10 @@
 	var recipesResolved = {!! json_encode($recipesResolved) !!};
 	var weekRecipe = {!! json_encode($weekRecipe) !!};
 
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 
-	Grocy.MealPlanFirstDayOfWeek = '{{ GROCY_MEAL_PLAN_FIRST_DAY_OF_WEEK }}';
+	Victual.MealPlanFirstDayOfWeek = '{{ VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK }}';
 </script>
 
 <div class="row">

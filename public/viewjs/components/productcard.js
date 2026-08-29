@@ -1,15 +1,15 @@
 // Implements the ProductCard widget (views/components/productcard.blade.php): a modal showing
 // summary details for one product (stock amount/value, last purchased/used, location, prices,
 // average shelf life, edit/journal/shopping-list/stock-entries links) and, when
-// GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING is enabled, a Chart.js price-history line chart.
+// VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING is enabled, a Chart.js price-history line chart.
 // Public API: Refresh(productId) - fetches and renders the product, also called by the
 // ".productcard-trigger" click handler below to populate the modal before showing it.
-Grocy.Components.ProductCard = {};
+Victual.Components.ProductCard = {};
 
 /** Fetches product details (GET stock/products/{id}) and renders them into the #productcard-* elements */
-Grocy.Components.ProductCard.Refresh = function(productId)
+Victual.Components.ProductCard.Refresh = function(productId)
 {
-	Grocy.Api.Get('stock/products/' + productId,
+	Victual.Api.Get('stock/products/' + productId,
 		function(productDetails)
 		{
 			var stockAmount = productDetails.stock_amount || '0';
@@ -37,7 +37,7 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 
 				if (productDetails.stock_amount_opened_aggregated > 0)
 				{
-					$('#productcard-product-stock-opened-amount-aggregated').text(__t('%s opened', productDetails.stock_amount_opened_aggregated.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts })));
+					$('#productcard-product-stock-opened-amount-aggregated').text(__t('%s opened', productDetails.stock_amount_opened_aggregated.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts })));
 				}
 				else
 				{
@@ -75,14 +75,14 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 
 			if (stockAmountOpened > 0)
 			{
-				$('#productcard-product-stock-opened-amount').text(__t('%s opened', stockAmountOpened.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts })));
+				$('#productcard-product-stock-opened-amount').text(__t('%s opened', stockAmountOpened.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts })));
 			}
 			else
 			{
 				$('#productcard-product-stock-opened-amount').text("");
 			}
 
-			$('#productcard-product-edit-button').attr("href", U("/product/" + productDetails.product.id.toString() + '?' + 'returnto=' + encodeURIComponent(Grocy.CurrentUrlRelative)));
+			$('#productcard-product-edit-button').attr("href", U("/product/" + productDetails.product.id.toString() + '?' + 'returnto=' + encodeURIComponent(Victual.CurrentUrlRelative)));
 			$('#productcard-product-journal-button').attr("href", U("/stockjournal?embedded&product=" + productDetails.product.id.toString()));
 			$('#productcard-product-shoppinglist-button').attr("href", U("/shoppinglistitem/new?embedded&updateexistingproduct&list=1&product=" + productDetails.product.id.toString()));
 			$('#productcard-product-stock-button').attr("href", U("/stockentries?embedded&product=" + productDetails.product.id.toString()));
@@ -93,8 +93,8 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 
 			if (productDetails.last_price !== null)
 			{
-				$('#productcard-product-last-price').text(__t("%1$s per %2$s", (productDetails.last_price * productDetails.qu_conversion_factor_price_to_stock).toLocaleString(undefined, { style: "currency", currency: Grocy.Currency, minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_price.name));
-				$('#productcard-product-last-price').attr("data-original-title", __t("%1$s per %2$s", productDetails.last_price.toLocaleString(undefined, { style: "currency", currency: Grocy.Currency, minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_stock.name));
+				$('#productcard-product-last-price').text(__t("%1$s per %2$s", (productDetails.last_price * productDetails.qu_conversion_factor_price_to_stock).toLocaleString(undefined, { style: "currency", currency: Victual.Currency, minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_price.name));
+				$('#productcard-product-last-price').attr("data-original-title", __t("%1$s per %2$s", productDetails.last_price.toLocaleString(undefined, { style: "currency", currency: Victual.Currency, minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_stock.name));
 			}
 			else
 			{
@@ -104,8 +104,8 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 
 			if (productDetails.avg_price !== null)
 			{
-				$('#productcard-product-average-price').text(__t("%1$s per %2$s", (productDetails.avg_price * productDetails.qu_conversion_factor_price_to_stock).toLocaleString(undefined, { style: "currency", currency: Grocy.Currency, minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_price.name));
-				$('#productcard-product-average-price').attr("data-original-title", __t("%1$s per %2$s", productDetails.avg_price.toLocaleString(undefined, { style: "currency", currency: Grocy.Currency, minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_stock.name));
+				$('#productcard-product-average-price').text(__t("%1$s per %2$s", (productDetails.avg_price * productDetails.qu_conversion_factor_price_to_stock).toLocaleString(undefined, { style: "currency", currency: Victual.Currency, minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_price.name));
+				$('#productcard-product-average-price').attr("data-original-title", __t("%1$s per %2$s", productDetails.avg_price.toLocaleString(undefined, { style: "currency", currency: Victual.Currency, minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display }), productDetails.quantity_unit_stock.name));
 			}
 			else
 			{
@@ -136,9 +136,9 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 
 			// Price history chart: one dataset per shopping location plus a hidden aggregate
 			// "_TrendlineDataset" used only to render the overall trendline
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			if (Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			{
-				Grocy.Api.Get('stock/products/' + productId + '/price-history',
+				Victual.Api.Get('stock/products/' + productId + '/price-history',
 					function(priceHistoryDataPoints)
 					{
 						if (priceHistoryDataPoints.length > 0)
@@ -146,12 +146,12 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 							$("#productcard-product-price-history-chart").removeClass("d-none");
 							$("#productcard-no-price-data-hint").addClass("d-none");
 
-							Grocy.Components.ProductCard.ReInitPriceHistoryChart();
+							Victual.Components.ProductCard.ReInitPriceHistoryChart();
 
 							var datasets = {};
 							datasets["_TrendlineDataset"] = []
 
-							var chart = Grocy.Components.ProductCard.PriceHistoryChart.data;
+							var chart = Victual.Components.ProductCard.PriceHistoryChart.data;
 							priceHistoryDataPoints.forEach((dataPoint) =>
 							{
 								var key = __t("Unknown store");
@@ -206,7 +206,7 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 
 							});
 
-							Grocy.Components.ProductCard.PriceHistoryChart.update();
+							Victual.Components.ProductCard.PriceHistoryChart.update();
 						}
 						else
 						{
@@ -232,22 +232,22 @@ Grocy.Components.ProductCard.Refresh = function(productId)
  * (Re-)creates the Chart.js price-history line chart in #productcard-product-price-history-chart,
  * destroying any previous instance first. Datasets/labels are populated afterwards by Refresh().
  */
-Grocy.Components.ProductCard.ReInitPriceHistoryChart = function()
+Victual.Components.ProductCard.ReInitPriceHistoryChart = function()
 {
-	if (typeof Grocy.Components.ProductCard.PriceHistoryChart !== "undefined")
+	if (typeof Victual.Components.ProductCard.PriceHistoryChart !== "undefined")
 	{
-		Grocy.Components.ProductCard.PriceHistoryChart.destroy();
+		Victual.Components.ProductCard.PriceHistoryChart.destroy();
 	}
 
 	var format = 'YYYY-MM-DD';
-	Grocy.Components.ProductCard.PriceHistoryChart = new Chart(document.getElementById("productcard-product-price-history-chart"), {
+	Victual.Components.ProductCard.PriceHistoryChart = new Chart(document.getElementById("productcard-product-price-history-chart"), {
 		type: "line",
 		data: {
 			labels: [ //Date objects
-				// Will be populated in Grocy.Components.ProductCard.Refresh
+				// Will be populated in Victual.Components.ProductCard.Refresh
 			],
 			datasets: [ //Datasets
-				// Will be populated in Grocy.Components.ProductCard.Refresh
+				// Will be populated in Victual.Components.ProductCard.Refresh
 			]
 		},
 		options: {
@@ -274,7 +274,7 @@ Grocy.Components.ProductCard.ReInitPriceHistoryChart = function()
 						beginAtZero: true,
 						callback: function(value, index, ticks)
 						{
-							return Number.parseFloat(value).toLocaleString(undefined, { style: "currency", currency: Grocy.Currency, minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display });
+							return Number.parseFloat(value).toLocaleString(undefined, { style: "currency", currency: Victual.Currency, minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display });
 						}
 					}
 				}]
@@ -299,7 +299,7 @@ Grocy.Components.ProductCard.ReInitPriceHistoryChart = function()
 							label += ': ';
 						}
 
-						label += tooltipItem.yLabel.toLocaleString(undefined, { style: "currency", currency: Grocy.Currency, minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display })
+						label += tooltipItem.yLabel.toLocaleString(undefined, { style: "currency", currency: Victual.Currency, minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display })
 						return label;
 					}
 				}
@@ -325,7 +325,7 @@ $(document).on("click", ".productcard-trigger", function(e)
 	var productId = $(e.currentTarget).attr("data-product-id");
 	if (productId != "")
 	{
-		Grocy.Components.ProductCard.Refresh(productId);
+		Victual.Components.ProductCard.Refresh(productId);
 		$("#productcard-modal").modal("show");
 	}
 });

@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
 /**
  * Encapsulates everything about persistence that differs between database engines.
  *
- * Grocy's data access is split in two: LessQL's fluent API (portable) and hand written
+ * Victual's data access is split in two: LessQL's fluent API (portable) and hand written
  * SQL in the migrations and a handful of services (not portable). This class is the seam
  * for the second part - connection setup, engine specific functions, and the few SQL
  * fragments that leak into PHP.
@@ -158,14 +158,14 @@ abstract class DatabaseDialect
 	}
 
 	/**
-	 * Factory: picks the dialect matching the GROCY_DB_DRIVER setting
+	 * Factory: picks the dialect matching the VICTUAL_DB_DRIVER setting
 	 * ("sqlite" when undefined). Called once per request by DatabaseService.
 	 *
 	 * @throws \Exception On an unsupported driver value
 	 */
 	public static function Create(): self
 	{
-		$driver = defined('GROCY_DB_DRIVER') ? strtolower(GROCY_DB_DRIVER) : 'sqlite';
+		$driver = defined('VICTUAL_DB_DRIVER') ? strtolower(VICTUAL_DB_DRIVER) : 'sqlite';
 
 		switch ($driver)
 		{

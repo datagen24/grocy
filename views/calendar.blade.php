@@ -53,7 +53,7 @@
 				<h4 class="modal-title w-100">{{ $__t('Configure colors') }}</h4>
 			</div>
 			<div class="modal-body">
-				@if(GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+				@if(VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 				<div class="form-group">
 					<div class="input-group">
 						<div class="input-group-prepend">
@@ -68,7 +68,7 @@
 				</div>
 				@endif
 
-				@if(GROCY_FEATURE_FLAG_TASKS)
+				@if(VICTUAL_FEATURE_FLAG_TASKS)
 				<div class="form-group">
 					<div class="input-group">
 						<div class="input-group-prepend">
@@ -83,7 +83,7 @@
 				</div>
 				@endif
 
-				@if(GROCY_FEATURE_FLAG_CHORES)
+				@if(VICTUAL_FEATURE_FLAG_CHORES)
 				<div class="form-group">
 					<div class="input-group">
 						<div class="input-group-prepend">
@@ -98,7 +98,7 @@
 				</div>
 				@endif
 
-				@if(GROCY_FEATURE_FLAG_BATTERIES)
+				@if(VICTUAL_FEATURE_FLAG_BATTERIES)
 				<div class="form-group">
 					<div class="input-group">
 						<div class="input-group-prepend">
@@ -113,7 +113,7 @@
 				</div>
 				@endif
 
-				@if(GROCY_FEATURE_FLAG_RECIPES_MEALPLAN)
+				@if(VICTUAL_FEATURE_FLAG_RECIPES_MEALPLAN)
 				<div class="form-group">
 					<div class="input-group">
 						<div class="input-group-prepend">

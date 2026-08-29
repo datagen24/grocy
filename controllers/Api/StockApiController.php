@@ -1,12 +1,12 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Helpers\Grocycode;
-use Grocy\Helpers\WebhookRunner;
-use Grocy\Services\LocalizationService;
-use Grocy\Services\StockService;
+use Victual\Controllers\Users\User;
+use Victual\Helpers\Grocycode;
+use Victual\Helpers\WebhookRunner;
+use Victual\Services\LocalizationService;
+use Victual\Services\StockService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -819,9 +819,9 @@ class StockApiController extends BaseApiController
 
 	/**
 	 * GET /api/stock/products/{productId}/printlabel - builds the webhook payload
-	 * (product name, Grocycode, product details, GROCY_LABEL_PRINTER_PARAMS) for
-	 * printing a product label; when GROCY_LABEL_PRINTER_RUN_SERVER is enabled the
-	 * configured GROCY_LABEL_PRINTER_WEBHOOK is also triggered server-side.
+	 * (product name, Grocycode, product details, VICTUAL_LABEL_PRINTER_PARAMS) for
+	 * printing a product label; when VICTUAL_LABEL_PRINTER_RUN_SERVER is enabled the
+	 * configured VICTUAL_LABEL_PRINTER_WEBHOOK is also triggered server-side.
 	 * Returns the payload (200) or a 400 error response.
 	 */
 	public function ProductPrintLabel(Request $request, Response $response, array $args)
@@ -834,11 +834,11 @@ class StockApiController extends BaseApiController
 				'product' => $productDetails->product->name,
 				'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productDetails->product->id)),
 				'details' => $productDetails,
-			], GROCY_LABEL_PRINTER_PARAMS);
+			], VICTUAL_LABEL_PRINTER_PARAMS);
 
-			if (GROCY_LABEL_PRINTER_RUN_SERVER)
+			if (VICTUAL_LABEL_PRINTER_RUN_SERVER)
 			{
-				(new WebhookRunner())->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+				(new WebhookRunner())->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 			}
 
 			return $this->ApiResponse($response, $webhookData);
@@ -852,10 +852,10 @@ class StockApiController extends BaseApiController
 	/**
 	 * GET /api/stock/entry/{entryId}/printlabel - builds the webhook payload (product
 	 * name, Grocycode carrying the stock entry id, product details, the stock entry
-	 * row, GROCY_LABEL_PRINTER_PARAMS, plus a due_date field when best-before-date
+	 * row, VICTUAL_LABEL_PRINTER_PARAMS, plus a due_date field when best-before-date
 	 * tracking is enabled) for printing a stock entry label; when
-	 * GROCY_LABEL_PRINTER_RUN_SERVER is enabled the configured
-	 * GROCY_LABEL_PRINTER_WEBHOOK is also triggered server-side.
+	 * VICTUAL_LABEL_PRINTER_RUN_SERVER is enabled the configured
+	 * VICTUAL_LABEL_PRINTER_WEBHOOK is also triggered server-side.
 	 * Returns the payload (200) or a 400 error response.
 	 */
 	public function StockEntryPrintLabel(Request $request, Response $response, array $args)
@@ -870,16 +870,16 @@ class StockApiController extends BaseApiController
 				'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $stockEntry->product_id, [$stockEntry->stock_id])),
 				'details' => $productDetails,
 				'stock_entry' => $stockEntry,
-			], GROCY_LABEL_PRINTER_PARAMS);
+			], VICTUAL_LABEL_PRINTER_PARAMS);
 
-			if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+			if (VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 			{
 				$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $stockEntry->best_before_date;
 			}
 
-			if (GROCY_LABEL_PRINTER_RUN_SERVER)
+			if (VICTUAL_LABEL_PRINTER_RUN_SERVER)
 			{
-				(new WebhookRunner())->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+				(new WebhookRunner())->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 			}
 
 			return $this->ApiResponse($response, $webhookData);

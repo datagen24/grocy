@@ -2,7 +2,7 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseService;
 
 // Assign a new stock_id to all opened stock entries where there is also an unopened one with the same stock_id
 $db = DatabaseService::GetInstance();

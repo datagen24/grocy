@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 use DateTime;
 use Mike42\Escpos\PrintConnectors\FilePrintConnector;
@@ -9,14 +9,14 @@ use Mike42\Escpos\Printer;
 
 /**
  * Prints the shopping list on an ESC/POS thermal printer, reached over the network or
- * a local device file depending on the GROCY_TPRINTER_* settings.
+ * a local device file depending on the VICTUAL_TPRINTER_* settings.
  */
 class PrintService extends BaseService
 {
 	/**
 	 * Prints the given lines and cuts the paper.
 	 *
-	 * @param bool $printHeader Whether to print the "Grocy" banner and timestamp first
+	 * @param bool $printHeader Whether to print the "Victual" banner and timestamp first
 	 * @param string[] $lines Pre-rendered text lines, one per shopping list item
 	 * @return array Always ['result' => 'OK']; failures throw instead
 	 * @throws \Exception When the printer cannot be reached
@@ -49,24 +49,24 @@ class PrintService extends BaseService
 	}
 
 	/**
-	 * Connects to the configured printer: TCP (GROCY_TPRINTER_IP/PORT) when
-	 * GROCY_TPRINTER_IS_NETWORK_PRINTER, otherwise a device file (GROCY_TPRINTER_CONNECTOR).
+	 * Connects to the configured printer: TCP (VICTUAL_TPRINTER_IP/PORT) when
+	 * VICTUAL_TPRINTER_IS_NETWORK_PRINTER, otherwise a device file (VICTUAL_TPRINTER_CONNECTOR).
 	 */
 	private static function getPrinterHandle()
 	{
-		if (GROCY_TPRINTER_IS_NETWORK_PRINTER)
+		if (VICTUAL_TPRINTER_IS_NETWORK_PRINTER)
 		{
-			$connector = new NetworkPrintConnector(GROCY_TPRINTER_IP, GROCY_TPRINTER_PORT);
+			$connector = new NetworkPrintConnector(VICTUAL_TPRINTER_IP, VICTUAL_TPRINTER_PORT);
 		}
 		else
 		{
-			$connector = new FilePrintConnector(GROCY_TPRINTER_CONNECTOR);
+			$connector = new FilePrintConnector(VICTUAL_TPRINTER_CONNECTOR);
 		}
 		return new Printer($connector);
 	}
 
 	/**
-	 * Prints the centered "Grocy" banner followed by the current date/time (d/m/Y H:i).
+	 * Prints the centered "Victual" banner followed by the current date/time (d/m/Y H:i).
 	 */
 	private static function printHeader(Printer $printer)
 	{
@@ -77,7 +77,7 @@ class PrintService extends BaseService
 		$printer->selectPrintMode(Printer::MODE_DOUBLE_WIDTH);
 		$printer->setTextSize(4, 4);
 		$printer->setReverseColors(true);
-		$printer->text('Grocy');
+		$printer->text('Victual');
 		$printer->setJustification();
 		$printer->setTextSize(1, 1);
 		$printer->setReverseColors(false);

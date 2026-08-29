@@ -7,7 +7,7 @@
 @push('componentScripts')
 @if(isset($ExternalBarcodeLookupPluginName))
 <script>
-	Grocy.ExternalBarcodeLookupPluginName = "{{ $ExternalBarcodeLookupPluginName }}";
+	Victual.ExternalBarcodeLookupPluginName = "{{ $ExternalBarcodeLookupPluginName }}";
 </script>
 @endif
 @endpush

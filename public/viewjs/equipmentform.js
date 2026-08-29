@@ -3,14 +3,14 @@
 // upload/replacement/deletion of the instruction manual file.
 
 // Form submit: POST /api/objects/equipment on create or PUT /api/objects/equipment/{id} on edit
-// (mode/id from Grocy.EditMode / Grocy.EditObjectId); a selected instruction manual is stored
+// (mode/id from Victual.EditMode / Victual.EditObjectId); a selected instruction manual is stored
 // under a random-prefixed file name and uploaded to the "equipmentmanuals" file group
-// after the object was saved (Grocy.Api.UploadFile)
+// after the object was saved (Victual.Api.UploadFile)
 $('#save-equipment-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("equipment-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("equipment-form", true))
 	{
 		return;
 	}
@@ -21,7 +21,7 @@ $('#save-equipment-button').on('click', function(e)
 	}
 
 	var jsonData = $('#equipment-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("equipment-form");
+	Victual.FrontendHelpers.BeginUiBusy("equipment-form");
 
 	// A newly selected manual file gets a randomized, cleaned server side file name
 	if ($("#instruction-manual")[0].files.length > 0)
@@ -29,30 +29,30 @@ $('#save-equipment-button').on('click', function(e)
 		jsonData.instruction_manual_file_name = RandomString() + CleanFileName($("#instruction-manual")[0].files[0].name);
 	}
 
-	if (Grocy.DeleteInstructionManualOnSave)
+	if (Victual.DeleteInstructionManualOnSave)
 	{
 		jsonData.instruction_manual_file_name = null;
 	}
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/equipment', jsonData,
+		Victual.Api.Post('objects/equipment', jsonData,
 			function(result)
 			{
-				Grocy.EditObjectId = result.created_object_id;
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.EditObjectId = result.created_object_id;
+				Victual.Components.UserfieldsForm.Save(function()
 				{
-					if (jsonData.hasOwnProperty("instruction_manual_file_name") && !Grocy.DeleteInstructionManualOnSave)
+					if (jsonData.hasOwnProperty("instruction_manual_file_name") && !Victual.DeleteInstructionManualOnSave)
 					{
-						Grocy.Api.UploadFile($("#instruction-manual")[0].files[0], 'equipmentmanuals', jsonData.instruction_manual_file_name,
+						Victual.Api.UploadFile($("#instruction-manual")[0].files[0], 'equipmentmanuals', jsonData.instruction_manual_file_name,
 							function(result)
 							{
 								window.location.href = U('/equipment');
 							},
 							function(xhr)
 							{
-								Grocy.FrontendHelpers.EndUiBusy("equipment-form");
-								Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+								Victual.FrontendHelpers.EndUiBusy("equipment-form");
+								Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 							}
 						);
 					}
@@ -64,45 +64,45 @@ $('#save-equipment-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("equipment-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("equipment-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
 		// Edit mode: delete the old manual file first when its removal was requested
-		if (Grocy.DeleteInstructionManualOnSave)
+		if (Victual.DeleteInstructionManualOnSave)
 		{
-			Grocy.Api.DeleteFile(Grocy.InstructionManualFileNameName, 'equipmentmanuals',
+			Victual.Api.DeleteFile(Victual.InstructionManualFileNameName, 'equipmentmanuals',
 				function(result)
 				{
 					// Nothing to do
 				},
 				function(xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy("equipment-form");
-					Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+					Victual.FrontendHelpers.EndUiBusy("equipment-form");
+					Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 				}
 			);
 		};
 
-		Grocy.Api.Put('objects/equipment/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/equipment/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
-				Grocy.Components.UserfieldsForm.Save(function()
+				Victual.Components.UserfieldsForm.Save(function()
 				{
-					if (jsonData.hasOwnProperty("instruction_manual_file_name") && !Grocy.DeleteInstructionManualOnSave)
+					if (jsonData.hasOwnProperty("instruction_manual_file_name") && !Victual.DeleteInstructionManualOnSave)
 					{
-						Grocy.Api.UploadFile($("#instruction-manual")[0].files[0], 'equipmentmanuals', jsonData.instruction_manual_file_name,
+						Victual.Api.UploadFile($("#instruction-manual")[0].files[0], 'equipmentmanuals', jsonData.instruction_manual_file_name,
 							function(result)
 							{
 								window.location.href = U('/equipment');
 							},
 							function(xhr)
 							{
-								Grocy.FrontendHelpers.EndUiBusy("equipment-form");
-								Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+								Victual.FrontendHelpers.EndUiBusy("equipment-form");
+								Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 							}
 						);
 					}
@@ -114,8 +114,8 @@ $('#save-equipment-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("equipment-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("equipment-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -124,7 +124,7 @@ $('#save-equipment-button').on('click', function(e)
 // Live-validate on any input; Enter submits the form when valid
 $('#equipment-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('equipment-form');
+	Victual.FrontendHelpers.ValidateForm('equipment-form');
 });
 
 $('#equipment-form input').keydown(function(event)
@@ -133,7 +133,7 @@ $('#equipment-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('equipment-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('equipment-form'))
 		{
 			return false;
 		}
@@ -144,12 +144,12 @@ $('#equipment-form input').keydown(function(event)
 	}
 });
 
-// "Delete manual" only flags the file for removal on save (Grocy.DeleteInstructionManualOnSave)
+// "Delete manual" only flags the file for removal on save (Victual.DeleteInstructionManualOnSave)
 // and updates the hints - the actual delete happens in the submit handler above
-Grocy.DeleteInstructionManualOnSave = false;
+Victual.DeleteInstructionManualOnSave = false;
 $('#delete-current-instruction-manual-button').on('click', function(e)
 {
-	Grocy.DeleteInstructionManualOnSave = true;
+	Victual.DeleteInstructionManualOnSave = true;
 	$("#current-equipment-instruction-manual").addClass("d-none");
 	$("#delete-current-instruction-manual-on-save-hint").removeClass("d-none");
 	$("#delete-current-instruction-manual-button").addClass("disabled");
@@ -159,12 +159,12 @@ $('#delete-current-instruction-manual-button').on('click', function(e)
 ResizeResponsiveEmbeds();
 
 // Initial state: load userfield values, validate once and focus the name field
-Grocy.Components.UserfieldsForm.Load();
-Grocy.FrontendHelpers.ValidateForm('equipment-form');
+Victual.Components.UserfieldsForm.Load();
+Victual.FrontendHelpers.ValidateForm('equipment-form');
 setTimeout(function()
 {
 	$('#name').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // Selecting a new manual file cancels a pending "delete manual" request
 $("#instruction-manual").on("change", function(e)
@@ -173,5 +173,5 @@ $("#instruction-manual").on("change", function(e)
 	$("#instruction-manual-label-none").addClass("d-none");
 	$("#delete-current-instruction-manual-on-save-hint").addClass("d-none");
 	$("#current-instruction-manuale").addClass("d-none");
-	Grocy.DeleteProductPictureOnSave = false;
+	Victual.DeleteProductPictureOnSave = false;
 });

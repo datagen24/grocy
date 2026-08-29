@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Services\StockService;
-use Grocy\Services\UserfieldsService;
-use Grocy\Services\UsersService;
+use Victual\Controllers\Users\User;
+use Victual\Services\StockService;
+use Victual\Services\UserfieldsService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -70,9 +70,9 @@ class GenericEntityApiController extends BaseApiController
 				$newObjectId = $this->DB->lastInsertId();
 
 				// TODO: This should be better done somehow in StockService
-				if ($args['entity'] == 'products' && boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
+				if ($args['entity'] == 'products' && boolval(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
 				{
-					StockService::GetInstance()->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
+					StockService::GetInstance()->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
 				}
 
 				return $this->ApiResponse($response, [
@@ -142,7 +142,7 @@ class GenericEntityApiController extends BaseApiController
 			// anybody could delete anybody's keys, as the ids are sequential.
 			// Keys of other users are answered with the same "not found" response as
 			// non-existing ones, so that this can't be used to enumerate valid ids.
-			if ($args['entity'] == 'api_keys' && $row->user_id != GROCY_USER_ID)
+			if ($args['entity'] == 'api_keys' && $row->user_id != VICTUAL_USER_ID)
 			{
 				if (!User::HasPermissions(User::PERMISSION_ADMIN))
 				{
@@ -216,9 +216,9 @@ class GenericEntityApiController extends BaseApiController
 				$row->update($requestBody);
 
 				// TODO: This should be better done somehow in StockService
-				if ($args['entity'] == 'products' && boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
+				if ($args['entity'] == 'products' && boolval(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
 				{
-					StockService::GetInstance()->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
+					StockService::GetInstance()->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
 				}
 
 				return $this->EmptyApiResponse($response);

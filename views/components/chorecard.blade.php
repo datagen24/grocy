@@ -43,7 +43,7 @@
 						<strong>{{ $__t('Average execution frequency') }}:</strong> <span id="chorecard-average-execution-frequency"></span><br>
 						<strong>{{ $__t('Last tracked') }}:</strong> <span id="chorecard-chore-last-tracked"></span> <time id="chorecard-chore-last-tracked-timeago"
 							class="timeago timeago-contextual"></time><br>
-						@if(GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS)
+						@if(VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
 						<strong>{{ $__t('Last done by') }}:</strong> <span id="chorecard-chore-last-done-by"></span>
 						@endif
 					</div>

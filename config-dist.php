@@ -7,8 +7,8 @@
 // the content of the file is used as the setting value
 //
 // Second priority:
-// An environment variable with the same name as the setting and prefix "GROCY_"
-// so for example "GROCY_BASE_URL"
+// An environment variable with the same name as the setting and prefix "VICTUAL_"
+// so for example "VICTUAL_BASE_URL"
 //
 // Third priority:
 // The settings defined here below
@@ -16,12 +16,12 @@
 // Either "production", "dev", "demo" or "prerelease"
 // When not "production", the application will work in a demo mode which means
 // authentication is disabled and some demo data will be generated during the database schema migration
-// (pass the query parameter "nodemodata", e.g. https://grocy.example.com/?nodemodata to skip that)
+// (pass the query parameter "nodemodata", e.g. https://victual.example.com/?nodemodata to skip that)
 Setting('MODE', 'production');
 
 // The database engine to use, either "sqlite" or "pgsql"
 // "sqlite" is the default and needs no further configuration - the database is a single
-// file at /data/grocy.db
+// file at /data/victual.db
 // "pgsql" stores everything in a PostgreSQL server, which is worth it when you want
 // concurrent writers, pg_dump based backups or replication; it needs the settings below
 // and PostgreSQL 13 or newer
@@ -30,14 +30,14 @@ Setting('DB_DRIVER', 'sqlite');
 // Connection settings, only used when DB_DRIVER is "pgsql"
 Setting('DB_HOST', 'localhost');
 Setting('DB_PORT', 5432);
-Setting('DB_NAME', 'grocy');
-Setting('DB_USER', 'grocy');
+Setting('DB_NAME', 'victual');
+Setting('DB_USER', 'victual');
 Setting('DB_PASSWORD', '');
 Setting('DB_SSLMODE', ''); // One of disable, allow, prefer, require, verify-ca, verify-full - leave empty for the libpq default
 
 // The directory name of one of the available localization folders
 // in the "/localization" directory (e.g. "en" or "de")
-// Grocy uses the first available locale / setting in this order
+// Victual uses the first available locale / setting in this order
 // 1. Browser prefered locale
 // 2. The one set in user settings
 // 3. The one defined here below
@@ -57,7 +57,7 @@ Setting('CALENDAR_SHOW_WEEK_OF_YEAR', true);
 // Can also be set to -1 to dynamically start the meal plan week on "today"
 Setting('MEAL_PLAN_FIRST_DAY_OF_WEEK', '');
 
-// To keep it simple: Grocy does not handle any currency conversions,
+// To keep it simple: Victual does not handle any currency conversions,
 // this here is used to format all money values,
 // so doesn't really matter, but needs to be the
 // ISO 4217 code of the currency ("USD", "EUR", "GBP", etc.)
@@ -67,20 +67,20 @@ Setting('CURRENCY', 'USD');
 // E.g. "kcal" or "kJ" or something else (doesn't really matter, it's only used to display energy values)
 Setting('ENERGY_UNIT', 'kcal');
 
-// When running Grocy in a subdirectory, this should be set to the relative path, otherwise empty
+// When running Victual in a subdirectory, this should be set to the relative path, otherwise empty
 // It needs to be set to the part (of the URL) AFTER the document root,
 // if URL rewriting is disabled, including index.php
 // Example with URL Rewriting support:
-//  Root URL = https://example.com/grocy
-//  => BASE_PATH = /grocy
+//  Root URL = https://example.com/victual
+//  => BASE_PATH = /victual
 // Example without URL Rewriting support:
-//  Root URL = https://example.com/grocy/public/index.php/
-//  => BASE_PATH = /grocy/public/index.php
+//  Root URL = https://example.com/victual/public/index.php/
+//  => BASE_PATH = /victual/public/index.php
 Setting('BASE_PATH', '');
 
 // The base URL of your installation,
 // should be just "/" when running directly under the root of a (sub)domain
-// or for example "https://example.com/grocy" when using a subdirectory
+// or for example "https://example.com/victual" when using a subdirectory
 Setting('BASE_URL', '/');
 
 // The plugin to use for external barcode lookups,
@@ -102,11 +102,11 @@ Setting('ENTRY_PAGE', 'stock');
 Setting('DISABLE_AUTH', false);
 
 // A valid fully qualified class name of the authentication middlware to use:
-//  Grocy\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Grocy
-//  Grocy\Middleware\Auth\ReverseProxyAuthMiddleware: When your reverse proxy handles authentication (see options below)
-//  Grocy\Middleware\Auth\LdapAuthMiddleware: When you want to use your existing LDAP server (see options below)
-// or any other class that implements Grocy\Middleware\Auth\BaseAuthMiddleware
-Setting('AUTH_CLASS', 'Grocy\Middleware\Auth\DefaultAuthMiddleware');
+//  Victual\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Victual
+//  Victual\Middleware\Auth\ReverseProxyAuthMiddleware: When your reverse proxy handles authentication (see options below)
+//  Victual\Middleware\Auth\LdapAuthMiddleware: When you want to use your existing LDAP server (see options below)
+// or any other class that implements Victual\Middleware\Auth\BaseAuthMiddleware
+Setting('AUTH_CLASS', 'Victual\Middleware\Auth\DefaultAuthMiddleware');
 
 // Options when using ReverseProxyAuthMiddleware
 Setting('REVERSE_PROXY_AUTH_HEADER', 'REMOTE_USER'); // The name of the HTTP header which your reverse proxy uses to pass the username (on successful authentication)
@@ -115,9 +115,9 @@ Setting('REVERSE_PROXY_AUTH_USE_ENV', false); // Set to true if the username is 
 // Options when using LdapAuthMiddleware
 Setting('LDAP_ADDRESS', ''); // Example value "ldap://vm-dc2019.local.berrnd.net"
 Setting('LDAP_BASE_DN', ''); // Example value "DC=local,DC=berrnd,DC=net"
-Setting('LDAP_BIND_DN', ''); // Example value "CN=grocy_bind_account,OU=service_accounts,DC=local,DC=berrnd,DC=net"
+Setting('LDAP_BIND_DN', ''); // Example value "CN=victual_bind_account,OU=service_accounts,DC=local,DC=example,DC=net"
 Setting('LDAP_BIND_PW', ''); // Password for the above account
-Setting('LDAP_USER_FILTER', ''); // Example value "(OU=grocy_users)"
+Setting('LDAP_USER_FILTER', ''); // Example value "(OU=victual_users)"
 Setting('LDAP_UID_ATTR', ''); // Windows AD: "sAMAccountName", OpenLDAP: "uid", GLAuth: "cn"
 
 // Default permissions for new users
@@ -130,7 +130,7 @@ Setting('GROCYCODE_TYPE', '2D');
 
 
 // Label printer settings
-Setting('LABEL_PRINTER_WEBHOOK', ''); // The URI that Grocy will POST to when asked to print a label
+Setting('LABEL_PRINTER_WEBHOOK', ''); // The URI that Victual will POST to when asked to print a label
 Setting('LABEL_PRINTER_RUN_SERVER', true); // Whether the webhook will be called server- or client-side
 Setting('LABEL_PRINTER_PARAMS', ['font_family' => 'Source Sans Pro (Regular)']); // Additional parameters supplied to the webhook
 Setting('LABEL_PRINTER_HOOK_JSON', true); // TRUE to use JSON or FALSE to use normal POST request variables

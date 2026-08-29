@@ -12,7 +12,7 @@ $('#save-transfer-button').on('click', function (e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("transfer-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("transfer-form", true))
 	{
 		return;
 	}
@@ -23,7 +23,7 @@ $('#save-transfer-button').on('click', function (e)
 	}
 
 	var jsonForm = $('#transfer-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("transfer-form");
+	Victual.FrontendHelpers.BeginUiBusy("transfer-form");
 
 	var apiUrl = 'stock/products/' + jsonForm.product_id + '/transfer';
 
@@ -39,10 +39,10 @@ $('#save-transfer-button').on('click', function (e)
 
 	var bookingResponse = null;
 
-	Grocy.Api.Get('stock/products/' + jsonForm.product_id,
+	Victual.Api.Get('stock/products/' + jsonForm.product_id,
 		function (productDetails)
 		{
-			Grocy.Api.Post(apiUrl, jsonData,
+			Victual.Api.Post(apiUrl, jsonData,
 				function (result)
 				{
 					bookingResponse = result;
@@ -54,7 +54,7 @@ $('#save-transfer-button').on('click', function (e)
 						jsonDataBarcode.barcode = GetUriParam("barcode");
 						jsonDataBarcode.product_id = jsonForm.product_id;
 
-						Grocy.Api.Post('objects/product_barcodes', jsonDataBarcode,
+						Victual.Api.Post('objects/product_barcodes', jsonDataBarcode,
 							function (result)
 							{
 								$("#flow-info-InplaceAddBarcodeToExistingProduct").addClass("d-none");
@@ -64,8 +64,8 @@ $('#save-transfer-button').on('click', function (e)
 							},
 							function (xhr)
 							{
-								Grocy.FrontendHelpers.EndUiBusy("transfer-form");
-								Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+								Victual.FrontendHelpers.EndUiBusy("transfer-form");
+								Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 							}
 						);
 					}
@@ -84,15 +84,15 @@ $('#save-transfer-button').on('click', function (e)
 
 					if (GetUriParam("embedded") !== undefined)
 					{
-						Grocy.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", jsonForm.product_id)), Grocy.BaseUrl);
-						window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", successMessage), Grocy.BaseUrl);
-						window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+						Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", jsonForm.product_id)), Victual.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", successMessage), Victual.BaseUrl);
+						window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 					}
 					else
 					{
-						Grocy.FrontendHelpers.EndUiBusy("transfer-form");
+						Victual.FrontendHelpers.EndUiBusy("transfer-form");
 						toastr.success(successMessage);
-						Grocy.Components.ProductPicker.FinishFlow();
+						Victual.Components.ProductPicker.FinishFlow();
 
 						// Show an info toast when the transfer moved the product into or out of a freezer location
 						if ($("#location_id_from option:selected").attr("data-is-freezer") == 0 && $("#location_id_to option:selected").attr("data-is-freezer") == 1) // Frozen
@@ -118,32 +118,32 @@ $('#save-transfer-button').on('click', function (e)
 							$("#use_specific_stock_entry").click();
 						}
 
-						Grocy.Components.ProductAmountPicker.Reset();
+						Victual.Components.ProductAmountPicker.Reset();
 						$("#location_id_from").find("option").remove().end().append("<option></option>");
-						$("#display_amount").attr("min", Grocy.DefaultMinAmount);
+						$("#display_amount").attr("min", Victual.DefaultMinAmount);
 						$("#display_amount").removeAttr("max");
-						$('#display_amount').val(Grocy.UserSettings.stock_default_transfer_amount);
+						$('#display_amount').val(Victual.UserSettings.stock_default_transfer_amount);
 						RefreshLocaleNumberInput();
 						$(".input-group-productamountpicker").trigger("change");
 						$("#tare-weight-handling-info").addClass("d-none");
-						Grocy.Components.ProductPicker.Clear();
+						Victual.Components.ProductPicker.Clear();
 						$("#location_id_to").val("");
 						$("#location_id_from").val("");
-						Grocy.Components.ProductPicker.GetInputElement().focus();
-						Grocy.Components.ProductCard.Refresh(jsonForm.product_id);
-						Grocy.FrontendHelpers.ValidateForm('transfer-form');
+						Victual.Components.ProductPicker.GetInputElement().focus();
+						Victual.Components.ProductCard.Refresh(jsonForm.product_id);
+						Victual.FrontendHelpers.ValidateForm('transfer-form');
 					}
 				},
 				function (xhr)
 				{
-					Grocy.FrontendHelpers.EndUiBusy("transfer-form");
+					Victual.FrontendHelpers.EndUiBusy("transfer-form");
 					console.error(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy("transfer-form");
+			Victual.FrontendHelpers.EndUiBusy("transfer-form");
 			console.error(xhr);
 		}
 	);
@@ -152,8 +152,8 @@ $('#save-transfer-button').on('click', function (e)
 // When a product is picked: resets dependent fields, refreshes the product card/amount
 // picker, rejects tare-weight-handled products (unsupported for transfer), rebuilds the
 // "from" location dropdown from the product's actual stock locations (defaulting to its
-// default location), and pre-fills fields from a matched barcode or Grocy-code if present
-Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
+// default location), and pre-fills fields from a matched barcode or Grocycode if present
+Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 {
 	$("#specific_stock_entry").find("option").remove().end().append("<option></option>");
 	if ($("#use_specific_stock_entry").is(":checked") && GetUriParam("stockId") == null)
@@ -170,25 +170,25 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 
 	if (productId)
 	{
-		Grocy.Components.ProductCard.Refresh(productId);
+		Victual.Components.ProductCard.Refresh(productId);
 
-		Grocy.Api.Get('stock/products/' + productId,
+		Victual.Api.Get('stock/products/' + productId,
 			function (productDetails)
 			{
-				Grocy.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id);
-				Grocy.Components.ProductAmountPicker.SetQuantityUnit(productDetails.quantity_unit_stock.id);
+				Victual.Components.ProductAmountPicker.Reload(productDetails.product.id, productDetails.quantity_unit_stock.id);
+				Victual.Components.ProductAmountPicker.SetQuantityUnit(productDetails.quantity_unit_stock.id);
 
 				// Tare-weight-handled products can't be transferred; reject the selection
 				if (productDetails.product.enable_tare_weight_handling == 1)
 				{
-					Grocy.Components.ProductPicker.GetPicker().parent().find(".invalid-feedback").text(__t('Products with tare weight enabled are currently not supported for transfer'));
-					Grocy.Components.ProductPicker.Clear();
+					Victual.Components.ProductPicker.GetPicker().parent().find(".invalid-feedback").text(__t('Products with tare weight enabled are currently not supported for transfer'));
+					Victual.Components.ProductPicker.Clear();
 					return;
 				}
 
 				// Rebuild the "from" location dropdown from the product's actual stock locations
 				$("#location_id_from").find("option").remove().end().append("<option></option>");
-				Grocy.Api.Get("stock/products/" + productId + '/locations',
+				Victual.Api.Get("stock/products/" + productId + '/locations',
 					function (stockLocations)
 					{
 						var setDefault = 0;
@@ -237,7 +237,7 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 				// that barcode's configured defaults (product_barcodes_view)
 				if (document.getElementById("product_id").getAttribute("barcode") != "null")
 				{
-					Grocy.Api.Get('objects/product_barcodes_view?query[]=barcode=' + document.getElementById("product_id").getAttribute("barcode"),
+					Victual.Api.Get('objects/product_barcodes_view?query[]=barcode=' + document.getElementById("product_id").getAttribute("barcode"),
 						function (barcodeResult)
 						{
 							if (barcodeResult != null)
@@ -254,11 +254,11 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 
 									if (barcode.qu_id != null)
 									{
-										Grocy.Components.ProductAmountPicker.SetQuantityUnit(barcode.qu_id);
+										Victual.Components.ProductAmountPicker.SetQuantityUnit(barcode.qu_id);
 									}
 
 									$(".input-group-productamountpicker").trigger("change");
-									Grocy.FrontendHelpers.ValidateForm('transfer-form');
+									Victual.FrontendHelpers.ValidateForm('transfer-form');
 									RefreshLocaleNumberInput();
 								}
 							}
@@ -271,14 +271,14 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 				}
 
 				// If a stock entry Grocycode was used, prefill location_from accordingly.
-				// A Grocy-code barcode has the form "grcy:p:<productId>:<stockId>" (4 parts);
+				// A Grocycode barcode has the form "grcy:p:<productId>:<stockId>" (4 parts);
 				// gc[3] is the specific stock entry's id
 				if ($("#product_id").data("grocycode"))
 				{
 					var gc = $("#product_id").attr("barcode").split(":");
 					if (gc.length == 4)
 					{
-						Grocy.Api.Get("objects/stock?query[]=stock_id=" + gc[3],
+						Victual.Api.Get("objects/stock?query[]=stock_id=" + gc[3],
 							function (stockEntries)
 							{
 								$("#location_id_from").val(stockEntries[0].location_id);
@@ -298,18 +298,18 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 				}
 				else
 				{
-					$("#display_amount").attr("min", Grocy.DefaultMinAmount);
+					$("#display_amount").attr("min", Victual.DefaultMinAmount);
 					$("#tare-weight-handling-info").addClass("d-none");
 				}
 
 				$('#display_amount').attr("data-stock-amount", productDetails.stock_amount);
 
-				Grocy.Components.ProductPicker.HideCustomError();
-				Grocy.FrontendHelpers.ValidateForm('transfer-form');
+				Victual.Components.ProductPicker.HideCustomError();
+				Victual.FrontendHelpers.ValidateForm('transfer-form');
 				setTimeout(function ()
 				{
 					$('#display_amount').focus();
-				}, Grocy.FormFocusDelay);
+				}, Victual.FormFocusDelay);
 			},
 			function (xhr)
 			{
@@ -320,9 +320,9 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 });
 
 // Initial default transfer amount, from user settings
-$('#display_amount').val(Grocy.UserSettings.stock_default_transfer_amount);
+$('#display_amount').val(Victual.UserSettings.stock_default_transfer_amount);
 $(".input-group-productamountpicker").trigger("change");
-Grocy.FrontendHelpers.ValidateForm('transfer-form');
+Victual.FrontendHelpers.ValidateForm('transfer-form');
 RefreshLocaleNumberInput();
 
 // When the "from" location changes: prevents picking the same location as "to" (hides it
@@ -366,7 +366,7 @@ $("#location_id_from").on('change', function (e)
 
 	if (locationId)
 	{
-		Grocy.Api.Get("stock/products/" + Grocy.Components.ProductPicker.GetValue() + '/entries',
+		Victual.Api.Get("stock/products/" + Victual.Components.ProductPicker.GetValue() + '/entries',
 			function (stockEntries)
 			{
 				stockEntries.forEach(stockEntry =>
@@ -402,7 +402,7 @@ $("#location_id_from").on('change', function (e)
 						sumValue = sumValue + stockEntry.amount;
 					}
 				});
-				$("#display_amount").attr("max", (sumValue * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Grocy.UserSettings.stock_decimal_places_amounts));
+				$("#display_amount").attr("max", (sumValue * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Victual.UserSettings.stock_decimal_places_amounts));
 				if (sumValue == 0)
 				{
 					$("#display_amount").parent().find(".invalid-feedback").text(__t('There are no units available at this location'));
@@ -419,7 +419,7 @@ $("#location_id_from").on('change', function (e)
 // Re-scale the amount's max when the quantity unit changes (converted via the QU's factor)
 $("#qu_id").on('change', function (e)
 {
-	$("#display_amount").attr("max", (Number.parseFloat($('#display_amount').attr("data-stock-amount")) * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Grocy.UserSettings.stock_decimal_places_amounts));
+	$("#display_amount").attr("max", (Number.parseFloat($('#display_amount').attr("data-stock-amount")) * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Victual.UserSettings.stock_decimal_places_amounts));
 });
 
 // Selects the amount field's content on focus for quick overtyping
@@ -431,12 +431,12 @@ $('#display_amount').on('focus', function (e)
 // Live-validates on every keystroke / select change
 $('#transfer-form input').keyup(function (event)
 {
-	Grocy.FrontendHelpers.ValidateForm('transfer-form');
+	Victual.FrontendHelpers.ValidateForm('transfer-form');
 });
 
 $('#transfer-form select').change(function (event)
 {
-	Grocy.FrontendHelpers.ValidateForm('transfer-form');
+	Victual.FrontendHelpers.ValidateForm('transfer-form');
 });
 
 // Enter key submits the form (if valid) instead of doing a default form submit
@@ -446,7 +446,7 @@ $('#transfer-form input').keydown(function (event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('transfer-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('transfer-form'))
 		{
 			return false;
 		}
@@ -464,7 +464,7 @@ $("#specific_stock_entry").on("change", function (e)
 	if ($(e.target).val() == "")
 	{
 		var sumValue = 0;
-		Grocy.Api.Get("stock/products/" + Grocy.Components.ProductPicker.GetValue() + '/entries',
+		Victual.Api.Get("stock/products/" + Victual.Components.ProductPicker.GetValue() + '/entries',
 			function (stockEntries)
 			{
 				stockEntries.forEach(stockEntry =>
@@ -474,7 +474,7 @@ $("#specific_stock_entry").on("change", function (e)
 						sumValue = sumValue + stockEntry.amount;
 					}
 				});
-				$("#display_amount").attr("max", (sumValue * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Grocy.UserSettings.stock_decimal_places_amounts));
+				$("#display_amount").attr("max", (sumValue * $("#qu_id option:selected").attr("data-qu-factor")).toFixed(Victual.UserSettings.stock_decimal_places_amounts));
 				if (sumValue == 0)
 				{
 					$("#display_amount").parent().find(".invalid-feedback").text(__t('There are no units available at this location'));
@@ -488,7 +488,7 @@ $("#specific_stock_entry").on("change", function (e)
 	}
 	else
 	{
-		$("#display_amount").attr("max", Number.parseFloat($('option:selected', this).attr('amount')).toFixed(Grocy.UserSettings.stock_decimal_places_amounts));
+		$("#display_amount").attr("max", Number.parseFloat($('option:selected', this).attr('amount')).toFixed(Victual.UserSettings.stock_decimal_places_amounts));
 	}
 });
 
@@ -511,7 +511,7 @@ $("#use_specific_stock_entry").on("change", function ()
 		$("#location_id_from").trigger('change');
 	}
 
-	Grocy.FrontendHelpers.ValidateForm("transfer-form");
+	Victual.FrontendHelpers.ValidateForm("transfer-form");
 });
 
 /**
@@ -523,7 +523,7 @@ $("#use_specific_stock_entry").on("change", function ()
  */
 function UndoStockBooking(bookingId)
 {
-	Grocy.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
+	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
 		function (result)
 		{
 			toastr.success(__t("Booking successfully undone"));
@@ -543,7 +543,7 @@ function UndoStockBooking(bookingId)
  */
 function UndoStockTransaction(transactionId)
 {
-	Grocy.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
+	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
 		function (result)
 		{
 			toastr.success(__t("Transaction successfully undone"));
@@ -564,11 +564,11 @@ if (GetUriParam("embedded") !== undefined)
 
 	if (typeof locationId === 'undefined')
 	{
-		Grocy.Components.ProductPicker.GetPicker().trigger('change');
+		Victual.Components.ProductPicker.GetPicker().trigger('change');
 		setTimeout(function ()
 		{
-			Grocy.Components.ProductPicker.GetInputElement().focus();
-		}, Grocy.FormFocusDelay);
+			Victual.Components.ProductPicker.GetInputElement().focus();
+		}, Victual.FormFocusDelay);
 	}
 	else
 	{
@@ -577,12 +577,12 @@ if (GetUriParam("embedded") !== undefined)
 		$("#location_id_from").trigger('change');
 		$("#use_specific_stock_entry").click();
 		$("#use_specific_stock_entry").trigger('change');
-		Grocy.Components.ProductPicker.GetPicker().trigger('change');
+		Victual.Components.ProductPicker.GetPicker().trigger('change');
 	}
 }
 
 // Default input field
 setTimeout(function ()
 {
-	Grocy.Components.ProductPicker.GetInputElement().focus();
-}, Grocy.FormFocusDelay);
+	Victual.Components.ProductPicker.GetInputElement().focus();
+}, Victual.FormFocusDelay);

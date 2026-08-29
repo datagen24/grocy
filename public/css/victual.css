@@ -36,11 +36,11 @@ a.discrete-link:hover {
 	text-decoration: none !important;
 }
 
-.grocy-card .card-header {
+.victual-card .card-header {
 	background-color: inherit;
 }
 
-.grocy-card .card-icons a {
+.victual-card .card-icons a {
 	font-size: 22px;
 	padding: 2px 4px;
 	text-decoration: none;
@@ -48,7 +48,7 @@ a.discrete-link:hover {
 	margin-left: 2px;
 }
 
-.grocy-card .card-icons i {
+.victual-card .card-icons i {
 	width: 22px;
 }
 
@@ -465,35 +465,35 @@ html {
 	cursor: pointer;
 }
 
-.grocy-tabs .nav-link {
+.victual-tabs .nav-link {
 	color: inherit;
 	text-transform: uppercase;
 }
 
-.grocy-tabs .nav-link {
+.victual-tabs .nav-link {
 	border: 2px solid transparent;
 	transition: border-bottom-color ease-in 0.1s;
 }
 
-.grocy-tabs .nav-link.active {
+.victual-tabs .nav-link.active {
 	border: 2px solid transparent;
 	border-bottom-color: #000 !important;
 }
 
-.grocy-tabs .nav-link:hover {
+.victual-tabs .nav-link:hover {
 	border: 2px solid transparent;
 	border-bottom-color: #000;
 }
 
-.grocy-tabs .nav-item {
+.victual-tabs .nav-item {
 	margin-bottom: -2px;
 }
 
-.grocy-tabs.card-header-tabs {
+.victual-tabs.card-header-tabs {
 	margin-bottom: -.65rem;
 }
 
-.grocy-tabs.tab-content>.active {
+.victual-tabs.tab-content>.active {
 	display: flex;
 	flex-direction: column;
 }
@@ -505,7 +505,7 @@ html {
 }
 
 @media print {
-	.grocy-tabs.print.tab-content>.tab-pane {
+	.victual-tabs.print.tab-content>.tab-pane {
 		display: flex !important;
 		flex-direction: column !important;
 		opacity: 1 !important;
@@ -515,7 +515,7 @@ html {
 		height: auto !important;
 	}
 
-	.grocy-tabs.break>.tab-pane {
+	.victual-tabs.break>.tab-pane {
 		page-break-after: always;
 	}
 

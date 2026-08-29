@@ -1,6 +1,6 @@
 # 02. MCP endpoint
 
-**Goal:** An integrated MCP server that authenticates against Grocy's own user system, so
+**Goal:** An integrated MCP server that authenticates against Victual's own user system, so
 an assistant can answer "what is expiring this week" or "add milk to the shopping list"
 without a separate bridge process.
 **Depends on:** per the README's Wave 5 — [11](11-api-error-handling.md),
@@ -17,13 +17,13 @@ selected logic).
 
 ## Today
 
-Grocy already has everything needed underneath:
+Victual already has everything needed underneath:
 
 - **API keys** — `services/ApiKeyService.php`, with a `key_type` column already used to
   separate general keys from `special-purpose-calendar-ical`. Keys resolve to a user via
   `GetUserByApiKey()`.
-- **Pluggable auth** — `middleware/Auth/`, selected by `GROCY_AUTH_CLASS`.
-  `DefaultAuthMiddleware` accepts a session cookie *or* a `GROCY-API-KEY` header, but only
+- **Pluggable auth** — `middleware/Auth/`, selected by `VICTUAL_AUTH_CLASS`.
+  `DefaultAuthMiddleware` accepts a session cookie *or* a `VICTUAL-API-KEY` header, but only
   for paths starting with `/api/`.
 - **Permissions** — 30 constants in `controllers/Users/User.php`, checked per route.
 - **Services** — `StockService`, `RecipesService`, `ChoresService` etc. already hold the
@@ -62,13 +62,13 @@ knowledge has a cutoff. **Before building, confirm against the current spec revi
 against the specific client you intend to use.** See Q1.
 
 **Future state, recorded 2026-08-27: the household IdP will eventually front this.**
-The longer term direction is to put the existing IdP in front of Grocy — forward-auth at
+The longer term direction is to put the existing IdP in front of Victual — forward-auth at
 the k3s ingress for the web UI (which is exactly what `ReverseProxyAuthMiddleware`
 already supports), and for MCP the IdP plays the authorization server role the MCP auth
 spec actually wants: the MCP endpoint validates the IdP's tokens and maps the subject to
-a Grocy user, and never issues tokens itself. That is a much better fit than Grocy
+a Victual user, and never issues tokens itself. That is a much better fit than Victual
 growing its own OAuth. Consequence for v1: **build the identity seam, not the auth** —
-keep "credential → Grocy user" as one small replaceable resolver (bearer API key today,
+keep "credential → Victual user" as one small replaceable resolver (bearer API key today,
 IdP token subject later) and have everything downstream (permissions, tool gating) work
 off the resolved user. If that seam exists, the IdP migration is a resolver swap plus
 ingress config, not a redesign. Caveat when the time comes: clients and IdPs vary in
@@ -147,7 +147,7 @@ existing endpoint.
 4. **Exposure.** Local network only, or reachable externally? That changes the auth answer
    considerably, and interacts with how the k3s ingress is set up. *Update:* external
    exposure, if it ever happens, waits for the IdP future state — the ingress + IdP then
-   owns that boundary, not Grocy.
+   owns that boundary, not Victual.
 
    > **Response:** Local network/tailnet only until there is a concrete reason; the
    > future-state note covers what changes if that ever flips.
@@ -160,7 +160,7 @@ existing endpoint.
    > `uihelper_*` rows are wide, and token economy is a real constraint for the
    > consuming model.
 6. **Is a built-in server the right shape at all?** A standalone MCP server talking to the
-   existing REST API would need no Grocy changes and could be updated independently as the
+   existing REST API would need no Victual changes and could be updated independently as the
    spec moves. Building it in gets native permission handling and one less moving part.
    Worth being explicit about the tradeoff, because "integrated" was the stated goal but
    the spec churn is a real argument for keeping it separable.
@@ -172,7 +172,7 @@ existing endpoint.
    > durable part of the integrated design. A sidecar calling the REST API with an
    > `API_KEY_TYPE_MCP` key gets independent deploys as the spec moves, an SDK doing
    > the transport, and a second small scale-to-zero service — exactly the pattern
-   > being practiced. "Authenticates against Grocy's own user system" is still
+   > being practiced. "Authenticates against Victual's own user system" is still
    > satisfied: the key resolves to a user and every REST call is permission-checked
    > as that user. What is lost is in-process permission granularity, which Q3's
    > answer covers. If it stays integrated anyway, the `/api/mcp` mount trick is

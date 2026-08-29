@@ -92,7 +92,7 @@ $("#search").on("keyup", Delay(function()
 
 	$(".recipe-gallery-item").removeClass("d-none");
 	$(".recipe-gallery-item .card-title-search:not(:contains_case_insensitive(" + value + "))").parent().parent().parent().addClass("d-none");
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -165,7 +165,7 @@ $(".recipe-delete").on('click', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/recipes/' + objectId, {},
+				Victual.Api.Delete('objects/recipes/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/recipes');
@@ -187,14 +187,14 @@ $(".recipe-copy").on('click', function(e)
 
 	var objectId = $(e.currentTarget).attr('data-recipe-id');
 
-	Grocy.Api.Post("recipes/" + objectId.toString() + "/copy", {},
+	Victual.Api.Post("recipes/" + objectId.toString() + "/copy", {},
 		function(result)
 		{
 			window.location.href = U('/recipes?recipe=' + result.created_object_id.toString());
 		},
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+			Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 		}
 	);
 });
@@ -224,7 +224,7 @@ $(document).on('click', '.recipe-shopping-list', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.FrontendHelpers.BeginUiBusy();
+				Victual.FrontendHelpers.BeginUiBusy();
 
 				var excludedProductIds = new Array();
 				$(".missing-recipe-pos-product-checkbox:checkbox:not(:checked)").each(function()
@@ -232,14 +232,14 @@ $(document).on('click', '.recipe-shopping-list', function(e)
 					excludedProductIds.push($(this).data("product-id"));
 				});
 
-				Grocy.Api.Post('recipes/' + objectId + '/add-not-fulfilled-products-to-shoppinglist', { "excludedProductIds": excludedProductIds },
+				Victual.Api.Post('recipes/' + objectId + '/add-not-fulfilled-products-to-shoppinglist', { "excludedProductIds": excludedProductIds },
 					function(result)
 					{
 						window.location.reload();
 					},
 					function(xhr)
 					{
-						Grocy.FrontendHelpers.EndUiBusy();
+						Victual.FrontendHelpers.EndUiBusy();
 						console.error(xhr);
 					}
 				);
@@ -272,18 +272,18 @@ $(".recipe-consume").on('click', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.FrontendHelpers.BeginUiBusy();
+				Victual.FrontendHelpers.BeginUiBusy();
 
-				Grocy.Api.Post('recipes/' + objectId + '/consume', {},
+				Victual.Api.Post('recipes/' + objectId + '/consume', {},
 					function(result)
 					{
-						Grocy.FrontendHelpers.EndUiBusy();
+						Victual.FrontendHelpers.EndUiBusy();
 						toastr.success(__t('Removed all in stock ingredients needed by recipe \"%s\" from stock', objectName));
 					},
 					function(xhr)
 					{
-						Grocy.FrontendHelpers.EndUiBusy();
-						Grocy.FrontendHelpers.ShowGenericError("A server error occured while processing your request", xhr.response);
+						Victual.FrontendHelpers.EndUiBusy();
+						Victual.FrontendHelpers.ShowGenericError("A server error occured while processing your request", xhr.response);
 					}
 				);
 			}
@@ -300,7 +300,7 @@ recipesTables.on('select', function(e, dt, type, indexes)
 		var selectedRecipeId = $(recipesTables.row(indexes[0]).node()).data("recipe-id");
 		var currentRecipeId = location.search.split('recipe=')[1];
 
-		if (BoolVal(Grocy.UserSettings.recipes_show_list_side_by_side))
+		if (BoolVal(Victual.UserSettings.recipes_show_list_side_by_side))
 		{
 			if (selectedRecipeId.toString() !== currentRecipeId)
 			{
@@ -339,7 +339,7 @@ $(".recipe-gallery-item").on("click", function(e)
 
 	var selectedRecipeId = $(this).data("recipe-id");
 
-	if (BoolVal(Grocy.UserSettings.recipes_show_list_side_by_side))
+	if (BoolVal(Victual.UserSettings.recipes_show_list_side_by_side))
 	{
 		window.location.href = U('/recipes?tab=gallery&recipe=' + selectedRecipeId);
 	}
@@ -416,7 +416,7 @@ $('#servings-scale').keyup(function(event)
 	var data = {};
 	data.desired_servings = $(this).val();
 
-	Grocy.Api.Put('objects/recipes/' + $(this).data("recipe-id"), data,
+	Victual.Api.Put('objects/recipes/' + $(this).data("recipe-id"), data,
 		function(result)
 		{
 			window.location.reload();
@@ -453,17 +453,17 @@ if (window.location.hash === "#fullscreen")
 }
 
 // Grocycode label printing: fetches label data from recipes/{id}/printlabel and sends it to the configured
-// label printer webhook (Grocy.Webhooks.labelprinter)
+// label printer webhook (Victual.Webhooks.labelprinter)
 $(document).on('click', '.recipe-grocycode-label-print', function(e)
 {
 	e.preventDefault();
 
 	var recipeId = $(e.currentTarget).attr('data-recipe-id');
-	Grocy.Api.Get('recipes/' + recipeId + '/printlabel', function(labelData)
+	Victual.Api.Get('recipes/' + recipeId + '/printlabel', function(labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });
@@ -479,14 +479,14 @@ $(document).on('click', '.ingredient-done-button', function(e)
 // "Add to meal plan": opens the modal prefilled with today's date and the clicked recipe (data-recipe-id)
 $(document).on("click", ".add-to-mealplan-button", function(e)
 {
-	Grocy.Components.DateTimePicker.Init(true);
-	Grocy.Components.DateTimePicker.SetValue(moment().format("YYYY-MM-DD"));
-	Grocy.Components.RecipePicker.Clear();
+	Victual.Components.DateTimePicker.Init(true);
+	Victual.Components.DateTimePicker.SetValue(moment().format("YYYY-MM-DD"));
+	Victual.Components.RecipePicker.Clear();
 	$("#add-to-mealplan-modal").modal("show");
 	$('#recipe_id').val($(e.currentTarget).attr("data-recipe-id"));
 	$('#recipe_id').data('combobox').refresh();
 	$('#recipe_id').trigger('change');
-	Grocy.FrontendHelpers.ValidateForm("add-to-mealplan-form");
+	Victual.FrontendHelpers.ValidateForm("add-to-mealplan-form");
 	$("#recipe_servings").focus();
 });
 
@@ -495,15 +495,15 @@ $('#save-add-to-mealplan-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("add-to-mealplan-form", true) || $(".combobox-menu-visible").length)
+	if (!Victual.FrontendHelpers.ValidateForm("add-to-mealplan-form", true) || $(".combobox-menu-visible").length)
 	{
 		return false;
 	}
 
 	var formData = $('#add-to-mealplan-form').serializeJSON();
-	formData.day = Grocy.Components.DateTimePicker.GetValue();
+	formData.day = Victual.Components.DateTimePicker.GetValue();
 
-	Grocy.Api.Post('objects/meal_plan', formData,
+	Victual.Api.Post('objects/meal_plan', formData,
 		function(result)
 		{
 			toastr.success(__t("Successfully added the recipe to the meal plan"));
@@ -511,7 +511,7 @@ $('#save-add-to-mealplan-button').on('click', function(e)
 		},
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+			Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 		}
 	);
 });
@@ -522,7 +522,7 @@ $('#add-to-mealplan-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('add-to-mealplan-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('add-to-mealplan-form'))
 		{
 			return false;
 		}

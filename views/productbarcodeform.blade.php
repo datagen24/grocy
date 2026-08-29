@@ -8,8 +8,8 @@
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 </script>
 
 <div class="row">
@@ -29,14 +29,14 @@
 	<div class="col-lg-6 col-12">
 
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
-			Grocy.EditObjectProduct = {!! json_encode($product) !!};
+			Victual.EditMode = '{{ $mode }}';
+			Victual.EditObjectProduct = {!! json_encode($product) !!};
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $barcode->id }};
-			Grocy.EditObject = {!! json_encode($barcode) !!};
+			Victual.EditObjectId = {{ $barcode->id }};
+			Victual.EditObject = {!! json_encode($barcode) !!};
 		</script>
 		@endif
 
@@ -67,7 +67,7 @@
 			'isRequired' => false
 			))
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			<div class="form-group">
 				<label for="shopping_location_id_id">{{ $__t('Store') }}</label>
 				<select class="custom-control custom-select"

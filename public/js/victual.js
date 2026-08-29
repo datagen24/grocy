@@ -1,21 +1,21 @@
-﻿// Grocy global object core: API wrapper (Grocy.Api), translation helpers (__t/__n),
-// generic frontend helpers (Grocy.FrontendHelpers), locale aware number/date display,
+﻿// Victual global object core: API wrapper (Victual.Api), translation helpers (__t/__n),
+// generic frontend helpers (Victual.FrontendHelpers), locale aware number/date display,
 // iframe modal / cross-window messaging and various global UI wiring.
-// Loaded on every page (after extensions.js) before the per-view script; the Grocy
+// Loaded on every page (after extensions.js) before the per-view script; the Victual
 // object itself (BaseUrl, UserSettings, UserId, Mode, ...) is pre-populated inline
 // by views/layout/default.blade.php.
 
-// Thin XMLHttpRequest wrapper around the grocy REST API,
+// Thin XMLHttpRequest wrapper around the Victual REST API,
 // all apiFunction arguments are paths relative to /api (e.g. "stock/products/1")
-Grocy.Api = {};
+Victual.Api = {};
 
 /**
- * Executes a GET request against the grocy API.
+ * Executes a GET request against the Victual API.
  * @param {string} apiFunction API path relative to /api, e.g. "system/db-changed-time"
  * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
  * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
  */
-Grocy.Api.Get = function (apiFunction, success, error)
+Victual.Api.Get = function (apiFunction, success, error)
 {
 	var xhr = new XMLHttpRequest();
 	var url = U('/api/' + apiFunction);
@@ -53,13 +53,13 @@ Grocy.Api.Get = function (apiFunction, success, error)
 };
 
 /**
- * Executes a POST request (JSON body) against the grocy API.
+ * Executes a POST request (JSON body) against the Victual API.
  * @param {string} apiFunction API path relative to /api
  * @param {Object} jsonData Request body, sent as JSON
  * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
  * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
  */
-Grocy.Api.Post = function (apiFunction, jsonData, success, error)
+Victual.Api.Post = function (apiFunction, jsonData, success, error)
 {
 	var xhr = new XMLHttpRequest();
 	var url = U('/api/' + apiFunction);
@@ -98,13 +98,13 @@ Grocy.Api.Post = function (apiFunction, jsonData, success, error)
 };
 
 /**
- * Executes a PUT request (JSON body) against the grocy API.
+ * Executes a PUT request (JSON body) against the Victual API.
  * @param {string} apiFunction API path relative to /api
  * @param {Object} jsonData Request body, sent as JSON
  * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
  * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
  */
-Grocy.Api.Put = function (apiFunction, jsonData, success, error)
+Victual.Api.Put = function (apiFunction, jsonData, success, error)
 {
 	var xhr = new XMLHttpRequest();
 	var url = U('/api/' + apiFunction);
@@ -143,13 +143,13 @@ Grocy.Api.Put = function (apiFunction, jsonData, success, error)
 };
 
 /**
- * Executes a DELETE request against the grocy API.
+ * Executes a DELETE request against the Victual API.
  * @param {string} apiFunction API path relative to /api
  * @param {Object} jsonData Request body, sent as JSON (usually {})
  * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
  * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
  */
-Grocy.Api.Delete = function (apiFunction, jsonData, success, error)
+Victual.Api.Delete = function (apiFunction, jsonData, success, error)
 {
 	var xhr = new XMLHttpRequest();
 	var url = U('/api/' + apiFunction);
@@ -195,7 +195,7 @@ Grocy.Api.Delete = function (apiFunction, jsonData, success, error)
  * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
  * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
  */
-Grocy.Api.UploadFile = function (file, group, fileName, success, error)
+Victual.Api.UploadFile = function (file, group, fileName, success, error)
 {
 	var xhr = new XMLHttpRequest();
 	var url = U('/api/files/' + group + '/' + btoa(fileName));
@@ -240,7 +240,7 @@ Grocy.Api.UploadFile = function (file, group, fileName, success, error)
  * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
  * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
  */
-Grocy.Api.DeleteFile = function (fileName, group, success, error)
+Victual.Api.DeleteFile = function (fileName, group, success, error)
 {
 	var xhr = new XMLHttpRequest();
 	var url = U('/api/files/' + group + '/' + btoa(fileName));
@@ -279,20 +279,20 @@ Grocy.Api.DeleteFile = function (fileName, group, success, error)
 };
 
 /**
- * Turns a root relative path (e.g. "/api/stock" or "/css/grocy.css") into an
- * absolute URL by prepending the configured base URL (Grocy.BaseUrl).
+ * Turns a root relative path (e.g. "/api/stock" or "/css/victual.css") into an
+ * absolute URL by prepending the configured base URL (Victual.BaseUrl).
  * @param {string} relativePath Path starting with "/"
  * @returns {string} Absolute URL
  */
 U = function (relativePath)
 {
-	return Grocy.BaseUrl.replace(/\/$/, '') + relativePath;
+	return Victual.BaseUrl.replace(/\/$/, '') + relativePath;
 }
 
 // Gettext style translators; the localization strings are provided inline by the layout
 // (TranslatorQu holds the separate quantity unit plural strings)
-Grocy.Translator = new window.translator.default(Grocy.LocalizationStrings);
-Grocy.TranslatorQu = new window.translator.default(Grocy.LocalizationStringsQu);
+Victual.Translator = new window.translator.default(Victual.LocalizationStrings);
+Victual.TranslatorQu = new window.translator.default(Victual.LocalizationStringsQu);
 
 /**
  * Translates the given text into the current language,
@@ -309,22 +309,22 @@ __t = function (text, ...placeholderValues)
 		return text;
 	}
 
-	if (Grocy.Mode === "dev")
+	if (Victual.Mode === "dev")
 	{
 		var text2 = text;
-		if (Grocy.LocalizationStrings && !Grocy.LocalizationStrings.messages[""].hasOwnProperty(text2))
+		if (Victual.LocalizationStrings && !Victual.LocalizationStrings.messages[""].hasOwnProperty(text2))
 		{
-			Grocy.Api.Post('system/log-missing-localization', { "text": text2 });
+			Victual.Api.Post('system/log-missing-localization', { "text": text2 });
 		}
 	}
 
 	// sprintf can fail due to invalid placeholders
 	try
 	{
-		return sprintf(Grocy.Translator.__(text, ...placeholderValues), ...placeholderValues);
+		return sprintf(Victual.Translator.__(text, ...placeholderValues), ...placeholderValues);
 	} catch (e)
 	{
-		return Grocy.Translator.__(text, ...placeholderValues);
+		return Victual.Translator.__(text, ...placeholderValues);
 	}
 }
 /**
@@ -343,12 +343,12 @@ __n = function (number, singularForm, pluralForm, isQu = false)
 		return singularForm;
 	}
 
-	if (Grocy.Mode === "dev")
+	if (Victual.Mode === "dev")
 	{
 		var singularForm2 = singularForm;
-		if (Grocy.LocalizationStrings && !Grocy.LocalizationStrings.messages[""].hasOwnProperty(singularForm2))
+		if (Victual.LocalizationStrings && !Victual.LocalizationStrings.messages[""].hasOwnProperty(singularForm2))
 		{
-			Grocy.Api.Post('system/log-missing-localization', { "text": singularForm2 });
+			Victual.Api.Post('system/log-missing-localization', { "text": singularForm2 });
 		}
 	}
 
@@ -361,11 +361,11 @@ __n = function (number, singularForm, pluralForm, isQu = false)
 
 	if (isQu)
 	{
-		return sprintf(Grocy.TranslatorQu.n__(singularForm, pluralForm, number, number), number.toLocaleString());
+		return sprintf(Victual.TranslatorQu.n__(singularForm, pluralForm, number, number), number.toLocaleString());
 	}
 	else
 	{
-		return sprintf(Grocy.Translator.n__(singularForm, pluralForm, number, number), number.toLocaleString());
+		return sprintf(Victual.Translator.n__(singularForm, pluralForm, number, number), number.toLocaleString());
 	}
 }
 
@@ -443,8 +443,8 @@ toastr.options = {
 	extendedTimeOut: 5000
 };
 
-Grocy.FrontendHelpers = {};
-Grocy.FrontendHelpers.ValidateForm = function (formId, reportValidity = false)
+Victual.FrontendHelpers = {};
+Victual.FrontendHelpers.ValidateForm = function (formId, reportValidity = false)
 {
 	var form = document.getElementById(formId);
 	if (form === null || form === undefined)
@@ -462,7 +462,7 @@ Grocy.FrontendHelpers.ValidateForm = function (formId, reportValidity = false)
 	return form.checkValidity();
 }
 
-Grocy.FrontendHelpers.BeginUiBusy = function (formId = null)
+Victual.FrontendHelpers.BeginUiBusy = function (formId = null)
 {
 	$("body").addClass("cursor-busy");
 
@@ -472,7 +472,7 @@ Grocy.FrontendHelpers.BeginUiBusy = function (formId = null)
 	}
 }
 
-Grocy.FrontendHelpers.EndUiBusy = function (formId = null)
+Victual.FrontendHelpers.EndUiBusy = function (formId = null)
 {
 	$("body").removeClass("cursor-busy");
 
@@ -482,7 +482,7 @@ Grocy.FrontendHelpers.EndUiBusy = function (formId = null)
 	}
 }
 
-Grocy.FrontendHelpers.ShowGenericError = function (message, exception)
+Victual.FrontendHelpers.ShowGenericError = function (message, exception)
 {
 	toastr.error(__t(message) + '<br><br>' + __t('Click to show technical details'), '', {
 		onclick: function ()
@@ -505,18 +505,18 @@ Grocy.FrontendHelpers.ShowGenericError = function (message, exception)
 	console.error(exception);
 }
 
-Grocy.FrontendHelpers.SaveUserSetting = function (settingsKey, value, force = false)
+Victual.FrontendHelpers.SaveUserSetting = function (settingsKey, value, force = false)
 {
-	if (Grocy.UserSettings[settingsKey] == value && !force)
+	if (Victual.UserSettings[settingsKey] == value && !force)
 	{
 		return;
 	}
 
-	Grocy.UserSettings[settingsKey] = value;
+	Victual.UserSettings[settingsKey] = value;
 
 	jsonData = {};
 	jsonData.value = value;
-	Grocy.Api.Put('user/settings/' + settingsKey, jsonData,
+	Victual.Api.Put('user/settings/' + settingsKey, jsonData,
 		function (result)
 		{
 			// Nothing to do...
@@ -528,11 +528,11 @@ Grocy.FrontendHelpers.SaveUserSetting = function (settingsKey, value, force = fa
 	);
 }
 
-Grocy.FrontendHelpers.DeleteUserSetting = function (settingsKey, reloadPageOnSuccess = false)
+Victual.FrontendHelpers.DeleteUserSetting = function (settingsKey, reloadPageOnSuccess = false)
 {
-	delete Grocy.UserSettings[settingsKey];
+	delete Victual.UserSettings[settingsKey];
 
-	Grocy.Api.Delete('user/settings/' + settingsKey, {},
+	Victual.Api.Delete('user/settings/' + settingsKey, {},
 		function (result)
 		{
 			if (reloadPageOnSuccess)
@@ -544,13 +544,13 @@ Grocy.FrontendHelpers.DeleteUserSetting = function (settingsKey, reloadPageOnSuc
 		{
 			if (xhr.statusText)
 			{
-				Grocy.FrontendHelpers.ShowGenericError('Error while deleting, please retry', xhr.response)
+				Victual.FrontendHelpers.ShowGenericError('Error while deleting, please retry', xhr.response)
 			}
 		}
 	);
 }
 
-Grocy.FrontendHelpers.RunWebhook = function (webhook, data, repetitions = 1)
+Victual.FrontendHelpers.RunWebhook = function (webhook, data, repetitions = 1)
 {
 	Object.assign(data, webhook.extra_data);
 	var hasAlreadyFailed = false;
@@ -564,7 +564,7 @@ Grocy.FrontendHelpers.RunWebhook = function (webhook, data, repetitions = 1)
 				if (!hasAlreadyFailed)
 				{
 					hasAlreadyFailed = true;
-					Grocy.FrontendHelpers.ShowGenericError(__t("Error while executing WebHook", { "status": status, "errorThrown": errorThrown }));
+					Victual.FrontendHelpers.ShowGenericError(__t("Error while executing WebHook", { "status": status, "errorThrown": errorThrown }));
 				}
 			});
 		}
@@ -575,7 +575,7 @@ Grocy.FrontendHelpers.RunWebhook = function (webhook, data, repetitions = 1)
 				if (!hasAlreadyFailed)
 				{
 					hasAlreadyFailed = true;
-					Grocy.FrontendHelpers.ShowGenericError(__t("Error while executing WebHook", { "status": status, "errorThrown": errorThrown }));
+					Victual.FrontendHelpers.ShowGenericError(__t("Error while executing WebHook", { "status": status, "errorThrown": errorThrown }));
 				}
 			});
 		}
@@ -613,7 +613,7 @@ $(document).on("change", ".user-setting-control", function ()
 		var value = element.val();
 	}
 
-	Grocy.FrontendHelpers.SaveUserSetting(settingKey, value);
+	Victual.FrontendHelpers.SaveUserSetting(settingKey, value);
 });
 
 // Show file name Bootstrap custom file input
@@ -671,7 +671,7 @@ $("body").children().each(function (index, child)
 {
 	new ResizeObserver(function ()
 	{
-		window.parent.postMessage(WindowMessageBag("ResizeResponsiveEmbeds"), Grocy.BaseUrl);
+		window.parent.postMessage(WindowMessageBag("ResizeResponsiveEmbeds"), Victual.BaseUrl);
 	}).observe(child);
 });
 
@@ -701,7 +701,7 @@ function RefreshLocaleNumberDisplay(rootSelector = "#page-content")
 		}
 
 		var value = Number.parseFloat(text);
-		element.text(value.toLocaleString(undefined, { style: "currency", currency: Grocy.Currency, minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_display }));
+		element.text(value.toLocaleString(undefined, { style: "currency", currency: Victual.Currency, minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_display }));
 		element.addClass("number-parsing-done");
 	});
 
@@ -715,7 +715,7 @@ function RefreshLocaleNumberDisplay(rootSelector = "#page-content")
 		}
 
 		var value = Number.parseFloat(text);
-		element.text(value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }));
+		element.text(value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }));
 		element.addClass("number-parsing-done");
 	});
 
@@ -763,7 +763,7 @@ function RefreshLocaleNumberInput(rootSelector = "#page-content")
 			return;
 		}
 
-		element.val(Number.parseFloat(value).toLocaleString("en", { minimumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_input, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_prices_input, useGrouping: false }));
+		element.val(Number.parseFloat(value).toLocaleString("en", { minimumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_input, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_prices_input, useGrouping: false }));
 	});
 
 	$(rootSelector + " .locale-number-input.locale-number-quantity-amount").each(function ()
@@ -775,7 +775,7 @@ function RefreshLocaleNumberInput(rootSelector = "#page-content")
 			return;
 		}
 
-		element.val(Number.parseFloat(value).toLocaleString("en", { minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts, useGrouping: false }));
+		element.val(Number.parseFloat(value).toLocaleString("en", { minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts, useGrouping: false }));
 	});
 
 	$(rootSelector + " .locale-number-input.locale-number-generic").each(function ()
@@ -797,11 +797,11 @@ $(document).on("click", ".easy-link-copy-textbox", function ()
 	$(this).select();
 });
 
-if (Grocy.CalendarFirstDayOfWeek)
+if (Victual.CalendarFirstDayOfWeek)
 {
 	moment.updateLocale(moment.locale(), {
 		"week": {
-			"dow": Number.parseInt(Grocy.CalendarFirstDayOfWeek)
+			"dow": Number.parseInt(Victual.CalendarFirstDayOfWeek)
 		}
 	});
 }
@@ -818,14 +818,14 @@ if (GetUriParam("embedded"))
 
 $(document).on("click", ".close-last-modal-button", function ()
 {
-	window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+	window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 });
 
 $("body").on("keydown", function (e)
 {
 	if (e.key == "Escape")
 	{
-		window.parent.postMessage(WindowMessageBag("CloseLastModal"), Grocy.BaseUrl);
+		window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
 	}
 });
 
@@ -859,41 +859,41 @@ $(window).on("message", function (e)
 		// data.Payload is the original WindowMessageBag
 
 		// => Send the original message to this window
-		window.postMessage(data.Payload, Grocy.BaseUrl);
+		window.postMessage(data.Payload, Victual.BaseUrl);
 
 		// => Bubble the broadcast message down to all child iframes
 		$("iframe.embed-responsive").each(function ()
 		{
-			$(this)[0].contentWindow.postMessage(data, Grocy.BaseUrl);
+			$(this)[0].contentWindow.postMessage(data, Victual.BaseUrl);
 		});
 	}
 });
 
-window.IsGrocy = true;
-Grocy.GetTopmostWindow = function ()
+window.IsVictual = true;
+Victual.GetTopmostWindow = function ()
 {
-	if (window.top.IsGrocy)
+	if (window.top.IsVictual)
 	{
-		// If the top window is Grocy (so when we're currently not running in an iframe) return that immediately
+		// If the top window is Victual (so when we're currently not running in an iframe) return that immediately
 		return window.top;
 	}
 	else
 	{
-		// Otherwise, so when we're currently running in an iframe, climb up the window chain and check for the top most Grocy window
-		var topmostGrocyWindow = window;
+		// Otherwise, so when we're currently running in an iframe, climb up the window chain and check for the top most Victual window
+		var topmostVictualWindow = window;
 
 		var currentWindow = window;
 		while (currentWindow != window.top)
 		{
-			if (currentWindow.IsGrocy)
+			if (currentWindow.IsVictual)
 			{
-				topmostGrocyWindow = currentWindow;
+				topmostVictualWindow = currentWindow;
 			}
 
 			currentWindow = currentWindow.parent;
 		}
 
-		return topmostGrocyWindow;
+		return topmostVictualWindow;
 	}
 }
 
@@ -910,9 +910,9 @@ $(document).on("click", ".show-as-dialog-link", function (e)
 		dialogType = element.attr("data-dialog-type")
 	}
 
-	if (Grocy.GetTopmostWindow() != window.self)
+	if (Victual.GetTopmostWindow() != window.self)
 	{
-		Grocy.GetTopmostWindow().postMessage(WindowMessageBag("IframeModal", { "Link": link, "DialogType": dialogType }), Grocy.BaseUrl);
+		Victual.GetTopmostWindow().postMessage(WindowMessageBag("IframeModal", { "Link": link, "DialogType": dialogType }), Victual.BaseUrl);
 	}
 	else
 	{
@@ -948,7 +948,7 @@ BootstrapComboboxDefaults = {
 	}
 };
 
-$(Grocy.UserPermissions).each(function (index, item)
+$(Victual.UserPermissions).each(function (index, item)
 {
 	if (item.has_permission == 0)
 	{
@@ -961,11 +961,11 @@ $('a.link-return').not(".btn").each(function ()
 	var base = $(this).data('href');
 	if (base.contains('?'))
 	{
-		$(this).attr('href', base + '&returnto' + encodeURIComponent(Grocy.CurrentUrlRelative));
+		$(this).attr('href', base + '&returnto' + encodeURIComponent(Victual.CurrentUrlRelative));
 	}
 	else
 	{
-		$(this).attr('href', base + '?returnto=' + encodeURIComponent(Grocy.CurrentUrlRelative));
+		$(this).attr('href', base + '?returnto=' + encodeURIComponent(Victual.CurrentUrlRelative));
 	}
 
 });
@@ -1005,8 +1005,8 @@ $(document).on("click", '.btn, a, button', function (e)
 });
 
 // Delay only initial field focus
-Grocy.FormFocusDelay = 500;
+Victual.FormFocusDelay = 500;
 setTimeout(function ()
 {
-	Grocy.FormFocusDelay = 0;
+	Victual.FormFocusDelay = 0;
 }, 1000);

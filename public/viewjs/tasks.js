@@ -22,7 +22,7 @@ $("#search").on("keyup", Delay(function ()
 	}
 
 	tasksTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Status filter dropdown (e.g. "due soon"/"overdue"), matched against the hidden
 // status-info column (index 5)
@@ -97,13 +97,13 @@ $(document).on('click', '.do-task-button', function (e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
 	var taskId = $(e.currentTarget).attr('data-task-id');
 	var taskName = $(e.currentTarget).attr('data-task-name');
 	var doneTime = moment().format('YYYY-MM-DD HH:mm:ss');
 
-	Grocy.Api.Post('tasks/' + taskId + '/complete', { 'done_time': doneTime },
+	Victual.Api.Post('tasks/' + taskId + '/complete', { 'done_time': doneTime },
 		function ()
 		{
 			if (!$("#show-done-tasks").is(":checked"))
@@ -120,14 +120,14 @@ $(document).on('click', '.do-task-button', function (e)
 				$('.do-task-button[data-task-id="' + taskId + '"]').addClass("disabled");
 			}
 
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			toastr.success(__t('Marked task %s as completed on %s', taskName, doneTime));
 			RefreshContextualTimeago("#task-" + taskId + "-row");
 			RefreshStatistics();
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);
@@ -139,19 +139,19 @@ $(document).on('click', '.undo-task-button', function (e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	Victual.FrontendHelpers.BeginUiBusy();
 
 	var taskId = $(e.currentTarget).attr('data-task-id');
 	var taskName = $(e.currentTarget).attr('data-task-name');
 
-	Grocy.Api.Post('tasks/' + taskId + '/undo', {},
+	Victual.Api.Post('tasks/' + taskId + '/undo', {},
 		function ()
 		{
 			window.location.reload();
 		},
 		function (xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy();
+			Victual.FrontendHelpers.EndUiBusy();
 			console.error(xhr);
 		}
 	);
@@ -182,7 +182,7 @@ $(document).on('click', '.delete-task-button', function (e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/tasks/' + objectId, {},
+				Victual.Api.Delete('objects/tasks/' + objectId, {},
 					function (result)
 					{
 						animateCSS("#task-" + objectId + "-row", "fadeOut", function ()
@@ -227,7 +227,7 @@ if (GetUriParam('include_done'))
 function RefreshStatistics()
 {
 	var nextXDays = $("#info-due-soon-tasks").data("next-x-days");
-	Grocy.Api.Get('tasks',
+	Victual.Api.Get('tasks',
 		function (result)
 		{
 			var dueTodayCount = 0;

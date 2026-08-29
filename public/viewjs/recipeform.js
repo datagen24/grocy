@@ -10,22 +10,22 @@
  */
 function saveRecipePicture(result, location, jsonData)
 {
-	var recipeId = Grocy.EditObjectId || result.created_object_id;
-	Grocy.EditObjectId = recipeId; // Grocy.EditObjectId is not yet set when adding a recipe
+	var recipeId = Victual.EditObjectId || result.created_object_id;
+	Victual.EditObjectId = recipeId; // Victual.EditObjectId is not yet set when adding a recipe
 
-	Grocy.Components.UserfieldsForm.Save(() =>
+	Victual.Components.UserfieldsForm.Save(() =>
 	{
-		if (jsonData.hasOwnProperty("picture_file_name") && !Grocy.DeleteRecipePictureOnSave)
+		if (jsonData.hasOwnProperty("picture_file_name") && !Victual.DeleteRecipePictureOnSave)
 		{
-			Grocy.Api.UploadFile($("#recipe-picture")[0].files[0], 'recipepictures', jsonData.picture_file_name,
+			Victual.Api.UploadFile($("#recipe-picture")[0].files[0], 'recipepictures', jsonData.picture_file_name,
 				(result) =>
 				{
 					window.location.href = U(location + recipeId);
 				},
 				(xhr) =>
 				{
-					Grocy.FrontendHelpers.EndUiBusy("recipe-form");
-					Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+					Victual.FrontendHelpers.EndUiBusy("recipe-form");
+					Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 				}
 			);
 		}
@@ -36,20 +36,20 @@ function saveRecipePicture(result, location, jsonData)
 	});
 }
 
-// Form submit: POSTs objects/recipes (create) or PUTs objects/recipes/{id} (edit, id from Grocy.EditObjectId);
-// a pending picture deletion (Grocy.DeleteRecipePictureOnSave) removes the old file from the "recipepictures" group first.
+// Form submit: POSTs objects/recipes (create) or PUTs objects/recipes/{id} (edit, id from Victual.EditObjectId);
+// a pending picture deletion (Victual.DeleteRecipePictureOnSave) removes the old file from the "recipepictures" group first.
 // The save button's data-location attribute decides whether to return to the recipes list or stay on the recipe page
 $('.save-recipe').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("recipe-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("recipe-form", true))
 	{
 		return;
 	}
 
 	var jsonData = $('#recipe-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("recipe-form");
+	Victual.FrontendHelpers.BeginUiBusy("recipe-form");
 
 	if ($("#recipe-picture")[0].files.length > 0)
 	{
@@ -58,35 +58,35 @@ $('.save-recipe').on('click', function(e)
 
 	const location = $(e.currentTarget).attr('data-location') == 'return' ? '/recipes?recipe=' : '/recipe/';
 
-	if (Grocy.EditMode == 'create')
+	if (Victual.EditMode == 'create')
 	{
-		Grocy.Api.Post('objects/recipes', jsonData,
+		Victual.Api.Post('objects/recipes', jsonData,
 			(result) => saveRecipePicture(result, location, jsonData));
 		return;
 	}
 
-	if (Grocy.DeleteRecipePictureOnSave)
+	if (Victual.DeleteRecipePictureOnSave)
 	{
 		jsonData.picture_file_name = null;
 
-		Grocy.Api.DeleteFile(Grocy.RecipePictureFileName, 'recipepictures',
+		Victual.Api.DeleteFile(Victual.RecipePictureFileName, 'recipepictures',
 			function(result)
 			{
 				// Nothing to do
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("recipe-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("recipe-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 
-	Grocy.Api.Put('objects/recipes/' + Grocy.EditObjectId, jsonData,
+	Victual.Api.Put('objects/recipes/' + Victual.EditObjectId, jsonData,
 		(result) => saveRecipePicture(result, location, jsonData),
 		function(xhr)
 		{
-			Grocy.FrontendHelpers.EndUiBusy("recipe-form");
+			Victual.FrontendHelpers.EndUiBusy("recipe-form");
 			console.error(xhr);
 		}
 	);
@@ -120,16 +120,16 @@ var recipesIncludesTables = $('#recipes-includes-table').DataTable({
 $('#recipes-includes-table tbody').removeClass("d-none");
 recipesIncludesTables.columns.adjust().draw();
 
-Grocy.FrontendHelpers.ValidateForm('recipe-form');
+Victual.FrontendHelpers.ValidateForm('recipe-form');
 setTimeout(function()
 {
 	$("#name").focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // Live validation while typing
 $('#recipe-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('recipe-form');
+	Victual.FrontendHelpers.ValidateForm('recipe-form');
 });
 
 // Enter submits the form (when valid)
@@ -139,7 +139,7 @@ $('#recipe-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('recipe-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('recipe-form'))
 		{
 			return false;
 		}
@@ -173,10 +173,10 @@ $(document).on('click', '.recipe-pos-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/recipes_pos/' + objectId, {},
+				Victual.Api.Delete('objects/recipes_pos/' + objectId, {},
 					function(result)
 					{
-						window.postMessage(WindowMessageBag("IngredientsChanged"), Grocy.BaseUrl);
+						window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
 					},
 					function(xhr)
 					{
@@ -211,10 +211,10 @@ $(document).on('click', '.recipe-include-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/recipes_nestings/' + objectId, {},
+				Victual.Api.Delete('objects/recipes_nestings/' + objectId, {},
 					function(result)
 					{
-						window.postMessage(WindowMessageBag("IngredientsChanged"), Grocy.BaseUrl);
+						window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
 					},
 					function(xhr)
 					{
@@ -243,7 +243,7 @@ $(document).on('click', '.recipe-pos-edit-button', function(e)
 	var recipePosId = $(e.currentTarget).attr('data-recipe-pos-id');
 
 	bootbox.dialog({
-		message: '<iframe class="embed-responsive" src="' + U("/recipe/") + Grocy.EditObjectId.toString() + '/pos/' + recipePosId.toString() + '?embedded&product=' + productId.toString() + '"></iframe>',
+		message: '<iframe class="embed-responsive" src="' + U("/recipe/") + Victual.EditObjectId.toString() + '/pos/' + recipePosId.toString() + '?embedded&product=' + productId.toString() + '"></iframe>',
 		size: 'large',
 		backdrop: true,
 		closeButton: false,
@@ -259,16 +259,16 @@ $(document).on('click', '.recipe-include-edit-button', function(e)
 	var recipeId = $(e.currentTarget).attr('data-recipe-included-recipe-id');
 	var recipeServings = $(e.currentTarget).attr('data-recipe-included-recipe-servings');
 
-	Grocy.Api.Put('objects/recipes/' + Grocy.EditObjectId, $('#recipe-form').serializeJSON(),
+	Victual.Api.Put('objects/recipes/' + Victual.EditObjectId, $('#recipe-form').serializeJSON(),
 		function(result)
 		{
 			$("#recipe-include-editform-title").text(__t("Edit included recipe"));
 			$("#recipe-include-form").data("edit-mode", "edit");
 			$("#recipe-include-form").data("recipe-nesting-id", id);
-			Grocy.Components.RecipePicker.SetId(recipeId);
+			Victual.Components.RecipePicker.SetId(recipeId);
 			$("#includes_servings").val(recipeServings);
 			$("#recipe-include-editform-modal").modal("show");
-			Grocy.FrontendHelpers.ValidateForm("recipe-include-form");
+			Victual.FrontendHelpers.ValidateForm("recipe-include-form");
 		},
 		function(xhr)
 		{
@@ -283,7 +283,7 @@ $("#recipe-pos-add-button").on("click", function(e)
 	e.preventDefault();
 
 	bootbox.dialog({
-		message: '<iframe class="embed-responsive" src="' + U("/recipe/") + Grocy.EditObjectId + '/pos/new?embedded"></iframe>',
+		message: '<iframe class="embed-responsive" src="' + U("/recipe/") + Victual.EditObjectId + '/pos/new?embedded"></iframe>',
 		size: 'large',
 		backdrop: true,
 		closeButton: false,
@@ -294,15 +294,15 @@ $("#recipe-pos-add-button").on("click", function(e)
 // Add an included recipe: saves the recipe form first, then opens the include modal in create mode
 $("#recipe-include-add-button").on("click", function(e)
 {
-	Grocy.Api.Put('objects/recipes/' + Grocy.EditObjectId, $('#recipe-form').serializeJSON(),
+	Victual.Api.Put('objects/recipes/' + Victual.EditObjectId, $('#recipe-form').serializeJSON(),
 		function(result)
 		{
 			$("#recipe-include-editform-title").text(__t("Add included recipe"));
 			$("#recipe-include-form").data("edit-mode", "create");
-			Grocy.Components.RecipePicker.Clear();
-			Grocy.Components.RecipePicker.GetInputElement().focus();
+			Victual.Components.RecipePicker.Clear();
+			Victual.Components.RecipePicker.GetInputElement().focus();
 			$("#recipe-include-editform-modal").modal("show");
-			Grocy.FrontendHelpers.ValidateForm("recipe-include-form");
+			Victual.FrontendHelpers.ValidateForm("recipe-include-form");
 		},
 		function(xhr)
 		{
@@ -317,7 +317,7 @@ $('#save-recipe-include-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("recipe-include-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("recipe-include-form", true))
 	{
 		return false;
 	}
@@ -331,33 +331,33 @@ $('#save-recipe-include-button').on('click', function(e)
 	var editMode = $("#recipe-include-form").data("edit-mode");
 
 	var jsonData = {};
-	jsonData.includes_recipe_id = Grocy.Components.RecipePicker.GetValue();
+	jsonData.includes_recipe_id = Victual.Components.RecipePicker.GetValue();
 	jsonData.servings = $("#includes_servings").val();
-	jsonData.recipe_id = Grocy.EditObjectId;
+	jsonData.recipe_id = Victual.EditObjectId;
 
 	if (editMode === 'create')
 	{
-		Grocy.Api.Post('objects/recipes_nestings', jsonData,
+		Victual.Api.Post('objects/recipes_nestings', jsonData,
 			function(result)
 			{
-				window.postMessage(WindowMessageBag("IngredientsChanged"), Grocy.BaseUrl);
+				window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Api.Put('objects/recipes_nestings/' + nestingId, jsonData,
+		Victual.Api.Put('objects/recipes_nestings/' + nestingId, jsonData,
 			function(result)
 			{
-				window.postMessage(WindowMessageBag("IngredientsChanged"), Grocy.BaseUrl);
+				window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -370,21 +370,21 @@ $("#recipe-picture").on("change", function(e)
 	$("#recipe-picture-label-none").addClass("d-none");
 	$("#delete-current-recipe-picture-on-save-hint").addClass("d-none");
 	$("#current-recipe-picture").addClass("d-none");
-	Grocy.DeleteRecipePictureOnSave = false;
+	Victual.DeleteRecipePictureOnSave = false;
 });
 
 // Mark the current picture for deletion on the next save (actual file delete happens in the submit handler)
-Grocy.DeleteRecipePictureOnSave = false;
+Victual.DeleteRecipePictureOnSave = false;
 $("#delete-current-recipe-picture-button").on("click", function(e)
 {
-	Grocy.DeleteRecipePictureOnSave = true;
+	Victual.DeleteRecipePictureOnSave = true;
 	$("#current-recipe-picture").addClass("d-none");
 	$("#delete-current-recipe-picture-on-save-hint").removeClass("d-none");
 	$("#recipe-picture-label").addClass("d-none");
 	$("#recipe-picture-label-none").removeClass("d-none");
 });
 
-Grocy.Components.UserfieldsForm.Load();
+Victual.Components.UserfieldsForm.Load();
 
 // When ingredients or includes changed (posted by the embedded forms / handlers above),
 // save the recipe form and reload the recipe page to re-render the tables
@@ -394,10 +394,10 @@ $(window).on("message", function(e)
 
 	if (data.Message === "IngredientsChanged")
 	{
-		Grocy.Api.Put('objects/recipes/' + Grocy.EditObjectId, $('#recipe-form').serializeJSON(),
+		Victual.Api.Put('objects/recipes/' + Victual.EditObjectId, $('#recipe-form').serializeJSON(),
 			function(result)
 			{
-				window.location.href = U('/recipe/' + Grocy.EditObjectId);
+				window.location.href = U('/recipe/' + Victual.EditObjectId);
 			},
 			function(xhr)
 			{
@@ -408,17 +408,17 @@ $(window).on("message", function(e)
 });
 
 // Grocycode label printing: fetches label data from recipes/{id}/printlabel and sends it to the
-// configured label printer webhook (Grocy.Webhooks.labelprinter)
+// configured label printer webhook (Victual.Webhooks.labelprinter)
 $(document).on('click', '.recipe-grocycode-label-print', function(e)
 {
 	e.preventDefault();
 
 	var recipeId = $(e.currentTarget).attr('data-recipe-id');
-	Grocy.Api.Get('recipes/' + recipeId + '/printlabel', function(labelData)
+	Victual.Api.Get('recipes/' + recipeId + '/printlabel', function(labelData)
 	{
-		if (Grocy.Webhooks.labelprinter !== undefined)
+		if (Victual.Webhooks.labelprinter !== undefined)
 		{
-			Grocy.FrontendHelpers.RunWebhook(Grocy.Webhooks.labelprinter, labelData);
+			Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, labelData);
 		}
 	});
 });

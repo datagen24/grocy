@@ -21,7 +21,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	userfieldsTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Entity filter, matched against the entity column (index 1); option value/text are both
 // the entity's internal name, so it doubles as the search term and as the "entity" param
@@ -70,7 +70,7 @@ $(document).on('click', '.userfield-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/userfields/' + objectId, {},
+				Victual.Api.Delete('objects/userfields/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/userfields');
@@ -93,5 +93,5 @@ if (GetUriParam("entity"))
 	setTimeout(function()
 	{
 		$("#name").focus();
-	}, Grocy.FormFocusDelay);
+	}, Victual.FormFocusDelay);
 }

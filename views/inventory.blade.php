@@ -4,9 +4,9 @@
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
-	Grocy.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.DefaultMinAmount = '{{$DEFAULT_MIN_AMOUNT}}';
 </script>
 
 <div class="row">
@@ -45,13 +45,13 @@
 			'invalidFeedback' => $__t('A purchased date is required'),
 			'nextInputSelector' => '#best_before_date',
 			'additionalCssClasses' => 'date-only-datetimepicker2',
-			'activateNumberPad' => GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
+			'activateNumberPad' => VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
 			))
 			@endif
 
 			@php
 			$additionalGroupCssClasses = '';
-			if (!GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+			if (!VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 			{
 			$additionalGroupCssClasses = 'd-none';
 			}
@@ -72,11 +72,11 @@
 			'earlierThanInfoLimit' => date('Y-m-d'),
 			'earlierThanInfoText' => $__t('The given date is earlier than today, are you sure?'),
 			'additionalGroupCssClasses' => $additionalGroupCssClasses,
-			'activateNumberPad' => GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
+			'activateNumberPad' => VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
 			))
 			@php $additionalGroupCssClasses = ''; @endphp
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			@include('components.numberpicker', array(
 			'id' => 'price',
 			'label' => 'Price',
@@ -101,14 +101,14 @@
 				value="0">
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 			@include('components.locationpicker', array(
 			'locations' => $locations,
 			'hint' => $__t('This will apply to added products')
 			))
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+			@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 			<div class="form-group">
 				<label for="stock_label_type">
 					{{ $__t('Stock entry label') }}

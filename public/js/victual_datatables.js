@@ -1,7 +1,7 @@
 // Shared DataTables setup: global defaults for all tables (state saving via user
 // settings, localization, column reordering, row grouping incl. collapse/expand),
 // accent neutral searching/sorting and the "table options" dialog for column
-// visibility / grouping. Loaded on every page after grocy.js.
+// visibility / grouping. Loaded on every page after victual.js.
 //
 // Table state is persisted per table as the user settings
 // "datatables_state_<tableId>" and "datatables_rowGroup_<tableId>" (JSON strings).
@@ -35,14 +35,14 @@ $.extend(true, $.fn.dataTable.defaults, {
 		if ($.isEmptyObject(data))
 		{
 			// state.clear() was called (resetting table layout)
-			Grocy.FrontendHelpers.DeleteUserSetting(settingKey, true);
+			Victual.FrontendHelpers.DeleteUserSetting(settingKey, true);
 		}
 		else
 		{
 			// Don't save when the state data hasn't actually changed
-			if (Grocy.UserSettings[settingKey] !== undefined)
+			if (Victual.UserSettings[settingKey] !== undefined)
 			{
-				var data1 = JSON.parse(Grocy.UserSettings[settingKey]);
+				var data1 = JSON.parse(Victual.UserSettings[settingKey]);
 				delete data1.time;
 				delete data1.childRows;
 
@@ -56,7 +56,7 @@ $.extend(true, $.fn.dataTable.defaults, {
 				}
 			}
 
-			Grocy.FrontendHelpers.SaveUserSetting(settingKey, JSON.stringify(data));
+			Victual.FrontendHelpers.SaveUserSetting(settingKey, JSON.stringify(data));
 		}
 	},
 	'stateLoadCallback': function (settings, data)
@@ -64,13 +64,13 @@ $.extend(true, $.fn.dataTable.defaults, {
 		// Loads the table state from user setting "datatables_state_<tableId>"
 		var settingKey = 'datatables_state_' + settings.sTableId;
 
-		if (Grocy.UserSettings[settingKey] == undefined)
+		if (Victual.UserSettings[settingKey] == undefined)
 		{
 			return null;
 		}
 		else
 		{
-			return JSON.parse(Grocy.UserSettings[settingKey]);
+			return JSON.parse(Victual.UserSettings[settingKey]);
 		}
 	},
 	'preDrawCallback': function (settings)
@@ -81,9 +81,9 @@ $.extend(true, $.fn.dataTable.defaults, {
 		if (typeof api.rowGroup === "function")
 		{
 			var settingKey = 'datatables_rowGroup_' + settings.sTableId;
-			if (Grocy.UserSettings[settingKey] !== undefined)
+			if (Victual.UserSettings[settingKey] !== undefined)
 			{
-				var rowGroup = JSON.parse(Grocy.UserSettings[settingKey]);
+				var rowGroup = JSON.parse(Victual.UserSettings[settingKey]);
 
 				// The draw event is called often therefore we have to check if it's really necessary
 				if (rowGroup.enable !== api.rowGroup().enabled()
@@ -360,7 +360,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 								var tableId = dataTable.settings()[0].sTableId;
 
 								// Delete rowgroup settings
-								Grocy.FrontendHelpers.DeleteUserSetting('datatables_rowGroup_' + tableId);
+								Victual.FrontendHelpers.DeleteUserSetting('datatables_rowGroup_' + tableId);
 
 								// Delete state settings
 								dataTable.state.clear();
@@ -431,7 +431,7 @@ $(document).on("click", ".change-table-columns-rowgroup-toggle", function ()
 	}
 
 	var settingKey = 'datatables_rowGroup_' + dataTable.settings()[0].sTableId;
-	Grocy.FrontendHelpers.SaveUserSetting(settingKey, JSON.stringify(rowGroup));
+	Victual.FrontendHelpers.SaveUserSetting(settingKey, JSON.stringify(rowGroup));
 
 	dataTable.draw();
 });

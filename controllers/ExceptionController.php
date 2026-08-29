@@ -1,10 +1,10 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
 use DI\Container;
-use Grocy\Controllers\Api\BaseApiController;
-use Grocy\Services\ApplicationService;
+use Victual\Controllers\Api\BaseApiController;
+use Victual\Services\ApplicationService;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\LoggerInterface;
@@ -43,17 +43,17 @@ class ExceptionController extends BaseApiController
 	 */
 	public function __invoke(ServerRequestInterface $request, Throwable $exception, bool $displayErrorDetails, bool $logErrors, bool $logErrorDetails, ?LoggerInterface $logger = null)
 	{
-		if (!defined('GROCY_LOCALE'))
+		if (!defined('VICTUAL_LOCALE'))
 		{
-			define('GROCY_LOCALE', GROCY_DEFAULT_LOCALE);
+			define('VICTUAL_LOCALE', VICTUAL_DEFAULT_LOCALE);
 		}
 
 		$response = $this->ResponseFactory->createResponse();
 		$isApiRoute = string_starts_with($request->getUri()->getPath(), '/api/');
 
-		if (!defined('GROCY_AUTHENTICATED'))
+		if (!defined('VICTUAL_AUTHENTICATED'))
 		{
-			define('GROCY_AUTHENTICATED', false);
+			define('VICTUAL_AUTHENTICATED', false);
 		}
 
 		if ($isApiRoute)
@@ -82,9 +82,9 @@ class ExceptionController extends BaseApiController
 
 		if ($exception instanceof HttpNotFoundException)
 		{
-			if (!defined('GROCY_AUTHENTICATED'))
+			if (!defined('VICTUAL_AUTHENTICATED'))
 			{
-				define('GROCY_AUTHENTICATED', false);
+				define('VICTUAL_AUTHENTICATED', false);
 			}
 
 			return $this->RenderPage($response->withStatus(404), 'errors/404', [

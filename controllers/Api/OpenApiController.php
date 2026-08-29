@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Services\ApiKeyService;
-use Grocy\Services\ApplicationService;
-use Grocy\Services\UserfieldsService;
+use Victual\Controllers\Users\User;
+use Victual\Services\ApiKeyService;
+use Victual\Services\ApplicationService;
+use Victual\Services\UserfieldsService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -31,7 +31,7 @@ class OpenApiController extends BaseApiController
 		$apiKeys = $this->DB->api_keys();
 		if (!User::HasPermissions(User::PERMISSION_ADMIN))
 		{
-			$apiKeys = $apiKeys->where('user_id', GROCY_USER_ID);
+			$apiKeys = $apiKeys->where('user_id', VICTUAL_USER_ID);
 		}
 
 		return $this->RenderPage($response, 'manageapikeys', [
@@ -59,7 +59,7 @@ class OpenApiController extends BaseApiController
 	}
 
 	/**
-	 * GET /api/openapi/specification - returns grocy.openapi.json enriched at runtime
+	 * GET /api/openapi/specification - returns victual.openapi.json enriched at runtime
 	 * with the installed version, the instance server URL and derived ExposedEntity_*
 	 * enum variants (including user entities and minus not editable/deletable/listable
 	 * entities) used by the Swagger UI.

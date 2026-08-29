@@ -22,7 +22,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	quantityUnitsTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()
 {
@@ -54,7 +54,7 @@ $(document).on('click', '.quantityunit-delete-button', function(e)
 		{
 			if (result === true)
 			{
-				Grocy.Api.Delete('objects/quantity_units/' + objectId, {},
+				Victual.Api.Delete('objects/quantity_units/' + objectId, {},
 					function(result)
 					{
 						window.location.href = U('/quantityunits');

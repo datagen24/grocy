@@ -39,8 +39,16 @@ the plans noted below start minting more of what they clean up.
 
 | # | Plan | Upstream | Depends on | Size |
 |---|---|---|---|---|
-| 16 | [Project rename](16-project-rename.md) | — | before first deployment | small–medium |
+| 16 | [Project rename](16-project-rename.md) | — | before first deployment | **done in the codebase** |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; read before 11 and 16 | small, ongoing |
+
+The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
+so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
+`victual.db`, the bin scripts are `bin/victual-*`, the spec is
+`victual.openapi.json`, and `GET /api/system/info` answers `victual_version`.
+Anything written from here forward uses those names. What is *not* renamed, ever,
+is the `grcy:` grocycode magic and the format's name — see 16's Tier 0. The repo
+rename and the registry claims happen at announcement time, not in a commit.
 
 **Blocking and de-risking, in one place:**
 
@@ -57,7 +65,7 @@ the plans noted below start minting more of what they clean up.
   than asserted by hand.
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
-- **10's `bin/grocy-migrate` precedes 14**, not the other way round — the one place the
+- **10's `bin/victual-migrate` precedes 14**, not the other way round — the one place the
   wave order below overrides the plan numbering, and why the CLI is pulled into wave 0.
 - **17 before [11](11-api-error-handling.md), [16](16-project-rename.md) and
   [10](10-cold-start-statelessness.md)** — the first two break third-party clients and 17
@@ -79,7 +87,7 @@ It is not a permanent commitment to SQLite — this is a hard fork and will drif
 feature is cheaper or only sensible on PostgreSQL, say so and make it PostgreSQL only
 rather than contorting the design (plan 01 is the first case).
 
-**Additive API.** New entities go in the `ExposedEntity` enum in `grocy.openapi.json`;
+**Additive API.** New entities go in the `ExposedEntity` enum in `victual.openapi.json`;
 existing endpoints keep their response shape. Anything that would change an existing
 response is called out explicitly in the plan rather than slipped in.
 
@@ -119,16 +127,16 @@ as parallel sessions.
 ### Wave 0 — decisions and scaffolding (one sitting)
 
 - **A dev/CI container, in this repo.** Both `.devtools/pgsql` scripts run under a
-  `grocy-fork-dev` image, and there is no Dockerfile, compose file or Makefile anywhere
+  `victual-dev` image, and there is no Dockerfile, compose file or Makefile anywhere
   in the tree — nor a vendored `packages/`. 14's verification 6 ("one command from a
   clean checkout") is unmeetable until that exists, so it is the first thing built: a
   Dockerfile (PHP 8.5, `pdo_sqlite` + `pdo_pgsql`, composer install) and a compose file
   with a PostgreSQL service. [10](10-cold-start-statelessness.md) later bakes its view
   cache into this same build.
-- **`bin/grocy-migrate`, pulled forward from [10](10-cold-start-statelessness.md).**
+- **`bin/victual-migrate`, pulled forward from [10](10-cold-start-statelessness.md).**
   `trigdifftest.php` needs a migrated SQLite database and nothing in the tree can make
-  one from a command line: `bin/grocy-db-import` returns early on `sqlite`
-  (`bin/grocy-db-import:68`) and migrations otherwise only run from `GET /`. Without
+  one from a command line: `bin/victual-db-import` returns early on `sqlite`
+  (`bin/victual-db-import:68`) and migrations otherwise only run from `GET /`. Without
   this, 14 piece 1 cannot run — the roadmap's own ordering is inverted. Only the CLI
   moves; the lock and the cache work stay in 10.
 - **14 piece 1**: the runnable diff suite (recover or rewrite the seeds), plus its

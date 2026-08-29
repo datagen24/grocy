@@ -13,7 +13,7 @@ Three things happen before the router is even built, and all three are hostile t
 ephemeral filesystem.
 
 **The version-hash redirect** (`app.php:52-77`). A hash of `version.json` plus
-`GROCY_BASE_URL` plus `GROCY_BASE_PATH` names a marker file inside
+`VICTUAL_BASE_URL` plus `VICTUAL_BASE_PATH` names a marker file inside
 `data/viewcache`. If the marker is absent the whole cache directory is emptied,
 opcache is reset, and the request — whatever it was — is answered with a 302 to `/`.
 On an ephemeral filesystem the marker is always absent, so this is not an upgrade
@@ -40,14 +40,14 @@ try/catch, so the race there is unguarded.
 | `data/viewcache/` HTMLPurifier serializer | `BaseApiController::GetParsedAndFilteredRequestBody` | No — but it is a runtime write on every JSON write request |
 | `data/storage/` | `FilesService` | Yes — until [01](01-file-storage.md) lands |
 | `data/config.php`, `data/settingoverrides/` | nobody | Read-only; ConfigMap-compatible already |
-| `data/grocy.db` | SQLite | Moot under PostgreSQL |
+| `data/victual.db` | SQLite | Moot under PostgreSQL |
 
 The HTMLPurifier serializer path is the one the review did not list, and it is the
 reason a "read-only except for the database" pod does not work today even after the
 redirect is gone: every `POST`/`PUT` through the generic CRUD API touches it.
 
-**One thing that is better than it looks.** The hash includes `GROCY_BASE_URL` and
-`GROCY_BASE_PATH`, which implies compiled views embed the deployment URL. They do not.
+**One thing that is better than it looks.** The hash includes `VICTUAL_BASE_URL` and
+`VICTUAL_BASE_PATH`, which implies compiled views embed the deployment URL. They do not.
 No template under `views/` references either constant; URLs are built by the `$U`
 closure injected at render time (`controllers/BaseController.php:78`). Compiled Blade
 output is therefore a pure function of the source tree, which is what makes baking it
@@ -64,7 +64,7 @@ problem — see [15](15-deliberate-cleanup.md).
 
 ### Separate the cache directory from the data directory
 
-New setting `GROCY_VIEWCACHE_PATH`, defaulting to `GROCY_DATAPATH . '/viewcache'` so
+New setting `VICTUAL_VIEWCACHE_PATH`, defaulting to `VICTUAL_DATAPATH . '/viewcache'` so
 nothing changes for existing installs. Container images set it to a baked, image-local
 path such as `/app/viewcache`. `SlimBladeView`, the Slim route collector and the
 HTMLPurifier serializer all read that one setting instead of deriving their own path
@@ -72,7 +72,7 @@ from the data path.
 
 ### Bake the cache at image build time
 
-`bin/grocy-warm-cache`: compiles every template under `views/` and writes the Slim
+`bin/victual-warm-cache`: compiles every template under `views/` and writes the Slim
 route cache, then exits. Run it as the last step of the image build. The result is
 deterministic per source tree, so it is a layer, not state.
 
@@ -83,7 +83,7 @@ hard error, which is the honest failure mode for an immutable image) is Q2.
 
 ### Move migrations out of the request path
 
-`bin/grocy-migrate`, a CLI entry point that bootstraps config the way `bin/grocy-db-import`
+`bin/victual-migrate`, a CLI entry point that bootstraps config the way `bin/victual-db-import`
 already does, takes the lock, runs `MigrateDatabase()`, and exits non-zero on failure.
 That is an initContainer in k3s and a one-line `docker exec` elsewhere.
 `DatabaseMigrationService` already works outside a request; nothing about it needs to
@@ -92,12 +92,12 @@ change except the lock.
 **This one piece ships ahead of the rest of this plan, in wave 0 with
 [14](14-contract-and-regression-scaffolding.md) piece 1.** `trigdifftest.php` needs
 `TRIGTEST_PRISTINE_PATH` — a migrated SQLite database — and nothing in the tree can
-produce one from a command line today: `bin/grocy-db-import` returns early when
-`DB_DRIVER` is `sqlite` (`bin/grocy-db-import:68`), and migrations otherwise only run
+produce one from a command line today: `bin/victual-db-import` returns early when
+`DB_DRIVER` is `sqlite` (`bin/victual-db-import:68`), and migrations otherwise only run
 from `GET /`. So 14's suite cannot run at all until this exists, which inverts the
 roadmap's ordering. Pulling just the CLI forward is the smallest cut that fixes it; the
 lock, the cache work and everything else below stay here in wave 1. When this plan's
-turn comes, `bin/grocy-migrate` already exists and gains the lock.
+turn comes, `bin/victual-migrate` already exists and gains the lock.
 
 `SystemController::Root` then stops calling `MigrateDatabase()`. Q4 covers whether a
 web-triggered fallback should remain for people running this fork from a stock
@@ -128,7 +128,7 @@ someone runs migrations outside the CLI entry point.
 With the cache baked and migrations moved, `app.php:52-77` deletes entirely: no
 `EmptyFolder`, no marker file, no `opcache_reset` (meaningless in an immutable image
 that is replaced rather than updated in place), no 302. Upgrades in a mutable
-deployment are then covered by "run `bin/grocy-warm-cache` after updating", which
+deployment are then covered by "run `bin/victual-warm-cache` after updating", which
 `update.sh` can do.
 
 ### Skip the SQLite checks on a PostgreSQL-only deployment
@@ -141,7 +141,7 @@ dialog; that one is cosmetic and is handled in [15](15-deliberate-cleanup.md).
 
 ### Explicitly not in scope
 
-The request-scoped `define()` constants (`GROCY_USER_ID`, `GROCY_LOCALE`, …) stay. They
+The request-scoped `define()` constants (`VICTUAL_USER_ID`, `VICTUAL_LOCALE`, …) stay. They
 are safe under php-fpm and only rule out worker-mode runtimes, which are not a goal.
 Recording that as a decision is worth more than changing it.
 
@@ -180,24 +180,24 @@ plainly because they are visible to clients:
 Lint proves nothing here; every check below wants a booted instance.
 
 1. **Fresh container, first request is an API call.** Empty data directory, empty
-   PostgreSQL database, migrations run by the init step. `curl -H 'GROCY-API-KEY: …'
+   PostgreSQL database, migrations run by the init step. `curl -H 'VICTUAL-API-KEY: …'
    /api/stock` as the very first request must return 200 with a JSON body — today it
    returns 302 with an HTML target. Repeat on SQLite.
-2. **Concurrent cold start.** Two `bin/grocy-migrate` processes against the same empty
+2. **Concurrent cold start.** Two `bin/victual-migrate` processes against the same empty
    PostgreSQL database, started together; and the same on SQLite. Both must exit 0 and
    the `migrations` table must contain each number exactly once. Run it ten times — the
    current race is timing-dependent and a single green run means nothing.
 
    Run this check with `FEATURE_FLAG_STOCK_LOCATION_TRACKING=false`. The `locations`
    row this plan's race is about is inserted by `migrations/8888.php` *inside* an
-   `if (!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)` guard, and `config-dist.php:167`
+   `if (!VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)` guard, and `config-dist.php:167`
    defaults that flag to **true**. On a default install the guard never runs, and the
    only row in `locations` is the id **2** "Fridge" that `migrations/0006.sql` inserts —
    so the assertion "exactly one row with id 1" fails for a reason that has nothing to
    do with concurrency, and the race the plan exists to close is never exercised at all.
    With the flag off, assert both the `migrations` uniqueness and the id-1 row.
 3. **Racing pods against an already-migrated database.** Five concurrent
-   `bin/grocy-migrate` runs must be no-ops and must not deadlock (this is the always-run
+   `bin/victual-migrate` runs must be no-ops and must not deadlock (this is the always-run
    `8888.php` path, which is the one that runs on every start forever).
 4. **Read-only root filesystem.** Boot with the image's filesystem mounted read-only
    except for the database, browse every top-level page, and perform one create, one
@@ -229,7 +229,7 @@ service and `PrerequisiteChecker`, none of which [11](11-api-error-handling.md),
 [14](14-contract-and-regression-scaffolding.md) go near. It can be done in parallel with
 any of them — with the two seams noted below.
 
-`bin/grocy-migrate` is the exception in the other direction: it ships early, in wave 0,
+`bin/victual-migrate` is the exception in the other direction: it ships early, in wave 0,
 because [14](14-contract-and-regression-scaffolding.md) piece 1 cannot run without it
 (see *Move migrations out of the request path*).
 
@@ -243,7 +243,7 @@ owns that constraint today, so it is recorded in both.
 
 ## Open questions
 
-1. **Are `GROCY_BASE_URL` / `GROCY_BASE_PATH` still load-bearing in the cache hash?**
+1. **Are `VICTUAL_BASE_URL` / `VICTUAL_BASE_PATH` still load-bearing in the cache hash?**
    Nothing under `views/` reads either constant and `$U` resolves at render time, which
    says no. But the hash was written for a reason, and the honest check is to compile the
    cache under one base path, serve under another, and diff the rendered HTML — not to
@@ -291,15 +291,15 @@ owns that constraint today, so it is recorded in both.
    defaulting off, precisely so the default is the immutable one.
 
    > **Response:** Agreed — `MIGRATE_ON_ROOT_REQUEST`, default off. Refinement: the
-   > Q6 fail-fast message should name the setting and `bin/grocy-migrate`, so the
+   > Q6 fail-fast message should name the setting and `bin/victual-migrate`, so the
    > failure is its own documentation.
 5. **Does the migration CLI also warm the cache?** They are different lifecycles — one is
-   per image build, the other is per deployment — but a single `bin/grocy-init` that does
+   per image build, the other is per deployment — but a single `bin/victual-init` that does
    both is one less thing to forget. I lean to keeping them separate commands and letting
    the image build and the initContainer each call the one they need.
 
    > **Response:** Agreed, keep them separate. They run at different lifecycle
-   > moments (image build vs deployment); a combined `grocy-init` blurs exactly the
+   > moments (image build vs deployment); a combined `victual-init` blurs exactly the
    > distinction this plan exists to draw.
 6. **What happens when the app boots against a database that is behind the code?**
    Today it silently migrates. With migrations moved out, the options are: fail fast with
@@ -326,7 +326,7 @@ owns that constraint today, so it is recorded in both.
    > already exists for this; `DatabaseImporter` was the first caller.
    > **What the failure looks like:** HTTP 503 with a plain-text body naming the
    > database's number, the code's number, `MIGRATE_ON_ROOT_REQUEST` and
-   > `bin/grocy-migrate` (per Q4's refinement). 503 rather than 500 because the
+   > `bin/victual-migrate` (per Q4's refinement). 503 rather than 500 because the
    > condition is transient and operational, and it is the one pre-[11](11-api-error-handling.md)
    > status decision that 11 should inherit rather than revisit.
 7. **Should the `migrations` table record which dialect applied each migration?**

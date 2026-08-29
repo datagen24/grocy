@@ -1,14 +1,14 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
 use DI\Container;
-use Grocy\Helpers\Grocycode;
-use Grocy\Services\LocalizationService;
-use Grocy\Services\RecipesService;
-use Grocy\Services\StockService;
-use Grocy\Services\UserfieldsService;
-use Grocy\Services\UsersService;
+use Victual\Helpers\Grocycode;
+use Victual\Services\LocalizationService;
+use Victual\Services\RecipesService;
+use Victual\Services\StockService;
+use Victual\Services\UserfieldsService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -107,7 +107,7 @@ class StockController extends BaseController
 			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'locations' => $this->DB->locations()->orderBy('name', 'COLLATE NOCASE'),
 			'users' => $usersService->GetUsersAsDto(),
-			'transactionTypes' => GetClassConstants('\Grocy\Services\StockService', 'TRANSACTION_TYPE_'),
+			'transactionTypes' => GetClassConstants('\Victual\Services\StockService', 'TRANSACTION_TYPE_'),
 			'userfieldsStock' => UserfieldsService::GetInstance()->GetFields('stock'),
 			'userfieldValuesStock' => UserfieldsService::GetInstance()->GetAllValues('stock')
 		]);
@@ -183,7 +183,7 @@ class StockController extends BaseController
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$userSettings = $usersService->GetUserSettings(GROCY_USER_ID);
+		$userSettings = $usersService->GetUserSettings(VICTUAL_USER_ID);
 		$nextXDays = $userSettings['stock_due_soon_days'];
 
 		$where = 'is_in_stock_or_below_min_stock = 1';
@@ -718,7 +718,7 @@ class StockController extends BaseController
 	public function Stockentries(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$nextXDays = $usersService->GetUserSettings(GROCY_USER_ID)['stock_due_soon_days'];
+		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['stock_due_soon_days'];
 
 		return $this->RenderPage($response, 'stockentries', [
 			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
@@ -776,7 +776,7 @@ class StockController extends BaseController
 			'entries' => $entries,
 			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'users' => $usersService->GetUsersAsDto(),
-			'transactionTypes' => GetClassConstants('\Grocy\Services\StockService', 'TRANSACTION_TYPE_')
+			'transactionTypes' => GetClassConstants('\Victual\Services\StockService', 'TRANSACTION_TYPE_')
 		]);
 	}
 

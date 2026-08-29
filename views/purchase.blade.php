@@ -3,14 +3,14 @@
 @section('title', $__t('Purchase'))
 
 @push('pageScripts')
-<script src="{{ $U('/js/grocy_uisound.js?v=', true) }}{{ $version }}"></script>
+<script src="{{ $U('/js/victual_uisound.js?v=', true) }}{{ $version }}"></script>
 @endpush
 
 @section('content')
 <script>
-	Grocy.QuantityUnits = {!! json_encode($quantityUnits) !!};
-	Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
-	Grocy.DefaultMinAmount = '{{ $DEFAULT_MIN_AMOUNT }}';
+	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
+	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+	Victual.DefaultMinAmount = '{{ $DEFAULT_MIN_AMOUNT }}';
 </script>
 
 <div class="row">
@@ -39,7 +39,7 @@
 					@endif>
 				@else
 				<script>
-					Grocy.UserSettings.scan_mode_purchase_enabled = false;
+					Victual.UserSettings.scan_mode_purchase_enabled = false;
 				</script>
 				@endif
 			</div>
@@ -73,11 +73,11 @@
 			'invalidFeedback' => $__t('A purchased date is required'),
 			'nextInputSelector' => '#best_before_date',
 			'additionalCssClasses' => 'date-only-datetimepicker2',
-			'activateNumberPad' => GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
+			'activateNumberPad' => VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
 			))
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 			@include('components.datetimepicker', array(
 			'id' => 'best_before_date',
 			'label' => 'Due date',
@@ -92,11 +92,11 @@
 			'shortcutLabel' => 'Never overdue',
 			'earlierThanInfoLimit' => date('Y-m-d'),
 			'earlierThanInfoText' => $__t('The given date is earlier than today, are you sure?'),
-			'activateNumberPad' => GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
+			'activateNumberPad' => VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
 			))
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			@include('components.numberpicker', array(
 			'id' => 'price',
 			'label' => 'Price',
@@ -141,14 +141,14 @@
 				value="0">
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 			@include('components.locationpicker', array(
 			'locations' => $locations,
 			'isRequired' => false
 			))
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+			@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 			<div class="form-group">
 				<label for="stock_label_type">{{ $__t('Stock entry label') }}</label>
 				<select class="custom-control custom-select"

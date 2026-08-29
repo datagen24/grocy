@@ -14,19 +14,19 @@
 		<h2 class="title">@yield('title')</h2>
 
 		<script>
-			Grocy.EditMode = '{{ $mode }}';
-			Grocy.QuantityUnits = {!! json_encode($quantityunits) !!};
-			Grocy.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
+			Victual.EditMode = '{{ $mode }}';
+			Victual.QuantityUnits = {!! json_encode($quantityunits) !!};
+			Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
 		</script>
 
 		@if($mode == 'edit')
 		<script>
-			Grocy.EditObjectId = {{ $recipe->id }};
+			Victual.EditObjectId = {{ $recipe->id }};
 		</script>
 
 		@if(!empty($recipe->picture_file_name))
 		<script>
-			Grocy.RecipePictureFileName = '{{ $recipe->picture_file_name }}';
+			Victual.RecipePictureFileName = '{{ $recipe->picture_file_name }}';
 		</script>
 		@endif
 		@endif
@@ -344,7 +344,7 @@
 						<i class="fa-solid fa-question-circle text-muted"
 							data-toggle="tooltip"
 							data-trigger="hover click"
-							title="{{ $__t('Grocycode is a unique referer to this %s in your Grocy instance - print it onto a label and scan it like any other barcode', $__t('Recipe')) }}"></i>
+							title="{{ $__t('Grocycode is a unique referer to this %s in your Victual instance - print it onto a label and scan it like any other barcode', $__t('Recipe')) }}"></i>
 					</h4>
 					<p>
 						@if($mode == 'edit')
@@ -356,7 +356,7 @@
 					<p>
 						<a class="btn btn-outline-primary btn-sm"
 							href="{{ $U('/recipe/' . $recipe->id . '/grocycode?download=true') }}">{{ $__t('Download') }}</a>
-						@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+						@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 						<a class="btn btn-outline-primary btn-sm recipe-grocycode-label-print"
 							data-recipe-id="{{ $recipe->id }}"
 							href="#">

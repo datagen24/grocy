@@ -39,7 +39,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	batteriesJournalTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Reset all filters (search, battery, date range) and reload
 $("#clear-filter-button").on("click", function()
@@ -80,7 +80,7 @@ $(document).on('click', '.undo-battery-execution-button', function(e)
 	var element = $(e.currentTarget);
 	var chargeCycleId = $(e.currentTarget).attr('data-charge-cycle-id');
 
-	Grocy.Api.Post('batteries/charge-cycles/' + chargeCycleId.toString() + '/undo', {},
+	Victual.Api.Post('batteries/charge-cycles/' + chargeCycleId.toString() + '/undo', {},
 		function(result)
 		{
 			element.closest("tr").addClass("text-muted");

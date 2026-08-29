@@ -375,8 +375,8 @@ msgstr "Означает, что %s будет убран из запаса"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Убрано %1$s из %2$s из запаса"
 
-msgid "About Grocy"
-msgstr "О Grocy"
+msgid "About Victual"
+msgstr "О Victual"
 
 msgid "Close"
 msgstr "Закрыть"
@@ -1525,12 +1525,6 @@ msgstr "Полная цена этого ингредиента будет ум�
 msgid "Price factor"
 msgstr "Коэффициент цены"
 
-msgid "Do you find Grocy useful?"
-msgstr "Вы находите Grocy полезным?"
-
-msgid "Say thanks"
-msgstr "Сказать спасибо"
-
 msgid "Search for recipes containing this product"
 msgstr "Искать рецепты, содержащие данный продукт"
 
@@ -1665,10 +1659,10 @@ msgstr "Редактировать запас"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Доступ к камере возможен только тогда, когда это поддерживается и разрешено "
-"вашим браузером и когда Grocy обслуживается через безопасное (https://) "
+"вашим браузером и когда Victual обслуживается через безопасное (https://) "
 "соединение."
 
 msgid "Keep screen on"
@@ -2343,7 +2337,7 @@ msgid "Download %s Grocycode"
 msgstr "Скачать Grocy-код \"%s\""
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocy-код - уникальная ссылка на %s в вашем экземпляре Grocy - распечатайте "

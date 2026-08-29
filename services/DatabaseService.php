@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
-use Grocy\Services\Database\DatabaseDialect;
+use Victual\Services\Database\DatabaseDialect;
 use LessQL\Database;
 
 /**
@@ -293,7 +293,7 @@ class DatabaseService
 	 */
 	private function IsQueryLoggingEnabled(): bool
 	{
-		return GROCY_MODE === 'dev' && file_exists(GROCY_DATAPATH . '/sql.log');
+		return VICTUAL_MODE === 'dev' && file_exists(VICTUAL_DATAPATH . '/sql.log');
 	}
 
 	private function LogQuery(string $sql, array $params)
@@ -303,7 +303,7 @@ class DatabaseService
 			return;
 		}
 
-		$logFilePath = GROCY_DATAPATH . '/sql.log';
+		$logFilePath = VICTUAL_DATAPATH . '/sql.log';
 
 		$line = $sql;
 		if (!empty($params))

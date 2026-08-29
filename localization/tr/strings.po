@@ -354,8 +354,8 @@ msgstr "Bu %s'in stoklardan silineceğini ifade ediyor"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "%2$s'ün %1$s'si stoklardan silindi"
 
-msgid "About Grocy"
-msgstr "Grocy Hakkında"
+msgid "About Victual"
+msgstr "Victual Hakkında"
 
 msgid "Close"
 msgstr "Kapat"
@@ -1447,12 +1447,6 @@ msgstr "Bu bileşenin ortaya çıkan fiyatı bu faktörle çarpılacaktır."
 msgid "Price factor"
 msgstr "Fiyat faktörü"
 
-msgid "Do you find Grocy useful?"
-msgstr "Grocy'yi yararlı buluyor musunuz?"
-
-msgid "Say thanks"
-msgstr "Teşekkür et"
-
 msgid "Search for recipes containing this product"
 msgstr "Bu ürünü içeren tarifleri ara"
 
@@ -1580,10 +1574,10 @@ msgstr "Stok girişini düzenle"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Kamera erişimi yalnızca tarayıcınız tarafından desteklendiğinde ve izin "
-"verildiğinde ve Grocy güvenli (https://) bağlantı üzerinden sunulduğunda "
+"verildiğinde ve Victual güvenli (https://) bağlantı üzerinden sunulduğunda "
 "mümkündür."
 
 msgid "Keep screen on"
@@ -2248,7 +2242,7 @@ msgid "Download %s Grocycode"
 msgstr "%sGrocykodunu indir"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocycode, Grocy örneğinizdeki bu %s e yönelik benzersiz bir referanstır; "

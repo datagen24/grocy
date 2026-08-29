@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Helpers;
+namespace Victual\Helpers;
 
 use Jenssegers\Blade\Blade;
 use Psr\Http\Message\ResponseInterface;

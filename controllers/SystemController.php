@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Services\ApplicationService;
-use Grocy\Services\DatabaseMigrationService;
-use Grocy\Services\DatabaseService;
-use Grocy\Services\DemoDataGeneratorService;
+use Victual\Services\ApplicationService;
+use Victual\Services\DatabaseMigrationService;
+use Victual\Services\DatabaseService;
+use Victual\Services\DemoDataGeneratorService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -48,7 +48,7 @@ class SystemController extends BaseController
 		$databaseMigrationService = DatabaseMigrationService::GetInstance();
 		$databaseMigrationService->MigrateDatabase();
 
-		if (GROCY_MODE === 'dev' || GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')
+		if (VICTUAL_MODE === 'dev' || VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
 		{
 			// The demo data generator uses SQLite specific SQL, so it can only run there -
 			// on any other driver demo data is skipped and the app just continues
@@ -78,8 +78,8 @@ class SystemController extends BaseController
 		$data = explode('#', base64_decode($request->getQueryParams()['data']));
 
 		$manifest = [
-			'name' => 'Grocy ' . $data[0],
-			'short_name' => 'Grocy ' . $data[0],
+			'name' => 'Victual ' . $data[0],
+			'short_name' => 'Victual ' . $data[0],
 			'icons' => [[
 				'src' => './img/icon-1024.png',
 				'sizes'=> '1024x1024',
@@ -96,16 +96,16 @@ class SystemController extends BaseController
 	}
 
 	/**
-	 * Resolves the relative URL of the configured entry page (GROCY_ENTRY_PAGE),
+	 * Resolves the relative URL of the configured entry page (VICTUAL_ENTRY_PAGE),
 	 * falling back to /about when the corresponding feature is disabled.
 	 *
 	 * @return string Relative URL, e.g. '/stockoverview'
 	 */
 	private function GetEntryPageRelative()
 	{
-		if (defined('GROCY_ENTRY_PAGE'))
+		if (defined('VICTUAL_ENTRY_PAGE'))
 		{
-			$entryPage = constant('GROCY_ENTRY_PAGE');
+			$entryPage = constant('VICTUAL_ENTRY_PAGE');
 		}
 		else
 		{
@@ -113,54 +113,54 @@ class SystemController extends BaseController
 		}
 
 		// Stock
-		if ($entryPage === 'stock' && constant('GROCY_FEATURE_FLAG_STOCK'))
+		if ($entryPage === 'stock' && constant('VICTUAL_FEATURE_FLAG_STOCK'))
 		{
 			return '/stockoverview';
 		}
 
 		// Shoppinglist
-		if ($entryPage === 'shoppinglist' && constant('GROCY_FEATURE_FLAG_SHOPPINGLIST'))
+		if ($entryPage === 'shoppinglist' && constant('VICTUAL_FEATURE_FLAG_SHOPPINGLIST'))
 		{
 			return '/shoppinglist';
 		}
 
 		// Recipes
-		if ($entryPage === 'recipes' && constant('GROCY_FEATURE_FLAG_RECIPES'))
+		if ($entryPage === 'recipes' && constant('VICTUAL_FEATURE_FLAG_RECIPES'))
 		{
 			return '/recipes';
 		}
 
 		// Chores
-		if ($entryPage === 'chores' && constant('GROCY_FEATURE_FLAG_CHORES'))
+		if ($entryPage === 'chores' && constant('VICTUAL_FEATURE_FLAG_CHORES'))
 		{
 			return '/choresoverview';
 		}
 
 		// Tasks
-		if ($entryPage === 'tasks' && constant('GROCY_FEATURE_FLAG_TASKS'))
+		if ($entryPage === 'tasks' && constant('VICTUAL_FEATURE_FLAG_TASKS'))
 		{
 			return '/tasks';
 		}
 
 		// Batteries
-		if ($entryPage === 'batteries' && constant('GROCY_FEATURE_FLAG_BATTERIES'))
+		if ($entryPage === 'batteries' && constant('VICTUAL_FEATURE_FLAG_BATTERIES'))
 		{
 			return '/batteriesoverview';
 		}
 
-		if ($entryPage === 'equipment' && constant('GROCY_FEATURE_FLAG_EQUIPMENT'))
+		if ($entryPage === 'equipment' && constant('VICTUAL_FEATURE_FLAG_EQUIPMENT'))
 		{
 			return '/equipment';
 		}
 
 		// Calendar
-		if ($entryPage === 'calendar' && constant('GROCY_FEATURE_FLAG_CALENDAR'))
+		if ($entryPage === 'calendar' && constant('VICTUAL_FEATURE_FLAG_CALENDAR'))
 		{
 			return '/calendar';
 		}
 
 		// Meal Plan
-		if ($entryPage === 'mealplan' && constant('GROCY_FEATURE_FLAG_RECIPES_MEALPLAN'))
+		if ($entryPage === 'mealplan' && constant('VICTUAL_FEATURE_FLAG_RECIPES_MEALPLAN'))
 		{
 			return '/mealplan';
 		}

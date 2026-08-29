@@ -1,5 +1,5 @@
 ﻿// Powers the user entity create/edit modal form (userentityform.blade.php).
-// Grocy.EditMode ('create'/'edit') and Grocy.EditObjectId select POST vs PUT. Note:
+// Victual.EditMode ('create'/'edit') and Victual.EditObjectId select POST vs PUT. Note:
 // unlike most other forms here, this one has no userfields (a user entity IS the
 // definition userfields attach to, so it can't itself carry them).
 
@@ -9,7 +9,7 @@ $('#save-userentity-button').on('click', function(e)
 {
 	e.preventDefault();
 
-	if (!Grocy.FrontendHelpers.ValidateForm("userentity-form", true))
+	if (!Victual.FrontendHelpers.ValidateForm("userentity-form", true))
 	{
 		return;
 	}
@@ -20,18 +20,18 @@ $('#save-userentity-button').on('click', function(e)
 	}
 
 	var jsonData = $('#userentity-form').serializeJSON();
-	Grocy.FrontendHelpers.BeginUiBusy("userentity-form");
+	Victual.FrontendHelpers.BeginUiBusy("userentity-form");
 
 	var redirectUrl = U("/userentities");
 
-	if (Grocy.EditMode === 'create')
+	if (Victual.EditMode === 'create')
 	{
-		Grocy.Api.Post('objects/userentities', jsonData,
+		Victual.Api.Post('objects/userentities', jsonData,
 			function(result)
 			{
 				if (GetUriParam("embedded") !== undefined)
 				{
-					window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 				}
 				else
 				{
@@ -40,19 +40,19 @@ $('#save-userentity-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("userentity-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("userentity-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
 	else
 	{
-		Grocy.Api.Put('objects/userentities/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('objects/userentities/' + Victual.EditObjectId, jsonData,
 			function(result)
 			{
 				if (GetUriParam("embedded") !== undefined)
 				{
-					window.parent.postMessage(WindowMessageBag("Reload"), Grocy.BaseUrl);
+					window.parent.postMessage(WindowMessageBag("Reload"), Victual.BaseUrl);
 				}
 				else
 				{
@@ -61,8 +61,8 @@ $('#save-userentity-button').on('click', function(e)
 			},
 			function(xhr)
 			{
-				Grocy.FrontendHelpers.EndUiBusy("userentity-form");
-				Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+				Victual.FrontendHelpers.EndUiBusy("userentity-form");
+				Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 			}
 		);
 	}
@@ -71,12 +71,12 @@ $('#save-userentity-button').on('click', function(e)
 // Live-validates on every keystroke / select change
 $('#userentity-form input').keyup(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('userentity-form');
+	Victual.FrontendHelpers.ValidateForm('userentity-form');
 });
 
 $('#userentity-form select').change(function(event)
 {
-	Grocy.FrontendHelpers.ValidateForm('userentity-form');
+	Victual.FrontendHelpers.ValidateForm('userentity-form');
 });
 
 // Enter key submits the form (if valid) instead of doing a default form submit
@@ -86,7 +86,7 @@ $('#userentity-form input').keydown(function(event)
 	{
 		event.preventDefault();
 
-		if (!Grocy.FrontendHelpers.ValidateForm('userentity-form'))
+		if (!Victual.FrontendHelpers.ValidateForm('userentity-form'))
 		{
 			return false;
 		}
@@ -111,11 +111,11 @@ $("#show_in_sidebar_menu").on("click", function()
 });
 
 // Initial setup: focus the name field, run initial validation
-Grocy.FrontendHelpers.ValidateForm('userentity-form');
+Victual.FrontendHelpers.ValidateForm('userentity-form');
 setTimeout(function()
 {
 	$('#name').focus();
-}, Grocy.FormFocusDelay);
+}, Victual.FormFocusDelay);
 
 // Click twice to trigger on-click but not change the actual checked state
 $("#show_in_sidebar_menu").click();

@@ -18,7 +18,7 @@ SELECT
 	CASE WHEN (EXTRACT(EPOCH FROM (sc.best_before_date::timestamp - date_trunc('second', LOCALTIMESTAMP))) / 86400.0) < 0 THEN
 		CASE WHEN p.due_type = 1 THEN 'overdue' ELSE 'expired' END
 	ELSE
-		CASE WHEN (EXTRACT(EPOCH FROM (sc.best_before_date::timestamp - date_trunc('second', LOCALTIMESTAMP))) / 86400.0) < CAST(grocy_user_setting('stock_due_soon_days') AS INT) THEN
+		CASE WHEN (EXTRACT(EPOCH FROM (sc.best_before_date::timestamp - date_trunc('second', LOCALTIMESTAMP))) / 86400.0) < CAST(victual_user_setting('stock_due_soon_days') AS INT) THEN
 			'due_soon'
 		ELSE
 			'ok'

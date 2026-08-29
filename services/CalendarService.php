@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
-use Grocy\Helpers\UrlManager;
+use Victual\Helpers\UrlManager;
 
 /**
  * Aggregates upcoming due dates from all enabled feature areas (stock due dates, tasks,
@@ -14,7 +14,7 @@ class CalendarService extends BaseService
 	public function __construct()
 	{
 		parent::__construct();
-		$this->UrlManager = new UrlManager(GROCY_BASE_URL);
+		$this->UrlManager = new UrlManager(VICTUAL_BASE_URL);
 	}
 
 	private $UrlManager;
@@ -32,7 +32,7 @@ class CalendarService extends BaseService
 		$usersService = UsersService::GetInstance();
 
 		$stockEvents = [];
-		if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+		if (VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 		{
 			$products = $this->DB->products();
 			$titlePrefix = LocalizationService::GetInstance()->__t('Product due') . ': ';
@@ -46,14 +46,14 @@ class CalendarService extends BaseService
 						'start' => $currentStockEntry->best_before_date,
 						'date_format' => 'date',
 						'link' => $this->UrlManager->ConstructUrl('/stockoverview'),
-						'color' => $usersService->GetUserSettings(GROCY_USER_ID)['calendar_color_products']
+						'color' => $usersService->GetUserSettings(VICTUAL_USER_ID)['calendar_color_products']
 					];
 				}
 			}
 		}
 
 		$taskEvents = [];
-		if (GROCY_FEATURE_FLAG_TASKS)
+		if (VICTUAL_FEATURE_FLAG_TASKS)
 		{
 			$titlePrefix = LocalizationService::GetInstance()->__t('Task due') . ': ';
 
@@ -64,13 +64,13 @@ class CalendarService extends BaseService
 					'start' => $currentTaskEntry->due_date,
 					'date_format' => 'date',
 					'link' => $this->UrlManager->ConstructUrl('/tasks'),
-					'color' => $usersService->GetUserSettings(GROCY_USER_ID)['calendar_color_tasks']
+					'color' => $usersService->GetUserSettings(VICTUAL_USER_ID)['calendar_color_tasks']
 				];
 			}
 		}
 
 		$choreEvents = [];
-		if (GROCY_FEATURE_FLAG_CHORES)
+		if (VICTUAL_FEATURE_FLAG_CHORES)
 		{
 			$users = UsersService::GetInstance()->GetUsersAsDto();
 			$chores = $this->DB->chores()->where('active = 1');
@@ -92,13 +92,13 @@ class CalendarService extends BaseService
 					'date_format' => 'datetime',
 					'link' => $this->UrlManager->ConstructUrl('/choresoverview'),
 					'allDay' => $chore->track_date_only == 1,
-					'color' => $usersService->GetUserSettings(GROCY_USER_ID)['calendar_color_chores']
+					'color' => $usersService->GetUserSettings(VICTUAL_USER_ID)['calendar_color_chores']
 				];
 			}
 		}
 
 		$batteryEvents = [];
-		if (GROCY_FEATURE_FLAG_BATTERIES)
+		if (VICTUAL_FEATURE_FLAG_BATTERIES)
 		{
 			$batteries = $this->DB->batteries()->where('active = 1');
 			$titlePrefix = LocalizationService::GetInstance()->__t('Battery charge cycle due') . ': ';
@@ -110,7 +110,7 @@ class CalendarService extends BaseService
 					'start' => $currentBatteryEntry->next_estimated_charge_time,
 					'date_format' => 'datetime',
 					'link' => $this->UrlManager->ConstructUrl('/batteriesoverview'),
-					'color' => $usersService->GetUserSettings(GROCY_USER_ID)['calendar_color_batteries']
+					'color' => $usersService->GetUserSettings(VICTUAL_USER_ID)['calendar_color_batteries']
 				];
 			}
 		}
@@ -118,7 +118,7 @@ class CalendarService extends BaseService
 		$mealPlanRecipeEvents = [];
 		$mealPlanNotesEvents = [];
 		$mealPlanProductEvents = [];
-		if (GROCY_FEATURE_FLAG_RECIPES_MEALPLAN)
+		if (VICTUAL_FEATURE_FLAG_RECIPES_MEALPLAN)
 		{
 			$mealPlanSections = $this->DB->meal_plan_sections();
 
@@ -148,7 +148,7 @@ class CalendarService extends BaseService
 					'date_format' => $dateFormat,
 					'description' => $this->UrlManager->ConstructUrl('/mealplan' . '?week=' . $mealPlanDayRecipe->day),
 					'link' => $this->UrlManager->ConstructUrl('/recipes' . '?recipe=' . $mealPlanDayRecipe->recipe_id . '#fullscreen'),
-					'color' => $usersService->GetUserSettings(GROCY_USER_ID)['calendar_color_meal_plan']
+					'color' => $usersService->GetUserSettings(VICTUAL_USER_ID)['calendar_color_meal_plan']
 				];
 			}
 
@@ -177,7 +177,7 @@ class CalendarService extends BaseService
 					'start' => $start,
 					'date_format' => $dateFormat,
 					'link' => $this->UrlManager->ConstructUrl('/mealplan' . '?start=' . $start),
-					'color' => $usersService->GetUserSettings(GROCY_USER_ID)['calendar_color_meal_plan']
+					'color' => $usersService->GetUserSettings(VICTUAL_USER_ID)['calendar_color_meal_plan']
 				];
 			}
 
@@ -206,7 +206,7 @@ class CalendarService extends BaseService
 					'start' => $start,
 					'date_format' => $dateFormat,
 					'link' => $this->UrlManager->ConstructUrl('/mealplan' . '?start=' . $start),
-					'color' => $usersService->GetUserSettings(GROCY_USER_ID)['calendar_color_meal_plan']
+					'color' => $usersService->GetUserSettings(VICTUAL_USER_ID)['calendar_color_meal_plan']
 				];
 			}
 		}

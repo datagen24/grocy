@@ -1,19 +1,19 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 use LessQL\Result;
 
 /**
  * User account management and per-user settings. Settings are cached per request; the
- * cache is shared with the SQL-side grocy_user_setting() helper on SQLite, which resolves
+ * cache is shared with the SQL-side victual_user_setting() helper on SQLite, which resolves
  * settings through GetUserSetting().
  */
 class UsersService extends BaseService
 {
 	/**
 	 * Creates a user (password hashed with Argon2id) and grants the permission set
-	 * configured as GROCY_DEFAULT_PERMISSIONS.
+	 * configured as VICTUAL_DEFAULT_PERMISSIONS.
 	 *
 	 * @return \LessQL\Row The new users row
 	 */
@@ -29,7 +29,7 @@ class UsersService extends BaseService
 		$newUserRow = $newUserRow->save();
 		$permList = [];
 
-		foreach ($this->DB->permission_hierarchy()->where('name', GROCY_DEFAULT_PERMISSIONS)->fetchAll() as $perm)
+		foreach ($this->DB->permission_hierarchy()->where('name', VICTUAL_DEFAULT_PERMISSIONS)->fetchAll() as $perm)
 		{
 			$permList[] = [
 				'user_id' => $newUserRow->id,
@@ -92,7 +92,7 @@ class UsersService extends BaseService
 	private static $UserSettingsCache = [];
 
 	/**
-	 * One setting value for the user, falling back to the $GROCY_DEFAULT_USER_SETTINGS
+	 * One setting value for the user, falling back to the $VICTUAL_DEFAULT_USER_SETTINGS
 	 * default and finally null. Cached per request.
 	 *
 	 * @param int $userId
@@ -120,10 +120,10 @@ class UsersService extends BaseService
 		else
 		{
 			// Use the configured default values for a missing setting, otherwise return NULL
-			global $GROCY_DEFAULT_USER_SETTINGS;
-			if (array_key_exists($settingKey, $GROCY_DEFAULT_USER_SETTINGS))
+			global $VICTUAL_DEFAULT_USER_SETTINGS;
+			if (array_key_exists($settingKey, $VICTUAL_DEFAULT_USER_SETTINGS))
 			{
-				$value = $GROCY_DEFAULT_USER_SETTINGS[$settingKey];
+				$value = $VICTUAL_DEFAULT_USER_SETTINGS[$settingKey];
 			}
 		}
 
@@ -132,7 +132,7 @@ class UsersService extends BaseService
 	}
 
 	/**
-	 * All settings of the user as [key => value], with $GROCY_DEFAULT_USER_SETTINGS
+	 * All settings of the user as [key => value], with $VICTUAL_DEFAULT_USER_SETTINGS
 	 * filling in every key the user has not overridden.
 	 *
 	 * @param int $userId
@@ -148,8 +148,8 @@ class UsersService extends BaseService
 		}
 
 		// Use the configured default values for all missing settings
-		global $GROCY_DEFAULT_USER_SETTINGS;
-		return array_merge($GROCY_DEFAULT_USER_SETTINGS, $settings);
+		global $VICTUAL_DEFAULT_USER_SETTINGS;
+		return array_merge($VICTUAL_DEFAULT_USER_SETTINGS, $settings);
 	}
 
 	/**

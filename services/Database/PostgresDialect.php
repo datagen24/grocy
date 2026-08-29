@@ -1,14 +1,14 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
 /**
  * PostgreSQL storage engine.
  *
- * Unlike SQLite, PostgreSQL cannot call back into PHP, so the helper functions Grocy
- * registers per connection on SQLite (regexp, grocy_user_setting, ceil) are instead
+ * Unlike SQLite, PostgreSQL cannot call back into PHP, so the helper functions Victual
+ * registers per connection on SQLite (regexp, victual_user_setting, ceil) are instead
  * provided natively: regexp maps onto the "~" operator, ceil already exists, and
- * grocy_user_setting is an SQL function installed by the baseline schema which resolves
+ * victual_user_setting is an SQL function installed by the baseline schema which resolves
  * the acting user from a session variable set by SetCurrentUserId().
  */
 class PostgresDialect extends DatabaseDialect
@@ -28,13 +28,13 @@ class PostgresDialect extends DatabaseDialect
 	}
 
 	/**
-	 * Connects using the GROCY_DB_* settings (host, port, name, user, password, sslmode).
+	 * Connects using the VICTUAL_DB_* settings (host, port, name, user, password, sslmode).
 	 * The PDO attributes deliberately match the SQLite dialect so both engines surface
 	 * errors and NULLs identically.
 	 */
 	public function CreateConnection(): \PDO
 	{
-		$pdo = new \PDO\Pgsql($this->GetDsn(), GROCY_DB_USER, GROCY_DB_PASSWORD);
+		$pdo = new \PDO\Pgsql($this->GetDsn(), VICTUAL_DB_USER, VICTUAL_DB_PASSWORD);
 		$pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		$pdo->setAttribute(\PDO::ATTR_ORACLE_NULLS, \PDO::NULL_EMPTY_STRING);
 
@@ -112,7 +112,7 @@ class PostgresDialect extends DatabaseDialect
 
 	public function GetIdentifierDelimiter(): string
 	{
-		// Grocy's tables and columns are all lower case, so quoting them is safe and also
+		// Victual's tables and columns are all lower case, so quoting them is safe and also
 		// covers the ones which would otherwise collide with reserved words
 		return '"';
 	}
@@ -208,28 +208,28 @@ class PostgresDialect extends DatabaseDialect
 	}
 
 	/**
-	 * Stores the acting user's id in the "grocy.user_id" session variable, which the SQL
-	 * grocy_user_setting() function reads. On SQLite the same function is a PHP callback
-	 * that sees GROCY_USER_ID directly, so no equivalent call is needed there.
+	 * Stores the acting user's id in the "victual.user_id" session variable, which the SQL
+	 * victual_user_setting() function reads. On SQLite the same function is a PHP callback
+	 * that sees VICTUAL_USER_ID directly, so no equivalent call is needed there.
 	 */
 	public function SetCurrentUserId(\PDO $pdo, $userId): void
 	{
-		$statement = $pdo->prepare("SELECT set_config('grocy.user_id', ?, false)");
+		$statement = $pdo->prepare("SELECT set_config('victual.user_id', ?, false)");
 		$statement->execute([(string)intval($userId)]);
 	}
 
 	/**
-	 * Builds the PDO DSN from the GROCY_DB_* settings (sslmode only when configured).
+	 * Builds the PDO DSN from the VICTUAL_DB_* settings (sslmode only when configured).
 	 */
 	private function GetDsn(): string
 	{
-		$dsn = 'pgsql:host=' . GROCY_DB_HOST
-			. ';port=' . intval(GROCY_DB_PORT)
-			. ';dbname=' . GROCY_DB_NAME;
+		$dsn = 'pgsql:host=' . VICTUAL_DB_HOST
+			. ';port=' . intval(VICTUAL_DB_PORT)
+			. ';dbname=' . VICTUAL_DB_NAME;
 
-		if (!empty(GROCY_DB_SSLMODE))
+		if (!empty(VICTUAL_DB_SSLMODE))
 		{
-			$dsn .= ';sslmode=' . GROCY_DB_SSLMODE;
+			$dsn .= ';sslmode=' . VICTUAL_DB_SSLMODE;
 		}
 
 		return $dsn;

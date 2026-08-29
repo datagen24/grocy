@@ -358,8 +358,8 @@ msgstr "המשמעות היא הסרה של %s מהמלאי"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "%1$s מתוך %2$s הוסרו מהמלאי"
 
-msgid "About Grocy"
-msgstr "על Grocy"
+msgid "About Victual"
+msgstr "על Victual"
 
 msgid "Close"
 msgstr "סגירה"
@@ -1468,12 +1468,6 @@ msgstr "המחיר שיתקבל לרכיב זה יוכפל במקדם הזה"
 msgid "Price factor"
 msgstr "מקדם מחיר"
 
-msgid "Do you find Grocy useful?"
-msgstr "Grocy שימושי לדעתך?"
-
-msgid "Say thanks"
-msgstr "להגיד תודה"
-
 msgid "Search for recipes containing this product"
 msgstr "חיפוש מתכונים שמכילים את המוצר הזה"
 
@@ -1604,9 +1598,9 @@ msgstr "עריכת רשומת מלאי"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
-"הגישה למצלמה אפשרית רק כשיש תמיכה והסכמה על ידי הדפדפן שלך וכאשר Grocy פועל "
+"הגישה למצלמה אפשרית רק כשיש תמיכה והסכמה על ידי הדפדפן שלך וכאשר Victual פועל "
 "דרך חיבור מאובטח (https://‎)"
 
 msgid "Keep screen on"
@@ -2258,7 +2252,7 @@ msgid "Download %s Grocycode"
 msgstr "הורדת קוד ה־Grocy של %s"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "קוד Grocy הוא ייחוס ייחודי עבור %s בעותק ה־Grocy שלך - יש להדפיס אותו על "

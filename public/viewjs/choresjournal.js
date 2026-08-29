@@ -44,7 +44,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	choresJournalTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Resets search/filters (and the "chore"/"months" URI params) and reloads the page
 $("#clear-filter-button").on("click", function()
@@ -82,7 +82,7 @@ $(document).on('click', '.undo-chore-execution-button', function(e)
 	var element = $(e.currentTarget);
 	var executionId = $(e.currentTarget).attr('data-execution-id');
 
-	Grocy.Api.Post('chores/executions/' + executionId.toString() + '/undo', {},
+	Victual.Api.Post('chores/executions/' + executionId.toString() + '/undo', {},
 		function(result)
 		{
 			element.closest("tr").addClass("text-muted");

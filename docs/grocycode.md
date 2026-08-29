@@ -1,17 +1,22 @@
 Grocycode
 ==========
 
-Grocycode is, in essence, a simple way to reference to arbitrary Grocy entities.
+Grocycode is, in essence, a simple way to reference to arbitrary Victual entities.
 Each Grocycode includes a magic, an entitiy identifier, an id and an ordered set of extra data.
-It is supported to be entered anywhere Grocy expects one to read a barcode, but can also reference
-Grocy-internal properties like specific stock entries, or specific batteries.
+It is supported to be entered anywhere Victual expects one to read a barcode, but can also reference
+Victual-internal properties like specific stock entries, or specific batteries.
 
 Serialization
 ----
 
 There are three mandatory parts in a Grocycode:
 
-1. The magic `grcy`
+1. The magic `grcy`, which keeps its spelling from upstream grocy on purpose: it is a
+   wire format printed onto physical labels, and those outlive branding. Renaming it
+   would invalidate every label already printed by an upstream instance and break
+   `bin/victual-db-import`, so `grcy` stays permanently
+   ([plan 16](plans/16-project-rename.md), Tier 0). The same goes for the name
+   *Grocycode* itself, which names that format rather than the project.
 2. An entity identifer matching the regular expression `[a-z]+` (that is, lowercase english alphabet without any fancy accents, minimum length 1 character).
 3. An object identifer matching the regular expression `[0-9]+`
 
@@ -53,7 +58,7 @@ Currently, Chore grocycodes do not define any extra fields.
 Visual Encoding
 ----
 
-Grocy uses DataMatrix 2D (or alternatively Code128 1D) Barcodes to encode grocycodes into a visual representation. In principle, there is no problem with using
+Victual uses DataMatrix 2D (or alternatively Code128 1D) Barcodes to encode grocycodes into a visual representation. In principle, there is no problem with using
 other encoding formats like QR codes; however DataMatrix uses less space for the same information and redundancy and is a bit
 easier read by 2D barcode scanners, especially on non-flat surfaces.
 

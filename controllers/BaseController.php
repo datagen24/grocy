@@ -1,20 +1,20 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
 use DI\Container;
-use Grocy\Controllers\Users\User;
-use Grocy\Services\ApplicationService;
-use Grocy\Services\DatabaseService;
-use Grocy\Services\LocalizationService;
-use Grocy\Services\UsersService;
+use Victual\Controllers\Users\User;
+use Victual\Services\ApplicationService;
+use Victual\Services\DatabaseService;
+use Victual\Services\LocalizationService;
+use Victual\Services\UsersService;
 
 /**
  * Base class for all non-API (view) controllers.
  *
  * Provides the shared DI container, the Blade view engine and the database
  * connection, plus the Render()/RenderPage() helpers that populate the
- * template variables common to every grocy page (localization, feature
+ * template variables common to every Victual page (localization, feature
  * flags, permissions, URL builder etc.).
  */
 class BaseController
@@ -32,7 +32,7 @@ class BaseController
 	/** @var Container The application DI container */
 	protected $AppContainer;
 
-	/** @var \Grocy\Helpers\SlimBladeView The shared Blade view engine */
+	/** @var \Victual\Helpers\SlimBladeView The shared Blade view engine */
 	protected $View;
 
 	/** @var \LessQL\Database Fluent database connection (SQLite or PostgreSQL, depending on configuration) */
@@ -69,7 +69,7 @@ class BaseController
 
 		// TODO: Better handle this generically based on the current language (header in .po file?)
 		$dir = 'ltr';
-		if (GROCY_LOCALE == 'he_IL')
+		if (VICTUAL_LOCALE == 'he_IL')
 		{
 			$dir = 'rtl';
 		}
@@ -90,18 +90,18 @@ class BaseController
 		$constants = get_defined_constants();
 		foreach ($constants as $constant => $value)
 		{
-			if (substr($constant, 0, 19) !== 'GROCY_FEATURE_FLAG_')
+			if (substr($constant, 0, 19) !== 'VICTUAL_FEATURE_FLAG_')
 			{
 				unset($constants[$constant]);
 			}
 		}
 		$this->View->set('featureFlags', $constants);
 
-		if (GROCY_AUTHENTICATED)
+		if (VICTUAL_AUTHENTICATED)
 		{
 			$this->View->set('permissions', User::PermissionList());
 
-			$decimalPlacesAmounts = UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'stock_decimal_places_amounts');
+			$decimalPlacesAmounts = UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'stock_decimal_places_amounts');
 			if ($decimalPlacesAmounts <= 0)
 			{
 				$defaultMinAmount = 1;
@@ -133,9 +133,9 @@ class BaseController
 		try
 		{
 			$usersService = UsersService::GetInstance();
-			if (defined('GROCY_USER_ID'))
+			if (defined('VICTUAL_USER_ID'))
 			{
-				$this->View->set('userSettings', $usersService->GetUserSettings(GROCY_USER_ID));
+				$this->View->set('userSettings', $usersService->GetUserSettings(VICTUAL_USER_ID));
 			}
 			else
 			{

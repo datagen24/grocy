@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
 /**
  * Comparing the same data as it comes back from two different engines.

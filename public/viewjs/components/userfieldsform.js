@@ -1,19 +1,19 @@
 // Implements the UserfieldsForm widget (views/components/userfieldsform.blade.php,
 // userfields_thead.blade.php, userfields_tbody.blade.php): renders/persists the custom
 // "userfields" defined for an entity (text/checkbox/date/datetime/file/link/multi-select
-// inputs with class "userfield-input") against Grocy.EditObjectId.
+// inputs with class "userfield-input") against Victual.EditObjectId.
 // Public API: Save(success, error), Load(), Clear() - all are no-ops when no #userfields-form
 // is present on the page. Consumers call these alongside their own object save/load/clear flow.
-Grocy.Components.UserfieldsForm = {};
+Victual.Components.UserfieldsForm = {};
 
 /**
- * Persists every changed ("is-dirty") userfield input via PUT userfields/{entity}/{Grocy.EditObjectId},
+ * Persists every changed ("is-dirty") userfield input via PUT userfields/{entity}/{Victual.EditObjectId},
  * one field at a time. File-type fields additionally upload the new file and/or delete the old
- * one (Grocy.Api.UploadFile/DeleteFile against the "userfiles" group) before/after the PUT.
+ * one (Victual.Api.UploadFile/DeleteFile against the "userfiles" group) before/after the PUT.
  * @param {function} [success] Called once after the last field has saved successfully.
  * @param {function} [error] Called once if the last field's save (or its file operation) fails.
  */
-Grocy.Components.UserfieldsForm.Save = function (success, error)
+Victual.Components.UserfieldsForm.Save = function (success, error)
 {
 	if (!$("#userfields-form").length)
 	{
@@ -80,17 +80,17 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 			jsonData[fieldName] = fieldValue;
 		}
 
-		Grocy.Api.Put('userfields/' + $("#userfields-form").data("entity") + '/' + Grocy.EditObjectId, jsonData,
+		Victual.Api.Put('userfields/' + $("#userfields-form").data("entity") + '/' + Victual.EditObjectId, jsonData,
 			function (result)
 			{
 				// Depending on which file-related state was collected above, follow up the field
 				// value save with the matching file upload and/or delete against 'userfiles'
 				if (typeof newFile !== 'undefined' && typeof oldFile !== 'undefined') // Delete and Upload
 				{
-					Grocy.Api.DeleteFile(oldFile, 'userfiles',
+					Victual.Api.DeleteFile(oldFile, 'userfiles',
 						function (result)
 						{
-							Grocy.Api.UploadFile(input[0].files[0], 'userfiles', newFile,
+							Victual.Api.UploadFile(input[0].files[0], 'userfiles', newFile,
 								function (result2)
 								{
 									if (success && index === editedUserfieldInputs.length - 1) // Last item
@@ -100,7 +100,7 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 								},
 								function (xhr)
 								{
-									Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+									Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 									if (error && index === editedUserfieldInputs.length - 1) // Last item
 									{
 										error();
@@ -110,7 +110,7 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 						},
 						function (xhr)
 						{
-							Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+							Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 							if (error && index === editedUserfieldInputs.length - 1) // Last item
 							{
 								error();
@@ -120,7 +120,7 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 				}
 				else if (typeof newFile !== 'undefined') // Upload only
 				{
-					Grocy.Api.UploadFile(input[0].files[0], 'userfiles', newFile,
+					Victual.Api.UploadFile(input[0].files[0], 'userfiles', newFile,
 						function (result2)
 						{
 							if (success && index === editedUserfieldInputs.length - 1) // Last item
@@ -130,7 +130,7 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 						},
 						function (xhr)
 						{
-							Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+							Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 							if (error && index === editedUserfieldInputs.length - 1) // Last item
 							{
 								error();
@@ -140,7 +140,7 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 				}
 				else if (typeof oldFile !== 'undefined') // Delete only
 				{
-					Grocy.Api.DeleteFile(oldFile, 'userfiles',
+					Victual.Api.DeleteFile(oldFile, 'userfiles',
 						function (result)
 						{
 							if (success && index === editedUserfieldInputs.length - 1) // Last item
@@ -150,7 +150,7 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 						},
 						function (xhr)
 						{
-							Grocy.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
+							Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 							if (error && index === editedUserfieldInputs.length - 1) // Last item
 							{
 								error();
@@ -178,23 +178,23 @@ Grocy.Components.UserfieldsForm.Save = function (success, error)
 }
 
 /**
- * Populates the userfield inputs: when no Grocy.EditObjectId is set (creating a new object),
+ * Populates the userfield inputs: when no Victual.EditObjectId is set (creating a new object),
  * applies each userfield's configured default value (GET objects/userfields); otherwise loads
- * the object's actual stored values (GET userfields/{entity}/{Grocy.EditObjectId}) and renders
+ * the object's actual stored values (GET userfields/{entity}/{Victual.EditObjectId}) and renders
  * them per input type (checkbox/file/multi-select/link/plain).
  */
-Grocy.Components.UserfieldsForm.Load = function ()
+Victual.Components.UserfieldsForm.Load = function ()
 {
 	if (!$("#userfields-form").length)
 	{
 		return;
 	}
 
-	if (typeof Grocy.EditObjectId == "undefined")
+	if (typeof Victual.EditObjectId == "undefined")
 	{
 		// Init fields by configured default values
 
-		Grocy.Api.Get("objects/userfields?query[]=entity=" + $("#userfields-form").data("entity"),
+		Victual.Api.Get("objects/userfields?query[]=entity=" + $("#userfields-form").data("entity"),
 			function (result)
 			{
 				$.each(result, function (key, userfield)
@@ -221,7 +221,7 @@ Grocy.Components.UserfieldsForm.Load = function ()
 
 				$("form").each(function ()
 				{
-					Grocy.FrontendHelpers.ValidateForm(this.id);
+					Victual.FrontendHelpers.ValidateForm(this.id);
 				});
 			},
 			function (xhr)
@@ -234,7 +234,7 @@ Grocy.Components.UserfieldsForm.Load = function ()
 	{
 		// Load object field values
 
-		Grocy.Api.Get('userfields/' + $("#userfields-form").data("entity") + '/' + Grocy.EditObjectId,
+		Victual.Api.Get('userfields/' + $("#userfields-form").data("entity") + '/' + Victual.EditObjectId,
 			function (result)
 			{
 				$.each(result, function (key, value)
@@ -310,7 +310,7 @@ Grocy.Components.UserfieldsForm.Load = function ()
 
 				$("form").each(function ()
 				{
-					Grocy.FrontendHelpers.ValidateForm(this.id);
+					Victual.FrontendHelpers.ValidateForm(this.id);
 				});
 			},
 			function (xhr)
@@ -325,14 +325,14 @@ Grocy.Components.UserfieldsForm.Load = function ()
  * Resets every userfield input to its empty state (unchecked/blank/no file), fetching the
  * entity's userfield definitions (GET objects/userfields) to know which inputs exist and their types.
  */
-Grocy.Components.UserfieldsForm.Clear = function ()
+Victual.Components.UserfieldsForm.Clear = function ()
 {
 	if (!$("#userfields-form").length)
 	{
 		return;
 	}
 
-	Grocy.Api.Get('objects/userfields?query[]=entity=' + $("#userfields-form").data("entity"),
+	Victual.Api.Get('objects/userfields?query[]=entity=' + $("#userfields-form").data("entity"),
 		function (result)
 		{
 			$.each(result, function (key, userfield)
@@ -388,7 +388,7 @@ Grocy.Components.UserfieldsForm.Clear = function ()
 
 			$("form").each(function ()
 			{
-				Grocy.FrontendHelpers.ValidateForm(this.id);
+				Victual.FrontendHelpers.ValidateForm(this.id);
 			});
 		},
 		function (xhr)
@@ -419,7 +419,7 @@ $(".userfield-input").change(function (e)
 {
 	$("form").each(function ()
 	{
-		Grocy.FrontendHelpers.ValidateForm(this.id);
+		Victual.FrontendHelpers.ValidateForm(this.id);
 	});
 });
 

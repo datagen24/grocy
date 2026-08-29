@@ -1,6 +1,6 @@
 -- The shared starting state for every test in the suite.
 --
--- Applied to a freshly migrated SQLite database (bin/grocy-migrate) to produce the
+-- Applied to a freshly migrated SQLite database (bin/victual-migrate) to produce the
 -- pristine database that trigdifftest.php copies before each script and that the view
 -- seeds build on. Kept deliberately small and readable: every row here exists because
 -- something in trigger-tests/ or view-tests/ refers to it, and a fixture you cannot

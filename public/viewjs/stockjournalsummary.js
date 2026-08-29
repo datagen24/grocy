@@ -63,7 +63,7 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	journalSummaryTable.search(value).draw();
-}, Grocy.FormFocusDelay));
+}, Victual.FormFocusDelay));
 
 // Resets all filters (note: #location-filter doesn't exist on this view, so that line
 // is a harmless no-op left over from the shared filter-clearing pattern)

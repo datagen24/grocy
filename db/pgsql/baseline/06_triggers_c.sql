@@ -10,11 +10,11 @@
 -- type = 'mealplan-week' is written here and read back by the view
 -- meal_plan_internal_recipe_relation (db/pgsql/baseline/03_views_group1.sql), which joins
 -- on r.name = LTRIM(EXTRACT(YEAR FROM mp.day)::integer::text || '-' ||
--- LPAD(grocy_sqlite_percent_w(mp.day)::text, 2, '0'), '0'). grocy_mealplan_week_name()
+-- LPAD(victual_sqlite_percent_w(mp.day)::text, 2, '0'), '0'). victual_mealplan_week_name()
 -- below is that exact expression, wrapped so every trigger that needs a week-name string
 -- calls the identical code the view calls - see the helper's own comment for why.
 --
--- Recursion note: SQLite runs with `recursive_triggers` OFF (Grocy's default, never changed
+-- Recursion note: SQLite runs with `recursive_triggers` OFF (Victual's default, never changed
 -- by the app). PostgreSQL has no equivalent switch - every row trigger always fires,
 -- including ones invoked as a side effect of another trigger's own DML - so anything that
 -- relies on SQLite suppressing some recursive chain needs an explicit guard here.
@@ -59,7 +59,7 @@
 -- REST API reach recipes_nestings/recipes_pos only by joining through the live `recipes`
 -- row by id, so a nestings/pos row whose recipe_id no longer exists in `recipes` is
 -- permanently unreachable garbage on both engines. What was verified instead, directly
--- against a running grocy-pg instance side by side with the SQLite output, is that the
+-- against a running victual-pg instance side by side with the SQLite output, is that the
 -- LIVE state - the set of {name, type} recipe rows that currently exist, and what each one's
 -- nestings/pos rows resolve to when joined back through `recipes` by name - is byte-for-byte
 -- identical between engines for every scenario in trigscripts_c/11 through /16. See this
@@ -87,9 +87,9 @@
 -- Reused by create_internal_recipe / update_internal_recipe / remove_internal_recipe:
 -- byte-for-byte the same expression as the join condition in meal_plan_internal_recipe_relation,
 -- so this function and that view will always agree on the name of a week's internal recipe.
--- Wraps the existing grocy_sqlite_percent_w() helper - see hazard 9 in db/pgsql/README.md.
-CREATE FUNCTION grocy_mealplan_week_name(d DATE) RETURNS TEXT AS $$
-	SELECT LTRIM(EXTRACT(YEAR FROM d)::integer::text || '-' || LPAD(grocy_sqlite_percent_w(d)::text, 2, '0'), '0');
+-- Wraps the existing victual_sqlite_percent_w() helper - see hazard 9 in db/pgsql/README.md.
+CREATE FUNCTION victual_mealplan_week_name(d DATE) RETURNS TEXT AS $$
+	SELECT LTRIM(EXTRACT(YEAR FROM d)::integer::text || '-' || LPAD(victual_sqlite_percent_w(d)::text, 2, '0'), '0');
 $$ LANGUAGE sql IMMUTABLE;
 
 -- Reused by create_internal_recipe / update_internal_recipe / remove_internal_recipe:
@@ -106,7 +106,7 @@ $$ LANGUAGE sql IMMUTABLE;
 -- has no such behaviour for an explicit NULL - it would raise a NOT NULL violation instead.
 -- This helper reproduces the SQLite behaviour explicitly: fall back to nextval() on the
 -- table's identity sequence when the table is empty.
-CREATE FUNCTION grocy_next_internal_recipe_id() RETURNS INTEGER AS $$
+CREATE FUNCTION victual_next_internal_recipe_id() RETURNS INTEGER AS $$
 	SELECT COALESCE(
 		(SELECT MIN(id) - 1 FROM recipes),
 		nextval(pg_get_serial_sequence('recipes', 'id'))::integer
@@ -642,7 +642,7 @@ FOR EACH ROW EXECUTE FUNCTION trg_userfield_values_special_handling_ins();
 -- maintain the same "internal recipes" bookkeeping: one shadow recipe of type
 -- 'mealplan-day' per day, one of type 'mealplan-week' per (year, week), and (for
 -- create/update only) one of type 'mealplan-shadow' per individual meal_plan row of
--- type 'recipe'. See hazard 9 in db/pgsql/README.md and the grocy_mealplan_week_name()
+-- type 'recipe'. See hazard 9 in db/pgsql/README.md and the victual_mealplan_week_name()
 -- helper above for how the week name is computed identically to how
 -- meal_plan_internal_recipe_relation reads it back.
 --
@@ -755,7 +755,7 @@ FOR EACH ROW EXECUTE FUNCTION trg_userfield_values_special_handling_ins();
 --    meal_plan_internal_recipe_relation already uses for the same comparison.
 --  * "INSERT OR REPLACE" is used only for the mealplan-day recipe, immediately after a DELETE
 --    that already removes any existing row of that (name, type); recipes has no UNIQUE
---    constraint on name, only on id, and grocy_next_internal_recipe_id() guarantees a fresh
+--    constraint on name, only on id, and victual_next_internal_recipe_id() guarantees a fresh
 --    id that cannot collide with an existing row (see that function's own comment) - so a
 --    plain INSERT is behaviourally identical to "OR REPLACE" here and is used for all three
 --    id-minting INSERTs, matching the plain INSERT the original already uses for the
@@ -768,7 +768,7 @@ FOR EACH ROW EXECUTE FUNCTION trg_userfield_values_special_handling_ins();
 --    "WHERE ... IS NULL" no-ops - a row that is NULL is set to NULL) purely for structural
 --    fidelity with the original; they cannot fire in practice under this schema.
 --  * STRFTIME('%Y-%W', day) = STRFTIME('%Y-%W', NEW.day) (matching "same year+week as this
---    row") is ported as grocy_mealplan_week_name(day) = grocy_mealplan_week_name(NEW.day) -
+--    row") is ported as victual_mealplan_week_name(day) = victual_mealplan_week_name(NEW.day) -
 --    comparing the two rows' formatted week-name strings is equivalent to comparing the
 --    (year, week) pairs they are built from, since the formatting function is a pure,
 --    deterministic mapping.
@@ -782,22 +782,22 @@ BEGIN
 	INSERT INTO recipes
 		(id, name, type)
 	VALUES
-		(grocy_next_internal_recipe_id(), CAST(NEW.day AS TEXT), 'mealplan-day');
+		(victual_next_internal_recipe_id(), CAST(NEW.day AS TEXT), 'mealplan-day');
 
 	-- Create a recipe per week
 	DELETE FROM recipes
-	WHERE name = grocy_mealplan_week_name(NEW.day)
+	WHERE name = victual_mealplan_week_name(NEW.day)
 		AND type = 'mealplan-week';
 
 	INSERT INTO recipes
 		(id, name, type)
 	VALUES
-		(grocy_next_internal_recipe_id(), grocy_mealplan_week_name(NEW.day), 'mealplan-week');
+		(victual_next_internal_recipe_id(), victual_mealplan_week_name(NEW.day), 'mealplan-week');
 
 	-- Delete all current nestings entries for the day and week recipe
 	DELETE FROM recipes_nestings
 	WHERE recipe_id IN (SELECT id FROM recipes WHERE name = CAST(NEW.day AS TEXT) AND type = 'mealplan-day')
-		OR recipe_id IN (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(NEW.day) AND type = 'mealplan-week');
+		OR recipe_id IN (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(NEW.day) AND type = 'mealplan-week');
 
 	-- Add all recipes for this day as included recipes in the day-recipe
 	INSERT INTO recipes_nestings
@@ -812,9 +812,9 @@ BEGIN
 	-- Add all recipes for this week as included recipes in the week-recipe
 	INSERT INTO recipes_nestings
 		(recipe_id, includes_recipe_id, servings)
-	SELECT (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), recipe_id, SUM(recipe_servings)
+	SELECT (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), recipe_id, SUM(recipe_servings)
 	FROM meal_plan
-	WHERE grocy_mealplan_week_name(day) = grocy_mealplan_week_name(NEW.day)
+	WHERE victual_mealplan_week_name(day) = victual_mealplan_week_name(NEW.day)
 		AND type = 'recipe'
 		AND recipe_id IS NOT NULL
 	GROUP BY recipe_id;
@@ -832,9 +832,9 @@ BEGIN
 	-- Add all products for this week as ingredients in the week-recipe
 	INSERT INTO recipes_pos
 		(recipe_id, product_id, amount, qu_id)
-	SELECT (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), product_id, SUM(product_amount), product_qu_id
+	SELECT (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), product_id, SUM(product_amount), product_qu_id
 	FROM meal_plan
-	WHERE grocy_mealplan_week_name(day) = grocy_mealplan_week_name(NEW.day)
+	WHERE victual_mealplan_week_name(day) = victual_mealplan_week_name(NEW.day)
 		AND type = 'product'
 		AND product_id IS NOT NULL
 	GROUP BY product_id, product_qu_id;
@@ -842,7 +842,7 @@ BEGIN
 	-- Create a shadow recipe per meal plan recipe
 	INSERT INTO recipes
 		(id, name, type)
-	SELECT grocy_next_internal_recipe_id(), CAST(NEW.day AS TEXT) || '#' || CAST(id AS TEXT), 'mealplan-shadow'
+	SELECT victual_next_internal_recipe_id(), CAST(NEW.day AS TEXT) || '#' || CAST(id AS TEXT), 'mealplan-shadow'
 	FROM meal_plan
 	WHERE id = NEW.id
 		AND type = 'recipe'
@@ -928,22 +928,22 @@ BEGIN
 	INSERT INTO recipes
 		(id, name, type)
 	VALUES
-		(grocy_next_internal_recipe_id(), CAST(NEW.day AS TEXT), 'mealplan-day');
+		(victual_next_internal_recipe_id(), CAST(NEW.day AS TEXT), 'mealplan-day');
 
 	-- Create a recipe per week
 	DELETE FROM recipes
-	WHERE name = grocy_mealplan_week_name(NEW.day)
+	WHERE name = victual_mealplan_week_name(NEW.day)
 		AND type = 'mealplan-week';
 
 	INSERT INTO recipes
 		(id, name, type)
 	VALUES
-		(grocy_next_internal_recipe_id(), grocy_mealplan_week_name(NEW.day), 'mealplan-week');
+		(victual_next_internal_recipe_id(), victual_mealplan_week_name(NEW.day), 'mealplan-week');
 
 	-- Delete all current nestings entries for the day and week recipe
 	DELETE FROM recipes_nestings
 	WHERE recipe_id IN (SELECT id FROM recipes WHERE name = CAST(NEW.day AS TEXT) AND type = 'mealplan-day')
-		OR recipe_id IN (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(NEW.day) AND type = 'mealplan-week');
+		OR recipe_id IN (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(NEW.day) AND type = 'mealplan-week');
 
 	-- Add all recipes for this day as included recipes in the day-recipe
 	INSERT INTO recipes_nestings
@@ -958,9 +958,9 @@ BEGIN
 	-- Add all recipes for this week as included recipes in the week-recipe
 	INSERT INTO recipes_nestings
 		(recipe_id, includes_recipe_id, servings)
-	SELECT (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), recipe_id, SUM(recipe_servings)
+	SELECT (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), recipe_id, SUM(recipe_servings)
 	FROM meal_plan
-	WHERE grocy_mealplan_week_name(day) = grocy_mealplan_week_name(NEW.day)
+	WHERE victual_mealplan_week_name(day) = victual_mealplan_week_name(NEW.day)
 		AND type = 'recipe'
 		AND recipe_id IS NOT NULL
 	GROUP BY recipe_id;
@@ -978,9 +978,9 @@ BEGIN
 	-- Add all products for this week as ingredients in the week-recipe
 	INSERT INTO recipes_pos
 		(recipe_id, product_id, amount, qu_id)
-	SELECT (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), product_id, SUM(product_amount), product_qu_id
+	SELECT (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(NEW.day) AND type = 'mealplan-week'), product_id, SUM(product_amount), product_qu_id
 	FROM meal_plan
-	WHERE grocy_mealplan_week_name(day) = grocy_mealplan_week_name(NEW.day)
+	WHERE victual_mealplan_week_name(day) = victual_mealplan_week_name(NEW.day)
 		AND type = 'product'
 		AND product_id IS NOT NULL
 	GROUP BY product_id, product_qu_id;
@@ -1003,7 +1003,7 @@ BEGIN
 
 	INSERT INTO recipes
 		(id, name, type)
-	SELECT grocy_next_internal_recipe_id(), CAST(NEW.day AS TEXT) || '#' || CAST(id AS TEXT), 'mealplan-shadow'
+	SELECT victual_next_internal_recipe_id(), CAST(NEW.day AS TEXT) || '#' || CAST(id AS TEXT), 'mealplan-shadow'
 	FROM meal_plan
 	WHERE id = NEW.id
 		AND type = 'recipe'
@@ -1064,22 +1064,22 @@ BEGIN
 	INSERT INTO recipes
 		(id, name, type)
 	VALUES
-		(grocy_next_internal_recipe_id(), CAST(OLD.day AS TEXT), 'mealplan-day');
+		(victual_next_internal_recipe_id(), CAST(OLD.day AS TEXT), 'mealplan-day');
 
 	-- Create a recipe per week
 	DELETE FROM recipes
-	WHERE name = grocy_mealplan_week_name(OLD.day)
+	WHERE name = victual_mealplan_week_name(OLD.day)
 		AND type = 'mealplan-week';
 
 	INSERT INTO recipes
 		(id, name, type)
 	VALUES
-		(grocy_next_internal_recipe_id(), grocy_mealplan_week_name(OLD.day), 'mealplan-week');
+		(victual_next_internal_recipe_id(), victual_mealplan_week_name(OLD.day), 'mealplan-week');
 
 	-- Delete all current nestings entries for the day and week recipe
 	DELETE FROM recipes_nestings
 	WHERE recipe_id IN (SELECT id FROM recipes WHERE name = CAST(OLD.day AS TEXT) AND type = 'mealplan-day')
-		OR recipe_id IN (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(OLD.day) AND type = 'mealplan-week');
+		OR recipe_id IN (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(OLD.day) AND type = 'mealplan-week');
 
 	-- Add all recipes for this day as included recipes in the day-recipe
 	INSERT INTO recipes_nestings
@@ -1094,9 +1094,9 @@ BEGIN
 	-- Add all recipes for this week as included recipes in the week-recipe
 	INSERT INTO recipes_nestings
 		(recipe_id, includes_recipe_id, servings)
-	SELECT (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(OLD.day) AND type = 'mealplan-week'), recipe_id, SUM(recipe_servings)
+	SELECT (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(OLD.day) AND type = 'mealplan-week'), recipe_id, SUM(recipe_servings)
 	FROM meal_plan
-	WHERE grocy_mealplan_week_name(day) = grocy_mealplan_week_name(OLD.day)
+	WHERE victual_mealplan_week_name(day) = victual_mealplan_week_name(OLD.day)
 		AND type = 'recipe'
 		AND recipe_id IS NOT NULL
 	GROUP BY recipe_id;
@@ -1114,9 +1114,9 @@ BEGIN
 	-- Add all products for this week as ingredients in the week-recipe
 	INSERT INTO recipes_pos
 		(recipe_id, product_id, amount, qu_id)
-	SELECT (SELECT id FROM recipes WHERE name = grocy_mealplan_week_name(OLD.day) AND type = 'mealplan-week'), product_id, SUM(product_amount), product_qu_id
+	SELECT (SELECT id FROM recipes WHERE name = victual_mealplan_week_name(OLD.day) AND type = 'mealplan-week'), product_id, SUM(product_amount), product_qu_id
 	FROM meal_plan
-	WHERE grocy_mealplan_week_name(day) = grocy_mealplan_week_name(OLD.day)
+	WHERE victual_mealplan_week_name(day) = victual_mealplan_week_name(OLD.day)
 		AND type = 'product'
 		AND product_id IS NOT NULL
 	GROUP BY product_id, product_qu_id;

@@ -1,5 +1,5 @@
 {
-	"name": "grocy",
+	"name": "victual",
 	"private": true,
 	"dependencies": {
 		"@danielfarrell/bootstrap-combobox": "https://github.com/berrnd/bootstrap-combobox.git#master-fork",

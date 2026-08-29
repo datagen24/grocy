@@ -7,7 +7,7 @@
 ## Why
 
 PostgreSQL alone does not make the pod stateless. `services/FilesService.php` writes to
-`GROCY_DATAPATH . '/storage'`, so product pictures, recipe pictures, user pictures, user
+`VICTUAL_DATAPATH . '/storage'`, so product pictures, recipe pictures, user pictures, user
 files and equipment manuals still need a volume.
 
 The stronger argument than storage size: today `picture_file_name` lives in the database
@@ -78,7 +78,7 @@ images are optional, and it keeps dumps trimmable.
 
 ### Code
 
-New `Grocy\Services\Storage\FileStorage` with `FilesystemStorage` (today's behaviour,
+New `Victual\Services\Storage\FileStorage` with `FilesystemStorage` (today's behaviour,
 unchanged) and `DatabaseStorage`:
 
 ```
@@ -114,7 +114,7 @@ No change. Same three routes, same headers, same 404 behaviour. `files` is delib
 
 1. **What happens to files already on disk when the setting is flipped?** The one open
    decision.
-   - **(a) Explicit import.** `bin/grocy-files-import` walks `/data/storage` into the
+   - **(a) Explicit import.** `bin/victual-files-import` walks `/data/storage` into the
      database; before it runs, images 404. One source of truth at any moment.
    - **(b) Read-through fallback.** Database first, filesystem for anything missing.
      Flipping Just Works, but a file can live in two places indefinitely.

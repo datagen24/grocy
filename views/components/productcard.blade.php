@@ -27,7 +27,7 @@
 							title="{{ $__t('Edit product') }}">
 							<i class="fa-solid fa-edit"></i>
 						</a>
-						@if(GROCY_FEATURE_FLAG_SHOPPINGLIST)
+						@if(VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 						<a id="productcard-product-shoppinglist-button"
 							class="btn btn-sm btn-outline-secondary py-0 mr-1 float-right disabled show-as-dialog-link"
 							href="#"
@@ -73,32 +73,32 @@
 								class="locale-number locale-number-quantity-amount"></span> <span id="productcard-product-stock-qu-name-aggregated"></span> <span id="productcard-product-stock-opened-amount-aggregated"
 								class="small font-italic"></span></span><br>
 
-						@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+						@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 						<strong>{{ $__t('Stock value') }}:</strong> <span id="productcard-product-stock-value"
 							class="locale-number locale-number-currency"></span><br>
 						@endif
 
-						@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)<strong>{{ $__t('Default location') }}:</strong> <span id="productcard-product-location"></span><br>@endif
+						@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)<strong>{{ $__t('Default location') }}:</strong> <span id="productcard-product-location"></span><br>@endif
 						<strong>{{ $__t('Last purchased') }}:</strong> <span id="productcard-product-last-purchased"></span> <time id="productcard-product-last-purchased-timeago"
 							class="timeago timeago-contextual"></time><br>
 						<strong>{{ $__t('Last used') }}:</strong> <span id="productcard-product-last-used"></span> <time id="productcard-product-last-used-timeago"
 							class="timeago timeago-contextual"></time><br>
 
-						@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)<strong>
+						@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)<strong>
 							{{ $__t('Last price') }}:</strong> <span id="productcard-product-last-price"
 							data-toggle="tooltip"
 							data-trigger="hover click"></span>
 						<br>
 						@endif
 
-						@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+						@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 						<strong>{{ $__t('Average price') }}:</strong> <span id="productcard-product-average-price"
 							data-toggle="tooltip"
 							data-trigger="hover click"></span>
 						<br>
 						@endif
 
-						@if(GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)<strong>{{ $__t('Average shelf life') }}:</strong> <span id="productcard-product-average-shelf-life"></span><br>@endif
+						@if(VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)<strong>{{ $__t('Average shelf life') }}:</strong> <span id="productcard-product-average-shelf-life"></span><br>@endif
 						<strong>{{ $__t('Spoil rate') }}:</strong> <span id="productcard-product-spoil-rate"></span>
 
 						<p class="w-75 mt-3 mx-auto">
@@ -108,7 +108,7 @@
 								loading="lazy">
 						</p>
 
-						@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+						@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 						<h5 class="mt-3">{{ $__t('Price history') }}</h5>
 						<canvas id="productcard-product-price-history-chart"
 							class="w-100 d-none"></canvas>

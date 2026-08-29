@@ -1,13 +1,13 @@
 <?php
 
-namespace Grocy\Middleware\Auth;
+namespace Victual\Middleware\Auth;
 
-use Grocy\Services\SessionService;
+use Victual\Services\SessionService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
- * Authenticates via the Grocy session cookie against the sessions managed
- * by SessionService. Not selected directly via GROCY_AUTH_CLASS, but used
+ * Authenticates via the Victual session cookie against the sessions managed
+ * by SessionService. Not selected directly via VICTUAL_AUTH_CLASS, but used
  * as a building block by DefaultAuthMiddleware (and thus LdapAuthMiddleware).
  */
 class SessionAuthMiddleware extends BaseAuthMiddleware
