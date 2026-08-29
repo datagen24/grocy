@@ -6,8 +6,14 @@ without a separate bridge process.
 **Depends on:** per the README's Wave 5 — [11](11-api-error-handling.md),
 [13](13-write-path-transactions.md) and [15](15-deliberate-cleanup.md) C1, plus
 [14](14-contract-and-regression-scaffolding.md)'s snapshot — all of which gate this plan.
-**Status:** draft for review — the least settled plan here, and the one with the most
-design freedom.
+**Status:** superseded in part — the Open-question responses below are settled and now
+carried by the full [MCP interface specification](../mcp-interface-spec.md)
+(2026-08-29), which fixes the protocol baseline (`2026-07-28`, TypeScript SDK v2), the
+sidecar architecture, the auth seam, the v1 toolset with schemas, and the verification
+plan. This file remains the decision record; the spec is what the implementation
+session builds from. The prior-art `mcp-grocy` fork was evaluated the same day — see
+the spec's Appendix A (verdict: rebuild the protocol layer, salvage packaging and
+selected logic).
 
 ## Today
 
