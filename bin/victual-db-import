@@ -89,7 +89,7 @@ try
 
 	// Deliberately NOT PDO::NULL_EMPTY_STRING, which the application sets on its own
 	// connections: it would turn every empty string in the database into NULL on the way
-	// through, which is both lossy and enough to violate a NOT NULL column. Grocy really
+	// through, which is both lossy and enough to violate a NOT NULL column. grocy really
 	// does store empty strings - meal_plan_sections holds the internal section with an
 	// empty name.
 	$source->setAttribute(\PDO::ATTR_ORACLE_NULLS, \PDO::NULL_NATURAL);

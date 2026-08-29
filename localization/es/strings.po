@@ -1645,7 +1645,7 @@ msgid ""
 "and when Victual is served via a secure (https://) connection"
 msgstr ""
 "El acceso a la cámara solo es posible cuando su navegador lo permite y "
-"cuando se accede a grocy a través de una conexión segura (https://)"
+"cuando se accede a Victual a través de una conexión segura (https://)"
 
 msgid "Keep screen on"
 msgstr "Mantener la pantalla encendida"

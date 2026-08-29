@@ -123,7 +123,7 @@ Victual.Components.CameraBarcodeScanner.StartScanning = function()
 		.catch((error) =>
 		{
 			Victual.FrontendHelpers.ShowGenericError("Error while initializing the barcode scanning library", error.message);
-			toastr.info(__t("Camera access is only possible when supported and allowed by your browser and when Grocy is served via a secure (https://) connection"));
+			toastr.info(__t("Camera access is only possible when supported and allowed by your browser and when Victual is served via a secure (https://) connection"));
 			window.localStorage.removeItem("cameraId");
 			setTimeout(function()
 			{

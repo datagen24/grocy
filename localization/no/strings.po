@@ -1583,7 +1583,7 @@ msgid ""
 "and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Tilgang til kamera er kun mulig når det er støttet og når nettleseren din "
-"tillater det, og når grocy kjøres gjennom en sikker tilkobling (https://)"
+"tillater det, og når Victual kjøres gjennom en sikker tilkobling (https://)"
 
 msgid "Keep screen on"
 msgstr "Skjerm alltid på"

@@ -405,7 +405,7 @@ msgid "Removed %1$s of %2$s from stock"
 msgstr "%1$s enlevée du stock de%2$s "
 
 msgid "About Victual"
-msgstr "À propos de grocy"
+msgstr "À propos de Victual"
 
 msgid "Close"
 msgstr "Fermer"
@@ -1668,7 +1668,7 @@ msgid ""
 "and when Victual is served via a secure (https://) connection"
 msgstr ""
 "L'accès à la caméra n'est possible que s'il est pris en charge et autorisé "
-"par votre navigateur et lorsque grocy utilise une connexion sécurisée "
+"par votre navigateur et lorsque Victual utilise une connexion sécurisée "
 "(HTTPS)"
 
 msgid "Keep screen on"

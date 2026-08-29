@@ -1497,7 +1497,7 @@ msgstr "编辑库存条目"
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
 "and when Victual is served via a secure (https://) connection"
-msgstr "仅当您的浏览器支持并允许通过安全链接(https://)访问grocy服务时，才能使用摄像头"
+msgstr "仅当您的浏览器支持并允许通过安全链接(https://)访问Victual服务时，才能使用摄像头"
 
 msgid "Keep screen on"
 msgstr "保持屏幕常亮"

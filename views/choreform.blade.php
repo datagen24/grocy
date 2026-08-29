@@ -318,7 +318,7 @@
 						<i class="fa-solid fa-question-circle text-muted"
 							data-toggle="tooltip"
 							data-trigger="hover click"
-							title="{{ $__t('Grocycode is a unique referer to this %s in your Grocy instance - print it onto a label and scan it like any other barcode', $__t('Chore')) }}"></i>
+							title="{{ $__t('Grocycode is a unique referer to this %s in your Victual instance - print it onto a label and scan it like any other barcode', $__t('Chore')) }}"></i>
 					</h4>
 					<p>
 						@if($mode == 'edit')
