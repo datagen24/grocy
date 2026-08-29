@@ -26,6 +26,7 @@ want grocy, [use grocy](https://grocy.info) — it is excellent and actively mai
 | **PostgreSQL support** alongside SQLite — typed baseline schema, ported views and triggers, differential tests proving the two engines agree | **done**, see [db/pgsql/README.md](db/pgsql/README.md) |
 | **File storage in the database**, so the container needs no persistent volume | [plan 01](docs/plans/01-file-storage.md) |
 | **MCP endpoint**, so an assistant can answer "what is expiring this week" | [plan 02](docs/plans/02-mcp-endpoint.md) |
+| **MQTT state publication**, so Home Assistant sees the household without polling a pod that is meant to be asleep | [plan 18](docs/plans/18-mqtt-state-publication.md) |
 | **Deeply nested locations and products** — hierarchies more than one level deep | [plans 07](docs/plans/07-nested-products.md), [08](docs/plans/08-nested-locations.md) |
 | **Location barcodes**, aimed at camera-based inventory rather than phone scanning | [plan 06](docs/plans/06-location-barcodes.md) |
 | Store-specific shopping lists, category-level minimum stock, seed datasets, US barcode lookup | [plans 03–05, 09](docs/plans/README.md) |

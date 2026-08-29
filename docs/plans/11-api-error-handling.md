@@ -358,6 +358,20 @@ than entangling a small ordering fix with a refactor.
 It blocks no feature plan. It should land before any new API surface is written, because
 every new endpoint written before it is another one to convert afterwards.
 
+**A constraint this plan inherits from the deployment**, recorded here because it is
+easy to implement wrong and easy to miss: sweep S12's login throttle lands in this
+plan's wave, and **its state cannot live in the process.** The target is a pod that
+scales to zero and, per [17](17-ecosystem-clients.md)'s Q2, actually will — idle
+windows of a night or longer are the normal case rather than the edge one. An in-memory
+or APCu counter is therefore reset for free by an attacker who waits, which is the same
+as having no throttle at all while looking like having one. Redis is always-on in the
+cluster and is the obvious home; a table is the alternative and costs a write per
+attempt. Either is fine. Neither is optional.
+
+The same reasoning applies to anything else this plan might keep between requests —
+error-rate counters, log sampling state, an `Origin` nonce if S8's check ever needs one.
+On this deployment, "keep it in memory" means "keep it until the pod next sleeps".
+
 ## Open questions
 
 1. **Ship the status-code changes outright, or behind a compatibility flag?** They are

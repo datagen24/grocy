@@ -15,6 +15,15 @@ all still unanswered, and Q1 is now being asked after the event rather than befo
 rule still holds for [11](11-api-error-handling.md) and
 [10](10-cold-start-statelessness.md), which are both still ahead.
 
+**Answered 2026-08-29, and the premise moved.** Q2 and Q4 now carry responses, and they
+change what this document is for. Both tracked clients are being replaced by first-party
+ones — a Home Assistant integration built here and a Swift client module written here —
+so the question stops being "which third-party client does this break" and becomes "what
+does the fork owe the clients it owns". Q2's answer is the larger of the two: the Home
+Assistant path is not a polling HTTP client at all but MQTT state publication from the
+server to a broker that is already always-on in the cluster, which dissolves Coupling 1
+rather than mitigating it. [18](18-mqtt-state-publication.md) is the plan that came out
+of it. Q1 and Q3 are still open, and Q3 is now half-answered.
 ## Why this is a plan and not a wiki page
 
 Every other plan is held to "the API is additive — existing endpoints keep their response
@@ -43,7 +52,10 @@ Assistant).
 
 **grocy-py** is not a tracked client — it is a decision, and only because the Home
 Assistant integration needs a Python client. It gets a section below and question 2, and
-depending on that answer it may leave this document entirely.
+depending on that answer it may leave this document entirely. **It has.** Q2's answer is
+that the ambient read path is MQTT rather than HTTP polling, so there is no Python client
+to depend on or reimplement — see the section below, kept for the reasoning rather than
+for the decision.
 
 Out, and recorded so the boundary is deliberate rather than an oversight:
 
@@ -158,6 +170,49 @@ interval stretch to minutes without the entities going stale in practice.
 This matters to question 2 more than anything else in this document. Rebasing upstream's
 integration inherits the poll design; reworking it is where the actual value is.
 
+### Resolved, 2026-08-29 — the conflict is removed rather than tuned
+
+The analysis above is correct and its conclusion was too small. It assumes the client
+polls *something*, and argues about what and how often. Both halves of that are wrong for
+this deployment, for two reasons that only became visible once the household's own numbers
+and cluster inventory were on the table:
+
+- **The idle windows are long and the usage is bursty.** Shopping is once or twice a week,
+  bulk shopping every other week, and whole nights pass with nothing happening. The pod
+  should be awake for something like an hour a week, not continuously. Against that, *any*
+  poll interval short enough to keep entities fresh keeps the pod hot, and any interval
+  long enough to let it sleep leaves them stale. Polling has no setting that is correct
+  here.
+- **An always-on MQTT broker is already in the cluster**, alongside Redis and InfluxDB, and
+  Home Assistant speaks MQTT natively.
+
+That second fact supplies the always-on component this problem needs. Published to
+**retained** topics, the broker holds the last known state and hands it to Home Assistant
+on connect — after Home Assistant restarts, and after the pod has been asleep for days.
+Home Assistant polls nothing and the server is not asked anything.
+
+What makes this sound rather than merely convenient is a property of the system: **while
+the pod is asleep, the data cannot change except by the clock.** Writes only happen when
+something is talking to the server, and the server is awake whenever that is true. So the
+freshness contract has three parts and no timer:
+
+1. the server publishes after every commit, and again on boot — it is awake at both moments
+   by definition;
+2. the server publishes **facts, not derived states** — `best_before_date`, not "expiring
+   soon" — so Home Assistant derives every time-relative view locally and nothing has to
+   wake at midnight to recompute anything;
+3. a full snapshot on boot repairs anything changed out of band, which is the only way
+   retained state can drift.
+
+Writes from Home Assistant go the other way, over HTTP, and wake the pod. That is correct
+rather than a compromise: a write is user-initiated, so a cold start sits behind a button
+press where it is invisible, and the household's own numbers put that at a handful of wakes
+a week.
+
+[18](18-mqtt-state-publication.md) is the server half. The client half shrinks to a thin
+integration for the interactive surfaces, since discovery-created entities cover the
+ambient ones without any custom code at all.
+
 ## Coupling 2 — `/system/info` and the version *value*
 
 This is about the string, not the key; the key rename is Coupling 0 and has already
@@ -262,6 +317,45 @@ model rather than a base to rebase on. The entity descriptions, config flow and 
 definitions are worth keeping; the data layer is not. Ship as a HACS custom repository.
 Not blocked by any plan — this can start now.
 
+> **Revised, 2026-08-29.** Not a fork at all, and smaller than this section assumes. With
+> [18](18-mqtt-state-publication.md) publishing retained state and discovery configs, the
+> ambient entities — stock counts, what is due, what is expiring, chores, batteries, tasks
+> — are created by Home Assistant's MQTT integration with no custom code in the loop. There
+> is no coordinator, no poll interval, no data layer, and therefore nothing left of
+> upstream's integration worth forking: what this section identified as the parts worth
+> keeping (entity descriptions, config flow, service definitions) are the parts that
+> discovery generates or that a handful of `rest_command` calls replace.
+>
+> What remains custom is the interactive surface, and it is worth being honest that it is
+> not nothing: anything that wants a real Home Assistant entity type outside MQTT
+> discovery's platform set needs a small first-party integration doing HTTP on demand. A
+> shopping list as a `todo` entity is the concrete case and it is confirmed rather than
+> suspected — `todo` is absent from the MQTT integration's `ENTITY_PLATFORMS` and there is
+> no `mqtt/todo.py` in `home-assistant/core` (checked 2026-08-29). Sensors, buttons,
+> numbers and selects are all there, which covers everything ambient. On-demand is the easy case; it
+> wakes the pod, which is what waking is for. Build that only when something actually wants
+> it, rather than up front.
+>
+> The upstream integration's own defects listed above stop being this fork's problem, since
+> none of its code is carried. They stay recorded as the reason not to carry it.
+
+### The add-on question, asked and closed
+
+Home Assistant runs Supervised on a Yellow, so add-ons are available — and the first
+instinct was a component/add-on pair, where the add-on holds state and talks to the
+scale-to-zero pod on the integration's behalf. That instinct was right about the shape of
+the problem: something always-on has to sit between an ambient consumer and a server that
+is usually absent.
+
+It is not needed, because the broker is already that thing. An add-on would be a second
+always-on process holding a copy of state that the broker holds anyway, installed and
+versioned separately, with the freshness logic split across two artifacts instead of
+living in one. The state belongs in exactly one place; MQTT retention puts it there
+without anything being built.
+
+Recorded rather than dropped, because "why is there no add-on" is a question this household
+will ask itself again in a year.
+
 ### grocy-py — a dependency question, not a project to track
 
 The only reason a Python client entered this list is that the Home Assistant integration
@@ -304,6 +398,26 @@ Recommendation: reimplement, async-native, inside the forked integration, and do
 grocy-py at all. See Q2 — this is the one open question in this plan whose answer changes
 what gets built rather than how it is labelled.
 
+> **Answered, and by dissolution.** Both options above presuppose a Python HTTP client
+> polling the server on a timer, and Coupling 1's revision removes the timer. The ambient
+> read path is MQTT; there is no client library to depend on or to write, because there is
+> no client doing reads. Whatever HTTP the interactive surface eventually needs is a few
+> `rest_command` calls or a thin integration, at which point "should this depend on
+> grocy-py" answers itself: seven read paths of surface, none.
+>
+> The three arguments above survive the question they were written for, and two of them are
+> why the MQTT answer is right rather than merely different. **Async** was really an
+> argument that thirteen serial round trips per interval is the wrong shape — and zero
+> round trips per interval is the shape it was reaching for. **Decay** — that free
+> maintenance is maintenance against *upstream grocy's* API, and its value falls exactly as
+> fast as this fork succeeds — applies to any dependency modelling this server's responses,
+> and is now an argument for the topic schema in [18](18-mqtt-state-publication.md) being
+> this fork's own rather than anything inherited.
+>
+> The note about offering the `pygrocy2`→`grocy-py` migration back to upstream as a PR is
+> moot: no upstream integration code is being carried, so there is no migration performed
+> here to offer.
+
 ### Grocy-SwiftUI — fork, and accept GPL-3.0
 
 GPL-3.0, one maintainer, actively developed. Forking is permitted and the fork stays
@@ -331,6 +445,32 @@ version gate's value, then the two latent 404s above, then hierarchical pickers 
 single-maintainer app is easier to follow than to diverge from. See Q3 on distribution,
 which is the real cost here and is not a code problem, and Q4 on whether the server meets
 the client half way on the header so this fork is not the only way to reach the server.
+
+> **Revised, 2026-08-29 — write it, do not fork it.** The Apple client is first-party: a
+> Swift client module — models, networking, auth, state — with independent UI modules per
+> platform on top of it, iOS first and iPad and Mac as their own targets against the same
+> module. Nothing above survives that except the two defects, which stay recorded as
+> evidence about the codebase rather than as a work list.
+>
+> Three consequences worth stating, because each one is a cost avoided rather than a
+> preference:
+>
+> - **The licence stops being a question.** A fork of Grocy-SwiftUI is GPL-3.0 and stays
+>   GPL-3.0. Written fresh, the module is this fork's own and carries the tree's BSD-3,
+>   which matters precisely because it is a *module* — something other things link against
+>   — rather than an application talking HTTP at arm's length. Do not read Grocy-SwiftUI's
+>   source while writing it.
+> - **The rebase burden disappears**, and with it the reason this section gave for forking:
+>   "a single-maintainer app is easier to follow than to diverge from" is an argument about
+>   carrying someone else's code, and there is none to carry.
+> - **The wire contract can be generated rather than hand-written.**
+>   `victual.openapi.json` is 73 paths and [14](14-contract-and-regression-scaffolding.md)
+>   piece 2 is about to freeze the response shapes; generating the module's transport from
+>   the spec makes that snapshot the client's contract too. Sequence it after
+>   [11](11-api-error-handling.md), which moves status codes across ~74 routes — generating
+>   before that means generating twice.
+>
+> This narrows Q3 to its real half: distribution. It also settles Q4 — see there.
 
 ## How this plan stays current
 
@@ -387,7 +527,28 @@ Q4 exists because that rename took a decision this document was supposed to hold
    grocy-py after all, then the `pygrocy2`→`grocy-py` migration is work upstream needs,
    is not fork-specific, and should be offered back as a PR rather than kept private.
 
-   > **Response:**
+   > **Response:** Neither, and the question was asked one level too low. Home Assistant
+   > is a first-party integration for this household, so the real question was never which
+   > Python library it depends on but what shape the coupling takes — and the answer is
+   > that the ambient read path is not HTTP at all. The server publishes retained state
+   > and discovery configs to the MQTT broker already running in the cluster; Home
+   > Assistant creates the entities from those and polls nothing. See Coupling 1's
+   > resolution above and [18](18-mqtt-state-publication.md) for the server half.
+   >
+   > What this buys, in the terms the question was asked in: thirteen serial requests
+   > every thirty seconds becomes zero requests, forever, until someone writes something.
+   > No amount of choosing between grocy-py and an `aiohttp` reimplementation gets there,
+   > because both of them are still a client asking a sleeping server how things are.
+   >
+   > The recommendation's own reasoning holds and points here: it identified the poll
+   > design as the thing to fix and the dependency as incidental. Publishing facts rather
+   > than derived states is what makes the long idle windows safe — the household's are
+   > overnight and often longer, with shopping once or twice a week — since Home Assistant
+   > computes every time-relative view locally and nothing needs waking at midnight.
+   >
+   > Writes stay HTTP and wake the pod, which is correct. Whatever interactive surface
+   > eventually wants a real entity type outside MQTT discovery's platform set gets a thin
+   > first-party integration, built when something actually wants it.
 
 3. **How does a forked Grocy-SwiftUI get onto devices?** This is the real cost of that
    fork and none of it is code. TestFlight needs a paid Apple developer account and a build
@@ -398,7 +559,18 @@ Q4 exists because that rename took a decision this document was supposed to hold
    an app. I lean to forking and sideloading initially, deferring the developer account
    until the fork does something the stock app cannot.
 
-   > **Response:**
+   > **Response, partial.** The forking half is answered elsewhere and against the lean:
+   > the Apple client is written here, not forked, as a Swift client module with
+   > independent UI modules per platform (see the revised posture above). So "how does a
+   > forked Grocy-SwiftUI get onto devices" becomes "how does *our* app get onto devices",
+   > which is the same problem minus the licence.
+   >
+   > The distribution half is still open and is still the real cost. One thing the module
+   > split changes about it: a Mac target signs and notarizes for direct distribution
+   > without the App Store, while iOS has no equivalent — so the platforms have genuinely
+   > different answers, and a shared module means the choice can be made per target rather
+   > than once for everything. That is an argument for the architecture, not an answer to
+   > the question.
 
 4. **Does the server keep accepting `GROCY-API-KEY`, and for how long?** New, and forced
    by Coupling 0 rather than chosen. Three answers, and the roadmap needs one of them
@@ -427,7 +599,27 @@ Q4 exists because that rename took a decision this document was supposed to hold
    response purely to keep an old name alive, which the additive rule permits and the
    hard-fork posture argues against.
 
-   > **Response:**
+   > **Response: no shim.** The first option, and it is now the cheap one rather than the
+   > austere one, because Q2 and Q3's answers removed what made it expensive.
+   >
+   > The case against "no shim" was that it makes this household's own software the only
+   > way to reach the server, and that it leans on Q3's distribution problem. Both are now
+   > true by construction rather than by choice: Home Assistant reaches the server over
+   > MQTT and does not send the header at all, and the Apple client is written here, so
+   > every client that exists is first-party and sets `VICTUAL-API-KEY` because it was
+   > written to. There is no unmodified client left for a shim to serve — the shim would be
+   > compatibility with software nobody here runs.
+   >
+   > "It forecloses anyone else's client before there is anyone else" stands as the honest
+   > cost, and is accepted. The header is one string in the `ApiKeyHeaderName` binding if
+   > that ever stops being true, and this response is the record that it was declined
+   > deliberately rather than never considered.
+   >
+   > Coupling 0 is therefore closed at no cost, which is a better outcome than it deserved:
+   > the ordering breach cost a decision taken implicitly, and the decision it would have
+   > taken is the one being taken here anyway. That is luck, not vindication — the same
+   > breach with a third-party client in the household's daily use would have cost an
+   > outage.
 
 ## Verification
 
@@ -454,6 +646,16 @@ roadmap is held to. Lint is not verification, and neither is reading a client's 
    entity fetches while nothing changes, and the number that matters is how long the pod
    stays idle — [10](10-cold-start-statelessness.md)'s scale-to-zero is the actual
    acceptance criterion, not the request count itself.
+
+   > **Revised with Q2.** The target is now *zero* requests from Home Assistant while
+   > nothing is written, so counting requests over ten minutes is no longer the
+   > interesting measurement — a ten minute window where the answer should be zero proves
+   > very little. What replaces it, per this item's own last clause: measure how long the
+   > pod actually stays scaled to zero over a week of ordinary household use, and confirm
+   > Home Assistant's entities are still correct at the end of it. [18](18-mqtt-state-publication.md)
+   > carries that as its own verification, including the case this one cannot see —
+   > restarting Home Assistant while the pod is asleep and confirming entities repopulate
+   > from retained topics rather than going unavailable.
 4. **[11](11-api-error-handling.md)'s breaking-changes list is replayed against clients.**
    For each moved status code, exercise the path from a client that reaches it and record
    the client-visible behaviour before and after. The permission-denied 400→403 change on
@@ -482,6 +684,12 @@ roadmap is held to. Lint is not verification, and neither is reading a client's 
    confirm both the accepted and the rejected case behave as the answer says — including,
    if the answer has an expiry, that the deprecation log line fires. A shim nobody has
    watched reject a request is a shim nobody knows the shape of.
+
+   > **Reduced by Q4's answer.** There is no shim, so the pair collapses to one case:
+   > confirm `GROCY-API-KEY` is rejected as an unauthenticated request rather than
+   > silently accepted anywhere. Still worth doing once — "we removed it" and "it is gone
+   > from every path" are different claims, and `ApiKeyAuthMiddleware` has more than one
+   > way in (sweep S11's query-string path, S17's iCal `secret` branch).
 7. **After [07](07-nested-products.md)/[08](08-nested-locations.md), look at the pickers.**
    Screenshot Grocy-SwiftUI's product-group and location pickers against a seeded tree
    three levels deep. The failure mode is visual and correct-looking, so it has to be

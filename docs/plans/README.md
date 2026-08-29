@@ -22,6 +22,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
+| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2 |
 
 ## Hardening
 
@@ -30,7 +31,7 @@ own defects table (items 1–13) is already fixed in `36650cd`; these are everyt
 found, plus the 2026-08-29 [security sweep](../security-sweep.md). They add no features
 and block no feature plan, but 12 and 14 should land before the plans noted below start
 minting more of what they clean up, and the sweep's four High findings land before
-anything at all — see the hotfix in wave 0.5 below.
+anything at all — **which they did**, on 2026-08-29; see the hotfix in wave 0.5 below.
 
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
@@ -47,7 +48,7 @@ anything at all — see the hotfix in wave 0.5 below.
 | # | Plan | Upstream | Depends on | Size | Status |
 |---|---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
-| 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **draft, and overtaken by 16** — see below |
+| 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
 
 The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
 so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
@@ -72,6 +73,14 @@ rename and the registry claims happen at announcement time, not in a commit.
   than asserted by hand.
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
+- **18 wants 10 to be real, and 10 wants 18 to exist.** 18's whole justification is a pod
+  that actually sleeps, and 10's scale-to-zero is not achieved while an ambient client
+  polls. Neither blocks the other's code — 18 is a publish path and 10 is a boot path — but
+  the pair is what delivers the deployment, and 18 is the cheaper half.
+- **Anything that keeps state between requests is 10's problem too.** On a pod that scales
+  to zero, in-process state is state until the next idle window. Sweep S12's login throttle
+  is the live case and is recorded in [11](11-api-error-handling.md)'s sequencing: Redis or
+  a table, never process memory.
 - **10's `bin/victual-migrate` precedes 14**, not the other way round — the one place the
   wave order below overrides the plan numbering, and why the CLI is pulled into wave 0.
 - **17 before [11](11-api-error-handling.md), [16](16-project-rename.md) and
@@ -80,6 +89,16 @@ rename and the registry claims happen at announcement time, not in a commit.
   reason: the Home Assistant integration polls every thirty seconds, so scale-to-zero is not
   achieved by 10 alone. 17 also asks 14 for client endpoint manifests asserted against the
   snapshot, so it wants reading before 14 piece 2 is built.
+
+  **17's Q2 and Q4 are answered (2026-08-29), and the rule relaxes for two of the three.**
+  There are no third-party clients left to break: Home Assistant becomes a first-party
+  integration fed by [18](18-mqtt-state-publication.md) over MQTT, and the Apple client is
+  a Swift module written here rather than a fork of Grocy-SwiftUI. So 11 no longer waits on
+  17 for the compatibility question (Q4: no shim, nothing unmodified reaches the server),
+  and 10's conflict with the Home Assistant poll loop is removed by 18 rather than
+  scheduled around. What survives is 17's *mechanism* half — the client-impact line per
+  plan, and manifests covering request headers and response keys rather than paths — which
+  now protects clients this household maintains instead of strangers'.
 
   **This rule was broken, on 16.** Both landed 2026-08-29; 16 went first and renamed the
   `GROCY-API-KEY` header and the `grocy_version` response field on the recorded premise
@@ -158,8 +177,9 @@ Wave 0 is complete and wave 1's track C is done; the rest is unstarted. Wave 4's
 is no longer settled — see 07-Q6 there. Two things sat between wave 0 and wave 1:
 a hotfix the security sweep forced, and a decision 17 has been owed since 16 landed.
 Neither is a wave; both are a single sitting, and wave 1 does not start until both are
-done. **The hotfix has landed; the decision has not** — 17-Q2 and 17-Q4 are still
-unanswered, so wave 1 is still not open.
+done. **Both are now done** — the hotfix landed and 17-Q2 and 17-Q4 carry responses, so
+wave 1 is open. Q2's answer added [18](18-mqtt-state-publication.md) to the roadmap and
+took the Home Assistant conflict out of 10's path; see wave 0.5 below.
 
 ### Wave 0 — decisions and scaffolding (one sitting) — **complete**
 
@@ -236,6 +256,17 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   defeats the scale-to-zero 10 exists for. Q1 and Q3 can wait; these two cannot, and the
   "17 before 11 and 10" rule above is otherwise broken a second time.
 
+  **Answered 2026-08-29.** **Q4: no shim** — every client that will exist is first-party,
+  so nothing unmodified reaches the server and `GROCY-API-KEY` is simply gone. **Q2:
+  neither option** — the question presupposed a polling HTTP client, and the household's
+  cluster already runs an always-on MQTT broker that Home Assistant speaks natively. The
+  server publishes retained state and discovery configs after every commit and on boot;
+  Home Assistant polls nothing and holds last-known state through arbitrarily long sleeps.
+  That is [18](18-mqtt-state-publication.md), new on the roadmap, and it removes 10's
+  Coupling 1 rather than mitigating it. Q3 is now half-answered (the Apple client is
+  written here, not forked, so the licence question is closed and only distribution is
+  open); Q1, the version string, is still open and still blocks nothing.
+
 ### Wave 1 — platform (three parallel tracks, disjoint files)
 
 - **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
@@ -253,6 +284,12 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 - **Track C: 13 write-path transactions** — **done**, ahead of the rest of this wave
   (`7abfd2fa`, `782289b8`, `96f9ec99`, 2026-08-29). All seven entrypoints, webhook after
   commit, and the importer made atomic. Tracks A and B are still open.
+- **Track D: 18 MQTT state publication.** New, from 17's Q2. Disjoint from A, B and C: it
+  adds a service and a call at the end of the write paths 13 already centralised, and
+  touches no file the other tracks open. It belongs in this wave rather than later because
+  track A's whole point is a pod that sleeps, and until 18 exists the household's Home
+  Assistant is the reason it will not. 13 is its prerequisite and is already in — the
+  publish hangs off the same after-commit seam the label-printer webhook uses.
 
 ### Wave 2 — API correctness
 
@@ -327,6 +364,14 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   follows S4's trusted-proxy pattern rather than a shared header alone.
 - **05 A + C** — store on lists, default list per product/recipe. B (store-layout
   ordering) waits for real shopping trips to prove it wanted.
+
+**The client work is not in any wave, and that is deliberate.** 17's answers commit this
+household to two first-party clients — a Home Assistant integration and a Swift module
+with per-platform UI targets — and neither lives in this repository. What this roadmap
+owes them is on it: 18 for the ambient read path, 11 for the error contract, 14 piece 2
+for the response snapshot the Swift module's transport is generated from. Sequence the
+Swift generation after 11, which moves status codes across ~74 routes; before that, any
+generated client is generated twice.
 
 ### Usage-driven tail — no scheduled slot
 
