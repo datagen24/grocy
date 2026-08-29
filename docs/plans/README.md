@@ -169,8 +169,9 @@ as parallel sessions.
   into 03) and never touches `stock_current`. Substitution turns out to be a third
   relation — directed, sibling-to-sibling, and not expressible by any tree — so it
   needs an explicit edge table and a plan of its own. What is left of 07 is the
-  one-level `parent_product_id` audit. Still after 08, which establishes the recursive
-  pattern that nested groups reuse.
+  one-level `parent_product_id` audit — now a confirm-and-leave-alone rather than a
+  clear-the-way, since nothing is being built on top of it. Still after 08, which
+  establishes the recursive pattern that nested groups reuse.
 
 ### Wave 5 — the assistant and the lists
 

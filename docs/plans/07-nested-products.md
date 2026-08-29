@@ -253,13 +253,24 @@ compared against a deliberate expectation rather than against whatever falls out
    > - **Q2's mixed middle node stops mattering.** Nothing stocks an intermediate
    >   node once the intermediates are groups.
    >
-   > **Open, and needs its own plan rather than an answer here:** whether block and
-   > shredded are two products with a directed substitution between them (the reading
-   > taken above) or one product in two packagings (`parent_product_id` proper, one
-   > pool in grams). The argument for keeping them separate is that a recipe wanting
-   > shredded should be told "you have a block" rather than silently satisfied, and
-   > that shredding is labour rather than a unit conversion. That distinction is the
-   > whole substance of what is left of this plan.
+   > **Closed: block and shredded are two products.** Different prices, different
+   > barcodes, different nutrition facts.
+   >
+   > One qualification, because the obvious objection is that grocy already handles
+   > two of those on a single product. It does: `product_barcodes` carries `barcode`,
+   > `qu_id`, `amount`, `shopping_location_id` and `last_price` per row, so several
+   > barcodes at different pack sizes and prices under one product is exactly what
+   > that table is for. Nutrition is what settles it — `calories` is a single column
+   > on `products`, one value per product, with nowhere to vary per barcode. A block
+   > and a bag of shredded cannot both be described by one row, so they are not one
+   > product, whatever the barcode table could absorb.
+   >
+   > This removes the last candidate for a roll-up in this catalogue, and with it the
+   > last reason for any of 07's machinery. It does **not** make `parent_product_id`
+   > dead: a genuine case is one where the differing attributes are only pack size and
+   > price — the same milk in a 1 L and a 2 L carton, same unit, same nutrition. Those
+   > exist and the column means the right thing for them. The cheese example simply
+   > was never one of them, which is why it kept resisting the model.
 
 7. **What replaces this plan?** Q6 removes most of it. What remains is worth stating so
    the roadmap is honest about the size:
@@ -277,8 +288,16 @@ compared against a deliberate expectation rather than against whatever falls out
    The recursive-CTE machinery, the stock aggregation, the substitution semantics and
    `cascade_change_qu_id_stock` all fall away with the taxonomy moving out of `products`.
 
-   > **Response:** Pending. The split above is the recommendation; it needs the
-   > block-versus-shredded question in Q6 settled before either piece is sized.
+   > **Response:** Accepted, now that Q6 is fully closed. Sizes: nested
+   > `product_groups` is small and belongs to 03; the substitution table is medium and
+   > needs its own plan; the one-level audit is small and is all that stays here.
+   >
+   > The audit's purpose changes slightly. It was "find every place that assumes one
+   > level, before making the tree deeper". Since the tree is not becoming deeper, it
+   > is now "confirm what `parent_product_id` is actually used for in this catalogue,
+   > and leave the one-level behaviour alone" — including checking whether it is used
+   > at all. Same reading, much smaller consequence: nothing is being built on top of
+   > what it finds.
 
 ## Review notes
 
