@@ -113,8 +113,11 @@ Counts from the tree as of this plan's writing.
   fork's traffic. That misattributes traffic to upstream and should change as
   soon as there is a name to change it to; arguably before.
 - **README, about page, logo** — the README already leads with "hard fork of
-  grocy"; the about page and `grocy.info` links move to the attribution section
-  (Q5) rather than vanishing.
+  grocy" and currently hotlinks *upstream's* logo SVG; the about page and
+  `grocy.info` links move to the attribution section (Q5) rather than
+  vanishing. A draft Victual logo exists (bowl-as-V mark with produce, dark
+  green wordmark); once settled it lands in `public/img/` and replaces the
+  hotlink.
 - **The MCP sidecar repo** — the interface spec already anticipates this plan:
   the repo takes the working name `grocy-mcp` "with the real name settled
   before the first tagged release" ([mcp-interface-spec.md](../mcp-interface-spec.md),
@@ -160,7 +163,17 @@ Counts from the tree as of this plan's writing.
    > out a vanity `victual` org/namespace — if one is ever wanted, *victualer*
    > is the clean claim on all three registries, which pleasingly matches the
    > actor name. Claim the free names (npm `victual`, Docker/GitHub
-   > `victualer`) at announcement time, not before. Domains not yet checked.
+   > `victualer`) at announcement time, not before.
+   >
+   > Domains, checked 2026-08-29 via NS delegation (NXDOMAIN at the TLD =
+   > unregistered; method calibrated against grocy.info and jellyfin.org):
+   > **victual, victualer, and victualler are all unregistered on .io, .app,
+   > and .dev** — nine for nine. Two caveats: registry-reserved names also
+   > NXDOMAIN (unlikely for these, but the registrar page is the final word),
+   > and Google Registry prices dictionary-word .app/.dev domains at premium
+   > tiers, so `victual.app`/`victual.dev` may cost more than list price.
+   > `victual.io` is the natural primary; register the -er/-ller variants as
+   > redirects per Q2.
 
 4. **Scope of the rename.** Repo and branding only, or also internal
    identifiers — DB name defaults, config env-var prefixes (`GROCY_*` → ?),
