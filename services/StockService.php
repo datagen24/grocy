@@ -1776,7 +1776,7 @@ class StockService extends BaseService
 
 		// Both bookings of an entry plus the stock row itself have to land together, or the
 		// stock ends up split across the two locations.
-		DatabaseService::GetInstance()->InTransaction(function () use ($potentialStockEntriesAtFromLocation, $amount, $productDetails, $productId, $locationIdFrom, $locationIdTo, $transactionId, &$labelWebhookPayloads)
+		DatabaseService::GetInstance()->InTransaction(function () use ($potentialStockEntriesAtFromLocation, $amount, $productDetails, $productId, $locationIdFrom, $locationIdTo, &$transactionId, &$labelWebhookPayloads)
 		{
 			foreach ($potentialStockEntriesAtFromLocation as $stockEntry)
 			{
