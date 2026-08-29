@@ -235,7 +235,7 @@ compared against a deliberate expectation rather than against whatever falls out
    > | Relation | Example | Where it belongs |
    > | --- | --- | --- |
    > | **Classification** | `Dairy / Cheese / Cheddar` | nested `product_groups` — a nullable `parent_group_id` on a lookup table, [03](03-category-min-stock.md)'s territory |
-   > | **Substitution** | sharp → medium, block → shredded | a new explicit, directed edge table; curated, never inferred from tree position |
+   > | **Substitution** | sharp → medium, block → shredded | a new explicit, directed edge table; curated, never inferred from tree position — now [16](16-product-substitutions.md) |
    > | **Same product, different packaging** | the upstream meaning | `parent_product_id`, left at its current depth |
    >
    > Consequences for the answers above, which are superseded rather than refined:
@@ -278,10 +278,10 @@ compared against a deliberate expectation rather than against whatever falls out
    - **Nested `product_groups`** — one nullable self-referencing column, a cycle guard,
      and the group pickers and reports learning to walk it. Belongs to
      [03](03-category-min-stock.md).
-   - **An explicit substitution table** — `product_id`, `substitute_product_id`, a
-     preference rank, and whatever the recipe-fulfilment and stock views need to consume
-     it. Directed: a symmetric pair is two rows, recorded deliberately. This is new work
-     and does not exist upstream in any form.
+   - **An explicit substitution table** — drafted as [16](16-product-substitutions.md):
+     `product_id`, `substitute_product_id`, a preference rank, and whatever the
+     recipe-fulfilment views need to consume it. Directed: a symmetric pair is two rows,
+     recorded deliberately. This is new work and does not exist upstream in any form.
    - **An audit of the existing one-level `parent_product_id` behaviour**, which was the
      first item of this plan and is the only part that survives unchanged.
 
@@ -319,7 +319,8 @@ What is left splits in two, and neither half is this plan:
 
 - **small** — nested `product_groups`, in [03](03-category-min-stock.md).
 - **medium** — an explicit directed substitution table, which is new work with no
-  upstream equivalent, and which needs its own plan.
+  upstream equivalent, and which now has its own plan:
+  [16](16-product-substitutions.md).
 - **small** — the one-level `parent_product_id` audit at the top of this document, the
   only part of 07 that survives as written.
 

@@ -34,6 +34,7 @@ the plans noted below start minting more of what they clean up.
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4 | 11, 13, 14 (per item) | small + one large open question |
+| 16 | [Product substitutions](16-product-substitutions.md) | 07-Q6 | 12, 14 | medium |
 
 **Blocking and de-risking, in one place:**
 
@@ -54,6 +55,9 @@ the plans noted below start minting more of what they clean up.
   wave order below overrides the plan numbering, and why the CLI is pulled into wave 0.
 - **15 is last**, except its auth refactor, which wants to precede
   [02](02-mcp-endpoint.md), and which carries the parked `shopping_locations` rename.
+- **12 and 14 before [16](16-product-substitutions.md)** — 16 adds a list/form pair (12's
+  case) and its whole risk is in fixtures that only 14's suite can run across both
+  engines.
 
 Each plan carries a **Verification** section: booted-instance checks and result-set diffs
 against a real database, following the standard the defects pass set. Lint is not
@@ -168,10 +172,15 @@ as parallel sessions.
   owner actually wants is a taxonomy, so it moves to nested `product_groups` (folded
   into 03) and never touches `stock_current`. Substitution turns out to be a third
   relation — directed, sibling-to-sibling, and not expressible by any tree — so it
-  needs an explicit edge table and a plan of its own. What is left of 07 is the
-  one-level `parent_product_id` audit — now a confirm-and-leave-alone rather than a
-  clear-the-way, since nothing is being built on top of it. Still after 08, which
-  establishes the recursive pattern that nested groups reuse.
+  needs an explicit edge table and a plan of its own, which is now
+  [16](16-product-substitutions.md). What is left of 07 is the one-level
+  `parent_product_id` audit — a confirm-and-leave-alone rather than a clear-the-way,
+  since nothing is being built on top of it. Still after 08, which establishes the
+  recursive pattern that nested groups reuse.
+- **16 product substitutions** — after 03's nested groups, so that browsing by class and
+  substituting within it are judged together. The only genuinely new work either half of
+  07 produced: grocy has no sibling-to-sibling or directed substitution in any form. Its
+  Q2 (units across a substitution) wants answering before the view is written.
 
 ### Wave 5 — the assistant and the lists
 

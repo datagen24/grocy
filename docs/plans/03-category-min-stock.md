@@ -5,6 +5,21 @@ of having to set one on every individual product.
 **Upstream:** [grocy/grocy#2616](https://github.com/grocy/grocy/issues/2616)
 **Status:** draft for review.
 
+> **Scope added by [07](07-nested-products.md)'s question 6: nested `product_groups`.**
+> 07 set out to make the *product* tree deep, and answering Q6 established that the tree
+> actually wanted is a taxonomy — `Dairy / Cheese / Cheddar` — which is a classification
+> of groups, not a packaging relation between products. That makes it this plan's
+> territory rather than 07's: one nullable self-referencing `parent_group_id` on
+> `product_groups`, a cycle guard, and the group pickers and reports learning to walk it.
+>
+> It is a natural fit here because a group minimum and a group hierarchy raise the same
+> question — does "always have some dairy" mean the node or the subtree? — and answering
+> it once is cheaper than answering it twice. The two pieces are still separable if this
+> plan gets large.
+>
+> The substitution half of 07 went elsewhere, to [16](16-product-substitutions.md).
+> Nothing about the taxonomy touches `stock_current` or `/stock`.
+
 ## Today
 
 Minimums are strictly per product: `products.min_stock_amount`, with
