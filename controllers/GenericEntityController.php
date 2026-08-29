@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Services\UserfieldsService;
+use Victual\Services\UserfieldsService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

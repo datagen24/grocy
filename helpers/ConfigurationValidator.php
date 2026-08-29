@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Helpers;
+namespace Victual\Helpers;
 
 /**
  * Thrown when a VICTUAL_* configuration constant has an invalid value.

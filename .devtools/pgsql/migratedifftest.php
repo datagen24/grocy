@@ -21,8 +21,8 @@
 
 require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
-use Grocy\Services\Database\DatabaseImporter;
-use Grocy\Services\Database\ValueComparison;
+use Victual\Services\Database\DatabaseImporter;
+use Victual\Services\Database\ValueComparison;
 
 $sqlitePath = getenv('MIGRATEDIFF_SQLITE_PATH');
 $pgsqlDsn = getenv('MIGRATEDIFF_PGSQL_DSN');

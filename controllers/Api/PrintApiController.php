@@ -1,10 +1,10 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Services\PrintService;
-use Grocy\Services\StockService;
+use Victual\Controllers\Users\User;
+use Victual\Services\PrintService;
+use Victual\Services\StockService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

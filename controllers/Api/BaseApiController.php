@@ -1,9 +1,9 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\BaseController;
-use Grocy\Services\DatabaseService;
+use Victual\Controllers\BaseController;
+use Victual\Services\DatabaseService;
 use LessQL\Result;
 use Psr\Http\Message\ResponseInterface as Response;
 use Slim\Exception\HttpException;

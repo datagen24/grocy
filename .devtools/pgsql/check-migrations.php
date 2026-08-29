@@ -21,8 +21,8 @@
 
 require_once (getenv('VICTUAL_ROOT') ?: dirname(__DIR__, 2)) . '/packages/autoload.php';
 
-use Grocy\Services\Database\DatabaseDialect;
-use Grocy\Services\DatabaseMigrationService;
+use Victual\Services\Database\DatabaseDialect;
+use Victual\Services\DatabaseMigrationService;
 
 const MARKER_ENGINE_EXCLUSIVE = '@engine-exclusive';
 const MARKER_OVERRIDES_GENERIC = '@overrides-generic';

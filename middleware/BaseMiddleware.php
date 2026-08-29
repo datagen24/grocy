@@ -1,9 +1,9 @@
 <?php
 
-namespace Grocy\Middleware;
+namespace Victual\Middleware;
 
 use DI\Container;
-use Grocy\Services\ApplicationService;
+use Victual\Services\ApplicationService;
 use Psr\Http\Message\ResponseFactoryInterface;
 
 /**

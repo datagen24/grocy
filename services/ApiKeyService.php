@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Manages API keys: creation, validation and lookup, including the special purpose

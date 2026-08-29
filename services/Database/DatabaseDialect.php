@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
 /**
  * Encapsulates everything about persistence that differs between database engines.

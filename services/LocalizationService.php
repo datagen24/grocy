@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 use Gettext\Translation;
 use Gettext\Translations;

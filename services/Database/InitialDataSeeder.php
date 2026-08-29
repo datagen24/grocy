@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
-use Grocy\Services\LocalizationService;
+use Victual\Services\LocalizationService;
 
 /**
  * The rows a brand new Grocy database needs before anyone can log into it.

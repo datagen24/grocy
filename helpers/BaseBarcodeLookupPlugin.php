@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Helpers;
+namespace Victual\Helpers;
 
 /**
  * Base class for external barcode lookup plugins (selected via the

@@ -148,7 +148,7 @@
 							data-chore-name="{{ FindObjectInArrayByPropertyValue($chores, 'id', $curentChoreEntry->chore_id)->name }}">
 							<i class="fa-solid fa-play"></i>
 						</a>
-						<a class="btn btn-secondary btn-sm track-chore-button skip permission-CHORE_TRACK_EXECUTION @if(FindObjectInArrayByPropertyValue($chores, 'id', $curentChoreEntry->chore_id)->period_type == \Grocy\Services\ChoresService::CHORE_PERIOD_TYPE_MANUALLY) disabled @endif"
+						<a class="btn btn-secondary btn-sm track-chore-button skip permission-CHORE_TRACK_EXECUTION @if(FindObjectInArrayByPropertyValue($chores, 'id', $curentChoreEntry->chore_id)->period_type == \Victual\Services\ChoresService::CHORE_PERIOD_TYPE_MANUALLY) disabled @endif"
 							href="#"
 							data-toggle="tooltip"
 							data-placement="left"

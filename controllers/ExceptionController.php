@@ -1,10 +1,10 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
 use DI\Container;
-use Grocy\Controllers\Api\BaseApiController;
-use Grocy\Services\ApplicationService;
+use Victual\Controllers\Api\BaseApiController;
+use Victual\Services\ApplicationService;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\LoggerInterface;

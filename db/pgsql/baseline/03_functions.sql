@@ -5,7 +5,7 @@
 --
 -- `ceil`, `substr`, `abs`, `round` and friends are native in PostgreSQL and need nothing.
 -- `regexp` is not needed either: the dialect emits the `~` operator instead (see
--- Grocy\Services\Database\PostgresDialect::GetRegexpCondition).
+-- Victual\Services\Database\PostgresDialect::GetRegexpCondition).
 --
 -- That leaves victual_user_setting(), which is used by the stock overview views.
 
@@ -40,7 +40,7 @@ CREATE TABLE user_settings_defaults (
 -- Resolves a setting for the user the current connection is acting for.
 --
 -- The acting user comes from the `victual.user_id` session variable, which
--- Grocy\Services\DatabaseService::SetCurrentUserId() sets once authentication has
+-- Victual\Services\DatabaseService::SetCurrentUserId() sets once authentication has
 -- established who is making the request. It falls back to user 1 so that the function
 -- still behaves sensibly on a connection which has not been told yet (during schema
 -- migration, for instance).

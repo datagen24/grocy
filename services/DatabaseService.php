@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
-use Grocy\Services\Database\DatabaseDialect;
+use Victual\Services\Database\DatabaseDialect;
 use LessQL\Database;
 
 /**

@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
 /**
  * PostgreSQL storage engine.

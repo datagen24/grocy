@@ -12,7 +12,7 @@
 
 require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
-use Grocy\Services\Database\ValueComparison;
+use Victual\Services\Database\ValueComparison;
 
 $seedFile = $argv[1];
 $views = array_slice($argv, 2);
@@ -81,10 +81,10 @@ if (!$skipCopy)
 	// disables triggers for the duration. Once triggers exist in the target, copying rows
 	// that the source's triggers already shaped would otherwise fire them a second time -
 	// cascading deletes and re-deriving values that are already correct.
-	$report = (new Grocy\Services\Database\DatabaseImporter(
+	$report = (new Victual\Services\Database\DatabaseImporter(
 		$sqlite,
 		$pg,
-		new Grocy\Services\Database\PostgresDialect(),
+		new Victual\Services\Database\PostgresDialect(),
 		fn($m) => null
 	))->Import(true);
 

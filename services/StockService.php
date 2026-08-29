@@ -1,9 +1,9 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
-use Grocy\Helpers\Grocycode;
-use Grocy\Helpers\WebhookRunner;
+use Victual\Helpers\Grocycode;
+use Victual\Helpers\WebhookRunner;
 use GuzzleHttp\Client;
 
 /**

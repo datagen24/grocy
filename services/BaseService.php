@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Base class for all services: provides the shared LessQL database connection

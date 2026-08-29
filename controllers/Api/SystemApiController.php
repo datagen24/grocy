@@ -1,10 +1,10 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Services\ApplicationService;
-use Grocy\Services\DatabaseService;
-use Grocy\Services\LocalizationService;
+use Victual\Services\ApplicationService;
+use Victual\Services\DatabaseService;
+use Victual\Services\LocalizationService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

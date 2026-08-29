@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Provides application level metadata: version information, the changelog and

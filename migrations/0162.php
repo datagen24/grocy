@@ -2,7 +2,7 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseService;
 
 // Migrate the old config.php setting FEATURE_SETTING_STOCK_COUNT_OPENED_PRODUCTS_AGAINST_MINIMUM_STOCK_AMOUNT
 // to the new product option treat_opened_as_out_of_stock

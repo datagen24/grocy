@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
 use Eluceo\iCal\Domain\Entity\Calendar;
 use Eluceo\iCal\Domain\Entity\Event;
@@ -10,8 +10,8 @@ use Eluceo\iCal\Domain\ValueObject\DateTime;
 use Eluceo\iCal\Domain\ValueObject\SingleDay;
 use Eluceo\iCal\Domain\ValueObject\TimeSpan;
 use Eluceo\iCal\Presentation\Factory\CalendarFactory;
-use Grocy\Services\ApiKeyService;
-use Grocy\Services\CalendarService;
+use Victual\Services\ApiKeyService;
+use Victual\Services\CalendarService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
-use Grocy\Services\DatabaseMigrationService;
+use Victual\Services\DatabaseMigrationService;
 
 /**
  * Copies the contents of an existing SQLite database into another engine, so that an

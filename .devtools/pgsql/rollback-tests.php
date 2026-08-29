@@ -44,8 +44,8 @@ if (!defined('VICTUAL_USER_ID'))
 	define('VICTUAL_USER_ID', 1);
 }
 
-use Grocy\Services\DatabaseService;
-use Grocy\Services\StockService;
+use Victual\Services\DatabaseService;
+use Victual\Services\StockService;
 
 const INJECTOR = 'probe_fail_after_first_write';
 

@@ -1,6 +1,6 @@
 <?php
 
-use Grocy\Helpers\BaseBarcodeLookupPlugin;
+use Victual\Helpers\BaseBarcodeLookupPlugin;
 use GuzzleHttp\Client;
 
 /*

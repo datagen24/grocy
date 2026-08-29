@@ -226,7 +226,7 @@
 			<input type="hidden"
 				id="assignment_type"
 				name="assignment_type"
-				value="{{ \Grocy\Services\ChoresService::CHORE_ASSIGNMENT_TYPE_NO_ASSIGNMENT }}">
+				value="{{ \Victual\Services\ChoresService::CHORE_ASSIGNMENT_TYPE_NO_ASSIGNMENT }}">
 			<input type="hidden"
 				id="assignment_config"
 				name="assignment_config"

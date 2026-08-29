@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Business logic for chore tracking: execution journal, next-execution user assignment

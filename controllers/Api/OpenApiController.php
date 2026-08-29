@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Services\ApiKeyService;
-use Grocy\Services\ApplicationService;
-use Grocy\Services\UserfieldsService;
+use Victual\Controllers\Users\User;
+use Victual\Services\ApiKeyService;
+use Victual\Services\ApplicationService;
+use Victual\Services\UserfieldsService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

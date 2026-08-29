@@ -1,9 +1,9 @@
 <?php
 
-use Grocy\Controllers\ExceptionController;
-use Grocy\Helpers\SlimBladeView;
-use Grocy\Helpers\UrlManager;
-use Grocy\Middleware\LocaleMiddleware;
+use Victual\Controllers\ExceptionController;
+use Victual\Helpers\SlimBladeView;
+use Victual\Helpers\UrlManager;
+use Victual\Middleware\LocaleMiddleware;
 use Psr\Container\ContainerInterface as Container;
 use Slim\Factory\AppFactory;
 
@@ -42,9 +42,9 @@ if (VICTUAL_DISABLE_AUTH === true)
 // Check if any invalid entries in config.php have been made
 try
 {
-	(new Grocy\Helpers\ConfigurationValidator())->validateConfig();
+	(new Victual\Helpers\ConfigurationValidator())->validateConfig();
 }
-catch (\Grocy\Helpers\EInvalidConfig $ex)
+catch (\Victual\Helpers\EInvalidConfig $ex)
 {
 	exit('Invalid setting in config.php: ' . $ex->getMessage());
 }

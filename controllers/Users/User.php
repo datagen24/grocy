@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Controllers\Users;
+namespace Victual\Controllers\Users;
 
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseService;
 use LessQL\Result;
 
 /**

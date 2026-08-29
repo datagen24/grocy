@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Middleware\Auth;
+namespace Victual\Middleware\Auth;
 
-use Grocy\Services\SessionService;
+use Victual\Services\SessionService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**

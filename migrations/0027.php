@@ -2,7 +2,7 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseService;
 
 $db = DatabaseService::GetInstance()->GetDbConnection();
 

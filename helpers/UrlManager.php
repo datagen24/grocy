@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Helpers;
+namespace Victual\Helpers;
 
 /**
  * Builds absolute application URLs, taking the configured base URL

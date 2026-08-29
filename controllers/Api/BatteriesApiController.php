@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers\Api;
+namespace Victual\Controllers\Api;
 
-use Grocy\Controllers\Users\User;
-use Grocy\Helpers\Grocycode;
-use Grocy\Helpers\WebhookRunner;
-use Grocy\Services\BatteriesService;
+use Victual\Controllers\Users\User;
+use Victual\Helpers\Grocycode;
+use Victual\Helpers\WebhookRunner;
+use Victual\Services\BatteriesService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

@@ -35,9 +35,9 @@ require_once __DIR__ . '/../helpers/PrerequisiteChecker.php';
 
 try
 {
-	(new Grocy\Helpers\PrerequisiteChecker())->checkRequirements();
+	(new Victual\Helpers\PrerequisiteChecker())->checkRequirements();
 }
-catch (Grocy\Helpers\ERequirementNotMet $ex)
+catch (Victual\Helpers\ERequirementNotMet $ex)
 {
 	exit('Unable to run Grocy: ' . $ex->getMessage());
 }

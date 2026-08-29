@@ -18,9 +18,9 @@
 
 require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
-use Grocy\Services\Database\DatabaseImporter;
-use Grocy\Services\Database\PostgresDialect;
-use Grocy\Services\Database\ValueComparison;
+use Victual\Services\Database\DatabaseImporter;
+use Victual\Services\Database\PostgresDialect;
+use Victual\Services\Database\ValueComparison;
 
 $scripts = array_slice($argv, 1);
 

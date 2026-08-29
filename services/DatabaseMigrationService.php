@@ -1,9 +1,9 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
-use Grocy\Services\Database\DatabaseDialect;
-use Grocy\Services\Database\InitialDataSeeder;
+use Victual\Services\Database\DatabaseDialect;
+use Victual\Services\Database\InitialDataSeeder;
 
 /**
  * Brings the database schema up to date on application start, for either engine.

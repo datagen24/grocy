@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 use Gumlet\ImageResize;
 use Gumlet\ImageResizeException;

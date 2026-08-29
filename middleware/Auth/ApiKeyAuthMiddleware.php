@@ -1,9 +1,9 @@
 <?php
 
-namespace Grocy\Middleware\Auth;
+namespace Victual\Middleware\Auth;
 
 use DI\Container;
-use Grocy\Services\ApiKeyService;
+use Victual\Services\ApiKeyService;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

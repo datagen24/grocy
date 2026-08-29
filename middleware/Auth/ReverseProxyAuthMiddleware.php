@@ -1,13 +1,13 @@
 <?php
 
-namespace Grocy\Middleware\Auth;
+namespace Victual\Middleware\Auth;
 
-use Grocy\Services\DatabaseService;
-use Grocy\Services\UsersService;
+use Victual\Services\DatabaseService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
- * Active when VICTUAL_AUTH_CLASS is set to Grocy\Middleware\Auth\ReverseProxyAuthMiddleware:
+ * Active when VICTUAL_AUTH_CLASS is set to Victual\Middleware\Auth\ReverseProxyAuthMiddleware:
  * authenticates against the username supplied by an upstream reverse proxy that
  * already performed authentication, either via the HTTP header named by
  * VICTUAL_REVERSE_PROXY_AUTH_HEADER (default "REMOTE_USER") or, when

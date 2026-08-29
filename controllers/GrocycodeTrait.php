@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Helpers\Grocycode;
+use Victual\Helpers\Grocycode;
 use jucksearm\barcode\lib\BarcodeFactory;
 use jucksearm\barcode\lib\DatamatrixFactory;
 use Psr\Http\Message\ResponseInterface as Response;

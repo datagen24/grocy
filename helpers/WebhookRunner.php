@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Helpers;
+namespace Victual\Helpers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;

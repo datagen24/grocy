@@ -17,8 +17,8 @@
 //
 // Exit codes: 0 on success (including "already up to date"), 1 on failure.
 
-use Grocy\Services\DatabaseMigrationService;
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseMigrationService;
+use Victual\Services\DatabaseService;
 
 if (PHP_SAPI !== 'cli')
 {
@@ -77,9 +77,9 @@ if (!defined('VICTUAL_USER_ID'))
 
 try
 {
-	(new Grocy\Helpers\ConfigurationValidator())->validateConfig();
+	(new Victual\Helpers\ConfigurationValidator())->validateConfig();
 }
-catch (\Grocy\Helpers\EInvalidConfig $ex)
+catch (\Victual\Helpers\EInvalidConfig $ex)
 {
 	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
 	exit(1);

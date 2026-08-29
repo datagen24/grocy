@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 use DateTime;
 use Mike42\Escpos\PrintConnectors\FilePrintConnector;

@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services\Database;
+namespace Victual\Services\Database;
 
-use Grocy\Services\UsersService;
+use Victual\Services\UsersService;
 
 /**
  * The original (and default) storage engine. Behaviour here is deliberately identical to

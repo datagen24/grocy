@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Cookie-based login sessions: creation, validation and removal of rows in the

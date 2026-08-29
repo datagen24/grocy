@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
 /**
  * Custom fields ("userfields") that users can attach to entities: field definitions
@@ -90,7 +90,7 @@ class UserfieldsService extends BaseService
 	 */
 	public function GetFieldTypes()
 	{
-		return GetClassConstants('\Grocy\Services\UserfieldsService');
+		return GetClassConstants('\Victual\Services\UserfieldsService');
 	}
 
 	/**

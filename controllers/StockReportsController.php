@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

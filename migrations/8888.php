@@ -4,7 +4,7 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\DatabaseService;
+use Victual\Services\DatabaseService;
 
 // When FEATURE_FLAG_STOCK_LOCATION_TRACKING is disabled,
 // some places assume that there exists a location with id 1,

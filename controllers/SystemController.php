@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Services\ApplicationService;
-use Grocy\Services\DatabaseMigrationService;
-use Grocy\Services\DatabaseService;
-use Grocy\Services\DemoDataGeneratorService;
+use Victual\Services\ApplicationService;
+use Victual\Services\DatabaseMigrationService;
+use Victual\Services\DatabaseService;
+use Victual\Services\DemoDataGeneratorService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

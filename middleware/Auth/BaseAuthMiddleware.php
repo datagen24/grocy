@@ -1,10 +1,10 @@
 <?php
 
-namespace Grocy\Middleware\Auth;
+namespace Victual\Middleware\Auth;
 
-use Grocy\Middleware\BaseMiddleware;
-use Grocy\Services\DatabaseService;
-use Grocy\Services\SessionService;
+use Victual\Middleware\BaseMiddleware;
+use Victual\Services\DatabaseService;
+use Victual\Services\SessionService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;

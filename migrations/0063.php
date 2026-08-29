@@ -2,8 +2,8 @@
 
 // This is executed inside DatabaseMigrationService class/context
 
-use Grocy\Services\DatabaseService;
-use Grocy\Services\LocalizationService;
+use Victual\Services\DatabaseService;
+use Victual\Services\LocalizationService;
 
 $localizationService = LocalizationService::GetInstance(VICTUAL_DEFAULT_LOCALE);
 $db = DatabaseService::GetInstance()->GetDbConnection();

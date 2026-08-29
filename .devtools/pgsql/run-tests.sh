@@ -27,7 +27,7 @@
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
 # difftest.php, trigdifftest.php and migratedifftest.php, which share their normalisation
-# rules with the application through Grocy\Services\Database\ValueComparison.
+# rules with the application through Victual\Services\Database\ValueComparison.
 #
 # Connection settings come from the environment. The two PHP tools were written with
 # disjoint variable namespaces (DIFFTEST_* and TRIGTEST_*) and this is where they are

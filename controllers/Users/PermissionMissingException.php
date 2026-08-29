@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Controllers\Users;
+namespace Victual\Controllers\Users;
 
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Exception\HttpForbiddenException;

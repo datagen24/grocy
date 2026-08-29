@@ -1,13 +1,13 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
 use DI\Container;
-use Grocy\Controllers\Users\User;
-use Grocy\Services\ApplicationService;
-use Grocy\Services\DatabaseService;
-use Grocy\Services\LocalizationService;
-use Grocy\Services\UsersService;
+use Victual\Controllers\Users\User;
+use Victual\Services\ApplicationService;
+use Victual\Services\DatabaseService;
+use Victual\Services\LocalizationService;
+use Victual\Services\UsersService;
 
 /**
  * Base class for all non-API (view) controllers.
@@ -32,7 +32,7 @@ class BaseController
 	/** @var Container The application DI container */
 	protected $AppContainer;
 
-	/** @var \Grocy\Helpers\SlimBladeView The shared Blade view engine */
+	/** @var \Victual\Helpers\SlimBladeView The shared Blade view engine */
 	protected $View;
 
 	/** @var \LessQL\Database Fluent database connection (SQLite or PostgreSQL, depending on configuration) */

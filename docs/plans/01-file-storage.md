@@ -78,7 +78,7 @@ images are optional, and it keeps dumps trimmable.
 
 ### Code
 
-New `Grocy\Services\Storage\FileStorage` with `FilesystemStorage` (today's behaviour,
+New `Victual\Services\Storage\FileStorage` with `FilesystemStorage` (today's behaviour,
 unchanged) and `DatabaseStorage`:
 
 ```

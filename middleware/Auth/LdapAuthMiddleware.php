@@ -1,14 +1,14 @@
 <?php
 
-namespace Grocy\Middleware\Auth;
+namespace Victual\Middleware\Auth;
 
-use Grocy\Services\DatabaseService;
-use Grocy\Services\SessionService;
-use Grocy\Services\UsersService;
+use Victual\Services\DatabaseService;
+use Victual\Services\SessionService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
- * Active when VICTUAL_AUTH_CLASS is set to Grocy\Middleware\Auth\LdapAuthMiddleware:
+ * Active when VICTUAL_AUTH_CLASS is set to Victual\Middleware\Auth\LdapAuthMiddleware:
  * authenticates logins against an external LDAP/Active Directory server (bind DN,
  * base DN, user filter and UID attribute configured via the VICTUAL_LDAP_* settings,
  * see config-dist.php), creating a local Grocy user on first successful login.

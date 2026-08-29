@@ -1,6 +1,6 @@
 <?php
 
-namespace Grocy\Helpers;
+namespace Victual\Helpers;
 
 /**
  * Thrown when a runtime prerequisite (PHP/SQLite version, PHP extension,

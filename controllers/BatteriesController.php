@@ -1,11 +1,11 @@
 <?php
 
-namespace Grocy\Controllers;
+namespace Victual\Controllers;
 
-use Grocy\Helpers\Grocycode;
-use Grocy\Services\BatteriesService;
-use Grocy\Services\UserfieldsService;
-use Grocy\Services\UsersService;
+use Victual\Helpers\Grocycode;
+use Victual\Services\BatteriesService;
+use Victual\Services\UserfieldsService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 

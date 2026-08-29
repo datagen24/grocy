@@ -1,8 +1,8 @@
 <?php
 
-namespace Grocy\Services;
+namespace Victual\Services;
 
-use Grocy\Helpers\UrlManager;
+use Victual\Helpers\UrlManager;
 
 /**
  * Aggregates upcoming due dates from all enabled feature areas (stock due dates, tasks,
