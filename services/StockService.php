@@ -846,7 +846,7 @@ class StockService extends BaseService
 						if (preg_match('/^https?:\/\//', $pluginOutput['__image_url']))
 						{
 							$webClient = new Client();
-							$response = $webClient->request('GET', $pluginOutput['__image_url'], ['headers' => ['User-Agent' => 'Grocy/' . ApplicationService::GetInstance()->GetInstalledVersion()->Version . ' (https://grocy.info)']]);
+							$response = $webClient->request('GET', $pluginOutput['__image_url'], ['headers' => ['User-Agent' => 'Victual/' . ApplicationService::GetInstance()->GetInstalledVersion()->Version . ' (https://github.com/datagen24/victual)']]);
 							$fileExtension = pathinfo(parse_url($pluginOutput['__image_url'], PHP_URL_PATH), PATHINFO_EXTENSION);
 
 							// Fallback to Content-Type header if file extension is missing

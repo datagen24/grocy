@@ -1,4 +1,4 @@
-# Grocy MCP interface specification
+# Victual MCP interface specification
 
 **Status:** v1 specification, written 2026-08-29. Companion to
 [plan 02](plans/02-mcp-endpoint.md), whose Open-question responses this document takes as
@@ -50,25 +50,25 @@ validators and the JSON Schema the client sees).
 ## 2. Architecture
 
 One small stateless HTTP service ("the sidecar"), deployed as its own container next to
-Grocy, speaking MCP on one side and Grocy's REST API on the other.
+Victual, speaking MCP on one side and Victual's REST API on the other.
 
 ```
 MCP client ──(Streamable HTTP, Authorization: Bearer <mcp key>)──> sidecar
-sidecar ──(REST, GROCY-API-KEY: <same key>)──> Grocy /api
+sidecar ──(REST, VICTUAL-API-KEY: <same key>)──> Victual /api
 ```
 
 - **No state.** No sessions, no database, no disk. Anything the sidecar knows it
   learned from the request or from a REST call it made while serving it. Two replicas
   behind a round-robin ingress must be indistinguishable from one.
-- **No credentials at rest.** The sidecar stores no Grocy API key. The bearer token the
-  client presents *is* the Grocy API key, forwarded on every REST call. Grocy validates
+- **No credentials at rest.** The sidecar stores no Victual API key. The bearer token the
+  client presents *is* the Victual API key, forwarded on every REST call. Victual validates
   it and permission-checks every operation as the key's user — which is what
-  "authenticates against Grocy's own user system" (fork goal 3) means in the sidecar
+  "authenticates against Victual's own user system" (fork goal 3) means in the sidecar
   shape.
 - **The credential→user seam lives in one module.** `resolveCredential(request) →
-  outbound auth headers` is the single place that knows the bearer token is a Grocy API
+  outbound auth headers` is the single place that knows the bearer token is a Victual API
   key. The IdP future state (02's 2026-08-27 note) replaces this module — validate the
-  IdP's token, map subject to a Grocy user, attach whatever server-to-server credential
+  IdP's token, map subject to a Victual user, attach whatever server-to-server credential
   that design lands on — and touches nothing else.
 
 ## 3. Transport
@@ -84,7 +84,7 @@ sidecar ──(REST, GROCY-API-KEY: <same key>)──> Grocy /api
 - `GET /healthz` — unauthenticated liveness for k8s probes; returns `200` with an empty
   body. It does not report name, version, or configuration (the prior art leaks these).
 
-**Identity:** `serverInfo.name = "grocy-mcp"`, `title = "Grocy"`, version from the
+**Identity:** `serverInfo.name = "victual-mcp"`, `title = "Victual"`, version from the
 release. Sent in every result's `_meta` per the stateless spec.
 
 ## 4. Authentication
@@ -92,7 +92,7 @@ release. Sent in every result's `_meta` per the stateless spec.
 ### 4.1 Client → sidecar
 
 Requests to `/mcp` MUST carry `Authorization: Bearer <key>` (canonical; the raw
-`GROCY-API-KEY: <key>` header is also accepted for parity with Grocy itself). A request
+`VICTUAL-API-KEY: <key>` header is also accepted for parity with Victual itself). A request
 with neither is answered `401` before any JSON-RPC processing. A key that is present
 but invalid is discovered on the first forwarded REST call and surfaces as a tool
 error naming the cause (§7) — the sidecar performs no validation of its own, because
@@ -112,10 +112,10 @@ spec only, not with MCP. This sidecar does not implement it in v1. Consequences:
   tokens, and swap the resolver module. That is the moment the authorization spec's
   MUSTs start applying — verify against the then-current revision, not this document.
 
-### 4.2 Sidecar → Grocy, and the Grocy-side changes
+### 4.2 Sidecar → Victual, and the Victual-side changes
 
 The forwarded key must be an **MCP-type** key, so that MCP access is granted and
-revoked independently of general API keys. This is the whole of the Grocy-side work,
+revoked independently of general API keys. This is the whole of the Victual-side work,
 and it is small:
 
 1. **`ApiKeyService::API_KEY_TYPE_MCP = 'mcp'`** alongside the two existing constants
@@ -123,7 +123,7 @@ and it is small:
 2. **`ApiKeyAuthMiddleware` accepts MCP-type keys.** Today the header path validates
    against `API_KEY_TYPE_DEFAULT` only
    (`middleware/Auth/ApiKeyAuthMiddleware.php:50`, via `IsValidApiKey`'s default
-   parameter) — an MCP-type key in `GROCY-API-KEY` is currently rejected. The
+   parameter) — an MCP-type key in `VICTUAL-API-KEY` is currently rejected. The
    middleware checks the header against both `default` and `mcp` types. Everything
    downstream — `GetUserByApiKey`, the 30 permission constants, per-route checks — is
    untouched and already works.
@@ -162,7 +162,7 @@ Six tools, the plan's table made concrete. Shared conventions first:
   `outputSchema`, plus one human-readable `text` block summarizing it in a sentence
   (counts, not rows). Rows are *shaped* — the named fields below, never raw REST/view
   rows. `uihelper_*`-width rows and embedded `product{}` objects stop at the sidecar.
-- **Dates** are `YYYY-MM-DD` strings; Grocy's sentinel `2999-12-31` ("never expires")
+- **Dates** are `YYYY-MM-DD` strings; Victual's sentinel `2999-12-31` ("never expires")
   is translated to `due_date: null`.
 - **Amounts** are numbers in the product's stock unit, with the unit's display name
   resolved via one `GET /api/objects/quantity_units` per request (id→name map built
@@ -177,7 +177,7 @@ Six tools, the plan's table made concrete. Shared conventions first:
   `recipes_i_can_cook`, `SHOPPINGLIST_ITEMS_ADD` for `add_to_shopping_list`,
   `STOCK_CONSUME` for `consume_product`, `STOCK_PURCHASE` for `purchase_product`
   (constants from `controllers/Users/User.php`). One probe per `tools/list` request —
-  stateless, nothing cached across requests. `tools/call` does *not* probe: Grocy
+  stateless, nothing cached across requests. `tools/call` does *not* probe: Victual
   enforces on the forwarded call, and a race (permission revoked between list and
   call) surfaces as an honest `forbidden` (§7).
 - **`tools/list` order and caching**: fixed, deterministic order; `ttlMs: 300000`,
@@ -280,11 +280,11 @@ Write-tool rules, fixed now:
 - Listed only when the deployment enables them in config (§8) **and** the presenting
   key clears the §5 capability filter (not `read_only`, user holds the tool's
   permission) — a read-only key never sees them at all. The hard boundary remains the
-  per-key `read_only` flag enforced inside Grocy (§4.2); the config gate and the list
+  per-key `read_only` flag enforced inside Victual (§4.2); the config gate and the list
   filter are UX, not security.
 - `consume_product` and `purchase_product` return the stock `transaction_id` in
   `structuredContent`, and the `text` block says how to undo ("this can be undone in
-  Grocy's stock journal") — the REST undo endpoints exist and an assistant that just
+  Victual's stock journal") — the REST undo endpoints exist and an assistant that just
   consumed the wrong thing should be able to say so accurately.
 - No write tool ever creates a product implicitly. The prior art's "smart" auto-create
   path is exactly the kind of surprise 02-Q2's caution exists to prevent; product
@@ -302,19 +302,19 @@ Two layers, never mixed:
   work, shaped so a model can act on them:
 
   ```json
-  { "error": "forbidden", "message": "The API key's user lacks STOCK_EDIT.", "grocy_status": 403 }
+  { "error": "forbidden", "message": "The API key's user lacks STOCK_EDIT.", "victual_status": 403 }
   ```
 
   `error` is one of `unauthorized` (bad/expired key — the user must fix the client
   config), `forbidden` (valid key, insufficient permission or read-only key on a
-  write), `not_found` (id does not exist), `invalid_request` (Grocy rejected the
-  parameters), `grocy_unavailable` (connect/timeout — retryable), `grocy_error`
+  write), `not_found` (id does not exist), `invalid_request` (Victual rejected the
+  parameters), `victual_unavailable` (connect/timeout — retryable), `victual_error`
   (5xx — not retryable without human attention). The `text` rendering states the
   category and whether retrying can help.
 
 This mapping is why [plan 11](plans/11-api-error-handling.md) gates this work: today
-Grocy answers 400 for "not allowed" and 500 for "bad filter" on some routes, which
-collapses `forbidden`/`invalid_request`/`grocy_error` into mush. The sidecar maps
+Victual answers 400 for "not allowed" and 500 for "bad filter" on some routes, which
+collapses `forbidden`/`invalid_request`/`victual_error` into mush. The sidecar maps
 status codes, it does not parse error prose — so the mapping is only as good as the
 codes, and 11 is what makes the codes true.
 
@@ -325,13 +325,13 @@ nothing here is complex enough for a config file:
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `GROCY_BASE_URL` | Grocy origin, e.g. `http://grocy.grocy.svc:80` | required |
+| `VICTUAL_BASE_URL` | Victual origin, e.g. `http://victual.victual.svc:80` | required |
 | `MCP_PORT` | listen port | `3000` |
 | `MCP_ENABLED_TOOLS` | comma-separated allowlist; `all-read` keyword = the six §5 tools | `all-read` |
 | `MCP_REQUEST_TIMEOUT_MS` | per-REST-call timeout | `10000` |
 | `LOG_LEVEL` | `error`/`warn`/`info`/`debug`, to stderr/stdout | `info` |
 
-Notably absent, on purpose: `GROCY_API_KEY` (credentials pass through, §2 — a stored
+Notably absent, on purpose: `VICTUAL_API_KEY` (credentials pass through, §2 — a stored
 key would make every unauthenticated LAN caller into that user), TLS settings (TLS is
 the ingress's job; the sidecar speaks plain HTTP inside the cluster and never disables
 certificate verification), and the prior art's per-tool YAML with `ack_token`s and
@@ -348,7 +348,7 @@ unknown `MCP_ENABLED_TOOLS` entry or missing required variable.
 - One container, distroless-or-alpine Node image, non-root, listening on `MCP_PORT`.
   Scale-to-zero on k3s is the practiced pattern; statelessness (§2, §3) is what makes
   it safe. Cold start is the sidecar's Node boot plus — on the first REST call —
-  Grocy's own cold start, which is [plan 10](plans/10-cold-start-statelessness.md)'s
+  Victual's own cold start, which is [plan 10](plans/10-cold-start-statelessness.md)'s
   problem and another reason 10 precedes Wave 5.
 - Exposure per 02-Q4: cluster/tailnet only. The ingress route for `/mcp` is not
   published externally; if that ever flips, the IdP future state (§4.1) owns the
@@ -371,9 +371,9 @@ Per the roadmap's standard — booted-instance checks, not lint:
 
 1. **Contract tests against recorded fixtures** from
    [14](plans/14-contract-and-regression-scaffolding.md)'s response-contract snapshot:
-   each tool's REST consumption is replayed against the frozen fixtures, so a Grocy
+   each tool's REST consumption is replayed against the frozen fixtures, so a Victual
    response-shape change breaks the sidecar's CI, not a household conversation.
-2. **MCP Inspector** against a compose stack (sidecar + Grocy + PostgreSQL, demo
+2. **MCP Inspector** against a compose stack (sidecar + Victual + PostgreSQL, demo
    dataset): `server/discover` reports both protocol revisions; `tools/list` matches
    `MCP_ENABLED_TOOLS` filtered by the presenting key's capabilities (§5), ordered
    deterministically, with cache hints; each §5 tool
@@ -382,7 +382,7 @@ Per the roadmap's standard — booted-instance checks, not lint:
 3. **Auth and capability matrix** on the same stack: no header → 401 pre-JSON-RPC;
    garbage key → `unauthorized` tool error; valid default-type key → rejected (only
    MCP-type keys pass, proving §4.2 item 2); MCP-type read-only key + (future) write
-   tool → 403 from Grocy surfacing as `forbidden`. For the §5 listing filter: two keys
+   tool → 403 from Victual surfacing as `forbidden`. For the §5 listing filter: two keys
    whose users differ in one permission (e.g. `RECIPES`) get `tools/list` responses
    differing in exactly that tool; revoking a permission is reflected in the next
    `tools/list`, and a `tools/call` on the now-hidden tool still answers `forbidden`
@@ -398,10 +398,10 @@ Per the roadmap's standard — booted-instance checks, not lint:
 ## 12. Repository bootstrap
 
 Per Open question 1's response, the sidecar starts as a **new repository**, importing
-packaging from `datagen24/mcp-grocy` rather than rebasing inside it. The parent fork
-is due to be renamed, so the repo takes a working name (`grocy-mcp`) with the real
-name settled before the first tagged release; `serverInfo.name` (§3) follows the repo
-name at that point and is frozen thereafter.
+packaging from `datagen24/mcp-grocy` rather than rebasing inside it. The parent fork's
+rename settled on **Victual** ([plan 16](plans/16-project-rename.md)), so the repo is
+`victual-mcp` outright rather than under a working name; `serverInfo.name` (§3) is that
+name and is frozen from the first tagged release.
 
 **Import from mcp-grocy** (all MIT; keep upstream attribution in LICENSE):
 
@@ -425,14 +425,14 @@ src/
   config.ts          zod env schema; exit non-zero on invalid (§8)
   server.ts          SDK v2 server + adapter, /mcp + /healthz (§3)
   auth/resolver.ts   credential→outbound-headers seam (§2, §4) — the IdP swap point
-  grocy/client.ts    REST client: base URL, timeout, §7 status→category mapping
-  grocy/shape.ts     row shaping + unit-name resolution + date sentinels (§5)
+  victual/client.ts    REST client: base URL, timeout, §7 status→category mapping
+  victual/shape.ts     row shaping + unit-name resolution + date sentinels (§5)
   tools/<name>.ts    one per tool: zod input/output schema + handler (§5, later §6)
 tests/
   fixtures/          imported from plan 14's response-contract snapshot
   contract/          replay tests per tool (§11.1)
   tools/             handler unit tests (mocked client)
-compose.yaml         sidecar + Grocy + PostgreSQL + demo data, for §11.2–11.5
+compose.yaml         sidecar + Victual + PostgreSQL + demo data, for §11.2–11.5
 ```
 
 No `build/` artifacts in git, no YAML config file, no stored credentials — the three
@@ -443,12 +443,14 @@ recurring hygiene findings from Appendix A, stated as rules.
 1. **Where does the sidecar live?** The existing `datagen24/mcp-grocy` repo carries
    working release/CI and Home Assistant add-on packaging worth keeping, but this spec
    shares almost no code with it (Appendix A). Options: a v3 rewrite branch in that
-   repo inheriting the packaging, or a fresh `grocy-mcp` repo importing the packaging
+   repo inheriting the packaging, or a fresh `victual-mcp` repo importing the packaging
    files. Either satisfies the spec; the repo choice is about release hygiene.
 
-   > **Response:** New repo (2026-08-29) — the parent Grocy fork is itself being
-   > renamed, so a rewrite branch inside `mcp-grocy` would tie the new server to two
-   > stale names at once. §12 records what gets imported and the naming rule.
+   > **Response:** New repo (2026-08-29) — the parent fork was itself being renamed,
+   > so a rewrite branch inside `mcp-grocy` would have tied the new server to two stale
+   > names at once. That rename has since landed on **Victual**
+   > ([plan 16](plans/16-project-rename.md)), so the new repo is `victual-mcp`. §12
+   > records what gets imported.
 2. **Should `tools/list` reflect the key's capabilities** once writes exist — i.e.
    hide write tools from read-only keys? Requires the sidecar to learn the key's flag
    (a `GET /api/user`-adjacent probe or a header echo), which is a per-request lookup
@@ -457,7 +459,7 @@ recurring hygiene findings from Appendix A, stated as rules.
    > **Response:** Adopted (2026-08-29), and promoted from "once writes exist" to a
    > v1 behavior: the design is in §5 (per-request probe of
    > `GET /api/user/capabilities`, static tool→permission map, 5-minute private
-   > cache hint) and the enabling Grocy endpoint is §4.2 item 5. From day one a key
+   > cache hint) and the enabling Victual endpoint is §4.2 item 5. From day one a key
    > whose user lacks `RECIPES` simply doesn't see `recipes_i_can_cook`; when writes
    > land their filtering costs nothing new.
 3. **Does the Home Assistant add-on shape survive?** It is a packaging of the stdio/
@@ -465,7 +467,7 @@ recurring hygiene findings from Appendix A, stated as rules.
    the HTTP+bearer shape like every other client — worth deciding before porting the
    add-on config forward.
 
-   > **Response:** Retired (2026-08-29). The sidecar lives alongside the Grocy
+   > **Response:** Retired (2026-08-29). The sidecar lives alongside the Victual
    > instance in the k3s cluster; anything (Home Assistant included) that wants it
    > speaks HTTP+bearer to that one deployment like every other client. §12's import
    > list drops the add-on scaffolding accordingly.
@@ -481,7 +483,7 @@ Evaluated 2026-08-29 at `/Users/speterson/src/mcp-grocy`, branch
 
 **Verdict: rebuild the protocol layer on SDK v2; salvage packaging, test discipline,
 and selected handler logic as reference material.** The fork is a useful catalog of
-what a Grocy MCP server can do, and its release/HA-add-on plumbing is real work worth
+what a Victual MCP server can do, and its release/HA-add-on plumbing is real work worth
 keeping. Its protocol core predates two spec rewrites and fights this spec's
 architecture at every layer that matters.
 
@@ -503,7 +505,7 @@ architecture at every layer that matters.
   — clients that believe the declaration get MethodNotFound.
 - No auth of any kind on the HTTP transport: no bearer check, `origin: '*'` CORS, no
   DNS-rebinding protection, and a stored single `GROCY_API_KEY` that makes every
-  reachable caller into that Grocy user — the exact model §4 exists to replace.
+  reachable caller into that Victual user — the exact model §4 exists to replace.
 - Hand-written JSON Schema literals, no `outputSchema`, results as
   `JSON.stringify(raw, null, 2)` text blocks — the opposite of §5's shaping, and the
   configured `response_size_limit` is never enforced.
@@ -522,13 +524,13 @@ architecture at every layer that matters.
   (`/stock|sauce|…/` misclassifies "chicken stock"-adjacent names; the `prescription`
   branch is unreachable). The `grocy.defaults` YAML block written to configure all
   this is silently stripped by the config schema and read by nothing.
-- Load-bearing Grocy internals: meal-plan shadow-recipe lookup by the
+- Load-bearing Victual internals: meal-plan shadow-recipe lookup by the
   `YYYY-MM-DD#id` *name* convention, hard-failing when absent — precisely the
   coupling a REST-consuming sidecar must not have against a fork whose internals
   drift.
 - Per-tool sub-config (`recipes_cooking_complete`) is read under the wrong key and
   never takes effect; its validator is registered but never invoked.
-- No Grocy version/capability probe anywhere — mismatches surface as raw HTTP errors
+- No Victual version/capability probe anywhere — mismatches surface as raw HTTP errors
   at call time.
 
 ### What to carry forward
@@ -542,5 +544,5 @@ architecture at every layer that matters.
    allowlist), fuzzy product search (§5.4, deferred), smart workflows (deferred until
    they can be config-driven — the `grocy.defaults` block is the germ of that config,
    and the lesson is that config must be schema-validated and provably read).
-4. **The endpoint census** (§3 of the survey): its dedup'd list of Grocy REST calls is
+4. **The endpoint census** (§3 of the survey): its dedup'd list of Victual REST calls is
    a ready-made map of what a fuller tool surface eventually touches.

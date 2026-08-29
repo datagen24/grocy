@@ -19,7 +19,7 @@ perimeter" is not "on a trusted host". Anything that requires only network reach
 exploit is in scope.
 
 **The household is multi-user, and the users are not peers.** This is a household ERP with
-chore tracking, which means real accounts for family members — including children. Grocy
+chore tracking, which means real accounts for family members — including children. Victual
 has a user system and thirty permission constants precisely because those accounts are
 meant to have different capabilities. That makes the *authenticated* trust boundary a real
 one, not a formality: a low-privilege account escalating to admin, reading another user's

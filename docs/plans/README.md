@@ -112,7 +112,7 @@ as parallel sessions.
 ### Wave 0 — decisions and scaffolding (one sitting)
 
 - **A dev/CI container, in this repo.** Both `.devtools/pgsql` scripts run under a
-  `grocy-fork-dev` image, and there is no Dockerfile, compose file or Makefile anywhere
+  `victual-dev` image, and there is no Dockerfile, compose file or Makefile anywhere
   in the tree — nor a vendored `packages/`. 14's verification 6 ("one command from a
   clean checkout") is unmeetable until that exists, so it is the first thing built: a
   Dockerfile (PHP 8.5, `pdo_sqlite` + `pdo_pgsql`, composer install) and a compose file

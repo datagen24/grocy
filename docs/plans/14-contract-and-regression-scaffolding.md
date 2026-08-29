@@ -17,7 +17,7 @@ asserting it. But its interface is:
     docker run --rm --network grocynet -v "$PWD":/app -v /path/to/scratch:/scratch \
       -v /path/to/scratch/data:/data \
       -e DIFFTEST_SQLITE_DSN=… -e DIFFTEST_PGSQL_DSN=… \
-      grocy-fork-dev php /app/.devtools/pgsql/difftest.php seed.sql <view> [<view> …]
+      victual-dev php /app/.devtools/pgsql/difftest.php seed.sql <view> [<view> …]
 
 and `seed.sql` is not in the repository. Neither is the list of views. There are 45 views
 in the baseline; which of them a given change should be tested against is knowledge that
@@ -41,7 +41,7 @@ is really two namespaces describing two different setups of the same pair of eng
 reconciling them into one is part of the runner's job rather than a detail of it.
 
 **Neither the image nor the pristine database exists in this repository.** Both
-invocations name a `grocy-fork-dev` image; there is no `Dockerfile`, no compose file and
+invocations name a `victual-dev` image; there is no `Dockerfile`, no compose file and
 no `Makefile` anywhere in the tree, so that image is something the operator built once
 from instructions that were never written down. And `TRIGTEST_PRISTINE_PATH` wants a
 *migrated* SQLite database, which nothing in the repo can produce from a command line:
@@ -107,7 +107,7 @@ checkout" is not reachable and verification 6 below is not achievable:
 
 - **An in-repo development environment.** A `Dockerfile` and a `docker-compose.yml`
   authored here: PHP 8.5 with `pdo_sqlite` and `pdo_pgsql`, `composer install` into
-  `packages/`, and a PostgreSQL service alongside it. This is what `grocy-fork-dev`
+  `packages/`, and a PostgreSQL service alongside it. This is what `victual-dev`
   refers to in both existing invocations and it does not exist in this repository — so
   the suite's first requirement is the image the suite runs in. Once it is committed,
   CI uses the same image rather than assembling its own (Q3).

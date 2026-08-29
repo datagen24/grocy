@@ -108,7 +108,7 @@ compares what their views actually return:
       -v "$PWD":/app -v /path/to/scratch:/scratch -v /path/to/scratch/data:/data \
       -e DIFFTEST_SQLITE_DSN=sqlite:/data/difftest.db \
       -e DIFFTEST_PGSQL_DSN='pgsql:host=grocy-pg;port=5432;dbname=grocy_full' \
-      grocy-fork-dev php /app/.devtools/pgsql/difftest.php seed.sql <view> [<view> ...]
+      victual-dev php /app/.devtools/pgsql/difftest.php seed.sql <view> [<view> ...]
 
 It seeds SQLite only, so SQLite's triggers fire, then copies the resulting tables into
 PostgreSQL. That isolates view logic from trigger behaviour.
@@ -427,7 +427,7 @@ identical table state, applies the same statements to each, and then compares ev
       -e TRIGTEST_SQLITE_PATH=/data/trigtest.db \
       -e TRIGTEST_PRISTINE_PATH=/scratch/demodata/grocy_en.db \
       -e TRIGTEST_PGSQL_DSN='pgsql:host=grocy-pg;port=5432;dbname=grocy_trig' \
-      grocy-fork-dev php /app/.devtools/pgsql/trigdifftest.php script.sql [script.sql ...]
+      victual-dev php /app/.devtools/pgsql/trigdifftest.php script.sql [script.sql ...]
 
 A script is plain SQL, one statement per `;` at end of line. To check a constraint that a
 trigger is supposed to enforce, precede the statement with

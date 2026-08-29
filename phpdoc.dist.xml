@@ -18,7 +18,7 @@
 		build artifact and is deliberately not committed.
 	-->
 
-	<title>grocy (datagen24 fork)</title>
+	<title>Victual (a hard fork of grocy)</title>
 
 	<paths>
 		<output>.phpdoc/build</output>
