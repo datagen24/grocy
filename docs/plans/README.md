@@ -39,7 +39,15 @@ the plans noted below start minting more of what they clean up.
 
 | # | Plan | Upstream | Depends on | Size |
 |---|---|---|---|---|
-| 16 | [Project rename](16-project-rename.md) | — | before first deployment | small–medium |
+| 16 | [Project rename](16-project-rename.md) | — | before first deployment | **done in the codebase** |
+
+The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
+so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
+`victual.db`, the bin scripts are `bin/victual-*`, the spec is
+`victual.openapi.json`, and `GET /api/system/info` answers `victual_version`.
+Anything written from here forward uses those names. What is *not* renamed, ever,
+is the `grcy:` grocycode magic and the format's name — see 16's Tier 0. The repo
+rename and the registry claims happen at announcement time, not in a commit.
 
 **Blocking and de-risking, in one place:**
 

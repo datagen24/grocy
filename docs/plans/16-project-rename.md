@@ -6,11 +6,14 @@ to break.
 **Depends on:** nothing — and the internal renames depend on *happening before
 the first deployment*, not on any other plan (the earlier lean on
 [15](15-deliberate-cleanup.md)'s breaking batch is the fallback, not the plan).
-**Status:** direction settled (see Q1), namespaces checked (see Q3), execution
-staged. No instance of this fork is deployed anywhere yet — the household runs
-upstream grocy — so the internal renames are currently free and get strictly
-more expensive the day the first instance deploys. That window drives the
-timing below.
+**Status:** **landed in the codebase.** Direction settled (Q1), namespaces
+checked (Q3), and Tiers 1, 2 and 3 all executed — see [Executed](#executed)
+below for what landed, what the survey missed, and what deliberately did not
+move. No instance of this fork was deployed anywhere when it landed — the
+household runs upstream grocy — which is exactly why the breaking parts went in
+now rather than waiting for [15](15-deliberate-cleanup.md)'s batch. What remains
+is outside the repository: the GitHub repo rename and the registry/domain claims
+of Q3, which are done at announcement time, not by a commit.
 
 ## Background
 
@@ -56,7 +59,7 @@ Counts from the tree as of this plan's writing.
 
 ### Tier 0 — never rename (wire formats)
 
-- **The grocycode magic `grcy:`** (`helpers/Grocycode.php`,
+- **The grocycode magic `grcy:`** — **held, as intended** (`helpers/Grocycode.php`,
   [docs/grocycode.md](../grocycode.md)). No fork instance is deployed, but the
   household's *upstream* grocy instance prints labels with this magic, and
   `bin/grocy-db-import` exists precisely to bring that instance's database —
@@ -64,9 +67,12 @@ Counts from the tree as of this plan's writing.
   breaks that migration path and every upstream-printed label. It is a wire
   format: keep `grcy` forever, documented as a historical artifact — at most
   accept a second magic alongside it someday. Do not let a rename sweep "fix"
-  this.
+  this. The reasoning now lives where someone would look for it, in
+  [docs/grocycode.md](../grocycode.md) itself, and the format's *name*
+  ("Grocycode", including its per-locale translations) is held with the magic:
+  it names the wire format, not the project.
 
-### Tier 1 — would break deployed instances; free while none exist
+### Tier 1 — would break deployed instances; free while none exist — **all landed**
 
 - **Env-var prefix `GROCY_*`** — every setting is overridable via the prefix
   (`helpers/extensions.php:244`), and `GROCY_DATAPATH` is load-bearing at boot
@@ -90,7 +96,7 @@ Counts from the tree as of this plan's writing.
   (`services/SessionService.php:11`) — renaming logs every user of a deployed
   instance out once; with none, free.
 
-### Tier 2 — internal, non-breaking but high-churn (schedule around open branches)
+### Tier 2 — internal, non-breaking but high-churn — **all landed**
 
 - **PHP namespace `Grocy\`** — 72 files plus composer autoload. Safe but a
   merge-conflict bomb for every open branch; do it at a quiet point between
@@ -106,7 +112,7 @@ Counts from the tree as of this plan's writing.
   translation in every locale. As a hard fork with no live Transifex feed this
   is tolerable, but it is a known cost, not free.
 
-### Tier 3 — free, and some should change regardless of the rename
+### Tier 3 — free, and some should change regardless of the rename — **all landed**
 
 - **User-Agent on barcode API calls** (`services/StockService.php:849`) sends
   `Grocy/<version> (https://grocy.info)` — advertising *upstream's* URL on this
@@ -245,3 +251,100 @@ Counts from the tree as of this plan's writing.
   ground rules, not a side effect.
 - The grocycode wire format (`grcy:` magic) is out of scope permanently
   (Tier 0): printed labels outlive branding.
+
+## Executed
+
+Landed 2026-08-29 on `claude/plan-16-remaining-steps-cb7a43`, in the order the
+tiers argue for: outward first, then the breaking identifiers, then the
+high-churn internals, each as its own commit.
+
+**Tier 3 — outward.** Both barcode-lookup User-Agents (`StockService` and the
+Open Food Facts plugin) now name Victual and this repository instead of
+upstream's URL. The about page drops the "Do you find Grocy useful? / Say
+thanks" block from the system-info tab and gains the Q5 attribution footer in
+its place: hard fork of grocy, the two licences and who holds each, the plain
+statement that no upstream sync relationship exists in either direction, and
+the say-thanks link kept there rather than in the UI chrome. Plus README prose,
+the package name, the phpDocumentor title, the dev image (`victual-dev`), and
+the MCP spec, whose sidecar repo is now `victual-mcp` outright rather than
+under a working name.
+
+**Tier 1 — breaking, and free.** `GROCY_*` → `VICTUAL_*` across the whole
+setting surface; the four database helper functions in both engines, plus the
+PostgreSQL session variables (`grocy.user_id`, `grocy.in_quc_*`) the survey did
+not list; `data/grocy.db` → `data/victual.db` and the per-locale demo file;
+`DB_NAME`/`DB_USER` and every matching value in compose, CI and the suite;
+`bin/victual-migrate` and `bin/victual-db-import`; and the session cookie.
+
+**Tier 2 — internal.** The `Grocy\` namespace as one mechanical commit of its
+own; the frontend global, its `public/js/grocy*.js` and `public/css/grocy*.css`
+files and the two CSS classes; `victual.openapi.json` with its title and a
+`license` block that no longer claims grocy.info is a licence; and the three
+name-bearing msgids, with two now-unused entries dropped.
+
+### What the survey missed
+
+Four things in the tree carried the name and were not in the tiers above. All
+four are the same category as items that were, and all four landed with them:
+
+- **The API key header `GROCY-API-KEY`** (`app.php:96`) — exactly the session
+  cookie's category. Now `VICTUAL-API-KEY`, in the app, the OpenAPI document
+  and the MCP spec that accepts it "for parity".
+- **`grocy_version` in `GET /api/system/info`** — the only response *field* in
+  the whole API surface carrying the name, now `victual_version`. This is a
+  breaking API change and is called out as one per the roadmap's ground rules,
+  not slipped in; the justification is Tier 1's, since no client exists.
+- **User-visible strings**: the PWA manifest `name`/`short_name`, the iCal
+  export's `PRODID` and its `Grocy.ics` attachment filename, the thermal
+  printer banner, page titles, and the "Unable to run Grocy" boot message.
+- **The 500 page**, which sent people to *upstream's* issue tracker for
+  failures in this fork's code.
+
+### What deliberately did not move
+
+- **Tier 0**, widened slightly in the doing: the `grcy:` magic, and with it the
+  name "Grocycode" and its per-locale translations ("Grocykood", "Grocy-код",
+  "GrocyKoodi"). Those name the wire format, not the project. The reasoning is
+  now recorded in [docs/grocycode.md](../grocycode.md) where a reader would look
+  for it. `GROCYCODE_TYPE` keeps its stem for the same reason — it configures
+  that format — and so reads `VICTUAL_GROCYCODE_TYPE` as an environment
+  variable, which is accurate rather than awkward.
+- **Every reference to upstream**: the fork attribution, `grocy/grocy` issue
+  links, the upstream demos, r/grocy, the say-thanks URL, `LICENSE.md`'s MIT
+  section, the `.tx` Transifex project (upstream's), the `mcp-grocy` prior art
+  in the MCP spec's Appendix A, and the changelog, which is upstream's release
+  record and not ours to rewrite.
+- **`update.sh`**, which downloads and installs an upstream *release*. Renaming
+  its strings would have made it look like this fork's updater, which it is
+  emphatically not; it now carries a header comment saying so.
+- **Inflected translations of the app name** in Estonian and Finnish
+  ("Grocyt", "Grocyssäsi") — the known cost the Tier 2 note predicted, left
+  rather than guessed at. Where the brand stood as its own word the translation
+  was carried across instead of orphaned, in 14 locales.
+- **The Victualer actor** (Q1). Naming automated writers "the Victualer" in the
+  audit trail is an actor identity, not a rename: it needs a writer to attribute
+  and belongs with [02](02-mcp-endpoint.md)'s sidecar, which is where the
+  credential→user seam already lives.
+
+### Verification
+
+- Fresh SQLite database: migrations run clean to 256, and the app serves
+  stockoverview, shoppinglist, recipes, mealplan, chores, products, calendar
+  and about at 200 with demo data. The layout requests only `victual*` assets
+  and each one serves 200.
+- `GET /api` 200, `/api/openapi/specification` reports "Victual REST API",
+  `/api/system/info` answers with `victual_version`, the manifest renders
+  "Victual", and the iCal feed emits `PRODID:Victual` as `Victual.ics`.
+- The differential suite passes all four phases against a real PostgreSQL 16:
+  migration numbering, freshly-migrated state identical, all views identical,
+  trigger behaviour identical across the eight scripts, and every failed write
+  path rolled back on both engines. That exercises `bin/victual-migrate` and
+  `bin/victual-db-import` under the renamed identifiers, which is the migration
+  path the Constraints protect.
+
+### Still outstanding, outside the repository
+
+Q3's claims, which the plan itself says are made at announcement time and not
+before: renaming `datagen24/grocy` to `datagen24/victual` on GitHub (the old
+path auto-redirects), registering `victual.io` with the `-er`/`-ller` variants
+as redirects, and claiming npm `victual` and Docker/GitHub `victualer`.
