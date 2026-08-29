@@ -40,6 +40,7 @@ the plans noted below start minting more of what they clean up.
 | # | Plan | Upstream | Depends on | Size |
 |---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | **done in the codebase** |
+| 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; read before 11 and 16 | small, ongoing |
 
 The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
 so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
@@ -66,6 +67,12 @@ rename and the registry claims happen at announcement time, not in a commit.
   everything else writable; only both together give a pod with no volume.
 - **10's `bin/victual-migrate` precedes 14**, not the other way round — the one place the
   wave order below overrides the plan numbering, and why the CLI is pulled into wave 0.
+- **17 before [11](11-api-error-handling.md), [16](16-project-rename.md) and
+  [10](10-cold-start-statelessness.md)** — the first two break third-party clients and 17
+  is where the cost of each candidate decision is written down. 10 is there for a different
+  reason: the Home Assistant integration polls every thirty seconds, so scale-to-zero is not
+  achieved by 10 alone. 17 also asks 14 for client endpoint manifests asserted against the
+  snapshot, so it wants reading before 14 piece 2 is built.
 - **15 is last**, except its auth refactor, which wants to precede
   [02](02-mcp-endpoint.md), and which carries the parked `shopping_locations` rename.
 
