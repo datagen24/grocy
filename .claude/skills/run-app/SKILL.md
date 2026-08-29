@@ -21,11 +21,14 @@ composer install --no-interaction --ignore-platform-req=php
 
 ```bash
 yarn install --frozen-lockfile
-ln -sfn ../node_modules public/packages
 ```
 
-The views load CSS/JS from `/packages/...`, which is this symlink
-(gitignored). Without it the app boots unstyled.
+The views load CSS/JS from `/packages/...`, and `.yarnrc` already sets
+`--modules-folder public/packages`, so yarn installs straight there — there
+is no `node_modules` and no symlink to make. If a stale `public/packages`
+symlink exists from an earlier session, yarn fails with
+`EEXIST: file already exists, mkdir '.../public/packages'`; `rm -f
+public/packages` and re-run. Without the packages the app boots unstyled.
 
 ## 3. PHP version gate (only if `php -v` < 8.5)
 
@@ -91,7 +94,26 @@ const { chromium } = require('playwright-core');
 ```
 
 Look at the screenshot after taking it — a blank frame means the boot or
-the styling symlink (step 2) failed.
+step 2 failed.
+
+**Demo pictures do not load in this environment.** Demo generation fetches
+product and recipe photos from `releases.grocy.info`, which the agent proxy
+denies (403 on CONNECT), and `DownloadFileIfNotAlreadyExists` writes a
+0-byte file instead of failing — so recipe thumbnails render as broken-image
+icons on `/mealplan`. For presentable screenshots, clear the references
+first:
+
+```bash
+php -r '$d = new PDO("sqlite:data/victual_en.db");
+  $d->exec("UPDATE recipes SET picture_file_name = NULL");
+  $d->exec("UPDATE products SET picture_file_name = NULL");'
+find data/storage -type f -size 0 -delete
+```
+
+Check for the problem rather than assuming: after loading a page,
+`document.images` filtered on `complete && naturalWidth === 0` lists what
+failed. One hit is expected and harmless — `#productcard-product-picture`
+is a `d-none` template element.
 
 ## Variants
 
