@@ -9,3 +9,7 @@ embedded.txt
 # defaults to a relative path in CI and is easy to point at the working tree by hand.
 /clover.xml
 *.cov
+
+# Local-only files: per-machine Claude settings (skills under .claude/ are tracked) and macOS metadata
+**/.claude/settings.local.json
+.DS_Store
