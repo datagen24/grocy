@@ -35,6 +35,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 		zip \
 	&& rm -rf /var/lib/apt/lists/*
 
+# pcov, so `SUITE_COVERAGE=1 .devtools/pgsql/run-tests.sh` works in the image without
+# further setup. It is the cheap driver — line coverage only, no stepping or profiling —
+# and it does nothing at all unless a process asks it to, so leaving it enabled costs the
+# ordinary runs nothing measurable. Xdebug would also work and is roughly an order of
+# magnitude slower.
+RUN pecl install pcov \
+	&& docker-php-ext-enable pcov
+
 # fileinfo, ctype, zlib, mbstring, filter, iconv, tokenizer and json are already compiled
 # into the base image; PrerequisiteChecker checks for all of them.
 

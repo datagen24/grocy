@@ -171,6 +171,19 @@ Piece 2 in CI needs a booted instance, not just two databases, which is a step u
 complexity. It may be right to run it locally first and add it to CI once it has proven
 stable.
 
+### 4. Coverage of the suite itself (added after the plan was written)
+
+Not part of the original plan and not a fourth kind of test: a way to see what pieces 1
+and 3 actually reach. `SUITE_COVERAGE=1` on the runner hooks every PHP process the run
+spawns and prints a line-coverage summary at the end; CI does this on every run and keeps
+the Clover file. Nothing is gated on the number.
+
+The reason it is worth having here specifically is the blind spot this plan's own suite
+had, and which cost three PostgreSQL defects to find: the view and trigger phases drive
+SQL at each engine and never enter application code, so for a while nothing in the suite
+executed a single line of `StockService` against PostgreSQL and no report said so. A
+coverage figure would have. See [.devtools/coverage/README.md](../../.devtools/coverage/README.md).
+
 ### Schema
 
 None. This plan adds no migration and touches no view. It does add fixture SQL, which is
