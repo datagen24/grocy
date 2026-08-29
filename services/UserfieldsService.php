@@ -24,7 +24,7 @@ class UserfieldsService extends BaseService
 	const USERFIELD_TYPE_SINGLE_LINE_TEXT = 'text-single-line';
 	const USERFIELD_TYPE_SINGLE_MULTILINE_TEXT = 'text-multi-line';
 
-	/** @var object|null Lazily decoded grocy.openapi.json (see GetOpenApispec()) */
+	/** @var object|null Lazily decoded victual.openapi.json (see GetOpenApispec()) */
 	protected $OpenApiSpec = null;
 
 	/**
@@ -191,14 +191,14 @@ class UserfieldsService extends BaseService
 	}
 
 	/**
-	 * The decoded grocy.openapi.json, loaded once per instance (source of the
+	 * The decoded victual.openapi.json, loaded once per instance (source of the
 	 * ExposedEntity enum used by GetEntities()).
 	 */
 	protected function GetOpenApispec()
 	{
 		if ($this->OpenApiSpec == null)
 		{
-			$this->OpenApiSpec = json_decode(file_get_contents(__DIR__ . '/../grocy.openapi.json'));
+			$this->OpenApiSpec = json_decode(file_get_contents(__DIR__ . '/../victual.openapi.json'));
 		}
 
 		return $this->OpenApiSpec;

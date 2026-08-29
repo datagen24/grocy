@@ -12,7 +12,7 @@ hardening set.
 
 ## Today
 
-The `/api` route group registers 86 operations across 73 paths and `grocy.openapi.json`
+The `/api` route group registers 86 operations across 73 paths and `victual.openapi.json`
 documents 86 operations across 73 paths — the totals agree, and two individual mismatches
 hide inside them (see [14](14-contract-and-regression-scaffolding.md)). The
 `ExposedEntity` allow-lists are read from the spec at runtime so entity drift is

@@ -98,7 +98,7 @@ class SystemApiController extends BaseApiController
 	}
 
 	/**
-	 * GET /api/system/info - returns information about the installed grocy version and environment.
+	 * GET /api/system/info - returns information about the installed Victual version and environment.
 	 */
 	public function GetSystemInfo(Request $request, Response $response, array $args)
 	{

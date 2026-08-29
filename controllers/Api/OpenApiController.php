@@ -59,7 +59,7 @@ class OpenApiController extends BaseApiController
 	}
 
 	/**
-	 * GET /api/openapi/specification - returns grocy.openapi.json enriched at runtime
+	 * GET /api/openapi/specification - returns victual.openapi.json enriched at runtime
 	 * with the installed version, the instance server URL and derived ExposedEntity_*
 	 * enum variants (including user entities and minus not editable/deletable/listable
 	 * entities) used by the Swagger UI.

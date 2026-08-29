@@ -160,7 +160,7 @@ touches local mutable state:
 **Verdict: structurally sound and spec-honest; per-endpoint error discipline is the
 weak spot.**
 
-- Route table vs `grocy.openapi.json`: of ~74 API routes, the only mismatch is the
+- Route table vs `victual.openapi.json`: of ~74 API routes, the only mismatch is the
   self-referential `/api/openapi/specification` missing from the spec. The
   `ExposedEntity` allow-lists are read from the spec at runtime, so entity drift is
   impossible by construction — a genuinely good mechanism, and the right foundation

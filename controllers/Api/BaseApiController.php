@@ -178,13 +178,13 @@ class BaseApiController extends BaseController
 	}
 
 	/**
-	 * Lazily loads and returns grocy.openapi.json as an object (also used for entity/file group validation).
+	 * Lazily loads and returns victual.openapi.json as an object (also used for entity/file group validation).
 	 */
 	protected function GetOpenApispec()
 	{
 		if ($this->OpenApiSpec == null)
 		{
-			$this->OpenApiSpec = json_decode(file_get_contents(__DIR__ . '/../../grocy.openapi.json'));
+			$this->OpenApiSpec = json_decode(file_get_contents(__DIR__ . '/../../victual.openapi.json'));
 		}
 
 		return $this->OpenApiSpec;

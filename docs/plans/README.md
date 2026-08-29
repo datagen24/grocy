@@ -72,7 +72,7 @@ It is not a permanent commitment to SQLite — this is a hard fork and will drif
 feature is cheaper or only sensible on PostgreSQL, say so and make it PostgreSQL only
 rather than contorting the design (plan 01 is the first case).
 
-**Additive API.** New entities go in the `ExposedEntity` enum in `grocy.openapi.json`;
+**Additive API.** New entities go in the `ExposedEntity` enum in `victual.openapi.json`;
 existing endpoints keep their response shape. Anything that would change an existing
 response is called out explicitly in the plan rather than slipped in.
 

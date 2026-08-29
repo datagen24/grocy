@@ -58,7 +58,7 @@ column type and the JSON changes; nothing anywhere notices.
 
 The route/spec mismatches are a small illustration — there are two, and they point in
 opposite directions: `/api/openapi/specification` is registered at `routes.php:154` and
-missing from `grocy.openapi.json`, while `/api/recipes/{recipeId}/copy` is documented in
+missing from `victual.openapi.json`, while `/api/recipes/{recipeId}/copy` is documented in
 the spec with no route behind it. The totals hide both, because the route table and the
 spec each come to 86 operations across 73 paths. They have survived because nothing
 compares the two — and the pair matters for the parity assertion in piece 2: a check
@@ -218,7 +218,7 @@ against it for now.
 
 ### API
 
-**No change to any endpoint**, with one exception: `grocy.openapi.json` gains the missing
+**No change to any endpoint**, with one exception: `victual.openapi.json` gains the missing
 `/api/openapi/specification` path, loses or gains a route for
 `/api/recipes/{recipeId}/copy`, and gains documented error responses for whatever
 [11](11-api-error-handling.md) has converted by then. Adding a path to the spec is
