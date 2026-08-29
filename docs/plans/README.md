@@ -35,6 +35,7 @@ the plans noted below start minting more of what they clean up.
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4 | 11, 13, 14 (per item) | small + one large open question |
 | 16 | [Product substitutions](16-product-substitutions.md) | 07-Q6 | 12, 14 | medium |
+| 17 | [Density conversions](17-density-conversions.md) | 16-Q2 | 14, 16 (soft) | unknown — all questions open |
 
 **Blocking and de-risking, in one place:**
 
@@ -192,6 +193,13 @@ as parallel sessions.
   ordering) waits for real shopping trips to prove it wanted.
 
 ### Usage-driven tail — no scheduled slot
+
+- **17 density conversions** — deliberately unscheduled. It sits behind
+  [16](16-product-substitutions.md), which is what will show whether hand-maintained
+  per-pair factors are painful enough to need a density model at all. Its first two
+  questions are forced rather than stylistic: `quantity_unit_conversions` enforces one row
+  per `(from_qu, to_qu, product)`, so packed-versus-sifted flour cannot be expressed by
+  using the existing table more carefully.
 
 - **02 writes** (`MCP_WRITE`-gated) once read-only has proven the transport — 13 is
   already in place by then.

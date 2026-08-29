@@ -239,6 +239,9 @@ this checkable at all:
    > from a right one. That accuracy burden sits on the agent maintaining the factors, not
    > on the schema. The schema's only job is to keep the three states above
    > distinguishable, so that a null is never silently treated as a 1.
+   >
+   > Whether that burden can later move off the agent and into a real density model is
+   > [17](17-density-conversions.md), which this answer created and which is entirely open.
 3. **Advisory or auto-satisfying?** Proposed advisory, per the reasoning above. The
    opposite choice makes `need_fulfilled` substitution-aware, which changes an existing
    response and would need saying so loudly.
