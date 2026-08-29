@@ -168,10 +168,21 @@ a *failed* operation leaves nothing behind.
    behaviour under a longer transaction is only observable there.
 3. **`trigdifftest.php` before and after.** `01_purchase_consume_undo.sql`,
    `03_parent_child_products.sql`, `06_qu_change_with_stock.sql` and `07_cascades.sql`
-   all drive these entrypoints; every one must produce identical table state across both
-   engines before and after the change. Triggers firing inside a transaction rather than
-   in autocommit is exactly the sort of thing that could differ, and this is the tool that
-   would show it.
+   exercise the same triggers these entrypoints fire; every one must produce identical
+   table state across both engines before and after the change.
+
+   What this does **not** do, despite an earlier wording here that said it did: those
+   scripts are plain SQL applied straight to each engine through PDO — nothing under
+   `.devtools/pgsql/` calls `StockService` — so they never enter the wrapped code and
+   never run inside one of the new transactions. They confirm the surrounding trigger
+   layer is untouched, which is worth having and is a real regression check. They cannot
+   confirm that an entrypoint rolls back, and reading a green suite as evidence of that
+   would be reading it wrong.
+
+   Which leaves check 1 as the only thing that verifies the property this plan exists
+   for. That is an argument for its probe being committed rather than run once and
+   discarded — as things stand, nothing in CI would notice if the wrapping were removed
+   again.
 4. **Happy-path equivalence against a real dataset.** Take a populated database, run a
    scripted sequence — purchase, consume partial, transfer between locations, open, undo
    the transaction — and diff the resulting `stock` and `stock_log` against the same
