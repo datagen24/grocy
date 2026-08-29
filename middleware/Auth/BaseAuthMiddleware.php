@@ -133,12 +133,28 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 	/**
 	 * Whether the current request reached us over HTTPS, honoring X-Forwarded-Proto for the
 	 * reverse proxy deployments this fork targets. Same determination UrlManager makes.
+	 *
+	 * This trusts a client-settable header, which is the pattern sweep finding S4 rates
+	 * High - and is Low here because of which way it fails. The header can only make the
+	 * cookie *more* restrictive: forging it adds `Secure`, which stops that browser sending
+	 * the cookie back over plain HTTP. That is a self-inflicted denial of service, not an
+	 * escalation, and it cannot remove a flag or reveal anything. When S4's trusted-proxy
+	 * allowlist lands in wave 2 this should be bounded by it too, so both header-trust
+	 * decisions are made in one place rather than two.
 	 */
 	protected static function IsHttpsRequest(): bool
 	{
-		if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && str_contains($_SERVER['HTTP_X_FORWARDED_PROTO'], 'https'))
+		if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']))
 		{
-			return true;
+			// The header is a comma-separated list when more than one proxy appends to it;
+			// the first entry is the scheme the client actually used. Matched exactly rather
+			// than by substring, so a value merely containing "https" does not qualify.
+			$forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+
+			if ($forwardedProto === 'https')
+			{
+				return true;
+			}
 		}
 
 		return !empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off';

@@ -407,9 +407,15 @@ class BaseApiController extends BaseController
 				if (!in_array($key, $htmlColumns))
 				{
 					// A text column is stored as the text that was typed, so that "&" is "&"
-					// wherever it is displayed. Nothing renders these raw - the views escape
-					// them - so text that looks like markup is stored as such and displayed
-					// as such. Never do this to an HTML column (see the constant above).
+					// wherever it is displayed. Every Blade render of these escapes, so text
+					// that looks like markup is displayed as text. Never do this to an HTML
+					// column (see the constant above).
+					//
+					// Not a complete defence, and knowingly so: `public/viewjs/mealplan.js`
+					// concatenates product and recipe names and meal plan notes into markup
+					// it hands to `.html()`, so those text columns still reach an HTML
+					// context. Escaping at that sink is plan 12's, which owns those files -
+					// see sweep finding S1's "What is still open".
 					$value = str_replace('&amp;', '&', $value);
 					$value = str_replace('&gt;', '>', $value);
 					$value = str_replace('&lt;', '<', $value);

@@ -140,6 +140,17 @@ class FilesApiController extends BaseApiController
 				throw new \Exception('Invalid filename');
 			}
 
+			// USERS_EDIT_SELF is a natural grant - it is what lets someone change their own
+			// password - and without this it would also let them delete every other user's
+			// picture, since the route carries no user id. Uploading needs no equivalent
+			// check: the name is new, so there is nothing to take away.
+			if ($args['group'] === 'userpictures'
+				&& !User::HasPermissions(User::PERMISSION_USERS_EDIT)
+				&& (!defined('VICTUAL_USER_PICTURE_FILE_NAME') || $fileName !== VICTUAL_USER_PICTURE_FILE_NAME))
+			{
+				throw new PermissionMissingException($request, User::PERMISSION_USERS_EDIT);
+			}
+
 			FilesService::GetInstance()->DeleteFile($args['group'], $fileName);
 
 			return $this->EmptyApiResponse($response);
@@ -204,7 +215,10 @@ class FilesApiController extends BaseApiController
 
 				$response = $response->withHeader('Cache-Control', 'max-age=2592000');
 				$response = $response->withHeader('Content-Type', $mimeType);
-				// Keeps the browser on the type above rather than sniffing the body
+				// Load-bearing, not belt and braces: a GIF/HTML polyglot passes getimagesize
+				// and sniffs as image/gif, so it is served inline - and it stays an image
+				// only because this header stops the browser sniffing its way to text/html.
+				// Removing this re-opens that path even with the checks above intact.
 				$response = $response->withHeader('X-Content-Type-Options', 'nosniff');
 				// RFC 5987 encoded, so a quote in the name cannot end the parameter
 				$response = $response->withHeader('Content-Disposition', $disposition . '; filename*=UTF-8\'\'' . rawurlencode($fileNameOutput));
@@ -265,7 +279,14 @@ class FilesApiController extends BaseApiController
 			}
 
 			// A name ending in .png that holds a script is the whole of the problem, so
-			// what was stored has to be what the extension said it was
+			// what was stored has to be what the extension said it was.
+			//
+			// Two limits worth knowing. This runs *after* the body is on disk, so it bounds
+			// what can be served, not what can be written - an upload size cap is sweep S10
+			// and belongs to plan 01's track. And it only fires for IMAGE_EXTENSIONS, so the
+			// bmp/tif/tiff/heic that GROUP_ALLOWED_EXTENSIONS admits into userfiles are
+			// stored unvalidated; they are safe because they sniff to a type outside
+			// INLINE_SERVED_TYPES and are therefore downloaded rather than rendered.
 			if (in_array(strtolower(pathinfo($fileName, PATHINFO_EXTENSION)), self::IMAGE_EXTENSIONS) && getimagesize($filePath) === false)
 			{
 				unlink($filePath);

@@ -352,6 +352,44 @@ function IsJsonString($text)
  *
  * @return bool
  */
+/**
+ * Whether a stored URL is safe to place in an href.
+ *
+ * Escaping the value protects the attribute, not the navigation: `{{ }}` renders
+ * `javascript:alert(1)` faithfully and the browser then runs it. Relative URLs and the
+ * three schemes below are allowed; anything else carrying a scheme is refused. The probe
+ * strips whitespace and control characters first because browsers ignore those inside a
+ * scheme, so `java\nscript:` is the same URL to them and has to be to us. Sweep finding
+ * S28.
+ *
+ * @param string|null $url
+ * @return bool
+ */
+function IsSafeExternalUrl($url)
+{
+	$probe = preg_replace('/[\x00-\x20]+/', '', (string)$url);
+
+	if (preg_match('/^([a-zA-Z][a-zA-Z0-9+.\-]*):/', $probe, $matches))
+	{
+		return in_array(strtolower($matches[1]), ['http', 'https', 'mailto'], true);
+	}
+
+	// No scheme at all - a relative URL, which cannot navigate anywhere but this origin
+	return true;
+}
+
+/**
+ * The given URL when it is safe to link to, and "#" when it is not - so an unsafe value is
+ * still visible as the link's text without being navigable. See IsSafeExternalUrl().
+ *
+ * @param string|null $url
+ * @return string
+ */
+function SafeExternalUrl($url)
+{
+	return IsSafeExternalUrl($url) ? (string)$url : '#';
+}
+
 function string_starts_with($haystack, $needle)
 {
 	return (substr($haystack, 0, strlen($needle)) === $needle);

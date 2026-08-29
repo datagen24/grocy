@@ -90,6 +90,29 @@ Those keep the purifier's output exactly as it came out — the S1 chain is clos
 precisely the columns that are rendered raw. Every other column is text: still purified,
 then un-escaped as before, so nothing about how `&` displays changes.
 
+**What is still open, and the claim that overreached.** An earlier draft of this section
+said the S1 chain was "closed for precisely the columns that are rendered raw". That is
+false, and the enumeration behind it was incomplete: it found `{!! !!}` in Blade and
+`.html($x->description)` in viewjs, and missed markup built by *string concatenation* and
+handed to `.html()`. `public/viewjs/mealplan.js` does exactly that with three text columns
+— `recipes.name` (`:213`), `products.name` (`:286`) and `meal_plan.note` (`:309`), plus the
+same names inside `data-recipe-name`/`data-product-name` attributes at `:208`, `:220`,
+`:281` and `:293`. Those columns are text, so they are still purified-then-un-escaped, and
+the original S1 chain reaches them: a product name of `&lt;img src=x onerror=…&gt;` is
+stored as a live tag and fires on opening the meal plan.
+
+This is not a regression — before the hotfix every column was un-escaped, so the sink was
+already live — and it is not fixed here, because fixing it means escaping at the sink in
+`public/viewjs`, which is [12](plans/12-frontend-shared-core.md)'s territory and which this
+hotfix is required not to touch. Making the *storage* safe instead is not available either:
+that is precisely the change that stores `M&amp;M's` for every name.
+
+So the accurate claim is narrower: **S1 is closed for the Blade renders and the
+`.html($x->description)` sinks, and remains open through `mealplan.js` until
+[12](plans/12-frontend-shared-core.md) escapes there.** `equipment.js` and
+`components/userfieldsform.js` build markup the same way and want the same pass when 12
+opens them.
+
 Two things follow from that split, and both are part of this change:
 
 - **The text columns that were being rendered raw are now escaped in the view**, since
@@ -138,6 +161,31 @@ Two departures:
   the ones a browser executes: no `svg`, `html`, `xhtml`, `xml` or `js`. A format that
   turns out to be wanted is one line in `GROUP_ALLOWED_EXTENSIONS`.
 
+Three residuals, recorded rather than left for someone to rediscover:
+
+- **`nosniff` is load-bearing, not defence in depth.** A GIF/HTML polyglot passes
+  `getimagesize` and sniffs as `image/gif`, so it is served inline — and stays an image
+  only because the header stops the browser sniffing on to `text/html`. The allow-list and
+  the content check do not cover that case; the header does. It is commented as such in
+  `ServeFile` so a future tidy-up does not remove it as redundant.
+- **The content check runs after the body is on disk**, so it bounds what can be *served*,
+  not what can be *written*. With S10's upload cap deferred to wave 1, an account that may
+  upload at all can still force unbounded disk writes; the extension allow-list does not
+  help, because the write happens first.
+- **`userfiles` admits `bmp`, `tif`, `tiff` and `heic`, which are not in
+  `IMAGE_EXTENSIONS`**, so they are stored without a content check. Safe under the serving
+  rules — they sniff to a type outside `INLINE_SERVED_TYPES` and are therefore downloaded
+  rather than rendered — but it is a real gap between "allowed as an image" and "validated
+  as an image", and it is only safe for as long as `INLINE_SERVED_TYPES` stays short.
+
+  **`userpictures` deletes are bound to the caller's own picture.** `USERS_EDIT_SELF` is a
+  natural grant — it is what lets a household member change their own password — and the
+  files route carries no user id, so without a check it would also let them delete every
+  other user's picture: S2's mass-unlink reduced rather than removed. `DeleteFile` now
+  requires `USERS_EDIT` unless the file being deleted is the caller's own
+  `VICTUAL_USER_PICTURE_FILE_NAME`. Uploads need no equivalent — the name is new, so there
+  is nothing to take away — which is why the binding is on delete alone.
+
 **S23 rode along**, per the roadmap's rule for S20–S24: the `Content-Disposition`
 filename is now RFC 5987 encoded (`filename*=UTF-8''` plus `rawurlencode`), so a quote
 in a name cannot end the parameter.
@@ -156,6 +204,24 @@ the `sessions` rows.
 The call is still `setcookie()` rather than a PSR-7 response header — 15-B2's other
 half, left where it was because `ProcessLogin` is a static with no response to write
 to, and 15-C1 rewrites that construction anyway.
+
+Two notes on what the cookie change touches:
+
+- **`X-Forwarded-Proto` is trusted with no proxy allowlist**, which is the pattern S4
+  rates High. It is Low here because of which way it fails: the header can only make the
+  cookie *more* restrictive, so forging it adds `Secure` and costs that browser its own
+  session over plain HTTP — a self-inflicted denial of service, not an escalation, and it
+  can neither remove a flag nor reveal anything. The comparison is against the first
+  entry of the list, matched exactly, rather than a substring test. When S4's
+  trusted-proxy allowlist lands in wave 2, this should be bounded by it as well, so both
+  header-trust decisions live in one place.
+- **The explicit `path` is an upgrade hazard for a subdirectory install.** `setcookie()`
+  previously defaulted to the request URI's directory; it is now `VICTUAL_BASE_PATH/`. A
+  root install resolves to `/` either way and nothing changes. Under a subdirectory, an
+  existing cookie at the old path can coexist with the new one under the same name, and
+  S19 — `Logout` deletes the session row without clearing the cookie — means the stale one
+  is not cleaned up either. Nothing is deployed today so nothing is affected; whoever
+  fixes S19 in wave 2 should clear the old path at the same time.
 
 **R1 — the feature flags.** `str_starts_with` in both loops, and `substr($constant, 8)`
 in the API one, so the UI sees `VICTUAL_FEATURE_FLAG_*` (what `public/viewjs` indexes
@@ -182,6 +248,7 @@ form shows its location field again.
 
 | # | Sev | Finding | Where | Fix |
 |---|---|---|---|---|
+| S28 | **Med** — *fixed* | **`javascript:` URIs in userfield links.** `components/userfields_tbody.blade.php` renders `<a href="{{ $userfieldObject->value }}">` for `USERFIELD_TYPE_LINK` and the decoded `$link` for `LINK_WITH_TITLE`. Blade's `{{ }}` escapes the *attribute* and does nothing about the *scheme*, and a userfield value is a text column — no markup for HTMLPurifier to act on, and `URI.AllowedSchemes` only governs hrefs inside purified HTML, never a bare column value a view drops into an `href`. So any `MASTER_DATA_EDIT` account can store `javascript:…` and it runs in this origin on click. Missed by the original sweep because its output-escaping pass looked for unescaped rendering, and this value is escaped; the category it lacked is URL-scheme sinks. Raised in review of the hotfix. | `views/components/userfields_tbody.blade.php`, `helpers/extensions.php` | Fixed in the hotfix: `SafeExternalUrl()` allows relative URLs plus `http`, `https` and `mailto`, and answers `#` otherwise. The probe strips whitespace and control characters before reading the scheme, because browsers ignore those inside one. The value is still shown as the link text, so nothing is hidden — it just does not navigate. |
 | S27 | **Low** | **The permissions API stores `permission_id` unvalidated, and a wrong value fails silently.** `SetPermissions` (`PUT`) and `AddPermission` (`POST`) write the body's `permission_id` into `user_permissions` verbatim — no check that it exists in `permission_hierarchy`, and the column takes a string. `PUT …/permissions` with `{"permissions":["STOCK"]}` answers 204 and writes a row that grants nothing, because `uihelper_user_permissions` joins on the numeric id. The failure is closed rather than open — the user ends up with *fewer* permissions, not more — but an administrator is told the grant succeeded when it did not, which is the same class of silent authorization failure as R1. Found while building a low-privilege account to verify S2's permission gate. | `controllers/Api/UsersApiController.php::SetPermissions`, `::AddPermission` | Validate each id against `permission_hierarchy` and answer 400 otherwise. Body-schema validation is 14 piece 2's (S16); this one is small enough to ride with 15-C1's user-permission work in wave 2. |
 
 ### Regression found on the way
@@ -229,7 +296,10 @@ and should treat S4's trusted-proxy pattern as the model for its own bearer seam
 inherits S14 before adding lookup sources. **15**'s non-breaking table gains `update.sh`
 (S13) and `.dockerignore`/non-root (S25, before 10 publishes an image).
 
-## What this sweep did not do
+## What the original sweep did not do
+
+*This section describes the 2026-08-29 static pass, not the hotfix that followed it — the
+hotfix's own verification was a booted instance, twice, and is recorded above.*
 
 It did not boot an instance, so none of the XSS chains were demonstrated end to end —
 S1 and S2 are read from the code, and the verification above is what would confirm
