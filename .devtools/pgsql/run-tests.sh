@@ -3,12 +3,18 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [views|triggers]
+#   .devtools/pgsql/run-tests.sh [views|triggers|rollback]
 #
-# Two kinds of check, for two reasons. Views are compared by what they return, because
+# Three kinds of check, for three reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
+#
+# The third asks something the first two cannot. Both of them drive SQL straight at each
+# engine and never enter the application, so neither would notice if a write path stopped
+# being transactional. The rollback tests go through StockService, fail an operation
+# halfway, and check the ledger is where it started — on each engine in turn rather than
+# against the other.
 #
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
@@ -22,6 +28,7 @@
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD   PostgreSQL connection (libpq's own names)
 #   SUITE_PGSQL_VIEW_DB                  database for the view tests   (default grocy_full)
 #   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default grocy_trig)
+#   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default grocy_rollback)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #
 # Under docker compose all of these are already set; see docker-compose.yml.
@@ -42,6 +49,7 @@ export PGHOST PGPORT PGUSER PGPASSWORD
 
 VIEW_DB="${SUITE_PGSQL_VIEW_DB:-grocy_full}"
 TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-grocy_trig}"
+ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-grocy_rollback}"
 
 WHICH="${1:-all}"
 
@@ -156,6 +164,77 @@ run_view_tests() {
 	done
 }
 
+# --- Rollback tests ---------------------------------------------------------------
+#
+# Unlike the two phases above, this one runs against one engine at a time: the question
+# is whether a failed operation leaves that engine's ledger intact, which has no
+# cross-engine comparison in it.
+
+run_rollback_tests() {
+	local datapath="$SUITE_SCRATCH/rollback-sqlite"
+	local sqlite_db="$SUITE_SCRATCH/rollback-source.db"
+
+	# SQLite first, from a fresh database with the base fixture, exactly as the pristine
+	# database is built.
+	rm -rf "$datapath"
+	mkdir -p "$datapath"
+
+	GROCY_DATAPATH="$datapath" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
+		|| fail 'could not migrate the rollback test database'
+	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/grocy.db" "$SUITE_DIR/fixtures/00_base.sql" \
+		|| fail 'could not apply the base fixture for the rollback tests'
+
+	# Kept aside before the tests run, so PostgreSQL starts from the same rows rather
+	# than from whatever the SQLite cases left behind.
+	cp "$datapath/grocy.db" "$sqlite_db"
+
+	say ""
+	if ! GROCY_DATAPATH="$datapath" php "$SUITE_DIR/rollback-tests.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$datapath"
+
+	# Then PostgreSQL, which is the half that was never covered before: the injector has
+	# to be written twice because RAISE(ABORT) has no PostgreSQL equivalent outside a
+	# function, and a rollback is exactly the sort of thing two engines can differ on.
+	build_pgsql "$ROLLBACK_DB"
+
+	local pgdatapath="$SUITE_SCRATCH/rollback-pgsql"
+	rm -rf "$pgdatapath"
+	mkdir -p "$pgdatapath"
+
+	cat > "$pgdatapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+
+	# The PostgreSQL side is populated by importing the SQLite database just used, rather
+	# than by applying the fixture again. That is the supported way a PostgreSQL
+	# deployment gets its data, so it is the state worth testing against — and it avoids
+	# depending on inserts behaving identically on both engines, which is a separate
+	# question from whether a rollback works. (They do not, currently: applying the
+	# fixture straight to PostgreSQL fails, because products_ins leaves
+	# cache__quantity_unit_conversions_resolved empty there while SQLite's populates it.
+	# Unrelated to this phase and recorded on its own.)
+	DIFFTEST_DB_NAME="$ROLLBACK_DB" GROCY_DATAPATH="$pgdatapath" \
+		php "$GROCY_ROOT/bin/grocy-db-import" "$sqlite_db" > /dev/null \
+		|| fail 'could not import the rollback fixture into PostgreSQL'
+
+	say ""
+	if ! GROCY_DATAPATH="$pgdatapath" DIFFTEST_DB_NAME="$ROLLBACK_DB" php "$SUITE_DIR/rollback-tests.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$pgdatapath"
+	rm -f "$sqlite_db"
+}
+
 # --- Trigger tests ----------------------------------------------------------------
 
 run_trigger_tests() {
@@ -192,8 +271,9 @@ build_pristine
 case "$WHICH" in
 	views) run_view_tests ;;
 	triggers) run_trigger_tests ;;
-	all) run_view_tests; run_trigger_tests ;;
-	*) fail "unknown target: $WHICH (expected views, triggers or all)" ;;
+	rollback) run_rollback_tests ;;
+	all) run_view_tests; run_trigger_tests; run_rollback_tests ;;
+	*) fail "unknown target: $WHICH (expected views, triggers, rollback or all)" ;;
 esac
 
 say ""

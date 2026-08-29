@@ -111,8 +111,7 @@ class RecipesService extends BaseService
 		$transactionId = uniqid();
 		$recipePositions = $this->DB->recipes_pos_resolved()->where('recipe_id', $recipeId)->fetchAll();
 
-		DatabaseService::GetInstance()->GetDbConnectionRaw()->beginTransaction();
-		try
+		DatabaseService::GetInstance()->InTransaction(function () use ($recipePositions, $recipeId, &$transactionId)
 		{
 			foreach ($recipePositions as $recipePosition)
 			{
@@ -127,13 +126,7 @@ class RecipesService extends BaseService
 					StockService::GetInstance()->ConsumeProduct($recipePosition->product_id, $amount, false, StockService::TRANSACTION_TYPE_CONSUME, 'default', $recipeId, null, $transactionId, true, true);
 				}
 			}
-		}
-		catch (\Exception $ex)
-		{
-			DatabaseService::GetInstance()->GetDbConnectionRaw()->rollback();
-			throw $ex;
-		}
-		DatabaseService::GetInstance()->GetDbConnectionRaw()->commit();
+		});
 
 		$recipe = $this->DB->recipes()->where('id = :1', $recipeId)->fetch();
 		$productId = $recipe->product_id;

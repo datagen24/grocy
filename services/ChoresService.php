@@ -314,21 +314,14 @@ class ChoresService extends BaseService
 			throw new \Exception('$choreIdToKeep cannot equal $choreIdToRemove');
 		}
 
-		DatabaseService::GetInstance()->GetDbConnectionRaw()->beginTransaction();
-		try
+		DatabaseService::GetInstance()->InTransaction(function () use ($choreIdToKeep, $choreIdToRemove)
 		{
 			$choreToKeep = $this->DB->chores($choreIdToKeep);
 			$choreToRemove = $this->DB->chores($choreIdToRemove);
 
 			DatabaseService::GetInstance()->ExecuteDbStatement('UPDATE chores_log SET chore_id = ' . $choreIdToKeep . ' WHERE chore_id = ' . $choreIdToRemove);
 			DatabaseService::GetInstance()->ExecuteDbStatement('DELETE FROM chores WHERE id = ' . $choreIdToRemove);
-		}
-		catch (\Exception $ex)
-		{
-			DatabaseService::GetInstance()->GetDbConnectionRaw()->rollback();
-			throw $ex;
-		}
-		DatabaseService::GetInstance()->GetDbConnectionRaw()->commit();
+		});
 	}
 
 	/**
