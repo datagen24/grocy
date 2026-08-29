@@ -281,7 +281,8 @@ class GenericEntityApiController extends BaseApiController
 			return $this->GenericErrorResponse($response, 'Entity does not exist or is not exposed');
 		}
 
-		$objects = $this->QueryData($this->DB->{$args['entity']}(), $request->getQueryParams());
+		$queryParams = $request->getQueryParams();
+		$objects = $this->MaterialiseFiltered($request, $this->QueryData($request, $this->DB->{$args['entity']}(), $queryParams), $queryParams);
 
 		$userfields = UserfieldsService::GetInstance()->GetFields($args['entity']);
 		if (count($userfields) > 0)

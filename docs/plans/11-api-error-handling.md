@@ -45,17 +45,38 @@ Neither is caught by the list endpoints, so a malformed `?order=` or `?query[]=`
 error, entirely — reaches `ExceptionController` as an unclassified throwable and is
 answered 500.
 
-**And a malformed `?order=` is not the only way that parameter reaches a 500 — on
-PostgreSQL only.** `QueryData` passes the field straight to LessQL's `orderBy()`, which
-quotes it with the dialect's delimiter. Quoting is case-insensitive on SQLite and case-
-sensitive on PostgreSQL, so `?order=Name` sorts on one engine and raises
-`column "Name" does not exist` on the other — a `PDOException` reaching the same
-unclassified path, and the same 500. That is hazard 17 in `db/pgsql/README.md`, and it is
-this plan's to answer because the answer is a status code: whatever validates the sort
-field should reject an unknown one with the `400` this plan is already giving
-`Invalid sort order`, rather than letting it become an engine-dependent 500. Note the
-`?query[]=` filter does not share the bug — it interpolates the field into a raw condition
-string, so PostgreSQL folds it like any bare identifier.
+> **Landed early — this plan's validation approach, applied to the `query[]`/`order`
+> surface only.** The rest of the plan is unbuilt. What is in the tree is the piece the
+> hazard-16/17 work needed, and it is recorded here because this plan is its home:
+>
+> - `Invalid sort order` and `Invalid query` are `HttpException(400)` rather than bare
+>   `\Exception`, so they no longer arrive as 500s.
+> - **The field is validated before any SQL is built.** `DatabaseDialect::GetColumnTypes()`
+>   reports the entity's columns per engine, and an unknown field is
+>   `400 Invalid query: unknown field "x"` on both. That is hazard 17's fix as well as this
+>   plan's: `?order=Name` used to sort on SQLite and 500 on PostgreSQL, and `?order=nope`
+>   was a 500 on both.
+> - **`~`, `!~` and `§` are restricted to text columns**, by one shared rule
+>   (`DatabaseDialect::IsTextMatchableType()`) rather than one per engine, so both give the
+>   same answer. `?query[]=id~2` used to match on SQLite, which coerces, and 500 on
+>   PostgreSQL, which has no such operator for the type. Both now answer `400`.
+> - **`MaterialiseFiltered()` is the backstop**: the filtered query is run where it can be
+>   caught, and a PDO failure on a request that carried caller-supplied `query[]`/`order`
+>   becomes a `400` rather than an unclassified 500. Validation is the primary mechanism;
+>   this catches the cases it cannot see, including any entity whose columns cannot be
+>   introspected.
+>
+> The direction was deliberate and is worth keeping in view when the rest of this plan
+> lands: casting the column to text on PostgreSQL would also have made `id~2` work on both,
+> and was rejected because the two engines render a float differently (`1.0` against `1`),
+> which would have replaced a loud error with a silent wrong answer. See hazard 16 in
+> `db/pgsql/README.md` for the measurements and for the one residual this leaves.
+>
+> **Client-visible, and so belongs in this plan's breaking-changes list**: three request
+> shapes that used to return `200` on SQLite now return `400` on both engines —
+> `~`/`!~`/`§` on a non-text column, an unknown field in `query[]`, and `order` naming a
+> field in the wrong case. Nothing that was already `400` moved, and no successful response
+> changed shape.
 
 **A related divergence in the same method was *not* a status-code question, and has since
 been fixed** — noted here because it is the reason `FilterData` no longer spells its own
@@ -65,14 +86,6 @@ engines with no error at all (hazard 16). It now calls `GetLikeCondition()` on t
 mirroring `GetRegexpCondition()`, and PostgreSQL gets `ILIKE`. SQLite's behaviour was taken
 as the reference, so no client pointed at a SQLite instance sees any change; a client
 pointed at PostgreSQL now gets the rows the API always documented.
-
-**What that leaves for this plan** is the non-text case, which is still a status code and
-still wrong. `?query[]=id~2` matches on SQLite, which coerces, and raises
-`operator does not exist: integer ~~* unknown` on PostgreSQL, which reaches
-`ExceptionController` as an unclassified throwable and is answered 500. It was a 500 with
-`LIKE` too, so the fix neither caused nor cured it. A filter naming a field of the wrong
-type for the operator is a client error and belongs in the `400` bucket with
-`Invalid query`, on both engines.
 
 **Missing objects are 404 or 400 depending on the verb.** `GetObject` throws a Slim
 `HttpNotFoundException`; `EditObject` and `DeleteObject` return

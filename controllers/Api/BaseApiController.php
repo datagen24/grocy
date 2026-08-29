@@ -4,8 +4,10 @@ namespace Victual\Controllers\Api;
 
 use Victual\Controllers\BaseController;
 use Victual\Services\DatabaseService;
+use Victual\Services\Database\DatabaseDialect;
 use LessQL\Result;
 use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Exception\HttpException;
 
 /**
@@ -60,10 +62,105 @@ class BaseApiController extends BaseController
 	/**
 	 * Applies the generic list query parameters (see QueryData) to $data and returns the result JSON-encoded.
 	 */
-	public function FilteredApiResponse(Response $response, Result $data, array $query)
+	public function FilteredApiResponse(Request $request, Response $response, Result $data, array $query)
 	{
-		$data = $this->QueryData($data, $query);
-		return $this->ApiResponse($response, $data);
+		$data = $this->QueryData($request, $data, $query);
+		return $this->ApiResponse($response, $this->MaterialiseFiltered($request, $data, $query));
+	}
+
+	/**
+	 * Runs a filtered/sorted query now rather than leaving it to be executed when the
+	 * response is serialised, so that a database rejection of a *client supplied* term
+	 * can be answered 400 instead of escaping as an unclassified 500.
+	 *
+	 * The rule is deliberately about provenance rather than about SQLSTATEs. "?order=nope"
+	 * is rejected by SQLite as an unknown column and "?query[]=id~2" by PostgreSQL as an
+	 * operator that does not exist for that type, and the list of codes an engine might
+	 * choose for "your term made this statement invalid" is not something worth keeping in
+	 * sync with two engines. What is knowable here is that the statement was fine until a
+	 * query parameter was appended to it: if the caller supplied no "query[]" and no
+	 * "order", a PDO failure is the server's and stays a 500.
+	 *
+	 * Returns the rows rather than the Result: LessQL's Result::jsonSerialize() is itself
+	 * fetchAll(), so this changes nothing about the response body.
+	 *
+	 * @return \LessQL\Row[]
+	 */
+	protected function MaterialiseFiltered(Request $request, Result $data, array $query): array
+	{
+		try
+		{
+			return $data->fetchAll();
+		}
+		catch (\PDOException $ex)
+		{
+			if (!isset($query['query']) && !isset($query['order']))
+			{
+				throw $ex;
+			}
+
+			// Deliberately does not carry the driver's message. It names types, columns and
+			// the engine, which is more than a caller needs to fix their request and more
+			// than this API says about itself anywhere else.
+			throw new HttpException(
+				$request,
+				'Invalid query: the database rejected the resulting statement - check that every field named in "query" and "order" exists on this entity and that the operator suits its type',
+				400,
+				$ex
+			);
+		}
+	}
+
+	/** @var array<string, array<string, string>> Column types per table, for this request only */
+	private static $ColumnTypeCache = [];
+
+	/**
+	 * The column types of the table or view $data reads from, keyed by column name, or an
+	 * empty array when they cannot be determined.
+	 *
+	 * Empty is not a failure and must not be treated as "no columns exist": a Result whose
+	 * table the engine does not know about is a case for letting the query run and be
+	 * caught by MaterialiseFiltered, not for rejecting every field the caller named.
+	 *
+	 * @return array<string, string>
+	 */
+	private function ColumnTypesOf(Result $data): array
+	{
+		$table = $data->getTable();
+
+		if (!array_key_exists($table, self::$ColumnTypeCache))
+		{
+			$database = DatabaseService::GetInstance();
+
+			try
+			{
+				self::$ColumnTypeCache[$table] = $database->GetDialect()->GetColumnTypes($database->GetDbConnectionRaw(), $table);
+			}
+			catch (\PDOException $ex)
+			{
+				// Introspection is an improvement on letting the engine complain, never a
+				// new way to fail: a request that would have worked must not start
+				// returning 500 because the catalogue lookup did. SQLite's PRAGMA compiles
+				// the view it is asked about, for instance, so it can fail for reasons that
+				// have nothing to do with the caller's filter. Fall back to no validation
+				// and let MaterialiseFiltered classify whatever the query itself does.
+				self::$ColumnTypeCache[$table] = [];
+			}
+		}
+
+		return self::$ColumnTypeCache[$table];
+	}
+
+	/**
+	 * Rejects a field a caller named in "query[]" or "order" that the entity does not have,
+	 * with 400 rather than the 500 the engine's own complaint would otherwise become.
+	 */
+	private function AssertFieldExists(Request $request, array $columnTypes, string $field): void
+	{
+		if (!empty($columnTypes) && !array_key_exists($field, $columnTypes))
+		{
+			throw new HttpException($request, 'Invalid query: unknown field "' . $field . '"', 400);
+		}
 	}
 
 	/**
@@ -71,11 +168,11 @@ class BaseApiController extends BaseController
 	 * query[] (filter conditions, see FilterData), limit/offset (pagination)
 	 * and order ("field" or "field:asc|desc"; throws on any other sort order).
 	 */
-	protected function QueryData(Result $data, array $query)
+	protected function QueryData(Request $request, Result $data, array $query)
 	{
 		if (isset($query['query']))
 		{
-			$data = $this->FilterData($data, $query['query']);
+			$data = $this->FilterData($request, $data, $query['query']);
 		}
 
 		if (isset($query['limit']) || isset($query['offset']))
@@ -91,6 +188,7 @@ class BaseApiController extends BaseController
 		if (isset($query['order']))
 		{
 			$parts = explode(':', $query['order']);
+			$this->AssertFieldExists($request, $this->ColumnTypesOf($data), $parts[0]);
 
 			if (count($parts) == 1)
 			{
@@ -100,7 +198,7 @@ class BaseApiController extends BaseController
 			{
 				if ($parts[1] != 'asc' && $parts[1] != 'desc')
 				{
-					throw new \Exception('Invalid sort order ' . $parts[1]);
+					throw new HttpException($request, 'Invalid sort order ' . $parts[1], 400);
 				}
 
 				$data = $data->orderBy($parts[0], $parts[1]);
@@ -116,8 +214,10 @@ class BaseApiController extends BaseController
 	 * "null" additionally matches SQL NULL) as a WHERE clause to $data.
 	 * Throws when a condition does not match the expected pattern.
 	 */
-	protected function FilterData(Result $data, array $query): Result
+	protected function FilterData(Request $request, Result $data, array $query): Result
 	{
+		$columnTypes = $this->ColumnTypesOf($data);
+
 		foreach ($query as $q)
 		{
 			$matches = [];
@@ -131,7 +231,28 @@ class BaseApiController extends BaseController
 
 			if (!array_key_exists('field', $matches) || !array_key_exists('op', $matches) || !array_key_exists('value', $matches))
 			{
-				throw new \Exception('Invalid query');
+				throw new HttpException($request, 'Invalid query', 400);
+			}
+
+			$this->AssertFieldExists($request, $columnTypes, $matches['field']);
+
+			// The substring and regex operators are the ones that need a string to work on.
+			// Rejecting them here, on both engines, is what stops the two disagreeing: left
+			// to the engines, SQLite coerces the value to text and matches while PostgreSQL
+			// has no such operator for the type and raises. Neither answer is better than
+			// the other, but one of them has to be given to both callers, and a filter that
+			// silently means different things per engine is the worse outcome of the two.
+			// See DatabaseDialect::IsTextMatchableType() for why timestamps are in here too.
+			if (in_array($matches['op'], ['~', '!~', '§'], true)
+				&& !empty($columnTypes)
+				&& !DatabaseDialect::IsTextMatchableType($columnTypes[$matches['field']]))
+			{
+				throw new HttpException(
+					$request,
+					'Invalid query: the "' . $matches['op'] . '" operator needs a text field, and "'
+						. $matches['field'] . '" is ' . $columnTypes[$matches['field']],
+					400
+				);
 			}
 
 			$sqlOrNull = '';

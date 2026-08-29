@@ -76,7 +76,7 @@ class ChoresApiController extends BaseApiController
 	 */
 	public function Current(Request $request, Response $response, array $args)
 	{
-		return $this->FilteredApiResponse($response, ChoresService::GetInstance()->GetCurrent(), $request->getQueryParams());
+		return $this->FilteredApiResponse($request, $response, ChoresService::GetInstance()->GetCurrent(), $request->getQueryParams());
 	}
 
 	/**

@@ -37,6 +37,7 @@
 
 require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
+use Victual\Services\Database\DatabaseDialect;
 use Victual\Services\Database\PostgresDialect;
 use Victual\Services\Database\SqliteDialect;
 
@@ -53,8 +54,19 @@ if (!is_readable($sqlitePath))
 	exit('  SQLite database not found or unreadable: ' . $sqlitePath . PHP_EOL);
 }
 
-$sqlite = new PDO('sqlite:' . $sqlitePath);
+// PDO\Sqlite rather than PDO, matching SqliteDialect::CreateConnection(): createFunction()
+// lives on the subclass, and plain "new PDO" does not give it.
+$sqlite = new PDO\Sqlite('sqlite:' . $sqlitePath);
 $sqlite->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// SqliteDialect::OnConnected() registers these on every application connection, and
+// PRAGMA table_info compiles the view it is asked about - so without them this file cannot
+// introspect any view that uses one. Stubs rather than the real implementations: what is
+// being asked of the view here is whether it compiles and what its columns are called, not
+// what it returns. The real ones need the whole application bootstrapped.
+$sqlite->createFunction('victual_user_setting', fn($value) => null);
+$sqlite->createFunction('regexp', fn($pattern, $value) => 0);
+$sqlite->createFunction('ceil', fn($value) => ceil((float)$value));
 
 $pgsql = new PDO($pgsqlDsn, getenv('FILTERDIFF_PGSQL_USER') ?: null, getenv('FILTERDIFF_PGSQL_PASSWORD') ?: null);
 $pgsql->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -166,11 +178,139 @@ foreach ([$sqlite, $pgsql] as $pdo)
 	$pdo->exec('DROP TABLE IF EXISTS ' . TABLE);
 }
 
+// --- Which columns the operator is allowed on -------------------------------------
+//
+// The row comparison above only exercises a text column, because that is the only kind
+// "~" is allowed on. What decides that is DatabaseDialect::IsTextMatchableType() applied
+// to whatever each engine reports the column's type as - two different strings, from two
+// different catalogues, that have to reach the same verdict or the API means different
+// things per engine.
+//
+// This is checked against the real schema rather than a fixture. A fixture would only
+// prove the classifier agrees about the types the fixture happens to contain; the schema
+// is what callers actually filter, and it is what changes under a migration.
+
+echo PHP_EOL;
+echo 'Operator eligibility per column, every shared table' . PHP_EOL;
+echo PHP_EOL;
+
+$sqliteTables = $sqlite->query(
+	"SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
+)->fetchAll(PDO::FETCH_COLUMN);
+
+$pgsqlTables = $pgsql->query(
+	'SELECT table_name FROM information_schema.tables '
+	. "WHERE table_schema = ANY(current_schemas(false)) ORDER BY table_name"
+)->fetchAll(PDO::FETCH_COLUMN);
+
+$shared = array_values(array_intersect($sqliteTables, $pgsqlTables));
+
+$checked = 0;
+$disagreements = [];
+$untyped = [];
+$samples = [];
+
+foreach ($shared as $table)
+{
+	$sqliteTypes = $dialects['sqlite']->GetColumnTypes($sqlite, $table);
+	$pgsqlTypes = $dialects['pgsql']->GetColumnTypes($pgsql, $table);
+
+	foreach ($sqliteTypes as $column => $sqliteType)
+	{
+		// A column only one engine has is the view/table difference the other phases are
+		// for; this phase is about the verdict, not the column list.
+		if (!array_key_exists($column, $pgsqlTypes))
+		{
+			continue;
+		}
+
+		$checked++;
+
+		$sqliteVerdict = DatabaseDialect::IsTextMatchableType($sqliteType);
+		$pgsqlVerdict = DatabaseDialect::IsTextMatchableType($pgsqlTypes[$column]);
+
+		if ($sqliteVerdict !== $pgsqlVerdict)
+		{
+			// SQLite's catalogue does not type a view column that is a computed expression -
+			// PRAGMA table_info returns an empty string for GROUP_CONCAT, COALESCE, a
+			// concatenation and so on, where PostgreSQL resolves the expression and reports
+			// what it came out as. Where SQLite has no type to offer, the two cannot be made
+			// to agree by comparing catalogues, and this file will not pretend otherwise.
+			//
+			// Rejecting the untyped ones is what the application does, and it is the smaller
+			// of the two available residuals: measured across this schema, rejecting leaves
+			// 13 columns where PostgreSQL is laxer, and allowing would leave 100 where SQLite
+			// is. Both are listed rather than asserted away, because the fix for either is
+			// the same piece of work - a type for these columns that does not come from
+			// asking two catalogues the same question and getting two different answers.
+			if (trim($sqliteType) === '')
+			{
+				$untyped[] = $table . '.' . $column . ': SQLite reports no type, PostgreSQL '
+					. $pgsqlTypes[$column] . ' (' . ($pgsqlVerdict ? 'allowed there' : 'rejected there') . ')';
+
+				continue;
+			}
+
+			$disagreements[] = $table . '.' . $column . ': ' . $sqliteType
+				. ' (' . ($sqliteVerdict ? 'allowed' : 'rejected') . ') vs '
+				. $pgsqlTypes[$column] . ' (' . ($pgsqlVerdict ? 'allowed' : 'rejected') . ')';
+		}
+
+		// One example of each of the four kinds the contract has to speak about, so the
+		// log shows what was actually compared rather than only a count.
+		$kind = $sqliteVerdict ? 'text' : (
+			stripos($sqliteType, 'INT') !== false ? 'integer' : (
+			stripos($sqliteType, 'DATE') !== false || stripos($sqliteType, 'TIME') !== false ? 'timestamp' : 'numeric'));
+
+		if (!isset($samples[$kind]))
+		{
+			$samples[$kind] = '  ' . str_pad($kind, 10) . str_pad($table . '.' . $column, 42)
+				. str_pad($sqliteType, 18) . str_pad($pgsqlTypes[$column], 28)
+				. ($sqliteVerdict ? '~ allowed' : '~ rejected');
+		}
+	}
+}
+
+foreach (['text', 'integer', 'numeric', 'timestamp'] as $kind)
+{
+	if (isset($samples[$kind]))
+	{
+		echo $samples[$kind] . PHP_EOL;
+	}
+}
+
+echo PHP_EOL;
+
+if (empty($disagreements))
+{
+	echo '  ok     ' . ($checked - count($untyped)) . ' of ' . $checked . ' columns across '
+		. count($shared) . ' shared tables/views: both engines agree wherever SQLite has a type' . PHP_EOL;
+}
+else
+{
+	foreach ($disagreements as $line)
+	{
+		echo '  DIFFER ' . $line . PHP_EOL;
+		$failures++;
+	}
+}
+
+if (!empty($untyped))
+{
+	echo '  note   ' . count($untyped) . ' view columns SQLite reports no type for, so the two engines'
+		. ' cannot be compared there; rejected on SQLite, and:' . PHP_EOL;
+
+	foreach ($untyped as $line)
+	{
+		echo '           - ' . $line . PHP_EOL;
+	}
+}
+
 echo PHP_EOL;
 
 if ($failures === 0)
 {
-	echo 'QUERY FILTER OPERATORS IDENTICAL ON ASCII' . PHP_EOL;
+	echo 'QUERY FILTER OPERATORS IDENTICAL ON ASCII, ELIGIBILITY IDENTICAL' . PHP_EOL;
 	exit(0);
 }
 

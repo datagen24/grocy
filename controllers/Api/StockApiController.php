@@ -786,7 +786,7 @@ class StockApiController extends BaseApiController
 			$allowSubproductSubstitution = true;
 		}
 
-		return $this->FilteredApiResponse($response, StockService::GetInstance()->GetProductStockEntries($args['productId'], false, $allowSubproductSubstitution), $request->getQueryParams());
+		return $this->FilteredApiResponse($request, $response, StockService::GetInstance()->GetProductStockEntries($args['productId'], false, $allowSubproductSubstitution), $request->getQueryParams());
 	}
 
 	/**
@@ -796,7 +796,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function LocationStockEntries(Request $request, Response $response, array $args)
 	{
-		return $this->FilteredApiResponse($response, StockService::GetInstance()->GetLocationStockEntries($args['locationId']), $request->getQueryParams());
+		return $this->FilteredApiResponse($request, $response, StockService::GetInstance()->GetLocationStockEntries($args['locationId']), $request->getQueryParams());
 	}
 
 	/**
@@ -814,7 +814,7 @@ class StockApiController extends BaseApiController
 			$allowSubproductSubstitution = true;
 		}
 
-		return $this->FilteredApiResponse($response, StockService::GetInstance()->GetProductStockLocations($args['productId'], $allowSubproductSubstitution), $request->getQueryParams());
+		return $this->FilteredApiResponse($request, $response, StockService::GetInstance()->GetProductStockLocations($args['productId'], $allowSubproductSubstitution), $request->getQueryParams());
 	}
 
 	/**

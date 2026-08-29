@@ -373,26 +373,72 @@ spelling rather than the contract. It now says "contains, case insensitive for A
 spells the non-ASCII limit out, because "case insensitive" unqualified would have promised
 the agreement this section has just said does not hold.
 
-Two things this does **not** fix, recorded so they are not mistaken for it:
+**The operator is now restricted to text columns, on both engines.** That was the second
+half of this hazard and it needed a different kind of fix. `?query[]=id~2` used to be
+answered by SQLite, which coerces the integer to text and matches, and by PostgreSQL with
+`operator does not exist: integer ~~* unknown` on the 500 path - a divergence in both the
+result and the status.
 
-- **`~` against a non-text column still diverges.** SQLite coerces, so `?query[]=id~2`
-  matches; PostgreSQL has no `~~` or `~~*` operator for `integer` and raises
-  `operator does not exist`, reaching the 500 path. That was true of `LIKE` before this
-  change and is equally true of `ILIKE` after it - the failure is identical, so this is a
-  pre-existing difference rather than a regression, and it is
-  [11](../../docs/plans/11-api-error-handling.md)'s to answer with a status code.
-- ~~**The suite still cannot see any of this.**~~ It can now. This was true when the fix
-  landed and was the honest thing to record; the gap is closed by a `filter` phase in
-  `run-tests.sh`, which asks each dialect for the condition it emits, runs both against
-  their own engine and compares the rows. It is the first phase that compares *application*
-  behaviour rather than SQL, and it was checked the way
-  [14](../../docs/plans/14-contract-and-regression-scaffolding.md) asks - by putting the
-  defect back and confirming the phase fails (three ASCII cases, `[1,2] vs [2]`).
+Casting on the PostgreSQL side would have closed it and was the obvious move; it is the
+wrong one. Measured across the two engines:
+
+| column | SQLite as text | PostgreSQL as text |
+|---|---|---|
+| `INTEGER 2` | `2` | `2` |
+| `REAL 1.0` | **`1.0`** | **`1`** |
+| timestamp | `2026-08-29 18:08:32` | same |
+
+So a cast agrees on integers and timestamps and silently disagrees on floats, which trades
+a loud error for a wrong answer - the exact failure this hazard already is. A canonical
+cross-engine stringification is a real design (which format, which precision, which time
+zone) and is worth having one day, but it has to be designed, not fall out of whatever
+`CAST` each engine happens to implement.
+
+So the fields are validated instead, before any SQL is built:
+`DatabaseDialect::GetColumnTypes()` per engine, and one shared rule,
+`DatabaseDialect::IsTextMatchableType()`, deciding what may be matched. The rule is
+SQLite's own TEXT-affinity rule - a declared type containing `CHAR`, `CLOB` or `TEXT` -
+which also selects exactly `text`, `character varying` and `character` out of
+PostgreSQL's `information_schema`. Anything else, timestamps included, is `400` on both
+engines. A field the entity does not have is `400` on both engines too, which is what
+closes hazard 17 below.
+
+**One residual, and it is measured rather than described.** SQLite's catalogue does not
+type a view column that is a computed expression: `PRAGMA table_info` returns an empty
+string for a `GROUP_CONCAT`, a `COALESCE` or a concatenation, where PostgreSQL resolves the
+expression and reports what it came out as. Where SQLite has no type to offer, comparing
+catalogues cannot make the two agree. Across this schema, 731 columns in 82 shared
+tables and views:
+
+- **718 agree**, and the `filter` phase fails if any of them ever stops agreeing.
+- **13 do not**, all of them view expressions PostgreSQL resolves to `text`. They are
+  rejected on SQLite and accepted on PostgreSQL, and the phase lists them by name on every
+  run. Rejecting is the smaller residual: allowing untyped columns instead would leave
+  **100** disagreeing, because 100 of the 113 untyped columns are numeric or temporal on
+  PostgreSQL. Neither number is zero, and the thing that would make it zero is a type for
+  these columns that does not come from asking two catalogues the same question.
+
+The practical cost of the 13 is worth naming: `stock_missing_products.name`,
+`users_dto.display_name` and `recipes_resolved.product_names_comma_separated` are among
+them, and they are exactly the sort of column somebody would want to substring match. On
+SQLite they now answer `400`.
+
+**The suite can see all of this**, which was not true when the first half of the fix
+landed. The `filter` phase of `run-tests.sh` asks each dialect for the condition it emits,
+runs both against their own engine and compares the rows, then compares the two engines'
+verdicts on every column of every shared table and view. It is the first phase that
+compares *application* behaviour rather than SQL, and it was checked the way
+[14](../../docs/plans/14-contract-and-regression-scaffolding.md) asks - by putting the
+defect back and confirming the phase fails (three ASCII cases, `[1,2] vs [2]`). It earned
+its place immediately: it is what caught the untyped-view-column residual above, before
+that shipped as a silent divergence.
 
 Do not reach for the `nocase` collation of hazard 15 to solve this. It is nondeterministic,
 and PostgreSQL rejects `LIKE` against a nondeterministic collation outright.
 
 ### Hazard 17: an identifier that reaches LessQL is quoted, and quoting is case sensitive
+**Fixed by validating the field - kept here because the mechanism is still live for any
+identifier that reaches LessQL from somewhere else.**
 `PostgresDialect::GetIdentifierDelimiter()` returns `"` with the comment "Victual's tables
 and columns are all lower case, so quoting them is safe". That is true of the schema - all
 37 tables, all their columns and all 45 views are lower case, verified by parsing every
@@ -428,9 +474,20 @@ quotes it and PostgreSQL folds it to lower case like any other bare identifier.
 `?query[]=Name=Milk` works on both engines. One code path is safe because it builds SQL by
 string concatenation and the other is broken because it does the tidier thing.
 
-Whatever fixes this should normalise or reject the identifier rather than widen the quoting,
-and rejecting it is also a `400` that [11](../../docs/plans/11-api-error-handling.md) already
-wants instead of the current `500`.
+**Fixed, by rejecting rather than by widening the quoting.** The field named in `order` is
+checked against the entity's real columns before it reaches LessQL, so `?order=Name` is now
+`400 Invalid query: unknown field "Name"` on both engines instead of a sort on one and a 500
+on the other. `?order=nope` was a 500 on *both* engines and is now the same 400 on both.
+
+Note what this costs on SQLite: `?order=Name` used to work there, because backtick quoting
+resolves case-insensitively. It does not any more. Accepting a field name in a case the
+entity does not actually use was never a documented behaviour, and keeping it would have
+meant either case-folding field names into the schema's spelling - which is the identifier
+equivalent of the cast rejected under hazard 16 - or leaving the two engines disagreeing.
+
+The same check covers `query[]`, so an unknown field is a `400` there too rather than a
+`no such column` 500 on SQLite. Both are `400 Invalid query`, which is the status
+[11](../../docs/plans/11-api-error-handling.md) wanted for this surface.
 
 ## What was checked and found clean
 

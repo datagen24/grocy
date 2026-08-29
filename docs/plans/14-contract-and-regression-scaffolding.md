@@ -267,6 +267,17 @@ because which characters fold is a property of the database's collation: an exac
 would fail on a `C`-locale database for something that is not a defect. A test that has to
 be loosened later is worse than one that states the invariant it actually has.
 
+**And it paid for itself before it was even committed.** The phase grew a second half —
+comparing the two engines' verdicts on which columns the `~` operator may be used on, across
+every column of every shared table and view — and that half immediately failed on 13
+columns nobody had thought about: SQLite's `PRAGMA table_info` reports an empty type for a
+view column that is a computed expression, where PostgreSQL resolves it. Those 13 would
+have shipped as a silent per-engine difference on exactly the columns most worth matching
+(`stock_missing_products.name`, `users_dto.display_name`). They are now listed by name on
+every run instead. That is the whole argument for behavioural phases in one incident: the
+defect was in the *fixture-free* part of the system, over real schema, and no snapshot of
+response shapes would have contained it.
+
 **What is still owed to piece 2** is the general case. The `filter` phase covers one
 operator pair on one code path; the snapshot still needs cases that compare the **rows** a
 parameterised endpoint returns, not only the shape of them, for the rest of the

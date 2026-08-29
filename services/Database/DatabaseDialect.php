@@ -72,6 +72,40 @@ abstract class DatabaseDialect
 	abstract public function GetLikeCondition(string $field, bool $negated): string;
 
 	/**
+	 * The declared/reported type of every column of $table, keyed by column name.
+	 *
+	 * Used to validate the fields a caller names in "query[]" and "order" before they reach
+	 * SQL, so an unusable one is a 400 rather than whatever the engine happens to do with
+	 * it. Works for views as well as tables, because most of what this API lists is a view.
+	 *
+	 * @return array<string, string> Empty when the table is unknown to the engine.
+	 */
+	abstract public function GetColumnTypes(\PDO $pdo, string $table): array;
+
+	/**
+	 * Whether a column of the given declared type can be substring-matched.
+	 *
+	 * Deliberately one rule for both engines rather than one per dialect, because the
+	 * point of it is that the two agree. It is SQLite's own TEXT-affinity rule - a declared
+	 * type containing CHAR, CLOB or TEXT - which also happens to select exactly
+	 * PostgreSQL's "text", "character varying" and "character" out of information_schema.
+	 *
+	 * Everything else is rejected on both engines, including timestamps. SQLite stores
+	 * those as text and would happily match "2026-08" against one; PostgreSQL cannot,
+	 * because a TIMESTAMP is not a string there. Rendering one to text so both could match
+	 * is a real feature and a real decision - which format, in which time zone, with which
+	 * precision - and it is not one to arrive at by accident through whatever CAST each
+	 * engine happens to implement. Until that is designed, the honest answer is that this
+	 * API does not offer substring matching on a timestamp, on either engine.
+	 */
+	public static function IsTextMatchableType(string $declaredType): bool
+	{
+		$type = strtoupper($declaredType);
+
+		return str_contains($type, 'CHAR') || str_contains($type, 'CLOB') || str_contains($type, 'TEXT');
+	}
+
+	/**
 	 * An SQL expression yielding the current local (not UTC) timestamp.
 	 */
 	abstract public function GetNowExpression(): string;

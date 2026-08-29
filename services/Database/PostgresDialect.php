@@ -82,6 +82,28 @@ class PostgresDialect extends DatabaseDialect
 	}
 
 	/**
+	 * information_schema.columns, which covers views as well as tables. Restricted to the
+	 * search path so a same-named table in another schema cannot answer for this one.
+	 */
+	public function GetColumnTypes(\PDO $pdo, string $table): array
+	{
+		$statement = $pdo->prepare(
+			'SELECT column_name, data_type FROM information_schema.columns '
+			. 'WHERE table_name = ? AND table_schema = ANY(current_schemas(false))'
+		);
+		$statement->execute([$table]);
+
+		$types = [];
+
+		foreach ($statement->fetchAll(\PDO::FETCH_ASSOC) as $column)
+		{
+			$types[$column['column_name']] = $column['data_type'];
+		}
+
+		return $types;
+	}
+
+	/**
 	 * LOCALTIMESTAMP truncated to seconds, equivalent to SQLite's
 	 * datetime('now', 'localtime') given the SET TIME ZONE in OnConnected().
 	 */
