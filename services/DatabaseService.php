@@ -187,6 +187,71 @@ class DatabaseService
 	}
 
 	/**
+	 * Runs $work inside a database transaction, committing on return and rolling back if
+	 * it throws.
+	 *
+	 * Nesting is the reason this exists. PDO has no nested transactions, and the call
+	 * graph already nests: RecipesService::ConsumeRecipe wraps and then calls
+	 * ConsumeProduct and AddProduct; StockService::InventoryProduct delegates to one of
+	 * those two; UndoTransaction loops over UndoBooking, which recurses into itself for
+	 * correlated bookings. A naive beginTransaction() in each of those would throw the
+	 * moment two of them met.
+	 *
+	 * So an inner call is a no-op: whoever opened the transaction owns committing it, and
+	 * the innermost work simply joins it. That is the right semantics as well as the
+	 * simple one — nothing here wants partial rollback, and an undo that half-succeeds is
+	 * exactly the state these transactions exist to prevent. Savepoints would allow it and
+	 * are supported by both engines, but no caller wants it; if one ever does, this
+	 * signature does not have to change.
+	 *
+	 * "Is a transaction already open?" is asked of PDO rather than tracked in a counter of
+	 * our own. A counter would only know about transactions opened through this method,
+	 * and DatabaseMigrationService opens its own directly — so a migration that called a
+	 * service would nest wrongly and the mistake would surface as a runtime error far from
+	 * its cause.
+	 *
+	 * The engine-specific counterpart is on the dialect: see DatabaseDialect for the
+	 * per-engine locking used around migrations. Engine-neutral composition belongs here;
+	 * anything an engine does differently belongs there.
+	 *
+	 * @param callable $work Receives no arguments; its return value is passed through
+	 * @return mixed Whatever $work returns
+	 * @throws \Throwable Whatever $work throws, after the transaction is rolled back
+	 */
+	public function InTransaction(callable $work)
+	{
+		$pdo = $this->GetDbConnectionRaw();
+
+		if ($pdo->inTransaction())
+		{
+			return $work();
+		}
+
+		$pdo->beginTransaction();
+
+		try
+		{
+			$result = $work();
+		}
+		catch (\Throwable $ex)
+		{
+			// Guarded because a statement can abort the transaction on its own (SQLite
+			// does this on some errors), and rolling back a transaction that is no longer
+			// open would replace the real exception with a misleading one.
+			if ($pdo->inTransaction())
+			{
+				$pdo->rollBack();
+			}
+
+			throw $ex;
+		}
+
+		$pdo->commit();
+
+		return $result;
+	}
+
+	/**
 	 * Tells the connection which user it acts for. Engines which resolve user settings in
 	 * SQL (PostgreSQL) need this; on SQLite it is a no-op.
 	 *
