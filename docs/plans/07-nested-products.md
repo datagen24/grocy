@@ -102,12 +102,17 @@ compared against a deliberate expectation rather than against whatever falls out
    subtree for stock aggregation and for `cumulate_min_stock_amount_of_sub_products`.
 
    > **Response:** Whole subtree — a partial tree is worse than no tree.
+   >
+   > **Superseded by Q6:** with the taxonomy moving to `product_groups`, nothing rolls
+   > up through `stock_current` at all.
 2. **Can a product with its own children also be a child?** Required for depth > 2. Any
    reason to forbid mixed nodes?
 
    > **Response:** None — they must be allowed (depth > 2 requires them). The
    > fixtures should include a middle node that itself holds stock, because that is
    > where aggregation is most likely to double-count.
+   >
+   > **Superseded by Q6:** the intermediates become groups, which never hold stock.
 3. **Cap the depth?** A cycle check is required for correctness; a depth cap is only
    guard-rail. I lean toward a cap of 5, configurable, mainly so a bad import cannot
    produce a 200 deep chain that makes every view slow.
@@ -121,6 +126,9 @@ compared against a deliberate expectation rather than against whatever falls out
 
    > **Response:** Whole subtree, ordered by depth (nearest first).
    > Direct-children-only would be the one roll-up that stops early, violating Q1's own answer.
+   >
+   > **Superseded by Q6:** substitution is not derived from the tree at all. Depth
+   > ordering is what offers heavy cream for whole milk.
 5. **Is there a real use case beyond two levels** for you specifically? If the answer is
    "brand > variant > size", that is three, and worth designing for concretely rather
    than in the abstract.
@@ -200,6 +208,77 @@ compared against a deliberate expectation rather than against whatever falls out
    > The locations tree in [08](08-nested-locations.md) has no equivalent problem —
    > containment is exactly what `parent_location_id` would mean — which is one more
    > reason 08 goes first.
+   >
+   > **Answered — it is mostly taxonomy, and substitution is a third relation, not a
+   > property of the tree.**
+   >
+   > The real requirement, in the owner's words: the tree is classification, but
+   > substitution genuinely exists — sharp cheddar in place of medium; a block in
+   > place of a bag of shredded, *because you can shred a block*.
+   >
+   > Those two examples are what settles this, and neither of them is
+   > `parent_product_id`:
+   >
+   > - **Sharp for medium is sibling-to-sibling, which grocy cannot express at all
+   >   today.** `products_current_substitutions` reads parent-down and one level
+   >   only: when a *parent* has no stock of its own, consume the next *child*
+   >   (`products_resolved` is a flat `CASE`, not a recursion). There is no path in
+   >   it from one child to another, so this requirement is not "extend the existing
+   >   substitution deeper" — the mechanism to extend does not do this at all.
+   > - **Block for shredded is directed.** A block substitutes for shredded because
+   >   shredding is a step you can take. Shredded does not substitute for a block.
+   >   Every tree-derived substitution is symmetric among siblings by construction,
+   >   so no amount of depth tuning expresses a one-way edge.
+   >
+   > So there are three relations here, and the plan as written conflated them:
+   >
+   > | Relation | Example | Where it belongs |
+   > | --- | --- | --- |
+   > | **Classification** | `Dairy / Cheese / Cheddar` | nested `product_groups` — a nullable `parent_group_id` on a lookup table, [03](03-category-min-stock.md)'s territory |
+   > | **Substitution** | sharp → medium, block → shredded | a new explicit, directed edge table; curated, never inferred from tree position |
+   > | **Same product, different packaging** | the upstream meaning | `parent_product_id`, left at its current depth |
+   >
+   > Consequences for the answers above, which are superseded rather than refined:
+   >
+   > - **Q1 (whole-subtree roll-up) does not happen.** With the taxonomy in
+   >   `product_groups`, nothing rolls up through `stock_current` and the quantity-unit
+   >   collision above disappears with it. `/stock` is untouched, which also settles
+   >   the Review note: the Home Assistant consumer sees no new rows.
+   > - **Q4 (whole subtree, nearest first) is wrong and is replaced.** Depth-ordered
+   >   subtree substitution is exactly what produces heavy cream as a substitute for
+   >   whole milk. Substitution becomes an explicit list with a direction and a
+   >   preference order, so "nearest first" is something the owner records rather than
+   >   something the tree infers.
+   > - **Q3's depth cap becomes a `product_groups` concern**, not a `products` one.
+   > - **Q2's mixed middle node stops mattering.** Nothing stocks an intermediate
+   >   node once the intermediates are groups.
+   >
+   > **Open, and needs its own plan rather than an answer here:** whether block and
+   > shredded are two products with a directed substitution between them (the reading
+   > taken above) or one product in two packagings (`parent_product_id` proper, one
+   > pool in grams). The argument for keeping them separate is that a recipe wanting
+   > shredded should be told "you have a block" rather than silently satisfied, and
+   > that shredding is labour rather than a unit conversion. That distinction is the
+   > whole substance of what is left of this plan.
+
+7. **What replaces this plan?** Q6 removes most of it. What remains is worth stating so
+   the roadmap is honest about the size:
+
+   - **Nested `product_groups`** — one nullable self-referencing column, a cycle guard,
+     and the group pickers and reports learning to walk it. Belongs to
+     [03](03-category-min-stock.md).
+   - **An explicit substitution table** — `product_id`, `substitute_product_id`, a
+     preference rank, and whatever the recipe-fulfilment and stock views need to consume
+     it. Directed: a symmetric pair is two rows, recorded deliberately. This is new work
+     and does not exist upstream in any form.
+   - **An audit of the existing one-level `parent_product_id` behaviour**, which was the
+     first item of this plan and is the only part that survives unchanged.
+
+   The recursive-CTE machinery, the stock aggregation, the substitution semantics and
+   `cascade_change_qu_id_stock` all fall away with the taxonomy moving out of `products`.
+
+   > **Response:** Pending. The split above is the recommendation; it needs the
+   > block-versus-shredded question in Q6 settled before either piece is sized.
 
 ## Review notes
 
@@ -210,6 +289,21 @@ compared against a deliberate expectation rather than against whatever falls out
 
 ## Effort
 
-Large — the largest item on the roadmap. The recursive view is an afternoon; the audit,
-the decisions above and the regression fixtures are the rest. Worth doing after 08 has
-established the pattern.
+**Was large — the largest item on the roadmap. Q6 removes most of it.**
+
+The size came from putting a taxonomy into `parent_product_id`: recursive stock
+aggregation, subtree substitution, `cascade_change_qu_id_stock` and the quantity-unit
+question all followed from that one decision. With the taxonomy moving to nested
+`product_groups`, none of them arises.
+
+What is left splits in two, and neither half is this plan:
+
+- **small** — nested `product_groups`, in [03](03-category-min-stock.md).
+- **medium** — an explicit directed substitution table, which is new work with no
+  upstream equivalent, and which needs its own plan.
+- **small** — the one-level `parent_product_id` audit at the top of this document, the
+  only part of 07 that survives as written.
+
+08 still goes first: it establishes the recursive-tree pattern that nested
+`product_groups` then reuses, and containment is the one relation where a parent column
+means what it appears to mean.

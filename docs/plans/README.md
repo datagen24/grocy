@@ -11,11 +11,11 @@ answer inline as a `> **Response:**` block, so question and answer read together
 | — | [Database abstraction / PostgreSQL](../../db/pgsql/README.md) | — | — | **done** |
 | 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small |
 | 02 | [MCP endpoint](02-mcp-endpoint.md) | — | — | medium |
-| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small |
+| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small, **+ nested `product_groups` from 07-Q6** |
 | 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium |
 | 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | — | medium |
 | 06 | [Location barcodes](06-location-barcodes.md) | — | — | small |
-| 07 | [Deeply nested products](07-nested-products.md) | — | — | **large** |
+| 07 | [Deeply nested products](07-nested-products.md) | — | — | ~~large~~ small — [re-scoped by Q6](07-nested-products.md#open-questions) |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small, **deferred** |
 
@@ -164,10 +164,13 @@ as parallel sessions.
 
 - **08 nested locations** — recursive pattern on the simpler tree, fixtures in 14's
   suite first.
-- **07 nested products** — only after 08 is merged and used. Fixtures before any
-  change, per its own verification section; this is the largest item on the roadmap
-  and the one to be careful with — it is an audit of every one-level assumption, not
-  "make the view recursive".
+- **07 nested products** — **re-scoped by 07-Q6, which is now answered.** The tree the
+  owner actually wants is a taxonomy, so it moves to nested `product_groups` (folded
+  into 03) and never touches `stock_current`. Substitution turns out to be a third
+  relation — directed, sibling-to-sibling, and not expressible by any tree — so it
+  needs an explicit edge table and a plan of its own. What is left of 07 is the
+  one-level `parent_product_id` audit. Still after 08, which establishes the recursive
+  pattern that nested groups reuse.
 
 ### Wave 5 — the assistant and the lists
 
