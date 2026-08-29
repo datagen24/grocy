@@ -52,6 +52,12 @@ services:
       # Where the throwaway databases go. Points at the volume below; without it the
       # runner uses /tmp inside the container and the volume is never touched.
       SUITE_SCRATCH: /scratch
+
+      # Passed through from the host when set, absent otherwise, so
+      #   SUITE_COVERAGE=1 docker compose run --rm dev .devtools/pgsql/run-tests.sh
+      # measures the run. The image already has pcov. See .devtools/coverage/README.md.
+      SUITE_COVERAGE:
+      SUITE_COVERAGE_CLOVER:
     working_dir: /app
 
 volumes:

@@ -42,5 +42,8 @@
 		"vendor-dir": "packages",
 		"platform-check": false,
 		"optimize-autoloader": true
+	},
+	"require-dev": {
+		"phpunit/php-code-coverage": "^11.0"
 	}
 }

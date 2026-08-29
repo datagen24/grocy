@@ -4,3 +4,8 @@ embedded.txt
 /public/packages
 /.phpdoc
 /phpdoc.xml
+
+# Coverage output: the per-process .cov files go to scratch, but SUITE_COVERAGE_CLOVER
+# defaults to a relative path in CI and is easy to point at the working tree by hand.
+/clover.xml
+*.cov

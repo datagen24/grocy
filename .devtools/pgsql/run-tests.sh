@@ -30,6 +30,11 @@
 #   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default grocy_trig)
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default grocy_rollback)
 #   SUITE_SCRATCH                        where the throwaway databases go
+#   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
+#   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
+#   SUITE_COVERAGE_CLOVER                also write a Clover XML report to this path
+#
+# The coverage variables are documented in full in .devtools/coverage/README.md.
 #
 # Under docker compose all of these are already set; see docker-compose.yml.
 
@@ -61,6 +66,46 @@ command -v php >/dev/null || fail 'php not found on PATH'
 [ -f "$GROCY_ROOT/packages/autoload.php" ] || fail 'packages/ is missing — run composer install first'
 
 mkdir -p "$SUITE_SCRATCH"
+
+# --- Coverage ---------------------------------------------------------------------
+#
+# The suite is a dozen short-lived PHP processes, so it is hooked at the interpreter
+# rather than at each call site: an extra ini directory sets auto_prepend_file, and
+# .devtools/coverage/prepend.php starts a driver in every process that then runs. Nothing
+# below this point knows coverage exists, which is the point — a phase added later is
+# measured without being told to be.
+#
+# The leading colon in PHP_INI_SCAN_DIR means "the usual directory, and then this one", so
+# the platform's own extension ini files still load.
+
+COVERAGE_DIR=""
+
+if [ "${SUITE_COVERAGE:-0}" = "1" ]; then
+	COVERAGE_DIR="${SUITE_COVERAGE_DIR:-$SUITE_SCRATCH/coverage}"
+
+	php -r 'exit(extension_loaded("pcov") || extension_loaded("xdebug") ? 0 : 1);' \
+		|| fail 'SUITE_COVERAGE=1 but neither pcov nor xdebug is loaded'
+
+	# Cleared, not appended to: merging this run's data with the last one would report
+	# lines as covered that this run never reached.
+	rm -rf "$COVERAGE_DIR"
+	mkdir -p "$COVERAGE_DIR"
+
+	COVERAGE_INI_DIR="$SUITE_SCRATCH/coverage-ini"
+	rm -rf "$COVERAGE_INI_DIR"
+	mkdir -p "$COVERAGE_INI_DIR"
+
+	cat > "$COVERAGE_INI_DIR/99-grocy-coverage.ini" <<-INI
+		auto_prepend_file=$GROCY_ROOT/.devtools/coverage/prepend.php
+		pcov.directory=$GROCY_ROOT
+		pcov.enabled=1
+	INI
+
+	export PHP_INI_SCAN_DIR=":$COVERAGE_INI_DIR"
+	export GROCY_COVERAGE_DIR="$COVERAGE_DIR"
+
+	say "measuring coverage into $COVERAGE_DIR"
+fi
 
 # --- The pristine SQLite database -------------------------------------------------
 #
@@ -275,6 +320,27 @@ case "$WHICH" in
 	all) run_view_tests; run_trigger_tests; run_rollback_tests ;;
 	*) fail "unknown target: $WHICH (expected views, triggers, rollback or all)" ;;
 esac
+
+if [ -n "$COVERAGE_DIR" ]; then
+	say ""
+	say "== coverage"
+
+	# Reported whether or not the suite passed: when a phase fails, what it did and did
+	# not reach is part of reading the failure.
+	report_args=("$COVERAGE_DIR")
+
+	if [ -n "${SUITE_COVERAGE_CLOVER:-}" ]; then
+		report_args+=("--clover=$SUITE_COVERAGE_CLOVER")
+	fi
+
+	# The report is itself a PHP process, and hooking it would have it measure its own
+	# run and write a further .cov into the directory it is reading. Unsetting the
+	# variable is enough — prepend.php returns immediately without it — and is what has
+	# to be done rather than clearing PHP_INI_SCAN_DIR, which would also drop the
+	# platform's own ini directory and with it every extension the report needs.
+	env -u GROCY_COVERAGE_DIR php "$GROCY_ROOT/.devtools/coverage/report.php" "${report_args[@]}" \
+		|| failures=$((failures + 1))
+fi
 
 say ""
 if [ "$failures" -eq 0 ]; then
