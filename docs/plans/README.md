@@ -27,8 +27,10 @@ tense it was written in — the Executed section, not the prose, is the record o
 
 Remedial work from [docs/architecture-review.md](../architecture-review.md). The review's
 own defects table (items 1–13) is already fixed in `36650cd`; these are everything else it
-found. They add no features and block no feature plan, but 12 and 14 should land before
-the plans noted below start minting more of what they clean up.
+found, plus the 2026-08-29 [security sweep](../security-sweep.md). They add no features
+and block no feature plan, but 12 and 14 should land before the plans noted below start
+minting more of what they clean up, and the sweep's four High findings land before
+anything at all — see the hotfix in wave 0.5 below.
 
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
@@ -37,7 +39,8 @@ the plans noted below start minting more of what they clean up.
 | 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list | — | medium | draft |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
-| 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4 | 11, 13, 14 (per item) | small + one large open question | draft |
+| 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
+| — | [Security sweep hotfix](../security-sweep.md) (S1, S2, S3, R1) | [docs/security-sweep.md](../security-sweep.md) | — | small | **open — lands before wave 1** |
 
 ## Meta
 
@@ -88,7 +91,20 @@ rename and the registry claims happen at announcement time, not in a commit.
   "Coupling 0" there. The rule stands unchanged for 11 and 10, both of which are still
   ahead.
 - **15 is last**, except its auth refactor, which wants to precede
-  [02](02-mcp-endpoint.md), and which carries the parked `shopping_locations` rename.
+  [02](02-mcp-endpoint.md), and which carries the parked `shopping_locations` rename —
+  and except 15-B2 (cookie flags), which the sweep pulls into the hotfix: it is one
+  line, nothing reads the cookie from JavaScript, and it is what turns the sweep's two
+  stored-XSS findings from "script runs" into "session stolen".
+- **The sweep's auth findings ride with wave 2, not ahead of it.** S4 (reverse-proxy
+  trust), S5 (`DEFAULT_PERMISSIONS`), S6 (`USERS_EDIT` escalation), S17 (dead iCal
+  branch, cross-instance construction), S18 (`AUTH_CLASS` type check) and S19 all live
+  in the files 11 and 15-C1/B1 rewrite. Fixing them first means doing the auth refactor
+  twice; they are added to 15's tables and land in that wave.
+- **Three sweep items are constraints on plans, not work of their own.** S11 (the
+  query-string API key path) must not be inherited by [02](02-mcp-endpoint.md)'s bearer
+  seam, and S4's trusted-proxy pattern is the model for it; S14 (barcode filename and
+  image fetch) is inherited by [09](09-barcode-lookup-sources.md) before it adds lookup
+  sources; S15, S16 and R1's `/system/config` contract test go into 14 piece 2.
 
 Each plan carries a **Verification** section: booted-instance checks and result-set diffs
 against a real database, following the standard the defects pass set. Lint is not
@@ -139,7 +155,10 @@ pod. Waves are strictly ordered; tracks inside a wave touch disjoint files and c
 as parallel sessions.
 
 Wave 0 is complete and wave 1's track C is done; the rest is unstarted. Wave 4's shape
-is no longer settled — see 07-Q6 there.
+is no longer settled — see 07-Q6 there. Two things now sit between wave 0 and wave 1:
+a hotfix the security sweep forced, and a decision 17 has been owed since 16 landed.
+Neither is a wave; both are a single sitting, and wave 1 does not start until both are
+done.
 
 ### Wave 0 — decisions and scaffolding (one sitting) — **complete**
 
@@ -172,11 +191,45 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   09 is parked until the data exists, and 04-Q2 (ship no barcodes) already stands on
   its own reasoning.
 
+### Wave 0.5 — the hotfix and the decision
+
+- **Security hotfix, one PR.** Four items from [docs/security-sweep.md](../security-sweep.md),
+  each a few lines, each in a file no wave 1 track opens:
+  - **S1** — `BaseApiController::GetParsedAndFilteredRequestBody` `str_replace`s
+    `&lt;`/`&gt;`/`&amp;` back to raw characters *after* HTMLPurifier, so entity-encoded
+    script is stored literally and rendered with `{!! !!}` in the stock overview,
+    recipes, shopping list and userfields. Delete the three lines; the S7 allow-list
+    trim (`iframe`, `id`) goes in the same edit.
+  - **S2** — `FilesApiController` has no `CheckPermission` on upload, serve or delete,
+    accepts any content under any extension, and serves it `inline` with a sniffed
+    MIME type. Permission per group, extension allow-list per group, `attachment`
+    unless the type is a safe image, `X-Content-Type-Options: nosniff`.
+  - **S3 / 15-B2** — `BaseAuthMiddleware::SetSessionCookie` gains `HttpOnly`,
+    `SameSite=Lax`, `Secure` when HTTPS, and a real expiry. 15-B2's open question about
+    `Strict` versus embedded mode is answered `Lax` here; 15 records it.
+  - **R1** — `BaseController` and `SystemApiController::GetConfig` test
+    `substr($constant, 0, 19)` against a 21-character prefix, so every feature flag is
+    dropped from the UI and the API. `str_starts_with` and `substr(…, 8)`. A regression
+    from 16, recorded in 16's Executed section.
+
+  Verification is a booted instance, not a diff: upload an `.svg` and confirm it
+  downloads rather than renders; read the `Set-Cookie` header; POST a product
+  description of `&lt;script&gt;` and confirm it comes back as text; open the consume
+  form with location tracking enabled and confirm the field is there.
+- **17-Q2 and 17-Q4, answered.** Q4 (does the server keep accepting `GROCY-API-KEY`,
+  and for how long) gates 11; Q2 (does the Home Assistant fork poll through grocy-py or
+  reimplement against `/system/db-changed-time`) gates 10, because thirty-second polling
+  defeats the scale-to-zero 10 exists for. Q1 and Q3 can wait; these two cannot, and the
+  "17 before 11 and 10" rule above is otherwise broken a second time.
+
 ### Wave 1 — platform (three parallel tracks, disjoint files)
 
 - **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
   easier to reason about once cold start no longer rewrites requests. Together they end
-  the PVC.
+  the PVC. 10 is the first plan to publish an image from the Dockerfile, so sweep S25
+  (`.dockerignore`, non-root `USER`) is 10's, and 01 inherits S2's per-group
+  extension allow-list and S10's upload cap when it moves storage into the database —
+  a blob column with no size limit is the same DoS with a different disk.
 - **Track B: 12 frontend shared core.** Land steps 1–2 as their own PR: the four latent
   bug fixes plus the `request()` core with `timeout`/`onerror`. Note what that PR does
   *not* deliver — all 148 `console.error` handlers are passed explicitly, so the default
@@ -190,15 +243,29 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 ### Wave 2 — API correctness
 
 - **11 API error handling**, presented as a before/after diff from 14's sweep. Then,
-  while the auth files are open: **15-C1** (authenticator extraction), **15-B1** (LDAP
-  removal + the `AUTH_CLASS` validation check) and **15-B2** (cookie flags) as one
-  small, changelogged follow-on. The remaining 15 one-liners (C3–C9) ride along with
-  whatever wave has the file open; C10 stays deferred until after 13, then folds in
-  here or later.
+  while the auth files are open: **15-C1** (authenticator extraction, which also closes
+  sweep S17 — the dead iCal `secret` branch exists *because* middlewares construct each
+  other), **15-B1** (LDAP removal + the `AUTH_CLASS` type check, sweep S18) and the
+  sweep's auth findings **S4** (trusted-proxy allowlist for `ReverseProxyAuthMiddleware`,
+  refuse when unset), **S5** (`DEFAULT_PERMISSIONS` no longer `['ADMIN']`; never grant
+  a permission the creator lacks), **S6** (`USERS_EDIT` cannot edit a user holding
+  permissions the caller lacks; current password required for self password change)
+  and **S19** (dummy-hash verify for unknown users, cookie cleared on logout, expired
+  sessions pruned) as one changelogged follow-on. 15-B2 already landed in the hotfix.
+  The remaining 15 one-liners (C3–C9) ride along with whatever wave has the file open;
+  C10 stays deferred until after 13, then folds in here or later.
+- **S8, S9, S12** land here too, as they are 11's territory: `Origin` check on
+  cookie-authenticated non-GET API requests and `GET /manageapikeys/new` / `GET /logout`
+  made POST (S8); the 500 page's trace and system info gated on `dev` and escaped
+  (S9 — 11 already owns the error surface); login throttling and a forced change while
+  the seeded `admin`/`admin` hash is in use (S12).
 
 ### Wave 3 — first features on the new platform
 
-- **09 implementation**, if wave 0's experiment justified it.
+- **09 implementation**, if wave 0's experiment justified it — inheriting sweep S14
+  first (filter `__barcode` to a filename-safe class, allow-list the image extension,
+  refuse loopback and private hosts before fetching `__image_url`), since every source
+  09 adds is another party that chooses that URL.
 - **06 location barcodes** — the first shipped dual-engine migration (deliberately
   small), on the locations list/form pair 12 just converted. Codes, printing, UUID, QR;
   camera ingest stays unscoped.
@@ -232,9 +299,18 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 ### Wave 5 — the assistant and the lists
 
 - **14 piece 2** — the response-contract snapshot, now that 11 has stabilized the
-  failure paths it records. This freezes the API surface 02 builds on.
+  failure paths it records. This freezes the API surface 02 builds on. It also takes
+  three sweep items that are contract work rather than fixes: body validation against
+  the entity's OpenAPI schema (S16 — `id` and `row_created_timestamp` stop being
+  writable through the generic endpoints), a length/complexity bound on the `§` regex
+  operator written into the filter contract `filterdifftest.php` already measures
+  (S15), and a test that `/system/config` returns at least `FEATURE_FLAG_STOCK` so R1
+  cannot recur.
 - **02 MCP, read-only v1** — separate container per its Q6 response, bearer key
-  behind the credential→user seam per the IdP note.
+  behind the credential→user seam per the IdP note. Two sweep constraints: the seam
+  does not accept a key from the query string (S11 — the server's own query path is
+  removed in wave 2 and the sidecar must not reintroduce it), and sidecar→server trust
+  follows S4's trusted-proxy pattern rather than a shared header alone.
 - **05 A + C** — store on lists, default list per product/recipe. B (store-layout
   ordering) waits for real shopping trips to prove it wanted.
 
@@ -247,6 +323,13 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   curated dataset content stays open-ended and unscheduled.
 - **Declined**: the `shopping_locations` rename (15-Q5) — revisit only if a breaking
   batch happens for other reasons.
+- **Deleted, whenever a PR next touches the root**: `update.sh` (sweep S13, rigor
+  review H3) — it wipes the install and unpacks an unsigned upstream Grocy zip. Added
+  to 15's non-breaking table so it has a home; it needs no wave.
+- **Not scheduled, recorded**: sweep S20–S24 (Host-header redirects, wildcard CORS,
+  integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, `Content-Disposition`
+  quoting, Actions pinned to tags). Each is a one-liner that rides with whichever wave
+  opens the file; S21 waits on 17 to say which browser clients exist.
 
 Every wave ends mergeable: nothing in a later wave reworks what an earlier wave
 shipped, and each track lands through its own PR with its plan's Verification section
