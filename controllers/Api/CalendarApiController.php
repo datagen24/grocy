@@ -16,14 +16,14 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
- * Serves the /api/calendar endpoints: iCal export of all grocy events
+ * Serves the /api/calendar endpoints: iCal export of all Victual events
  * (due products, chores, tasks, meal plan etc.) and the shareable link for it.
  */
 class CalendarApiController extends BaseApiController
 {
 	/**
 	 * GET /api/calendar/ical - exports all events from CalendarService as an iCal file
-	 * (Content-Type text/calendar, served as attachment "Grocy.ics"); events without
+	 * (Content-Type text/calendar, served as attachment "Victual.ics"); events without
 	 * a start are skipped, timed events are exported as zero-length occurrences.
 	 * Returns a 400 JSON error response on failure.
 	 */
@@ -36,7 +36,7 @@ class CalendarApiController extends BaseApiController
 			$maxDate = null;
 
 			$vCalendar = new Calendar();
-			$vCalendar->setProductIdentifier('Grocy');
+			$vCalendar->setProductIdentifier('Victual');
 
 			foreach ($events as $event)
 			{
@@ -93,7 +93,7 @@ class CalendarApiController extends BaseApiController
 
 			$response->write((new CalendarFactory())->createCalendar($vCalendar));
 			$response = $response->withHeader('Content-Type', 'text/calendar; charset=utf-8');
-			return $response->withHeader('Content-Disposition', 'attachment; filename="Grocy.ics"');
+			return $response->withHeader('Content-Disposition', 'attachment; filename="Victual.ics"');
 		}
 		catch (\Exception $ex)
 		{

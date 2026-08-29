@@ -364,8 +364,8 @@ msgstr "Tai reiškia, kad %s bus pašalintas iš sandėlio"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "Pašalintas %1$s iš %2$s sandėlio"
 
-msgid "About Grocy"
-msgstr "Apie Grocy"
+msgid "About Victual"
+msgstr "Apie Victual"
 
 msgid "Close"
 msgstr "Uždaryti"
@@ -1509,12 +1509,6 @@ msgstr "Klaida inicijuojant brūkšninio kodo nuskaitymo biblioteką"
 msgid "Price factor"
 msgstr "Kainos faktorius"
 
-msgid "Do you find Grocy useful?"
-msgstr "Ar Grocy jums naudinga?"
-
-msgid "Say thanks"
-msgstr "Sakyk ačiū"
-
 msgid "Search for recipes containing this product"
 msgstr "Ieškokite receptų, kuriuose yra šis produktas"
 
@@ -1648,10 +1642,10 @@ msgstr "Redaguoti sandėlio įrašą"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Prieiga prie fotoaparato galima tik tada, kai palaiko ir leidžia jūsų "
-"naršyklė ir kai Grocy aptarnaujamas saugiu (https://) ryšiu"
+"naršyklė ir kai Victual aptarnaujamas saugiu (https://) ryšiu"
 
 msgid "Keep screen on"
 msgstr "Laikykite ekraną įjungtą"
@@ -2325,7 +2319,7 @@ msgid "Download %s Grocycode"
 msgstr "Atsisiųskite %s grocycode"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocy kodas yra unikali nuoroda į tai %s jūsų Grocy egzemplioriuje – "

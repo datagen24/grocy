@@ -5,7 +5,7 @@ namespace Victual\Services\Database;
 /**
  * PostgreSQL storage engine.
  *
- * Unlike SQLite, PostgreSQL cannot call back into PHP, so the helper functions Grocy
+ * Unlike SQLite, PostgreSQL cannot call back into PHP, so the helper functions Victual
  * registers per connection on SQLite (regexp, victual_user_setting, ceil) are instead
  * provided natively: regexp maps onto the "~" operator, ceil already exists, and
  * victual_user_setting is an SQL function installed by the baseline schema which resolves
@@ -112,7 +112,7 @@ class PostgresDialect extends DatabaseDialect
 
 	public function GetIdentifierDelimiter(): string
 	{
-		// Grocy's tables and columns are all lower case, so quoting them is safe and also
+		// Victual's tables and columns are all lower case, so quoting them is safe and also
 		// covers the ones which would otherwise collide with reserved words
 		return '"';
 	}

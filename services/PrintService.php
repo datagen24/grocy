@@ -16,7 +16,7 @@ class PrintService extends BaseService
 	/**
 	 * Prints the given lines and cuts the paper.
 	 *
-	 * @param bool $printHeader Whether to print the "Grocy" banner and timestamp first
+	 * @param bool $printHeader Whether to print the "Victual" banner and timestamp first
 	 * @param string[] $lines Pre-rendered text lines, one per shopping list item
 	 * @return array Always ['result' => 'OK']; failures throw instead
 	 * @throws \Exception When the printer cannot be reached
@@ -66,7 +66,7 @@ class PrintService extends BaseService
 	}
 
 	/**
-	 * Prints the centered "Grocy" banner followed by the current date/time (d/m/Y H:i).
+	 * Prints the centered "Victual" banner followed by the current date/time (d/m/Y H:i).
 	 */
 	private static function printHeader(Printer $printer)
 	{
@@ -77,7 +77,7 @@ class PrintService extends BaseService
 		$printer->selectPrintMode(Printer::MODE_DOUBLE_WIDTH);
 		$printer->setTextSize(4, 4);
 		$printer->setReverseColors(true);
-		$printer->text('Grocy');
+		$printer->text('Victual');
 		$printer->setJustification();
 		$printer->setTextSize(1, 1);
 		$printer->setReverseColors(false);

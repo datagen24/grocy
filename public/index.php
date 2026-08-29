@@ -39,7 +39,7 @@ try
 }
 catch (Victual\Helpers\ERequirementNotMet $ex)
 {
-	exit('Unable to run Grocy: ' . $ex->getMessage());
+	exit('Unable to run Victual: ' . $ex->getMessage());
 }
 
 require_once __DIR__ . '/../app.php';

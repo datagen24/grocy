@@ -12,7 +12,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
  * already performed authentication, either via the HTTP header named by
  * VICTUAL_REVERSE_PROXY_AUTH_HEADER (default "REMOTE_USER") or, when
  * VICTUAL_REVERSE_PROXY_AUTH_USE_ENV is enabled, the equally named entry in
- * $_SERVER (see config-dist.php). A matching local Grocy user is created on
+ * $_SERVER (see config-dist.php). A matching local Victual user is created on
  * first sight of a username. API routes still fall back to regular API key
  * authentication first, for reverse proxy setups that bypass the proxy for them.
  */
@@ -80,7 +80,7 @@ class ReverseProxyAuthMiddleware extends BaseAuthMiddleware
 
 	/**
 	 * Not supported: authentication is fully delegated to the reverse proxy, so
-	 * there is no Grocy-handled login form to process.
+	 * there is no Victual-handled login form to process.
 	 *
 	 * @param array $postParams The login form POST parameters (unused)
 	 * @throws \Exception Always

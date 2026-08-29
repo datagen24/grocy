@@ -347,7 +347,7 @@ msgstr "이것은 \"%s\"이(가) 재고에서 제거된다는 것을 의미합�
 msgid "Removed %1$s of %2$s from stock"
 msgstr "%2$s %1$s을 재고 목록에서 제거함"
 
-msgid "About Grocy"
+msgid "About Victual"
 msgstr ""
 
 msgid "Close"
@@ -1387,12 +1387,6 @@ msgstr ""
 msgid "Price factor"
 msgstr "가격 변동"
 
-msgid "Do you find Grocy useful?"
-msgstr ""
-
-msgid "Say thanks"
-msgstr "Say thanks"
-
 msgid "Search for recipes containing this product"
 msgstr "이 제품이 포함된 요리법 검색"
 
@@ -1513,7 +1507,7 @@ msgstr "재고 목록 수정"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 
 msgid "Keep screen on"
@@ -2123,7 +2117,7 @@ msgid "Download %s Grocycode"
 msgstr ""
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 

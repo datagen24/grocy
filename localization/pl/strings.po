@@ -387,8 +387,8 @@ msgstr "To znaczy, że %s zostanie usunięty ze stanu"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "%2$s - %1$s - usunięto z zapasów"
 
-msgid "About Grocy"
-msgstr "O Grocy"
+msgid "About Victual"
+msgstr "O Victual"
 
 msgid "Close"
 msgstr "Zamknij"
@@ -1535,12 +1535,6 @@ msgstr "Cena tego składnika zostanie pomnożona przez ten współczynnik"
 msgid "Price factor"
 msgstr "Współczynnik ceny"
 
-msgid "Do you find Grocy useful?"
-msgstr "Uważasz, że Grocy jest dla Ciebie przydatny?"
-
-msgid "Say thanks"
-msgstr "Podziękuj"
-
 msgid "Search for recipes containing this product"
 msgstr "Szukaj przepisów zawierających ten produkt"
 
@@ -1675,10 +1669,10 @@ msgstr "Edytuj pozycję zapasu"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
 "Dostęp do kamery jest możliwy tylko w momencie kiedy Twoja przeglądarka na "
-"to pozwala oraz Grocy jest serwowane przez zabezpieczone (https://) "
+"to pozwala oraz Victual jest serwowane przez zabezpieczone (https://) "
 "połączenie"
 
 msgid "Keep screen on"
@@ -2347,7 +2341,7 @@ msgid "Download %s Grocycode"
 msgstr "Pobierz Grocycode dla %s"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr ""
 "Grocycode to unikalny odnośnik do %s w twojej instancji Grocy - umieść go na"

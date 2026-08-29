@@ -271,7 +271,7 @@ class DatabaseImporter
 
 		if ($sourceVersion === false || $sourceVersion === null)
 		{
-			throw new \Exception('The source database has no migrations recorded, so it is not a Grocy database');
+			throw new \Exception('The source database has no migrations recorded, so it is not a grocy or Victual database');
 		}
 
 		if ($targetVersion === false || $targetVersion === null)
@@ -400,7 +400,7 @@ class DatabaseImporter
 		// Both sides have to report what is stored, not what their connection makes of
 		// it. The application's connections set PDO::NULL_EMPTY_STRING, so a stored empty
 		// string reads back as null, while the importer's source connection deliberately
-		// does not (see bin/victual-db-import — Grocy really does store empty strings, the
+		// does not (see bin/victual-db-import — grocy really does store empty strings, the
 		// internal meal plan section being one). Comparing a NULL_NATURAL read against a
 		// NULL_EMPTY_STRING read reports a difference for every empty string in the
 		// database and means nothing. Setting both to NULL_NATURAL keeps the empty
@@ -500,7 +500,7 @@ class DatabaseImporter
 		}
 
 		// ALTER TABLE rather than session_replication_role, which needs superuser -
-		// a Grocy database user normally owns its tables but is not a superuser
+		// a Victual database user normally owns its tables but is not a superuser
 		foreach ($tables as $table)
 		{
 			$this->Target->exec('ALTER TABLE ' . $this->TargetDialect->QuoteIdentifier($table)

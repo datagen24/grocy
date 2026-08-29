@@ -5,7 +5,7 @@ namespace Victual\Services\Database;
 use Victual\Services\LocalizationService;
 
 /**
- * The rows a brand new Grocy database needs before anyone can log into it.
+ * The rows a brand new Victual database needs before anyone can log into it.
  *
  * On SQLite these arrive as a side effect of replaying the migration history: 0027.php
  * creates the admin user, 0031.php the default quantity units and location, 0062/0063

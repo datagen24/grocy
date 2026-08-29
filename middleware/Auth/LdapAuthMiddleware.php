@@ -11,9 +11,9 @@ use Psr\Http\Message\ServerRequestInterface as Request;
  * Active when VICTUAL_AUTH_CLASS is set to Victual\Middleware\Auth\LdapAuthMiddleware:
  * authenticates logins against an external LDAP/Active Directory server (bind DN,
  * base DN, user filter and UID attribute configured via the VICTUAL_LDAP_* settings,
- * see config-dist.php), creating a local Grocy user on first successful login.
+ * see config-dist.php), creating a local Victual user on first successful login.
  * Request authentication itself (session cookie / API key) is delegated to
- * DefaultAuthMiddleware, since logins still result in a normal Grocy session.
+ * DefaultAuthMiddleware, since logins still result in a normal Victual session.
  */
 class LdapAuthMiddleware extends BaseAuthMiddleware
 {
@@ -34,7 +34,7 @@ class LdapAuthMiddleware extends BaseAuthMiddleware
 	/**
 	 * Verifies username/password against the configured LDAP server: binds with the
 	 * service account to look up the user's DN, then rebinds as that user to
-	 * validate the password. On success, creates the local Grocy user if it does not
+	 * validate the password. On success, creates the local Victual user if it does not
 	 * exist yet, creates a session and sets the session cookie.
 	 *
 	 * @param array $postParams The login form POST parameters (username, password, stay_logged_in)

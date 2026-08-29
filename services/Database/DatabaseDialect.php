@@ -5,7 +5,7 @@ namespace Victual\Services\Database;
 /**
  * Encapsulates everything about persistence that differs between database engines.
  *
- * Grocy's data access is split in two: LessQL's fluent API (portable) and hand written
+ * Victual's data access is split in two: LessQL's fluent API (portable) and hand written
  * SQL in the migrations and a handful of services (not portable). This class is the seam
  * for the second part - connection setup, engine specific functions, and the few SQL
  * fragments that leak into PHP.

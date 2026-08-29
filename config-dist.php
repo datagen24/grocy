@@ -102,7 +102,7 @@ Setting('ENTRY_PAGE', 'stock');
 Setting('DISABLE_AUTH', false);
 
 // A valid fully qualified class name of the authentication middlware to use:
-//  Victual\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Grocy
+//  Victual\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Victual
 //  Victual\Middleware\Auth\ReverseProxyAuthMiddleware: When your reverse proxy handles authentication (see options below)
 //  Victual\Middleware\Auth\LdapAuthMiddleware: When you want to use your existing LDAP server (see options below)
 // or any other class that implements Victual\Middleware\Auth\BaseAuthMiddleware

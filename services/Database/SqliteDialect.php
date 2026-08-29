@@ -6,7 +6,7 @@ use Victual\Services\UsersService;
 
 /**
  * The original (and default) storage engine. Behaviour here is deliberately identical to
- * what Grocy did before the dialect layer existed, so that existing installations are
+ * what the code did before the dialect layer existed, so that existing installations are
  * untouched by the PostgreSQL work.
  */
 class SqliteDialect extends DatabaseDialect
@@ -18,7 +18,7 @@ class SqliteDialect extends DatabaseDialect
 
 	/**
 	 * Opens the database file (creating it when missing, as SQLite does by default).
-	 * NULL_EMPTY_STRING matches upstream Grocy: empty strings come back as null.
+	 * NULL_EMPTY_STRING matches upstream grocy: empty strings come back as null.
 	 */
 	public function CreateConnection(): \PDO
 	{
@@ -30,7 +30,7 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
-	 * Registers the PHP callbacks SQLite lacks natively and Grocy's SQL relies on:
+	 * Registers the PHP callbacks SQLite lacks natively and Victual's SQL relies on:
 	 * REGEXP (UTF-8 aware via mb_ereg), victual_user_setting() for user settings resolved
 	 * inside views, and ceil(). PostgreSQL provides native equivalents of all three
 	 * instead, since it cannot call back into PHP.

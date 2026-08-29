@@ -350,8 +350,8 @@ msgstr "ストックから%s削除します"
 msgid "Removed %1$s of %2$s from stock"
 msgstr "ストックから %2$s の %1$s を削除しました"
 
-msgid "About Grocy"
-msgstr "Grocyについて"
+msgid "About Victual"
+msgstr "Victualについて"
 
 msgid "Close"
 msgstr "閉じる"
@@ -1376,12 +1376,6 @@ msgstr "この材料の価格にこの係数を乗算します"
 msgid "Price factor"
 msgstr "価格係数"
 
-msgid "Do you find Grocy useful?"
-msgstr "Grocyの使い心地はいかがですか？"
-
-msgid "Say thanks"
-msgstr "感謝を伝える"
-
 msgid "Search for recipes containing this product"
 msgstr "この物品を含むレシピを検索"
 
@@ -1502,9 +1496,9 @@ msgstr "ストックを編集"
 
 msgid ""
 "Camera access is only possible when supported and allowed by your browser "
-"and when Grocy is served via a secure (https://) connection"
+"and when Victual is served via a secure (https://) connection"
 msgstr ""
-"カメラへのアクセスは、ブラウザが対応しておりアクセス許可を受けている場合、およびGrocyが安全な接続(https://)経由で提供されている場合のみ利用可能です"
+"カメラへのアクセスは、ブラウザが対応しておりアクセス許可を受けている場合、およびVictualが安全な接続(https://)経由で提供されている場合のみ利用可能です"
 
 msgid "Keep screen on"
 msgstr "画面を消灯しない"
@@ -2117,7 +2111,7 @@ msgid "Download %s Grocycode"
 msgstr "%sのGrocycodeをダウンロード"
 
 msgid ""
-"Grocycode is a unique referer to this %s in your Grocy instance - print it "
+"Grocycode is a unique referer to this %s in your Victual instance - print it "
 "onto a label and scan it like any other barcode"
 msgstr "Grocycodeは、Grocyインスタンス内のこの%sへの一意の参照元です。ラベルに印刷して、バーコードと同じようにスキャンできます"
 

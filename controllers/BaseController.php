@@ -14,7 +14,7 @@ use Victual\Services\UsersService;
  *
  * Provides the shared DI container, the Blade view engine and the database
  * connection, plus the Render()/RenderPage() helpers that populate the
- * template variables common to every grocy page (localization, feature
+ * template variables common to every Victual page (localization, feature
  * flags, permissions, URL builder etc.).
  */
 class BaseController
