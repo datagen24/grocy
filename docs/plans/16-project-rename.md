@@ -352,16 +352,13 @@ goes instead. Nothing here blocks the codebase rename, which is complete.
 Q3 answers these and says explicitly to claim them *at announcement time, not
 before*, so they are not oversights and there is nothing to do in code:
 
-- [ ] **Rename `datagen24/grocy` to `datagen24/victual` on GitHub.** GitHub
-      auto-redirects the old path, so nothing breaks and no clone has to be
-      re-pointed. Do it first — the rest reference it. This is the one ordering
-      dependency the rename leaves behind: four places already write
-      `https://github.com/datagen24/victual` — the two barcode-lookup
-      User-Agents, the 500 page's issue link, and the OpenAPI `license.url` —
-      and none of them resolves until the repository actually carries that
-      name. Nothing in the application depends on them resolving, so this is a
-      dangling link rather than a defect, but it is why the repo rename is the
-      first of these to do rather than the last.
+- [x] **Rename `datagen24/grocy` to `datagen24/victual` on GitHub** — **done
+      2026-08-29.** This was the one ordering dependency the code rename left
+      behind: four places already wrote `https://github.com/datagen24/victual`
+      — the two barcode-lookup User-Agents, the 500 page's issue link, and the
+      OpenAPI `license.url` — and none of them resolved until the repository
+      carried that name. They do now. GitHub auto-redirects the old path, so no
+      existing clone had to be re-pointed.
 - [ ] **Register `victual.io`**, with `victualer`/`victualler` as redirects per
       Q2. Q3 verified nine-for-nine unregistered on .io/.app/.dev, with the two
       caveats it records (registry-reserved names also NXDOMAIN, and Google

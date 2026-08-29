@@ -239,21 +239,23 @@ be argued with rather than accepted wholesale.
 
 ## Screenshots
 
+This fork, running its own demo dataset — not upstream's screenshots.
+
 ### Stock overview
 
-![Stock overview](https://github.com/grocy/grocy/raw/master/.github/publication_assets/stock.png "Stock overview")
+![Stock overview](.github/publication_assets/stock.png "Stock overview")
 
 ### Shopping List
 
-![Shopping List](https://github.com/grocy/grocy/raw/master/.github/publication_assets/shoppinglist.png "Shopping List")
+![Shopping List](.github/publication_assets/shoppinglist.png "Shopping List")
 
 ### Meal Plan
 
-![Meal Plan](https://github.com/grocy/grocy/raw/master/.github/publication_assets/mealplan.png "Meal Plan")
+![Meal Plan](.github/publication_assets/mealplan.png "Meal Plan")
 
 ### Chores overview
 
-![Chores overview](https://github.com/grocy/grocy/raw/master/.github/publication_assets/chores.png "Chores overview")
+![Chores overview](.github/publication_assets/chores.png "Chores overview")
 
 ## Motivation
 
