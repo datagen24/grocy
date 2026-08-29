@@ -35,12 +35,12 @@ $('#save-stockentry-button').on('click', function(e)
 	jsonData.price = price;
 	jsonData.open = $("#open").is(":checked");
 
-	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 	{
 		jsonData.shopping_location_id = Grocy.Components.ShoppingLocationPicker.GetValue();
 	}
 
-	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 	{
 		jsonData.location_id = Grocy.Components.LocationPicker.GetValue();
 	}
@@ -54,7 +54,7 @@ $('#save-stockentry-button').on('click', function(e)
 		{
 			Grocy.EditObjectId = result[0].transaction_id;
 
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER && $("#print-label").is(":checked"))
+			if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER && $("#print-label").is(":checked"))
 			{
 				Grocy.Api.Get('stock/entry/' + Grocy.EditObjectRowId + '/printlabel', function(labelData)
 				{
@@ -153,7 +153,7 @@ $("#amount").on("focus", function(e)
 // whenever the due date changes), when label printing is enabled
 Grocy.Components.DateTimePicker.GetInputElement().on('change', function(e)
 {
-	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 	{
 		$("#print-label").prop("checked", true);
 	}

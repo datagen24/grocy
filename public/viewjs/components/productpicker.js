@@ -327,7 +327,7 @@ $('#product_id_text_input').on('blur', function (e)
 				};
 			}
 
-			if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING)
+			if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING)
 			{
 				buttons.retrycamerascanning = {
 					label: '<strong>C</strong> <i class="fa-solid fa-camera"></i>',

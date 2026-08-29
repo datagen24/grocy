@@ -35,7 +35,7 @@
 		<form id="shoppinglist-form"
 			novalidate>
 
-			@if(GROCY_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS)
+			@if(VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS)
 			<div class="form-group">
 				<label for="shopping_list_id">{{ $__t('Shopping list') }}</label>
 				<select class="custom-control custom-select"

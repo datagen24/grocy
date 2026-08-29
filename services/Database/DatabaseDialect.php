@@ -158,14 +158,14 @@ abstract class DatabaseDialect
 	}
 
 	/**
-	 * Factory: picks the dialect matching the GROCY_DB_DRIVER setting
+	 * Factory: picks the dialect matching the VICTUAL_DB_DRIVER setting
 	 * ("sqlite" when undefined). Called once per request by DatabaseService.
 	 *
 	 * @throws \Exception On an unsupported driver value
 	 */
 	public static function Create(): self
 	{
-		$driver = defined('GROCY_DB_DRIVER') ? strtolower(GROCY_DB_DRIVER) : 'sqlite';
+		$driver = defined('VICTUAL_DB_DRIVER') ? strtolower(VICTUAL_DB_DRIVER) : 'sqlite';
 
 		switch ($driver)
 		{

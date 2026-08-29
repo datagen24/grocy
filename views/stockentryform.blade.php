@@ -51,7 +51,7 @@
 
 			@php
 			$additionalGroupCssClasses = '';
-			if (!GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+			if (!VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 			{
 			$additionalGroupCssClasses = 'd-none';
 			}
@@ -72,11 +72,11 @@
 			'earlierThanInfoLimit' => date('Y-m-d'),
 			'earlierThanInfoText' => $__t('The given date is earlier than today, are you sure?'),
 			'additionalGroupCssClasses' => $additionalGroupCssClasses,
-			'activateNumberPad' => GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
+			'activateNumberPad' => VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
 			))
 			@php $additionalGroupCssClasses = ''; @endphp
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			@php
 			if (empty($stockEntry->price))
 			{
@@ -109,7 +109,7 @@
 				value="0">
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 			@include('components.locationpicker', array(
 			'locations' => $locations,
 			'prefillById' => $stockEntry->location_id
@@ -132,7 +132,7 @@
 				</div>
 			</div>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input @if($stockEntry->open == 1) checked @endif class="form-check-input custom-control-input" type="checkbox" id="open" name="open" value="1">
@@ -147,7 +147,7 @@
 			'entity' => 'stock'
 			))
 
-			@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+			@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input class="form-check-input custom-control-input"

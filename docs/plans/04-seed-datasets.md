@@ -38,7 +38,7 @@ installs and merges into an existing one. The importer resolves names to ids as 
 
 ### Import path
 
-`bin/grocy-seed-import <dataset.json> [--dry-run]`, mirroring `bin/grocy-db-import`:
+`bin/grocy-seed-import <dataset.json> [--dry-run]`, mirroring `bin/victual-db-import`:
 
 - idempotent — an existing name is skipped, not duplicated or updated
 - `--dry-run` prints what would be created

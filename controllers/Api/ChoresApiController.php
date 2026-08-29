@@ -107,13 +107,13 @@ class ChoresApiController extends BaseApiController
 				$skipped = $requestBody['skipped'];
 			}
 
-			$doneBy = GROCY_USER_ID;
+			$doneBy = VICTUAL_USER_ID;
 			if (array_key_exists('done_by', $requestBody) && !empty($requestBody['done_by']))
 			{
 				$doneBy = $requestBody['done_by'];
 			}
 
-			if ($doneBy != GROCY_USER_ID)
+			if ($doneBy != VICTUAL_USER_ID)
 			{
 				User::CheckPermission($request, User::PERMISSION_CHORE_TRACK_EXECUTION);
 			}
@@ -150,8 +150,8 @@ class ChoresApiController extends BaseApiController
 
 	/**
 	 * GET /api/chores/{choreId}/printlabel - assembles the label printer webhook payload
-	 * (chore name, Grocycode, details plus GROCY_LABEL_PRINTER_PARAMS), runs the webhook
-	 * server-side when GROCY_LABEL_PRINTER_RUN_SERVER is enabled and returns the payload (200)
+	 * (chore name, Grocycode, details plus VICTUAL_LABEL_PRINTER_PARAMS), runs the webhook
+	 * server-side when VICTUAL_LABEL_PRINTER_RUN_SERVER is enabled and returns the payload (200)
 	 * or a 400 error response.
 	 */
 	public function ChorePrintLabel(Request $request, Response $response, array $args)
@@ -164,11 +164,11 @@ class ChoresApiController extends BaseApiController
 				'chore' => $choreDetails->chore->name,
 				'grocycode' => (string)(new Grocycode(Grocycode::CHORE, $args['choreId'])),
 				'details' => $choreDetails,
-			], GROCY_LABEL_PRINTER_PARAMS);
+			], VICTUAL_LABEL_PRINTER_PARAMS);
 
-			if (GROCY_LABEL_PRINTER_RUN_SERVER)
+			if (VICTUAL_LABEL_PRINTER_RUN_SERVER)
 			{
-				(new WebhookRunner())->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+				(new WebhookRunner())->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 			}
 
 			return $this->ApiResponse($response, $webhookData);

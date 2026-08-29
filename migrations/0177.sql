@@ -7,7 +7,7 @@ SELECT
 	CASE WHEN JULIANDAY(sc.best_before_date) - JULIANDAY('now', 'localtime') < 0 THEN
 		CASE WHEN p.due_type = 1 THEN 'overdue' ELSE 'expired' END
 	ELSE
-		CASE WHEN JULIANDAY(sc.best_before_date) - JULIANDAY('now', 'localtime') < CAST(grocy_user_setting('stock_due_soon_days') AS INT) THEN
+		CASE WHEN JULIANDAY(sc.best_before_date) - JULIANDAY('now', 'localtime') < CAST(victual_user_setting('stock_due_soon_days') AS INT) THEN
 			'due_soon'
 		ELSE
 			'ok'

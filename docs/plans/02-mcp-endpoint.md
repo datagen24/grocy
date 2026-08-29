@@ -22,8 +22,8 @@ Grocy already has everything needed underneath:
 - **API keys** — `services/ApiKeyService.php`, with a `key_type` column already used to
   separate general keys from `special-purpose-calendar-ical`. Keys resolve to a user via
   `GetUserByApiKey()`.
-- **Pluggable auth** — `middleware/Auth/`, selected by `GROCY_AUTH_CLASS`.
-  `DefaultAuthMiddleware` accepts a session cookie *or* a `GROCY-API-KEY` header, but only
+- **Pluggable auth** — `middleware/Auth/`, selected by `VICTUAL_AUTH_CLASS`.
+  `DefaultAuthMiddleware` accepts a session cookie *or* a `VICTUAL-API-KEY` header, but only
   for paths starting with `/api/`.
 - **Permissions** — 30 constants in `controllers/Users/User.php`, checked per route.
 - **Services** — `StockService`, `RecipesService`, `ChoresService` etc. already hold the

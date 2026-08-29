@@ -1,7 +1,7 @@
-@php global $GROCY_REQUIRED_FRONTEND_PACKAGES; @endphp
+@php global $VICTUAL_REQUIRED_FRONTEND_PACKAGES; @endphp
 
 <!DOCTYPE html>
-<html lang="{{ GROCY_LOCALE }}"
+<html lang="{{ VICTUAL_LOCALE }}"
 	dir="{{ $dir }}">
 
 <head>
@@ -16,7 +16,7 @@
 		sizes="32x32"
 		href="{{ $U('/img/icon-32.png?v=', true) }}{{ $version }}">
 
-	@if (GROCY_AUTHENTICATED)
+	@if (VICTUAL_AUTHENTICATED)
 	<link rel="manifest"
 		crossorigin="use-credentials"
 		href="{{ $U('/manifest') . '?data=' . base64_encode($__env->yieldContent('title') . '#' . $U($_SERVER['REQUEST_URI'])) }}">
@@ -39,15 +39,15 @@
 	<link href="{{ $U('/packages/toastr/build/toastr.min.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 
-	@if(in_array('bootstrap-combobox', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('bootstrap-combobox', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/@danielfarrell/bootstrap-combobox/css/bootstrap-combobox.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
-	@if(in_array('bootstrap-select', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('bootstrap-select', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/bootstrap-select/dist/css/bootstrap-select.min.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
-	@if(in_array('datatables', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('datatables', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/datatables.net-bs4/css/dataTables.bootstrap4.min.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	<link href="{{ $U('/packages/datatables.net-colreorder-bs4/css/colReorder.bootstrap4.min.css?v=', true) }}{{ $version }}"
@@ -57,23 +57,23 @@
 	<link href="{{ $U('/packages/datatables.net-select-bs4/css/select.bootstrap4.min.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
-	@if(in_array('tempusdominus', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('tempusdominus', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/tempusdominus-bootstrap-4/build/css/tempusdominus-bootstrap-4.min.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
-	@if(in_array('summernote', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('summernote', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/summernote/dist/summernote-bs4.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
-	@if(in_array('animatecss', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('animatecss', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/animate.css/animate.min.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
-	@if(in_array('fullcalendar', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('fullcalendar', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/fullcalendar/dist/fullcalendar.min.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
-	@if(in_array('daterangepicker', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('daterangepicker', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<link href="{{ $U('/packages/daterangepicker/daterangepicker.css?v=', true) }}{{ $version }}"
 		rel="stylesheet">
 	@endif
@@ -91,35 +91,35 @@
 
 	@stack('pageStyles')
 
-	@if(file_exists(GROCY_DATAPATH . '/custom_css.html'))
-	@php include GROCY_DATAPATH . '/custom_css.html' @endphp
+	@if(file_exists(VICTUAL_DATAPATH . '/custom_css.html'))
+	@php include VICTUAL_DATAPATH . '/custom_css.html' @endphp
 	@endif
 	<script>
 		var Grocy = { };
 		Grocy.Components = { };
-		Grocy.Mode = '{{ GROCY_MODE }}';
+		Grocy.Mode = '{{ VICTUAL_MODE }}';
 		Grocy.BaseUrl = '{{ $U('/') }}';
 		Grocy.CurrentUrlRelative = "/" + window.location.href.split('?')[0].replace(Grocy.BaseUrl, "");
 		Grocy.View = '{{ $viewName }}';
-		Grocy.Currency = '{{ GROCY_CURRENCY }}';
-		Grocy.EnergyUnit = '{{ GROCY_ENERGY_UNIT }}';
-		Grocy.CalendarFirstDayOfWeek = '{{ GROCY_CALENDAR_FIRST_DAY_OF_WEEK }}';
-		Grocy.CalendarShowWeekNumbers = {{ BoolToString(GROCY_CALENDAR_SHOW_WEEK_OF_YEAR) }};
+		Grocy.Currency = '{{ VICTUAL_CURRENCY }}';
+		Grocy.EnergyUnit = '{{ VICTUAL_ENERGY_UNIT }}';
+		Grocy.CalendarFirstDayOfWeek = '{{ VICTUAL_CALENDAR_FIRST_DAY_OF_WEEK }}';
+		Grocy.CalendarShowWeekNumbers = {{ BoolToString(VICTUAL_CALENDAR_SHOW_WEEK_OF_YEAR) }};
 		Grocy.LocalizationStrings = {!! $LocalizationStrings !!};
 		Grocy.LocalizationStringsQu = {!! $LocalizationStringsQu !!};
 		Grocy.FeatureFlags = {!! json_encode($featureFlags) !!};
 		Grocy.Webhooks = {
-		@if(GROCY_FEATURE_FLAG_LABEL_PRINTER && !GROCY_LABEL_PRINTER_RUN_SERVER)
+		@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER && !VICTUAL_LABEL_PRINTER_RUN_SERVER)
 			"labelprinter" : {
-				"hook": "{{ GROCY_LABEL_PRINTER_WEBHOOK }}",
-				"extra_data": {!! json_encode(GROCY_LABEL_PRINTER_PARAMS) !!},
-				"json": {{ BoolToString(GROCY_LABEL_PRINTER_HOOK_JSON) }}
+				"hook": "{{ VICTUAL_LABEL_PRINTER_WEBHOOK }}",
+				"extra_data": {!! json_encode(VICTUAL_LABEL_PRINTER_PARAMS) !!},
+				"json": {{ BoolToString(VICTUAL_LABEL_PRINTER_HOOK_JSON) }}
 			}
 		@endif
 		};
 
-		@if (GROCY_AUTHENTICATED)
-		Grocy.UserId = {{ GROCY_USER_ID }};
+		@if (VICTUAL_AUTHENTICATED)
+		Grocy.UserId = {{ VICTUAL_USER_ID }};
 		Grocy.UserSettings = {!! json_encode($userSettings) !!};
 		Grocy.UserPermissions = {!! json_encode($permissions) !!};
 		@else
@@ -148,7 +148,7 @@
 				class="d-none d-sm-inline"></span>
 		</span>
 
-		@if(GROCY_AUTHENTICATED)
+		@if(VICTUAL_AUTHENTICATED)
 		<button class="navbar-toggler navbar-toggler-right"
 			type="button"
 			data-toggle="collapse"
@@ -160,7 +160,7 @@
 			class="collapse navbar-collapse">
 			<ul class="navbar-nav navbar-sidenav">
 
-				@if(GROCY_FEATURE_FLAG_STOCK)
+				@if(VICTUAL_FEATURE_FLAG_STOCK)
 				<li class="nav-item nav-item-sidebar @if($viewName == 'stockoverview') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -172,7 +172,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_SHOPPINGLIST)
+				@if(VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 				<li class="nav-item nav-item-sidebar @if($viewName == 'shoppinglist') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -184,7 +184,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_RECIPES)
+				@if(VICTUAL_FEATURE_FLAG_RECIPES)
 				<div class="nav-item-divider"></div>
 				<li class="nav-item nav-item-sidebar permission-RECIPES @if($viewName == 'recipes') active-page @endif"
 					data-toggle="tooltip"
@@ -196,7 +196,7 @@
 						<span class="nav-link-text">{{ $__t('Recipes') }}</span>
 					</a>
 				</li>
-				@if(GROCY_FEATURE_FLAG_RECIPES_MEALPLAN)
+				@if(VICTUAL_FEATURE_FLAG_RECIPES_MEALPLAN)
 				<li class="nav-item nav-item-sidebar permission-RECIPES_MEALPLAN @if($viewName == 'mealplan') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -210,7 +210,7 @@
 				</li>
 				@endif
 				@endif
-				@if(GROCY_FEATURE_FLAG_CHORES)
+				@if(VICTUAL_FEATURE_FLAG_CHORES)
 				<div class="nav-item-divider"></div>
 				<li class="nav-item nav-item-sidebar @if($viewName == 'choresoverview') active-page @endif"
 					data-toggle="tooltip"
@@ -223,7 +223,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_TASKS)
+				@if(VICTUAL_FEATURE_FLAG_TASKS)
 				<li class="nav-item nav-item-sidebar @if($viewName == 'tasks') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -235,7 +235,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_BATTERIES)
+				@if(VICTUAL_FEATURE_FLAG_BATTERIES)
 				<li class="nav-item nav-item-sidebar @if($viewName == 'batteriesoverview') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -247,7 +247,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_EQUIPMENT)
+				@if(VICTUAL_FEATURE_FLAG_EQUIPMENT)
 				<li class="nav-item nav-item-sidebar permission-EQUIPMENT @if($viewName == 'equipment') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -259,7 +259,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_CALENDAR)
+				@if(VICTUAL_FEATURE_FLAG_CALENDAR)
 				<div class="nav-item-divider"></div>
 				<li class="nav-item nav-item-sidebar permission-CALENDAR @if($viewName == 'calendar') active-page @endif"
 					data-toggle="tooltip"
@@ -273,7 +273,7 @@
 				</li>
 				@endif
 
-				@if(GROCY_FEATURE_FLAG_STOCK)
+				@if(VICTUAL_FEATURE_FLAG_STOCK)
 				<div class="nav-item-divider"></div>
 				<li class="nav-item nav-item-sidebar permission-STOCK_PURCHASE @if($viewName == 'purchase') active-page @endif"
 					data-toggle="tooltip"
@@ -295,7 +295,7 @@
 						<span class="nav-link-text">{{ $__t('Consume') }}</span>
 					</a>
 				</li>
-				@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+				@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 				<li class="nav-item nav-item-sidebar permission-STOCK_TRANSFER @if($viewName == 'transfer') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -318,7 +318,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_CHORES)
+				@if(VICTUAL_FEATURE_FLAG_CHORES)
 				<li class="nav-item nav-item-sidebar permission-CHORE_TRACK_EXECUTION @if($viewName == 'choretracking') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -330,7 +330,7 @@
 					</a>
 				</li>
 				@endif
-				@if(GROCY_FEATURE_FLAG_BATTERIES)
+				@if(VICTUAL_FEATURE_FLAG_BATTERIES)
 				<li class="nav-item nav-item-sidebar permission-BATTERIES_TRACK_CHARGE_CYCLE @if($viewName == 'batterytracking') active-page @endif"
 					data-toggle="tooltip"
 					data-placement="right"
@@ -387,8 +387,8 @@
 								<span class="nav-link-text">{{ $__t('Products') }}</span>
 							</a>
 						</li>
-						@if(GROCY_FEATURE_FLAG_STOCK)
-						@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+						@if(VICTUAL_FEATURE_FLAG_STOCK)
+						@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 						<li class="@if($viewName == 'locations') active-page @endif">
 							<a class="nav-link discrete-link"
 								href="{{ $U('/locations') }}">
@@ -396,7 +396,7 @@
 							</a>
 						</li>
 						@endif
-						@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+						@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 						<li class="@if($viewName == 'shoppinglocations') active-page @endif">
 							<a class="nav-link discrete-link"
 								href="{{ $U('/shoppinglocations') }}">
@@ -417,7 +417,7 @@
 								<span class="nav-link-text">{{ $__t('Product groups') }}</span>
 							</a>
 						</li>
-						@if(GROCY_FEATURE_FLAG_CHORES)
+						@if(VICTUAL_FEATURE_FLAG_CHORES)
 						<li class="@if($viewName == 'chores') active-page @endif">
 							<a class="nav-link discrete-link"
 								href="{{ $U('/chores') }}">
@@ -425,7 +425,7 @@
 							</a>
 						</li>
 						@endif
-						@if(GROCY_FEATURE_FLAG_BATTERIES)
+						@if(VICTUAL_FEATURE_FLAG_BATTERIES)
 						<li class="@if($viewName == 'batteries') active-page @endif">
 							<a class="nav-link discrete-link"
 								href="{{ $U('/batteries') }}">
@@ -433,7 +433,7 @@
 							</a>
 						</li>
 						@endif
-						@if(GROCY_FEATURE_FLAG_TASKS)
+						@if(VICTUAL_FEATURE_FLAG_TASKS)
 						<li class="@if($viewName == 'taskcategories') active-page @endif">
 							<a class="nav-link discrete-link"
 								href="{{ $U('/taskcategories') }}">
@@ -467,37 +467,37 @@
 			</ul>
 
 			<ul class="navbar-nav ml-auto">
-				@if(GROCY_AUTHENTICATED && !GROCY_IS_EMBEDDED_INSTALL && !GROCY_DISABLE_AUTH)
+				@if(VICTUAL_AUTHENTICATED && !VICTUAL_IS_EMBEDDED_INSTALL && !VICTUAL_DISABLE_AUTH)
 				<li class="nav-item dropdown">
-					<a class="nav-link dropdown-toggle discrete-link @if(!empty(GROCY_USER_PICTURE_FILE_NAME)) py-0 @endif"
+					<a class="nav-link dropdown-toggle discrete-link @if(!empty(VICTUAL_USER_PICTURE_FILE_NAME)) py-0 @endif"
 						href="#"
 						data-toggle="dropdown">
-						@if(empty(GROCY_USER_PICTURE_FILE_NAME))
+						@if(empty(VICTUAL_USER_PICTURE_FILE_NAME))
 						<i class="fa-solid fa-user"></i>
 						@else
 						<img class="rounded-circle"
-							src="{{ $U('/api/files/userpictures/' . base64_encode(GROCY_USER_PICTURE_FILE_NAME) . '?force_serve_as=picture&best_fit_width=32&best_fit_height=32') }}"
+							src="{{ $U('/api/files/userpictures/' . base64_encode(VICTUAL_USER_PICTURE_FILE_NAME) . '?force_serve_as=picture&best_fit_width=32&best_fit_height=32') }}"
 							loading="lazy">
 						@endif
-						{{ GROCY_USER_USERNAME }}
+						{{ VICTUAL_USER_USERNAME }}
 					</a>
 
 					<div class="dropdown-menu dropdown-menu-right">
 						<a class="dropdown-item logout-button discrete-link"
 							href="{{ $U('/logout') }}"><i class="fa-solid fa-fw fa-sign-out-alt"></i>&nbsp;{{ $__t('Logout') }}</a>
 						<div class="dropdown-divider"></div>
-						@if(!defined('GROCY_EXTERNALLY_MANAGED_AUTHENTICATION'))
+						@if(!defined('VICTUAL_EXTERNALLY_MANAGED_AUTHENTICATION'))
 						<a class="dropdown-item logout-button discrete-link"
-							href="{{ $U('/user/' . GROCY_USER_ID . '?changepw=true') }}"><i class="fa-solid fa-fw fa-key"></i>&nbsp;{{ $__t('Change password') }}</a>
+							href="{{ $U('/user/' . VICTUAL_USER_ID . '?changepw=true') }}"><i class="fa-solid fa-fw fa-key"></i>&nbsp;{{ $__t('Change password') }}</a>
 						@else
 						<a class="dropdown-item logout-button discrete-link"
-							href="{{ $U('/user/' . GROCY_USER_ID) }}"><i class="fa-solid fa-fw fa-key"></i>&nbsp;{{ $__t('Edit user') }}</a>
+							href="{{ $U('/user/' . VICTUAL_USER_ID) }}"><i class="fa-solid fa-fw fa-key"></i>&nbsp;{{ $__t('Edit user') }}</a>
 						@endif
 					</div>
 				</li>
 				@endif
 
-				@if(GROCY_AUTHENTICATED)
+				@if(VICTUAL_AUTHENTICATED)
 				<li class="nav-item dropdown">
 					<a class="nav-link dropdown-toggle discrete-link"
 						href="#"
@@ -637,23 +637,23 @@
 					<div class="dropdown-menu dropdown-menu-right">
 						<a class="dropdown-item discrete-link"
 							href="{{ $U('/stocksettings') }}"><i class="fa-solid fa-fw fa-box"></i>&nbsp;{{ $__t('Stock settings') }}</a>
-						@if(GROCY_FEATURE_FLAG_SHOPPINGLIST)
+						@if(VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 						<a class="dropdown-item discrete-link permission-SHOPPINGLIST"
 							href="{{ $U('/shoppinglistsettings') }}"><i class="fa-solid fa-fw fa-shopping-cart"></i>&nbsp;{{ $__t('Shopping list settings') }}</a>
 						@endif
-						@if(GROCY_FEATURE_FLAG_RECIPES)
+						@if(VICTUAL_FEATURE_FLAG_RECIPES)
 						<a class="dropdown-item discrete-link permission-RECIPES"
 							href="{{ $U('/recipessettings') }}"><i class="fa-solid fa-fw fa-pizza-slice"></i>&nbsp;{{ $__t('Recipes settings') }}</a>
 						@endif
-						@if(GROCY_FEATURE_FLAG_CHORES)
+						@if(VICTUAL_FEATURE_FLAG_CHORES)
 						<a class="dropdown-item discrete-link permission-CHORES"
 							href="{{ $U('/choressettings') }}"><i class="fa-solid fa-fw fa-home"></i>&nbsp;{{ $__t('Chores settings') }}</a>
 						@endif
-						@if(GROCY_FEATURE_FLAG_TASKS)
+						@if(VICTUAL_FEATURE_FLAG_TASKS)
 						<a class="dropdown-item discrete-link permission-TASKS"
 							href="{{ $U('/taskssettings') }}"><i class="fa-solid fa-fw fa-tasks"></i>&nbsp;{{ $__t('Tasks settings') }}</a>
 						@endif
-						@if(GROCY_FEATURE_FLAG_BATTERIES)
+						@if(VICTUAL_FEATURE_FLAG_BATTERIES)
 						<a class="dropdown-item discrete-link permission-BATTERIES"
 							href="{{ $U('/batteriessettings') }}"><i class="fa-solid fa-fw fa-battery-half"></i>&nbsp;{{ $__t('Batteries settings') }}</a>
 						@endif
@@ -665,7 +665,7 @@
 						<a class="dropdown-item discrete-link permission-USERS_READ"
 							href="{{ $U('/users') }}"><i class="fa-solid fa-fw fa-users"></i>&nbsp;{{ $__t('Manage users') }}</a>
 						<div class="dropdown-divider"></div>
-						@if(!GROCY_DISABLE_AUTH)
+						@if(!VICTUAL_DISABLE_AUTH)
 						<a class="dropdown-item discrete-link"
 							href="{{ $U('/manageapikeys') }}"><i class="fa-solid fa-fw fa-handshake"></i>&nbsp;{{ $__t('Manage API keys') }}</a>
 						@endif
@@ -685,8 +685,8 @@
 	</nav>
 	@endif
 
-	<div class="@if(GROCY_AUTHENTICATED) content-wrapper @endif pt-0">
-		<div class="container-fluid @if(GROCY_AUTHENTICATED && !$embedded) pr-1 pl-md-3 pl-2 @endif @if($embedded) px-1 @endif">
+	<div class="@if(VICTUAL_AUTHENTICATED) content-wrapper @endif pt-0">
+		<div class="container-fluid @if(VICTUAL_AUTHENTICATED && !$embedded) pr-1 pl-md-3 pl-2 @endif @if($embedded) px-1 @endif">
 			<div class="row mb-3">
 				<div id="page-content"
 					class="col content-text">
@@ -707,10 +707,10 @@
 	<script src="{{ $U('/packages/gettext-translator/dist/translator.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/packages/nosleep.js/dist/NoSleep.min.js?v=', true) }}{{ $version }}"></script>
 
-	@if(in_array('bootstrap-combobox', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('bootstrap-combobox', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/@danielfarrell/bootstrap-combobox/js/bootstrap-combobox.js?v=', true) }}{{ $version }}"></script>
 	@endif
-	@if(in_array('datatables', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('datatables', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/datatables.net/js/jquery.dataTables.min.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/packages/datatables.net-bs4/js/dataTables.bootstrap4.min.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/packages/datatables.net-colreorder/js/dataTables.colReorder.min.js?v=', true) }}{{ $version }}"></script>
@@ -720,31 +720,31 @@
 	<script src="{{ $U('/packages/datatables.net-select/js/dataTables.select.min.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/packages/datatables.net-select-bs4/js/select.bootstrap4.min.js?v=', true) }}{{ $version }}"></script>
 	@endif
-	@if(in_array('tempusdominus', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('tempusdominus', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/tempusdominus-bootstrap-4/build/js/tempusdominus-bootstrap-4.min.js?v=', true) }}{{ $version }}"></script>
 	@endif
-	@if(in_array('summernote', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('summernote', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/summernote/dist/summernote-bs4.min.js?v=', true) }}{{ $version }}"></script>
 	@if(!empty($__t('summernote_locale') && $__t('summernote_locale') != 'x'))<script src="{{ $U('/packages', true) }}/summernote/dist/lang/summernote-{{ $__t('summernote_locale') }}.js?v={{ $version }}"></script>@endif
 	@endif
-	@if(in_array('bootstrap-select', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('bootstrap-select', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/bootstrap-select/dist/js/bootstrap-select.min.js?v=', true) }}{{ $version }}"></script>
 	@if(!empty($__t('bootstrap-select_locale') && $__t('bootstrap-select_locale') != 'x'))<script src="{{ $U('/packages', true) }}/bootstrap-select/dist/js/i18n/defaults-{{ $__t('bootstrap-select_locale') }}.js?v={{ $version }}"></script>@endif
 	@endif
-	@if(in_array('fullcalendar', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('fullcalendar', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/fullcalendar/dist/fullcalendar.min.js?v=', true) }}{{ $version }}"></script>
 	@if(!empty($__t('fullcalendar_locale') && $__t('fullcalendar_locale') != 'x'))<script src="{{ $U('/packages', true) }}/fullcalendar/dist/locale/{{ $__t('fullcalendar_locale') }}.js?v={{ $version }}"></script>@endif
 	@endif
-	@if(in_array('daterangepicker', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('daterangepicker', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/daterangepicker/daterangepicker.js?v=', true) }}{{ $version }}"></script>
 	@endif
-	@if(in_array('zxing', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('zxing', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/@zxing/library/umd/index.min.js?v=', true) }}{{ $version }}"></script>
 	@endif
-	@if(in_array('bwipjs', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('bwipjs', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/bwip-js/dist/bwip-js-min.js?v=', true) }}{{ $version }}"></script>
 	@endif
-	@if(in_array('chartjs', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('chartjs', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/packages/chart.js/dist/Chart.min.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/packages/chartjs-plugin-colorschemes/dist/chartjs-plugin-colorschemes.min.js?v=', true) }}{{ $version}}"></script>
 	<script src="{{ $U('/packages/chartjs-plugin-doughnutlabel/dist/chartjs-plugin-doughnutlabel.js?v=', true) }}{{ $version }}"></script>
@@ -760,10 +760,10 @@
 	<script src="{{ $U('/js/grocy_nightmode.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/js/grocy_clock.js?v=', true) }}{{ $version }}"></script>
 
-	@if(in_array('datatables', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('datatables', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/js/grocy_datatables.js?v=', true) }}{{ $version }}"></script>
 	@endif
-	@if(in_array('summernote', $GROCY_REQUIRED_FRONTEND_PACKAGES))
+	@if(in_array('summernote', $VICTUAL_REQUIRED_FRONTEND_PACKAGES))
 	<script src="{{ $U('/js/grocy_summernote.js?v=', true) }}{{ $version }}"></script>
 	@endif
 
@@ -771,8 +771,8 @@
 	@stack('componentScripts')
 	<script src="{{ $U('/viewjs/' . $viewName . '.js?v=', true) }}{{ $version }}"></script>
 
-	@if(file_exists(GROCY_DATAPATH . '/custom_js.html'))
-	@php include GROCY_DATAPATH . '/custom_js.html' @endphp
+	@if(file_exists(VICTUAL_DATAPATH . '/custom_js.html'))
+	@php include VICTUAL_DATAPATH . '/custom_js.html' @endphp
 	@endif
 </body>
 

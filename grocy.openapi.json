@@ -2,7 +2,7 @@
 	"openapi": "3.1.0",
 	"info": {
 		"title": "Grocy REST API",
-		"description": "Authentication is done via API keys (header *GROCY-API-KEY* or same named query parameter), which you can manage [here](PlaceHolderManageApiKeysUrl).<br>Additionally requests from within the frontend are also valid (via session cookie).",
+		"description": "Authentication is done via API keys (header *VICTUAL-API-KEY* or same named query parameter), which you can manage [here](PlaceHolderManageApiKeysUrl).<br>Additionally requests from within the frontend are also valid (via session cookie).",
 		"version": "xxx",
 		"license": {
 			"name": "grocy.info",
@@ -6034,7 +6034,7 @@
 			"ApiKeyAuth": {
 				"type": "apiKey",
 				"in": "header",
-				"name": "GROCY-API-KEY"
+				"name": "VICTUAL-API-KEY"
 			}
 		},
 		"parameters": {

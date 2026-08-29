@@ -35,12 +35,12 @@ $('#save-consume-button').on('click', function(e)
 		jsonData.stock_entry_id = jsonForm.specific_stock_entry;
 	}
 
-	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 	{
 		jsonData.location_id = $("#location_id").val();
 	}
 
-	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_RECIPES && Grocy.Components.RecipePicker.GetValue().toString().length > 0)
+	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_RECIPES && Grocy.Components.RecipePicker.GetValue().toString().length > 0)
 	{
 		jsonData.recipe_id = Grocy.Components.RecipePicker.GetValue();
 	}
@@ -129,11 +129,11 @@ $('#save-consume-button').on('click', function(e)
 						$(".input-group-productamountpicker").trigger("change");
 						$("#tare-weight-handling-info").addClass("d-none");
 						Grocy.Components.ProductPicker.Clear();
-						if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_RECIPES)
+						if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_RECIPES)
 						{
 							Grocy.Components.RecipePicker.Clear();
 						}
-						if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+						if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 						{
 							$("#location_id").find("option").remove().end().append("<option></option>");
 						}

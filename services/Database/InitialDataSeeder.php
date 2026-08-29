@@ -103,13 +103,13 @@ class InitialDataSeeder
 	 * @param \PDO $db An already migrated, empty database
 	 * @param DatabaseDialect $dialect Dialect matching $db (quoting, id counter resync)
 	 * @param LocalizationService|null $localizationService Supplies the translated default
-	 *                                                      names; defaults to GROCY_DEFAULT_LOCALE
+	 *                                                      names; defaults to VICTUAL_DEFAULT_LOCALE
 	 */
 	public function __construct(\PDO $db, DatabaseDialect $dialect, ?LocalizationService $localizationService = null)
 	{
 		$this->Db = $db;
 		$this->Dialect = $dialect;
-		$this->LocalizationService = $localizationService ?? LocalizationService::GetInstance(GROCY_DEFAULT_LOCALE);
+		$this->LocalizationService = $localizationService ?? LocalizationService::GetInstance(VICTUAL_DEFAULT_LOCALE);
 	}
 
 	/**
@@ -138,8 +138,8 @@ class InitialDataSeeder
 	 */
 	private function SeedAdminUser(): void
 	{
-		$username = defined('GROCY_HTTP_USER') ? GROCY_HTTP_USER : 'admin';
-		$password = defined('GROCY_HTTP_USER') ? GROCY_HTTP_PASSWORD : 'admin';
+		$username = defined('VICTUAL_HTTP_USER') ? VICTUAL_HTTP_USER : 'admin';
+		$password = defined('VICTUAL_HTTP_USER') ? VICTUAL_HTTP_PASSWORD : 'admin';
 
 		$this->Insert('users', [
 			'username' => $username,

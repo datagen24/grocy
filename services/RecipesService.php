@@ -187,7 +187,7 @@ class RecipesService extends BaseService
 	 * This deliberately reimplements SQLite's STRFTIME('%W', ...) in PHP - "week of year,
 	 * Monday as first day of week 1, days before the year's first Monday are week 00".
 	 * The name is written by the meal_plan triggers (migrations/0071.sql, 0073.sql,
-	 * 0096.sql, 0139.sql on SQLite; grocy_mealplan_week_name() on PostgreSQL, see
+	 * 0096.sql, 0139.sql on SQLite; victual_mealplan_week_name() on PostgreSQL, see
 	 * db/pgsql/baseline/03_views_group1.sql), and anything looking a week recipe up has to
 	 * produce byte identical output or the lookup silently stops matching. Neither PHP's
 	 * "W" (ISO-8601, which shifts dates across the year boundary) nor PostgreSQL's

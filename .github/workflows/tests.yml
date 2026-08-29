@@ -51,13 +51,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: grocy
-          POSTGRES_PASSWORD: grocy
-          POSTGRES_DB: grocy
+          POSTGRES_USER: victual
+          POSTGRES_PASSWORD: victual
+          POSTGRES_DB: victual
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U grocy"
+          --health-cmd "pg_isready -U victual"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -97,8 +97,8 @@ jobs:
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
-          PGUSER: grocy
-          PGPASSWORD: grocy
+          PGUSER: victual
+          PGPASSWORD: victual
           SUITE_COVERAGE: 1
           SUITE_COVERAGE_CLOVER: clover.xml
         run: .devtools/pgsql/run-tests.sh

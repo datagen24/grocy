@@ -7,7 +7,7 @@
 ## Why
 
 PostgreSQL alone does not make the pod stateless. `services/FilesService.php` writes to
-`GROCY_DATAPATH . '/storage'`, so product pictures, recipe pictures, user pictures, user
+`VICTUAL_DATAPATH . '/storage'`, so product pictures, recipe pictures, user pictures, user
 files and equipment manuals still need a volume.
 
 The stronger argument than storage size: today `picture_file_name` lives in the database

@@ -126,7 +126,7 @@ class ChoresController extends BaseController
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$nextXDays = $usersService->GetUserSettings(GROCY_USER_ID)['chores_due_soon_days'];
+		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['chores_due_soon_days'];
 
 		$chores = $this->DB->chores()->orderBy('name', 'COLLATE NOCASE');
 		$currentChores = ChoresService::GetInstance()->GetCurrent();

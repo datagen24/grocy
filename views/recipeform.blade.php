@@ -356,7 +356,7 @@
 					<p>
 						<a class="btn btn-outline-primary btn-sm"
 							href="{{ $U('/recipe/' . $recipe->id . '/grocycode?download=true') }}">{{ $__t('Download') }}</a>
-						@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+						@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 						<a class="btn btn-outline-primary btn-sm recipe-grocycode-label-print"
 							data-recipe-id="{{ $recipe->id }}"
 							href="#">

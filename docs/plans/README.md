@@ -56,7 +56,7 @@ the plans noted below start minting more of what they clean up.
   than asserted by hand.
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
-- **10's `bin/grocy-migrate` precedes 14**, not the other way round — the one place the
+- **10's `bin/victual-migrate` precedes 14**, not the other way round — the one place the
   wave order below overrides the plan numbering, and why the CLI is pulled into wave 0.
 - **15 is last**, except its auth refactor, which wants to precede
   [02](02-mcp-endpoint.md), and which carries the parked `shopping_locations` rename.
@@ -118,10 +118,10 @@ as parallel sessions.
   Dockerfile (PHP 8.5, `pdo_sqlite` + `pdo_pgsql`, composer install) and a compose file
   with a PostgreSQL service. [10](10-cold-start-statelessness.md) later bakes its view
   cache into this same build.
-- **`bin/grocy-migrate`, pulled forward from [10](10-cold-start-statelessness.md).**
+- **`bin/victual-migrate`, pulled forward from [10](10-cold-start-statelessness.md).**
   `trigdifftest.php` needs a migrated SQLite database and nothing in the tree can make
-  one from a command line: `bin/grocy-db-import` returns early on `sqlite`
-  (`bin/grocy-db-import:68`) and migrations otherwise only run from `GET /`. Without
+  one from a command line: `bin/victual-db-import` returns early on `sqlite`
+  (`bin/victual-db-import:68`) and migrations otherwise only run from `GET /`. Without
   this, 14 piece 1 cannot run — the roadmap's own ordering is inverted. Only the CLI
   moves; the lock and the cache work stay in 10.
 - **14 piece 1**: the runnable diff suite (recover or rewrite the seeds), plus its

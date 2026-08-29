@@ -186,7 +186,7 @@
 			'hint' => $__t('The start date cannot be changed when the chore was once tracked')
 			))
 
-			@if(GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS)
+			@if(VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
 			<div class="form-group">
 				<label for="assignment_type">{{ $__t('Assignment type') }}</label>
 				<select required
@@ -263,7 +263,7 @@
 				</div>
 			</div>
 
-			@if(GROCY_FEATURE_FLAG_STOCK)
+			@if(VICTUAL_FEATURE_FLAG_STOCK)
 			<div class="form-group mt-4 mb-1">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
@@ -330,7 +330,7 @@
 					<p>
 						<a class="btn btn-outline-primary btn-sm"
 							href="{{ $U('/chore/' . $chore->id . '/grocycode?download=true') }}">{{ $__t('Download') }}</a>
-						@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+						@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 						<a class="btn btn-outline-primary btn-sm chore-grocycode-label-print"
 							data-chore-id="{{ $chore->id }}"
 							href="#">

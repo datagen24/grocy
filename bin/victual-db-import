@@ -3,9 +3,9 @@
 
 // Imports an existing SQLite database into the configured target database.
 //
-//   php bin/grocy-db-import [/path/to/grocy.db] [--force]
+//   php bin/victual-db-import [/path/to/victual.db] [--force]
 //
-// The source defaults to grocy.db in the data path. The target is whatever config.php
+// The source defaults to victual.db in the data path. The target is whatever config.php
 // selects, which has to be an engine other than SQLite.
 //
 // The target schema is created if it does not exist yet, so a fresh, empty PostgreSQL
@@ -26,25 +26,25 @@ $positional = array_values(array_filter($arguments, fn($a) => !str_starts_with($
 
 if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
 {
-	echo "Usage: php bin/grocy-db-import [/path/to/grocy.db] [--force]\n\n";
+	echo "Usage: php bin/victual-db-import [/path/to/victual.db] [--force]\n\n";
 	echo "  Copies an existing SQLite database into the database configured in config.php.\n";
 	echo "  --force  Overwrite a target that already contains data.\n";
 	exit(0);
 }
 
-if (!defined('GROCY_DATAPATH'))
+if (!defined('VICTUAL_DATAPATH'))
 {
-	define('GROCY_DATAPATH', getenv('GROCY_DATAPATH') ?: __DIR__ . '/../data');
+	define('VICTUAL_DATAPATH', getenv('VICTUAL_DATAPATH') ?: __DIR__ . '/../data');
 }
 
 require_once __DIR__ . '/../packages/autoload.php';
-require_once GROCY_DATAPATH . '/config.php';
+require_once VICTUAL_DATAPATH . '/config.php';
 require_once __DIR__ . '/../config-dist.php';
 
 // Migrations and the demo location fixup expect a user context
-if (!defined('GROCY_USER_ID'))
+if (!defined('VICTUAL_USER_ID'))
 {
-	define('GROCY_USER_ID', 1);
+	define('VICTUAL_USER_ID', 1);
 }
 
 try
@@ -56,7 +56,7 @@ catch (\Grocy\Helpers\EInvalidConfig $ex)
 	exit('Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
 }
 
-$sourcePath = $positional[0] ?? (GROCY_DATAPATH . '/grocy.db');
+$sourcePath = $positional[0] ?? (VICTUAL_DATAPATH . '/victual.db');
 
 if (!file_exists($sourcePath))
 {
@@ -72,7 +72,7 @@ if ($targetDialect->GetName() === 'sqlite')
 }
 
 echo 'Source: ' . $sourcePath . ' (sqlite)' . PHP_EOL;
-echo 'Target: ' . GROCY_DB_NAME . ' on ' . GROCY_DB_HOST . ':' . GROCY_DB_PORT . ' (' . $targetDialect->GetName() . ')' . PHP_EOL;
+echo 'Target: ' . VICTUAL_DB_NAME . ' on ' . VICTUAL_DB_HOST . ':' . VICTUAL_DB_PORT . ' (' . $targetDialect->GetName() . ')' . PHP_EOL;
 echo PHP_EOL;
 
 try

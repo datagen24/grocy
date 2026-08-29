@@ -31,7 +31,7 @@ class SqliteDialect extends DatabaseDialect
 
 	/**
 	 * Registers the PHP callbacks SQLite lacks natively and Grocy's SQL relies on:
-	 * REGEXP (UTF-8 aware via mb_ereg), grocy_user_setting() for user settings resolved
+	 * REGEXP (UTF-8 aware via mb_ereg), victual_user_setting() for user settings resolved
 	 * inside views, and ceil(). PostgreSQL provides native equivalents of all three
 	 * instead, since it cannot call back into PHP.
 	 */
@@ -43,10 +43,10 @@ class SqliteDialect extends DatabaseDialect
 			return (false !== mb_ereg($pattern, $value)) ? 1 : 0;
 		});
 
-		$pdo->createFunction('grocy_user_setting', function ($value)
+		$pdo->createFunction('victual_user_setting', function ($value)
 		{
 			$usersService = new UsersService();
-			return $usersService->GetUserSetting(GROCY_USER_ID, $value);
+			return $usersService->GetUserSetting(VICTUAL_USER_ID, $value);
 		});
 
 		// Unfortunately not included by default
@@ -135,22 +135,22 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
-	 * Absolute path of the database file: grocy.db in the data directory, or a
-	 * per-locale grocy_<suffix>.db in demo/prerelease mode.
+	 * Absolute path of the database file: victual.db in the data directory, or a
+	 * per-locale victual_<suffix>.db in demo/prerelease mode.
 	 */
 	public function GetDbFilePath(): string
 	{
-		if (GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease')
+		if (VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
 		{
-			$dbSuffix = GROCY_DEFAULT_LOCALE;
-			if (defined('GROCY_DEMO_DB_SUFFIX'))
+			$dbSuffix = VICTUAL_DEFAULT_LOCALE;
+			if (defined('VICTUAL_DEMO_DB_SUFFIX'))
 			{
-				$dbSuffix = GROCY_DEMO_DB_SUFFIX;
+				$dbSuffix = VICTUAL_DEMO_DB_SUFFIX;
 			}
 
-			return GROCY_DATAPATH . '/grocy_' . $dbSuffix . '.db';
+			return VICTUAL_DATAPATH . '/victual_' . $dbSuffix . '.db';
 		}
 
-		return GROCY_DATAPATH . '/grocy.db';
+		return VICTUAL_DATAPATH . '/victual.db';
 	}
 }

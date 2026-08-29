@@ -53,12 +53,12 @@ foreach ($args as $arg)
 
 if ($directory === null)
 {
-	$directory = getenv('GROCY_COVERAGE_DIR') ?: null;
+	$directory = getenv('VICTUAL_COVERAGE_DIR') ?: null;
 }
 
 if ($directory === null || !is_dir($directory))
 {
-	fwrite(STDERR, "no coverage directory: pass one, or set GROCY_COVERAGE_DIR\n");
+	fwrite(STDERR, "no coverage directory: pass one, or set VICTUAL_COVERAGE_DIR\n");
 	exit(2);
 }
 
@@ -98,7 +98,7 @@ echo (new Text(Thresholds::default(), false, false))->process($merged, false);
 
 if ($clover !== null)
 {
-	(new Clover())->process($merged, $clover, 'grocy differential suite');
+	(new Clover())->process($merged, $clover, 'victual differential suite');
 	echo 'Clover written to ' . $clover . "\n";
 }
 

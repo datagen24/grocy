@@ -204,7 +204,7 @@ class ChoresService extends BaseService
 	 * @return int The id of the created log row
 	 * @throws \Exception When the chore or user does not exist, or a manually scheduled chore is skipped
 	 */
-	public function TrackChore(int $choreId, string $trackedTime, $doneBy = GROCY_USER_ID, $skipped = false)
+	public function TrackChore(int $choreId, string $trackedTime, $doneBy = VICTUAL_USER_ID, $skipped = false)
 	{
 		if (!$this->ChoreExists($choreId))
 		{

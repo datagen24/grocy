@@ -49,7 +49,7 @@
 			'nextInputSelector' => '#amount'
 			))
 
-			<div class="form-group mb-2 @if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif">
+			<div class="form-group mb-2 @if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
 						&&
@@ -90,7 +90,7 @@
 				</div>
 			</div>
 
-			<div class="form-group @if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif">
+			<div class="form-group @if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
 						&&
@@ -120,7 +120,7 @@
 					name="note">@if($mode == 'edit'){{ $recipePos->note }}@endif</textarea>
 			</div>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			@php if($mode == 'edit') { $value = $recipePos->price_factor; } else { $value = 1; } @endphp
 			@include('components.numberpicker', array(
 			'id' => 'price_factor',

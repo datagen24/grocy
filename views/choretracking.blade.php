@@ -44,18 +44,18 @@
 			'invalidFeedback' => $__t('A date is required')
 			))
 
-			@if(GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS)
+			@if(VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
 			@include('components.userpicker', array(
 			'label' => 'Done by',
 			'users' => $users,
 			'nextInputSelector' => '#user_id',
-			'prefillByUserId' => GROCY_USER_ID
+			'prefillByUserId' => VICTUAL_USER_ID
 			))
 			@else
 			<input type="hidden"
 				id="user_id"
 				name="user_id"
-				value="{{ GROCY_USER_ID }}">
+				value="{{ VICTUAL_USER_ID }}">
 			@endif
 
 			@include('components.userfieldsform', array(

@@ -6,7 +6,7 @@ use Grocy\Services\DatabaseService;
 use LessQL\Result;
 
 /**
- * Permission helper for the currently authenticated user (GROCY_USER_ID):
+ * Permission helper for the currently authenticated user (VICTUAL_USER_ID):
  * defines all known permission names as PERMISSION_* constants and offers
  * static checks against the resolved permissions in the database.
  */
@@ -89,7 +89,7 @@ class User
 	 */
 	public function GetPermissionList()
 	{
-		return $this->DB->uihelper_user_permissions()->where('user_id', GROCY_USER_ID);
+		return $this->DB->uihelper_user_permissions()->where('user_id', VICTUAL_USER_ID);
 	}
 
 	/**
@@ -129,6 +129,6 @@ class User
 	 */
 	protected function GetPermissions(): Result
 	{
-		return $this->DB->user_permissions_resolved()->where('user_id', GROCY_USER_ID);
+		return $this->DB->user_permissions_resolved()->where('user_id', VICTUAL_USER_ID);
 	}
 }

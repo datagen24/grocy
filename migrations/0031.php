@@ -5,7 +5,7 @@
 use Grocy\Services\DatabaseService;
 use Grocy\Services\LocalizationService;
 
-$localizationService = LocalizationService::GetInstance(GROCY_DEFAULT_LOCALE);
+$localizationService = LocalizationService::GetInstance(VICTUAL_DEFAULT_LOCALE);
 $db = DatabaseService::GetInstance()->GetDbConnection();
 
 if ($db->quantity_units()->count() === 0)

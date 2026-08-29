@@ -21,7 +21,7 @@ $('#save-chore-button').on('click', function(e)
 	var jsonData = $('#chore-form').serializeJSON();
 	jsonData.start_date = Grocy.Components.DateTimePicker.GetValue();
 
-	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS)
+	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
 	{
 		jsonData.assignment_config = $("#assignment_config").val().join(",");
 	}

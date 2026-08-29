@@ -9,9 +9,9 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
  * Authenticates API requests via an API key against the keys managed by
- * ApiKeyService. Not selected directly via GROCY_AUTH_CLASS, but used as a
+ * ApiKeyService. Not selected directly via VICTUAL_AUTH_CLASS, but used as a
  * building block by DefaultAuthMiddleware and ReverseProxyAuthMiddleware.
- * The key is expected in the configured header (default GROCY-API-KEY), as
+ * The key is expected in the configured header (default VICTUAL-API-KEY), as
  * a query parameter of the same name, or - for the calendar iCal route -
  * as a special purpose key in the "secret" query parameter.
  */

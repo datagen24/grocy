@@ -120,12 +120,12 @@
 							href="#"><i class="fa-solid fa-eye"></i></a>
 					</th>
 					<th>{{ $__t('Name') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif allow-grouping">{{ $__t('Location') }}</th>
+					<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif allow-grouping">{{ $__t('Location') }}</th>
 					<th class="allow-grouping">{{ $__t('Min. stock amount') }}</th>
 					<th class="">{{ $__t('Default quantity unit purchase') }}</th>
 					<th class="allow-grouping">{{ $__t('Quantity unit stock') }}</th>
 					<th class="">{{ $__t('Product group') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping">{{ $__t('Default store') }}</th>
+					<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping">{{ $__t('Default store') }}</th>
 					<th class="">{{ $__t('Grocycode') }}</th>
 					<th>{{ $__t('Product picture') }}</th>
 
@@ -183,7 +183,7 @@
 							title="{{ $__t('This product has a picture') }}"></i>
 						@endif
 					</td>
-					<td class="@if(!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
 						@php
 						$location = FindObjectInArrayByPropertyValue($locations, 'id', $product->location_id);
 						@endphp
@@ -203,7 +203,7 @@
 					<td>
 						@if(!empty($product->product_group_id)) {{ FindObjectInArrayByPropertyValue($productGroups, 'id', $product->product_group_id)->name }} @endif
 					</td>
-					<td class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
 						@php
 						$store = FindObjectInArrayByPropertyValue($shoppingLocations, 'id', $product->shopping_location_id);
 						@endphp

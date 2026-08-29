@@ -69,7 +69,7 @@ class BaseController
 
 		// TODO: Better handle this generically based on the current language (header in .po file?)
 		$dir = 'ltr';
-		if (GROCY_LOCALE == 'he_IL')
+		if (VICTUAL_LOCALE == 'he_IL')
 		{
 			$dir = 'rtl';
 		}
@@ -90,18 +90,18 @@ class BaseController
 		$constants = get_defined_constants();
 		foreach ($constants as $constant => $value)
 		{
-			if (substr($constant, 0, 19) !== 'GROCY_FEATURE_FLAG_')
+			if (substr($constant, 0, 19) !== 'VICTUAL_FEATURE_FLAG_')
 			{
 				unset($constants[$constant]);
 			}
 		}
 		$this->View->set('featureFlags', $constants);
 
-		if (GROCY_AUTHENTICATED)
+		if (VICTUAL_AUTHENTICATED)
 		{
 			$this->View->set('permissions', User::PermissionList());
 
-			$decimalPlacesAmounts = UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'stock_decimal_places_amounts');
+			$decimalPlacesAmounts = UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'stock_decimal_places_amounts');
 			if ($decimalPlacesAmounts <= 0)
 			{
 				$defaultMinAmount = 1;
@@ -133,9 +133,9 @@ class BaseController
 		try
 		{
 			$usersService = UsersService::GetInstance();
-			if (defined('GROCY_USER_ID'))
+			if (defined('VICTUAL_USER_ID'))
 			{
-				$this->View->set('userSettings', $usersService->GetUserSettings(GROCY_USER_ID));
+				$this->View->set('userSettings', $usersService->GetUserSettings(VICTUAL_USER_ID));
 			}
 			else
 			{

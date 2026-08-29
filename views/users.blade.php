@@ -25,7 +25,7 @@
 			</div>
 			<div class="related-links collapse d-md-flex order-2 width-xs-sm-100 m-1 mt-md-0 mb-md-0 float-right"
 				id="related-links">
-				@if(!defined('GROCY_EXTERNALLY_MANAGED_AUTHENTICATION'))
+				@if(!defined('VICTUAL_EXTERNALLY_MANAGED_AUTHENTICATION'))
 				<a class="btn btn-primary responsive-button"
 					href="{{ $U('/user/new') }}">
 					{{ $__t('Add') }}
@@ -98,7 +98,7 @@
 							title="{{ $__t('Edit this item') }}">
 							<i class="fa-solid fa-edit"></i>
 						</a>
-						@if(!GROCY_IS_EMBEDDED_INSTALL && !GROCY_DISABLE_AUTH)
+						@if(!VICTUAL_IS_EMBEDDED_INSTALL && !VICTUAL_DISABLE_AUTH)
 						<a class="btn btn-info btn-sm"
 							href="{{ $U('/user/' . $user->id . '/permissions') }}"
 							data-toggle="tooltip"
@@ -106,7 +106,7 @@
 							<i class="fa-solid fa-lock"></i>
 						</a>
 						@endif
-						<a class="btn btn-danger btn-sm user-delete-button @if($user->id == GROCY_USER_ID) disabled @endif"
+						<a class="btn btn-danger btn-sm user-delete-button @if($user->id == VICTUAL_USER_ID) disabled @endif"
 							href="#"
 							data-user-id="{{ $user->id }}"
 							data-user-username="{{ $user->username }}"

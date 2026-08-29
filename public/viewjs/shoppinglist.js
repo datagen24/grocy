@@ -203,7 +203,7 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 $(document).on('click', '#clear-shopping-list', function (e)
 {
 	var confirmMessage = __t('Are you sure you want to empty shopping list "%s"?', $("#selected-shopping-list option:selected").text());
-	if (!BoolVal(Grocy.FeatureFlags.GROCY_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS))
+	if (!BoolVal(Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS))
 	{
 		confirmMessage = __t('Are you sure you want to empty the shopping list?');
 	}
@@ -599,7 +599,7 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 		}
 	}
 
-	if (!Grocy.FeatureFlags["GROCY_FEATURE_FLAG_THERMAL_PRINTER"])
+	if (!Grocy.FeatureFlags["VICTUAL_FEATURE_FLAG_THERMAL_PRINTER"])
 	{
 		delete printButtons['printtp'];
 		sizePrintDialog = 'small';
@@ -702,7 +702,7 @@ $("img.barcode").each(function ()
 
 // On small screens or when stock tracking is disabled, the "stock" filter group
 // isn't shown, so drop the border that would otherwise separate it visually
-if ($(window).width() < 768 || !Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK)
+if ($(window).width() < 768 || !Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK)
 {
 	$("#filter-container").removeClass("border-bottom");
 }

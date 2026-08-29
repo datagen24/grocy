@@ -4,7 +4,7 @@
 //
 // The suite's other phases all start from a PostgreSQL database that was populated by
 // copying an already-migrated SQLite one, so none of them has ever looked at what
-// bin/grocy-migrate produces on its own. That blind spot hid a real defect: the
+// bin/victual-migrate produces on its own. That blind spot hid a real defect: the
 // PostgreSQL baseline is schema only, while a third of the migrations it stands in for
 // also insert rows, so a freshly migrated PostgreSQL database had no admin user, no
 // permission hierarchy and no quantity units - and reported success.
@@ -19,7 +19,7 @@
 //   MIGRATEDIFF_PGSQL_DSN     a freshly migrated PostgreSQL database
 //   MIGRATEDIFF_PGSQL_USER, MIGRATEDIFF_PGSQL_PASSWORD
 
-require_once (getenv('GROCY_ROOT') ?: '/app') . '/packages/autoload.php';
+require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
 use Grocy\Services\Database\DatabaseImporter;
 use Grocy\Services\Database\ValueComparison;

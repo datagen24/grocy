@@ -41,11 +41,11 @@ $('#save-inventory-button').on('click', function (e)
 			jsonData.best_before_date = Grocy.Components.DateTimePicker.GetValue();
 			jsonData.note = jsonForm.note;
 			jsonData.stock_label_type = jsonForm.stock_label_type;
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			{
 				jsonData.shopping_location_id = Grocy.Components.ShoppingLocationPicker.GetValue();
 			}
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+			if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 			{
 				jsonData.location_id = Grocy.Components.LocationPicker.GetValue();
 			}
@@ -92,7 +92,7 @@ $('#save-inventory-button').on('click', function (e)
 					// Label printing (only when stock was added): fires the "labelprinter" webhook
 					// (Grocy.Webhooks.labelprinter) once per booking or once per created stock entry,
 					// with the product name, Grocycode and due date as payload
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER && Number.parseFloat($("#amount").attr("data-estimated-booking-amount")) > 0)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER && Number.parseFloat($("#amount").attr("data-estimated-booking-amount")) > 0)
 					{
 						if (Grocy.Webhooks.labelprinter !== undefined)
 						{
@@ -101,7 +101,7 @@ $('#save-inventory-button').on('click', function (e)
 								var webhookData = {};
 								webhookData.product = productDetails.product.name;
 								webhookData.grocycode = 'grcy:p:' + jsonForm.product_id + ":" + result[0].stock_id;
-								if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+								if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 								{
 									webhookData.due_date = __t('DD') + ': ' + result[0].best_before_date;
 								}
@@ -118,7 +118,7 @@ $('#save-inventory-button').on('click', function (e)
 											var webhookData = {};
 											webhookData.product = productDetails.product.name;
 											webhookData.grocycode = 'grcy:p:' + jsonForm.product_id + ":" + stockEntry.stock_id;
-											if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+											if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 											{
 												webhookData.due_date = __t('DD') + ': ' + result[0].best_before_date;
 											}
@@ -174,7 +174,7 @@ $('#save-inventory-button').on('click', function (e)
 									$('#price-hint').text("");
 									Grocy.Components.DateTimePicker.Clear();
 									Grocy.Components.ProductPicker.Clear();
-									if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+									if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 									{
 										Grocy.Components.ShoppingLocationPicker.SetValue('');
 									}
@@ -182,7 +182,7 @@ $('#save-inventory-button').on('click', function (e)
 									Grocy.Components.ProductCard.Refresh(jsonForm.product_id);
 									Grocy.Components.UserfieldsForm.Clear();
 
-									if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+									if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 									{
 										$("#stock_label_type").val(0);
 									}
@@ -259,16 +259,16 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 				}
 
 				RefreshLocaleNumberInput();
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 				{
 					Grocy.Components.ShoppingLocationPicker.SetId(productDetails.last_shopping_location_id);
 				}
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 				{
 					Grocy.Components.LocationPicker.SetId(productDetails.location.id);
 				}
 
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 				{
 					if (productDetails.product.default_best_before_days.toString() !== '0')
 					{
@@ -286,7 +286,7 @@ Grocy.Components.ProductPicker.GetPicker().on('change', function (e)
 					}
 				}
 
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 				{
 					$("#stock_label_type").val(productDetails.product.default_stock_label_type);
 					$("#stock_label_type").trigger("change");
@@ -509,7 +509,7 @@ $('#display_amount,#qu_id').on('keyup change', function (e)
 				{
 					$('#inventory-change-info').text(__t('This means %s will be added to stock', estimatedBookingAmount.toLocaleString() + ' ' + __n(estimatedBookingAmount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true)));
 					Grocy.Components.DateTimePicker.GetInputElement().attr('required', '');
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 					{
 						Grocy.Components.LocationPicker.GetInputElement().attr('required', '');
 					}
@@ -518,7 +518,7 @@ $('#display_amount,#qu_id').on('keyup change', function (e)
 				{
 					$('#inventory-change-info').text(__t('This means %s will be removed from stock', estimatedBookingAmount.toLocaleString() + ' ' + __n(estimatedBookingAmount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true)));
 					Grocy.Components.DateTimePicker.GetInputElement().removeAttr('required');
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 					{
 						Grocy.Components.LocationPicker.GetInputElement().removeAttr('required');
 					}
@@ -528,7 +528,7 @@ $('#display_amount,#qu_id').on('keyup change', function (e)
 					$('#inventory-change-info').addClass('d-none');
 				}
 
-				if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+				if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 				{
 					Grocy.Components.DateTimePicker.GetInputElement().removeAttr('required');
 				}
@@ -590,7 +590,7 @@ $("#display_amount").attr("min", "0");
 
 // Label printer feature: when "label per unit" is selected, show how many labels
 // the estimated booking amount would print
-if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 {
 	$("#stock_label_type, #amount").on("change", function (e)
 	{

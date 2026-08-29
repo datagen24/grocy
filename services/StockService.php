@@ -251,7 +251,7 @@ class StockService extends BaseService
 				$location = $this->DB->locations()->where('id', $locationId)->fetch();
 			}
 
-			if (GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING && $locationId !== null && $location->is_freezer == 1 && $productDetails->product->default_best_before_days_after_freezing >= -1)
+			if (VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_FREEZING && $locationId !== null && $location->is_freezer == 1 && $productDetails->product->default_best_before_days_after_freezing >= -1)
 			{
 				if ($productDetails->product->default_best_before_days_after_freezing == -1)
 				{
@@ -309,7 +309,7 @@ class StockService extends BaseService
 							'location_id' => $locationId,
 							'transaction_id' => $transactionId,
 							'shopping_location_id' => $shoppingLocationId,
-							'user_id' => GROCY_USER_ID,
+							'user_id' => VICTUAL_USER_ID,
 							'note' => $note
 						]);
 						$logRow->save();
@@ -327,16 +327,16 @@ class StockService extends BaseService
 						]);
 						$stockRow->save();
 
-						if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER)
+						if (VICTUAL_FEATURE_FLAG_LABEL_PRINTER && VICTUAL_LABEL_PRINTER_RUN_SERVER)
 						{
 							$webhookData = array_merge([
 								'product' => $productDetails->product->name,
 								'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockId])),
 								'details' => $productDetails,
 								'stock_entry' => $stockRow,
-							], GROCY_LABEL_PRINTER_PARAMS);
+							], VICTUAL_LABEL_PRINTER_PARAMS);
 
-							if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+							if (VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 							{
 								$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $bestBeforeDate;
 							}
@@ -363,7 +363,7 @@ class StockService extends BaseService
 						'location_id' => $locationId,
 						'transaction_id' => $transactionId,
 						'shopping_location_id' => $shoppingLocationId,
-						'user_id' => GROCY_USER_ID,
+						'user_id' => VICTUAL_USER_ID,
 						'note' => $note
 					]);
 					$logRow->save();
@@ -381,16 +381,16 @@ class StockService extends BaseService
 					]);
 					$stockRow->save();
 
-					if ($stockLabelType == 1 && GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER)
+					if ($stockLabelType == 1 && VICTUAL_FEATURE_FLAG_LABEL_PRINTER && VICTUAL_LABEL_PRINTER_RUN_SERVER)
 					{
 						$webhookData = array_merge([
 							'product' => $productDetails->product->name,
 							'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockId])),
 							'details' => $productDetails,
 							'stock_entry' => $stockRow,
-						], GROCY_LABEL_PRINTER_PARAMS);
+						], VICTUAL_LABEL_PRINTER_PARAMS);
 
-						if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+						if (VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 						{
 							$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $bestBeforeDate;
 						}
@@ -409,7 +409,7 @@ class StockService extends BaseService
 			foreach ($labelWebhookPayloads as $webhookData)
 			{
 				$runner = new WebhookRunner();
-				$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+				$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 			}
 
 			return $transactionId;
@@ -633,7 +633,7 @@ class StockService extends BaseService
 							'opened_date' => $stockEntry->opened_date,
 							'recipe_id' => $recipeId,
 							'transaction_id' => $transactionId,
-							'user_id' => GROCY_USER_ID,
+							'user_id' => VICTUAL_USER_ID,
 							'location_id' => $stockEntry->location_id,
 							'note' => $stockEntry->note,
 							'shopping_location_id' => $stockEntry->shopping_location_id
@@ -669,7 +669,7 @@ class StockService extends BaseService
 							'opened_date' => $stockEntry->opened_date,
 							'recipe_id' => $recipeId,
 							'transaction_id' => $transactionId,
-							'user_id' => GROCY_USER_ID,
+							'user_id' => VICTUAL_USER_ID,
 							'location_id' => $stockEntry->location_id,
 							'note' => $stockEntry->note,
 							'shopping_location_id' => $stockEntry->shopping_location_id
@@ -684,9 +684,9 @@ class StockService extends BaseService
 					}
 				}
 
-				if (boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
+				if (boolval(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
 				{
-					$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
+					$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
 				}
 			});
 
@@ -742,7 +742,7 @@ class StockService extends BaseService
 			'correlation_id' => $correlationId,
 			'transaction_id' => $transactionId,
 			'stock_row_id' => $stockRow->id,
-			'user_id' => GROCY_USER_ID,
+			'user_id' => VICTUAL_USER_ID,
 			'note' => $stockRow->note
 		]);
 		$logOldRowForStockUpdate->save();
@@ -783,7 +783,7 @@ class StockService extends BaseService
 			'correlation_id' => $correlationId,
 			'transaction_id' => $transactionId,
 			'stock_row_id' => $stockRow->id,
-			'user_id' => GROCY_USER_ID,
+			'user_id' => VICTUAL_USER_ID,
 			'note' => $stockRow->note
 		]);
 		$logNewRowForStockUpdate->save();
@@ -1433,16 +1433,16 @@ class StockService extends BaseService
 						$newBestBeforeDate = $stockEntry->best_before_date;
 					}
 
-					if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $newBestBeforeDate != $stockEntry->best_before_date)
+					if (VICTUAL_FEATURE_FLAG_LABEL_PRINTER && VICTUAL_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $newBestBeforeDate != $stockEntry->best_before_date)
 					{
 						$webhookData = array_merge([
 							'product' => $productDetails->product->name,
 							'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockEntry->stock_id])),
 							'details' => $productDetails,
 							'stock_entry' => $stockEntry,
-						], GROCY_LABEL_PRINTER_PARAMS);
+						], VICTUAL_LABEL_PRINTER_PARAMS);
 
-						if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+						if (VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 						{
 							$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $newBestBeforeDate;
 						}
@@ -1479,7 +1479,7 @@ class StockService extends BaseService
 						'price' => $stockEntry->price,
 						'opened_date' => date('Y-m-d'),
 						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
+						'user_id' => VICTUAL_USER_ID,
 						'note' => $stockEntry->note
 					]);
 					$logRow->save();
@@ -1522,7 +1522,7 @@ class StockService extends BaseService
 						'price' => $stockEntry->price,
 						'opened_date' => date('Y-m-d'),
 						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
+						'user_id' => VICTUAL_USER_ID,
 						'note' => $stockEntry->note
 					]);
 					$logRow->save();
@@ -1547,9 +1547,9 @@ class StockService extends BaseService
 				}
 			}
 
-			if (boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
+			if (boolval(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
 			{
-				$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
+				$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
 			}
 		});
 
@@ -1558,7 +1558,7 @@ class StockService extends BaseService
 		foreach ($labelWebhookPayloads as $webhookData)
 		{
 			$runner = new WebhookRunner();
-			$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+			$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 		}
 
 		return $transactionId;
@@ -1587,7 +1587,7 @@ class StockService extends BaseService
 		// If no entry was found with for this product, we return gracefully
 		if ($productRow != null && !empty($productRow))
 		{
-			$decimals = UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'stock_decimal_places_amounts');
+			$decimals = UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'stock_decimal_places_amounts');
 			$newAmount = $productRow->amount - $amount;
 
 			// Delete the entry when the rest amount is below the smallest value representable
@@ -1607,7 +1607,7 @@ class StockService extends BaseService
 	 * Renders a shopping list as plain text lines for thermal printer output, one entry per line
 	 * ("<amount> <product name>"), with amounts right-padded to a common width. Product amounts are
 	 * converted from stock quantity units to the entry's quantity unit and rounded; quantity unit
-	 * names and notes are appended depending on the GROCY_TPRINTER_* settings. Entries without a
+	 * names and notes are appended depending on the VICTUAL_TPRINTER_* settings. Entries without a
 	 * product print their note instead.
 	 *
 	 * @param int $listId
@@ -1641,7 +1641,7 @@ class StockService extends BaseService
 				$amount = round($row->amount * $factor);
 				$note = '';
 
-				if (GROCY_TPRINTER_PRINT_NOTES)
+				if (VICTUAL_TPRINTER_PRINT_NOTES)
 				{
 					if ($row->note != '')
 					{
@@ -1650,7 +1650,7 @@ class StockService extends BaseService
 				}
 			}
 
-			if (GROCY_TPRINTER_PRINT_QUANTITY_NAME && $isValidProduct)
+			if (VICTUAL_TPRINTER_PRINT_QUANTITY_NAME && $isValidProduct)
 			{
 				$quantityname = $row->qu_name;
 				if ($amount > 1)
@@ -1786,7 +1786,7 @@ class StockService extends BaseService
 				}
 
 				$newBestBeforeDate = $stockEntry->best_before_date;
-				if (GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
+				if (VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
 				{
 					$locationFrom = $this->DB->locations()->where('id', $locationIdFrom)->fetch();
 					$locationTo = $this->DB->locations()->where('id', $locationIdTo)->fetch();
@@ -1810,16 +1810,16 @@ class StockService extends BaseService
 						$newBestBeforeDate = date('Y-m-d', strtotime('+' . $productDetails->product->default_best_before_days_after_thawing . ' days'));
 					}
 
-					if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $stockEntry->best_before_date != $newBestBeforeDate)
+					if (VICTUAL_FEATURE_FLAG_LABEL_PRINTER && VICTUAL_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $stockEntry->best_before_date != $newBestBeforeDate)
 					{
 						$webhookData = array_merge([
 							'product' => $productDetails->product->name,
 							'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockEntry->stock_id])),
 							'details' => $productDetails,
 							'stock_entry' => $stockEntry,
-						], GROCY_LABEL_PRINTER_PARAMS);
+						], VICTUAL_LABEL_PRINTER_PARAMS);
 
-						if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+						if (VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 						{
 							$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $newBestBeforeDate;
 						}
@@ -1847,7 +1847,7 @@ class StockService extends BaseService
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
 						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
+						'user_id' => VICTUAL_USER_ID,
 						'note' => $stockEntry->note
 					]);
 					$logRowForLocationFrom->save();
@@ -1865,7 +1865,7 @@ class StockService extends BaseService
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
 						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
+						'user_id' => VICTUAL_USER_ID,
 						'note' => $stockEntry->note
 					]);
 					$logRowForLocationTo->save();
@@ -1895,7 +1895,7 @@ class StockService extends BaseService
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
 						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
+						'user_id' => VICTUAL_USER_ID,
 						'note' => $stockEntry->note
 					]);
 					$logRowForLocationFrom->save();
@@ -1913,7 +1913,7 @@ class StockService extends BaseService
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
 						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
+						'user_id' => VICTUAL_USER_ID,
 						'note' => $stockEntry->note
 					]);
 					$logRowForLocationTo->save();
@@ -1949,7 +1949,7 @@ class StockService extends BaseService
 		foreach ($labelWebhookPayloads as $webhookData)
 		{
 			$runner = new WebhookRunner();
-			$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+			$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 		}
 
 		return $transactionId;
@@ -2317,7 +2317,7 @@ class StockService extends BaseService
 	}
 
 	/**
-	 * Instantiates the barcode lookup plugin configured via GROCY_STOCK_BARCODE_LOOKUP_PLUGIN,
+	 * Instantiates the barcode lookup plugin configured via VICTUAL_STOCK_BARCODE_LOOKUP_PLUGIN,
 	 * passing it the active locations, active quantity units and the current user's settings.
 	 * A plugin file in the data dir (user plugin) takes precedence over the bundled one.
 	 *
@@ -2326,7 +2326,7 @@ class StockService extends BaseService
 	 */
 	private function LoadExternalBarcodeLookupPlugin()
 	{
-		$pluginName = defined('GROCY_STOCK_BARCODE_LOOKUP_PLUGIN') ? GROCY_STOCK_BARCODE_LOOKUP_PLUGIN : '';
+		$pluginName = defined('VICTUAL_STOCK_BARCODE_LOOKUP_PLUGIN') ? VICTUAL_STOCK_BARCODE_LOOKUP_PLUGIN : '';
 		if (empty($pluginName))
 		{
 			throw new \Exception('No barcode lookup plugin defined');
@@ -2334,16 +2334,16 @@ class StockService extends BaseService
 
 		// User plugins take precedence
 		$standardPluginPath = __DIR__ . "/../plugins/$pluginName.php";
-		$userPluginPath = GROCY_DATAPATH . "/plugins/$pluginName.php";
+		$userPluginPath = VICTUAL_DATAPATH . "/plugins/$pluginName.php";
 		if (file_exists($userPluginPath))
 		{
 			require_once $userPluginPath;
-			return new $pluginName($this->DB->locations()->where('active = 1')->fetchAll(), $this->DB->quantity_units()->where('active = 1')->fetchAll(), UsersService::GetInstance()->GetUserSettings(GROCY_USER_ID));
+			return new $pluginName($this->DB->locations()->where('active = 1')->fetchAll(), $this->DB->quantity_units()->where('active = 1')->fetchAll(), UsersService::GetInstance()->GetUserSettings(VICTUAL_USER_ID));
 		}
 		elseif (file_exists($standardPluginPath))
 		{
 			require_once $standardPluginPath;
-			return new $pluginName($this->DB->locations()->where('active = 1')->fetchAll(), $this->DB->quantity_units()->where('active = 1')->fetchAll(), UsersService::GetInstance()->GetUserSettings(GROCY_USER_ID));
+			return new $pluginName($this->DB->locations()->where('active = 1')->fetchAll(), $this->DB->quantity_units()->where('active = 1')->fetchAll(), UsersService::GetInstance()->GetUserSettings(VICTUAL_USER_ID));
 		}
 		else
 		{

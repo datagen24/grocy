@@ -4,11 +4,11 @@ namespace Grocy\Services;
 
 /**
  * Cookie-based login sessions: creation, validation and removal of rows in the
- * sessions table. The session key doubles as the value of the grocy_session cookie.
+ * sessions table. The session key doubles as the value of the victual_session cookie.
  */
 class SessionService extends BaseService
 {
-	const SESSION_COOKIE_NAME = 'grocy_session';
+	const SESSION_COOKIE_NAME = 'victual_session';
 
 	/**
 	 * Creates a session for the user and returns the new session key.
@@ -42,7 +42,7 @@ class SessionService extends BaseService
 	/**
 	 * The user with the lowest id (normally the initially created admin), used as the
 	 * acting user in modes without authentication (dev/demo/prerelease, embedded
-	 * installs, GROCY_DISABLE_AUTH).
+	 * installs, VICTUAL_DISABLE_AUTH).
 	 */
 	public function GetDefaultUser()
 	{

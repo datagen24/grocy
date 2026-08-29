@@ -10,7 +10,7 @@
 //
 // Usage: php difftest.php <seed.sql> <view> [<view> ...]
 
-require_once (getenv('GROCY_ROOT') ?: '/app') . '/packages/autoload.php';
+require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 
 use Grocy\Services\Database\ValueComparison;
 
@@ -21,22 +21,22 @@ $views = array_slice($argv, 2);
 $sqlite = new PDO\Sqlite(getenv('DIFFTEST_SQLITE_DSN') ?: 'sqlite:/data/difftest.db');
 $sqlite->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-// Grocy registers helper functions on its SQLite connections from PHP (see
+// Victual registers helper functions on its SQLite connections from PHP (see
 // SqliteDialect::OnConnected). Without them every view that uses one - anything built on
 // products_volatile_status, for instance - fails on the SQLite side before the two engines
 // are even compared, which would quietly exempt those views from being tested at all.
 $defaultUserSettings = [];
-$configDist = (getenv('GROCY_ROOT') ?: '/app') . '/config-dist.php';
+$configDist = (getenv('VICTUAL_ROOT') ?: '/app') . '/config-dist.php';
 if (file_exists($configDist))
 {
 	// Only to pick up the default user settings; the constants are irrelevant here
-	if (!defined('GROCY_DATAPATH')) define('GROCY_DATAPATH', sys_get_temp_dir());
+	if (!defined('VICTUAL_DATAPATH')) define('VICTUAL_DATAPATH', sys_get_temp_dir());
 	@include $configDist;
-	global $GROCY_DEFAULT_USER_SETTINGS;
-	$defaultUserSettings = $GROCY_DEFAULT_USER_SETTINGS ?? [];
+	global $VICTUAL_DEFAULT_USER_SETTINGS;
+	$defaultUserSettings = $VICTUAL_DEFAULT_USER_SETTINGS ?? [];
 }
 
-$sqlite->createFunction('grocy_user_setting', function ($key) use ($sqlite, $defaultUserSettings)
+$sqlite->createFunction('victual_user_setting', function ($key) use ($sqlite, $defaultUserSettings)
 {
 	$statement = $sqlite->prepare('SELECT value FROM user_settings WHERE user_id = 1 AND key = ?');
 	$statement->execute([$key]);
@@ -58,11 +58,11 @@ $sqlite->createFunction('regexp', function ($pattern, $value)
 
 $sqlite->createFunction('ceil', fn($value) => ceil($value));
 
-$pg = new PDO(getenv('DIFFTEST_PGSQL_DSN') ?: 'pgsql:host=grocy-pg;port=5432;dbname=grocy_full', getenv('DIFFTEST_PGSQL_USER') ?: 'grocy', getenv('DIFFTEST_PGSQL_PASSWORD') ?: 'grocy');
+$pg = new PDO(getenv('DIFFTEST_PGSQL_DSN') ?: 'pgsql:host=victual-pg;port=5432;dbname=victual_full', getenv('DIFFTEST_PGSQL_USER') ?: 'victual', getenv('DIFFTEST_PGSQL_PASSWORD') ?: 'victual');
 $pg->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // Set DIFFTEST_SKIP_COPY=1 to compare against a PostgreSQL database that was populated
-// some other way - in particular one filled by bin/grocy-db-import, which verifies the
+// some other way - in particular one filled by bin/victual-db-import, which verifies the
 // real migration command rather than this script's own copier.
 $skipCopy = (bool)getenv('DIFFTEST_SKIP_COPY');
 
@@ -91,7 +91,7 @@ if (!$skipCopy)
 	echo '  copied ' . array_sum($report) . ' rows across ' . count($report) . " tables into PostgreSQL\n\n";
 }
 
-// PostgreSQL resolves grocy_user_setting() against this table, which DatabaseMigrationService
+// PostgreSQL resolves victual_user_setting() against this table, which DatabaseMigrationService
 // fills in a real deployment. Mirror it here so both engines fall back to the same defaults.
 if (!empty($defaultUserSettings))
 {

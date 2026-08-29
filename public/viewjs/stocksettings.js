@@ -6,12 +6,12 @@ $("#product_presets_product_group_id").val(Grocy.UserSettings.product_presets_pr
 $("#product_presets_qu_id").val(Grocy.UserSettings.product_presets_qu_id);
 $("#product_presets_default_due_days").val(Grocy.UserSettings.product_presets_default_due_days);
 
-if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING && BoolVal(Grocy.UserSettings.product_presets_treat_opened_as_out_of_stock))
+if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING && BoolVal(Grocy.UserSettings.product_presets_treat_opened_as_out_of_stock))
 {
 	$("#product_presets_treat_opened_as_out_of_stock").prop("checked", true);
 }
 
-if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 {
 	$("#product_presets_default_stock_label_type").val(Grocy.UserSettings.product_presets_default_stock_label_type);
 }

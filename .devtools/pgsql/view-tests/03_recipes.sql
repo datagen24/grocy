@@ -65,7 +65,7 @@ INSERT INTO recipes_pos (recipe_id, product_id, amount, qu_id) VALUES (700, 703,
 -- the day- and week-recipes onto recipe_id 701, which is what pulls the whole 701/700
 -- tree above one level further and is what actually exercises
 -- meal_plan_internal_recipe_relation's three branches (day, week, shadow) end to end,
--- including the week-recipe name that grocy_sqlite_percent_w (hazard 9) has to agree
+-- including the week-recipe name that victual_sqlite_percent_w (hazard 9) has to agree
 -- with the SQLite-computed one on.
 INSERT INTO meal_plan (id, day, type, recipe_id, recipe_servings, section_id) VALUES (700, '2026-01-19', 'recipe', 701, 4, 1);
 

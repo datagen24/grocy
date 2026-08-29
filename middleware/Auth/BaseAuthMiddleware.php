@@ -12,10 +12,10 @@ use Slim\Routing\RouteContext;
 
 /**
  * Base class for all authentication middlewares (the concrete class is selected
- * via the GROCY_AUTH_CLASS setting). Handles the common flow: public routes
+ * via the VICTUAL_AUTH_CLASS setting). Handles the common flow: public routes
  * (root/login), authentication-less modes (dev/demo/prerelease, embedded
  * install, DISABLE_AUTH) and, otherwise, delegating to AuthenticateRequest().
- * On success the GROCY_AUTHENTICATED / GROCY_USER_* constants are defined;
+ * On success the VICTUAL_AUTHENTICATED / VICTUAL_USER_* constants are defined;
  * on failure API routes get a 401 response and other routes a redirect to /login.
  */
 abstract class BaseAuthMiddleware extends BaseMiddleware
@@ -42,20 +42,20 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 		{
 			// Root and Login routes are public/unauthenticated
 
-			define('GROCY_AUTHENTICATED', false);
+			define('VICTUAL_AUTHENTICATED', false);
 			return $handler->handle($request);
 		}
 
-		if (GROCY_MODE === 'dev' || GROCY_MODE === 'demo' || GROCY_MODE === 'prerelease' || GROCY_IS_EMBEDDED_INSTALL || GROCY_DISABLE_AUTH)
+		if (VICTUAL_MODE === 'dev' || VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease' || VICTUAL_IS_EMBEDDED_INSTALL || VICTUAL_DISABLE_AUTH)
 		{
 			// These modes use default user context (without authentication) only
 
 			$sessionService = SessionService::GetInstance();
 			$user = $sessionService->GetDefaultUser();
 
-			define('GROCY_AUTHENTICATED', true);
-			define('GROCY_USER_USERNAME', $user->username);
-			define('GROCY_USER_PICTURE_FILE_NAME', $user->picture_file_name);
+			define('VICTUAL_AUTHENTICATED', true);
+			define('VICTUAL_USER_USERNAME', $user->username);
+			define('VICTUAL_USER_PICTURE_FILE_NAME', $user->picture_file_name);
 			self::SyncDatabaseUserContext();
 
 			return $handler->handle($request);
@@ -68,7 +68,7 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 
 			if ($user === null)
 			{
-				define('GROCY_AUTHENTICATED', false);
+				define('VICTUAL_AUTHENTICATED', false);
 				$response = $this->ResponseFactory->createResponse();
 
 				if ($this->IsApiRoute)
@@ -82,10 +82,10 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 			}
 			else
 			{
-				define('GROCY_AUTHENTICATED', true);
-				define('GROCY_USER_ID', $user->id);
-				define('GROCY_USER_USERNAME', $user->username);
-				define('GROCY_USER_PICTURE_FILE_NAME', $user->picture_file_name);
+				define('VICTUAL_AUTHENTICATED', true);
+				define('VICTUAL_USER_ID', $user->id);
+				define('VICTUAL_USER_USERNAME', $user->username);
+				define('VICTUAL_USER_PICTURE_FILE_NAME', $user->picture_file_name);
 				self::SyncDatabaseUserContext();
 
 				return $response = $handler->handle($request);
@@ -96,13 +96,13 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 	/**
 	 * Passes the acting user down to the database connection. Engines which resolve user
 	 * settings in SQL rather than via a PHP callback (PostgreSQL) need this to make
-	 * grocy_user_setting() work; on SQLite it does nothing.
+	 * victual_user_setting() work; on SQLite it does nothing.
 	 */
 	protected static function SyncDatabaseUserContext()
 	{
-		if (defined('GROCY_USER_ID'))
+		if (defined('VICTUAL_USER_ID'))
 		{
-			DatabaseService::GetInstance()->SetCurrentUserId(GROCY_USER_ID);
+			DatabaseService::GetInstance()->SetCurrentUserId(VICTUAL_USER_ID);
 		}
 	}
 

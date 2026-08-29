@@ -25,7 +25,7 @@ class TasksController extends BaseController
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$nextXDays = $usersService->GetUserSettings(GROCY_USER_ID)['tasks_due_soon_days'];
+		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['tasks_due_soon_days'];
 
 		if (isset($request->getQueryParams()['include_done']))
 		{

@@ -1,7 +1,7 @@
 // Implements the ProductCard widget (views/components/productcard.blade.php): a modal showing
 // summary details for one product (stock amount/value, last purchased/used, location, prices,
 // average shelf life, edit/journal/shopping-list/stock-entries links) and, when
-// GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING is enabled, a Chart.js price-history line chart.
+// VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING is enabled, a Chart.js price-history line chart.
 // Public API: Refresh(productId) - fetches and renders the product, also called by the
 // ".productcard-trigger" click handler below to populate the modal before showing it.
 Grocy.Components.ProductCard = {};
@@ -136,7 +136,7 @@ Grocy.Components.ProductCard.Refresh = function(productId)
 
 			// Price history chart: one dataset per shopping location plus a hidden aggregate
 			// "_TrendlineDataset" used only to render the overall trendline
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			{
 				Grocy.Api.Get('stock/products/' + productId + '/price-history',
 					function(priceHistoryDataPoints)

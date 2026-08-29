@@ -52,17 +52,17 @@ of what was found and what was decided.
 | 6 | `WebhookRunner` catches nonexistent `Grocy\Helpers\RequestException`, so a printer webhook failure 500s the user action instead of being handled | `helpers/WebhookRunner.php` | ✅ Catches `GuzzleHttp\Exception\GuzzleException`, **not** `RequestException` as originally suggested: `ConnectException` extends `TransferException`, so timeouts and DNS failures — the likeliest printer failures given the 2 s timeout — would still have escaped |
 | 7 | `/recipes` 500s on a fresh install: unguarded `$selectedRecipe->id` when no recipes exist | `controllers/RecipesController.php:113` | ✅ `recipePositionsResolved` resolved inside the existing guard; the `FindObjectInArrayByPropertyValue` lookup, which can also return null, is guarded too |
 | 8 | LDAP filter injection: raw POST username interpolated into the search filter | `middleware/Auth/LdapAuthMiddleware.php:35` | ✅ `ldap_escape(..., LDAP_ESCAPE_FILTER)`, plus an exact-one-result check before `$result[0]` is dereferenced |
-| 9 | Stack traces served in production: `addErrorMiddleware(true, ...)` hardcoded, so every 500 includes `error_details.stack_trace` | `app.php:115` | ✅ Gated on `GROCY_MODE === 'dev'`. Error *logging* left off deliberately — tracked as its own piece of work |
+| 9 | Stack traces served in production: `addErrorMiddleware(true, ...)` hardcoded, so every 500 includes `error_details.stack_trace` | `app.php:115` | ✅ Gated on `VICTUAL_MODE === 'dev'`. Error *logging* left off deliberately — tracked as its own piece of work |
 | 10 | `FilesService.php:54` tests `$bestFitHeight !== null` twice (second was surely `$bestFitWidth`); `:70` catches an unimported `ImageResizeException` that can never match | `services/FilesService.php` | ✅ Operand fixed (the height-only branch was dead code); `Gumlet\ImageResizeException` imported |
 | 11 | `LogMissingLocalization` returns `null` (→ 500) outside dev mode | `controllers/Api/SystemApiController.php:76-92` | ✅ Returns `EmptyApiResponse` unconditionally |
 | 12 | `LocalizationService` per-locale instance cache never hits: `in_array($locale, self::$InstanceMap)` compares the locale string against the cached *objects*, so every call re-parses the `.po` files from disk | `services/LocalizationService.php:161-174` | ✅ `isset(self::$InstanceMap[$locale])` |
-| 13 | Demo/prerelease mode hard-fails on PostgreSQL: `DemoDataGeneratorService` is unconditionally SQLite-flavored (`sqlite_sequence`, `STRFTIME`, `datetime('now','localtime')`) but is invoked regardless of `DB_DRIVER` | `services/DemoDataGeneratorService.php`, called from `controllers/SystemController.php:51` | ✅ Skipped (with a note on stderr) unless the dialect is SQLite, rather than hard-failing — `GROCY_MODE=dev` stays usable on PostgreSQL. The SQL was **not** ported |
+| 13 | Demo/prerelease mode hard-fails on PostgreSQL: `DemoDataGeneratorService` is unconditionally SQLite-flavored (`sqlite_sequence`, `STRFTIME`, `datetime('now','localtime')`) but is invoked regardless of `DB_DRIVER` | `services/DemoDataGeneratorService.php`, called from `controllers/SystemController.php:51` | ✅ Skipped (with a note on stderr) unless the dialect is SQLite, rather than hard-failing — `VICTUAL_MODE=dev` stays usable on PostgreSQL. The SQL was **not** ported |
 
 ### What the fixing pass turned up beyond the table
 
 - **Defect 2 was leaking more than listed.** The blocklist also let through
-  `GROCY_USER_USERNAME`, `GROCY_USER_PICTURE_FILE_NAME`, `GROCY_LOCALE` and
-  `GROCY_EXTERNALLY_MANAGED_AUTHENTICATION`, alongside every `LDAP_*`, `AUTH_CLASS`,
+  `VICTUAL_USER_USERNAME`, `VICTUAL_USER_PICTURE_FILE_NAME`, `VICTUAL_LOCALE` and
+  `VICTUAL_EXTERNALLY_MANAGED_AUTHENTICATION`, alongside every `LDAP_*`, `AUTH_CLASS`,
   `REVERSE_PROXY_AUTH_HEADER` and `TPRINTER_*` setting. That is the argument for the
   allowlist over a longer blocklist: the endpoint fails open on every setting added
   after it.
@@ -84,7 +84,7 @@ of what was found and what was decided.
   triggers write week recipe names with SQLite's definition, so
   `RecipesService::GetMealPlanWeekRecipeName()` reproduces it exactly (verified
   against SQLite for every day of 2015–2035). This is the PHP-side counterpart of
-  `grocy_sqlite_percent_w()` in the PostgreSQL baseline.
+  `victual_sqlite_percent_w()` in the PostgreSQL baseline.
 - **Defect 13 has a second PostgreSQL hazard even if the SQL is ported one day.**
   `DemoDataGeneratorService` inserts explicit `quantity_units` IDs and never calls
   `DatabaseDialect::ResyncGeneratedIdCounters()`, so a ported generator would still
@@ -115,14 +115,14 @@ touches local mutable state:
   (file storage in the database), which removes `data/storage`.
 - **`data/storage`** — uploaded files; removed by plan 01.
 - **`data/config.php` + `data/settingoverrides/`** — read-only at runtime; a stub
-  config plus `GROCY_*` env vars is already viable, ConfigMap-compatible.
-- **SQLite artifacts** (`data/grocy.db`, file-mtime change tracking) — moot under
+  config plus `VICTUAL_*` env vars is already viable, ConfigMap-compatible.
+- **SQLite artifacts** (`data/victual.db`, file-mtime change tracking) — moot under
   PostgreSQL; the Postgres dialect already replaced mtime tracking with a table.
-- **Request-scoped `define()` constants** (`GROCY_USER_ID`, `GROCY_LOCALE`, …) — safe
+- **Request-scoped `define()` constants** (`VICTUAL_USER_ID`, `VICTUAL_LOCALE`, …) — safe
   under php-fpm, but permanently rule out worker-mode runtimes (FrankenPHP, Swoole).
   Not worth changing unless that becomes a goal.
 - **PrerequisiteChecker requires `pdo_sqlite` ≥ 3.40 and opens `sqlite::memory:` on
-  every request even on pgsql-only deployments** — skip when `GROCY_DB_DRIVER=pgsql`
+  every request even on pgsql-only deployments** — skip when `VICTUAL_DB_DRIVER=pgsql`
   to slim the image and the request path.
 
 ## Backend (controllers, middleware, helpers)
@@ -231,7 +231,7 @@ enforced by copying, and the copies are drifting.**
 plumbing (`DatabaseService`, migrations, the API's `§` regex operator) — but not yet
 fully honored by its consumers.** `StockService` reached for raw SQLite date SQL
 (defect 3), and `DemoDataGeneratorService` is SQLite-only yet ran whenever
-`GROCY_MODE` is dev/demo/prerelease (defect 13). Both are now fixed — but not the way
+`VICTUAL_MODE` is dev/demo/prerelease (defect 13). Both are now fixed — but not the way
 this section proposed. The review assumed the missing piece was a dialect primitive
 for "today"/"N days from now"; in practice every consumer wanted a *per-request
 constant*, not a per-row expression, so the fix was to compute the cutoff in PHP and

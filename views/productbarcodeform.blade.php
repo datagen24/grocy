@@ -67,7 +67,7 @@
 			'isRequired' => false
 			))
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			<div class="form-group">
 				<label for="shopping_location_id_id">{{ $__t('Store') }}</label>
 				<select class="custom-control custom-select"

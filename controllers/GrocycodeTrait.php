@@ -15,7 +15,7 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 trait GrocycodeTrait
 {
 	/**
-	 * Renders the given Grocycode as a PNG (DataMatrix when GROCY_GROCYCODE_TYPE is '2D',
+	 * Renders the given Grocycode as a PNG (DataMatrix when VICTUAL_GROCYCODE_TYPE is '2D',
 	 * otherwise Code 128) and writes it to the response.
 	 *
 	 * Query parameters: size (image size in pixels 2D / bar height 1D; renderer default when omitted)
@@ -27,7 +27,7 @@ trait GrocycodeTrait
 	{
 		$size = $request->getQueryParam('size', null);
 
-		if (GROCY_GROCYCODE_TYPE == '2D')
+		if (VICTUAL_GROCYCODE_TYPE == '2D')
 		{
 			$png = (new DatamatrixFactory())->setCode((string)$grocycode)->setSize($size)->getDatamatrixPngData();
 		}

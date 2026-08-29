@@ -63,8 +63,8 @@
 					value="@if($mode == 'edit'){{ $user->last_name }}@endif">
 			</div>
 
-			@if(!GROCY_IS_EMBEDDED_INSTALL && !GROCY_DISABLE_AUTH)
-			@if(!defined('GROCY_EXTERNALLY_MANAGED_AUTHENTICATION'))
+			@if(!VICTUAL_IS_EMBEDDED_INSTALL && !VICTUAL_DISABLE_AUTH)
+			@if(!defined('VICTUAL_EXTERNALLY_MANAGED_AUTHENTICATION'))
 			@if($mode == 'edit')
 			<div class="form-group mb-1">
 				<div class="custom-control custom-checkbox">

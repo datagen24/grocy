@@ -112,7 +112,7 @@ Grocy.Components.CameraBarcodeScanner.StartScanning = function()
 		{
 			Grocy.Components.CameraBarcodeScanner.CheckCapabilities();
 
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_AUTO_TORCH_ON_WITH_CAMERA)
+			if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_AUTO_TORCH_ON_WITH_CAMERA)
 			{
 				setTimeout(function()
 				{

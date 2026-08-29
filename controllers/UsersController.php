@@ -47,7 +47,7 @@ class UsersController extends BaseController
 		}
 		else
 		{
-			if ($args['userId'] == GROCY_USER_ID)
+			if ($args['userId'] == VICTUAL_USER_ID)
 			{
 				User::CheckPermission($request, User::PERMISSION_USERS_EDIT_SELF);
 			}

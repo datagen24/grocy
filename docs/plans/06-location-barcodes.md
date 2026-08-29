@@ -58,7 +58,7 @@ re-import, or a rebuild. Every printed label then points at the wrong shelf, sil
 Two options:
 
 - **Accept id based codes.** Simplest, and ids are in practice stable for a database that
-  is only ever migrated rather than rebuilt. `bin/grocy-db-import` preserves ids exactly,
+  is only ever migrated rather than rebuilt. `bin/victual-db-import` preserves ids exactly,
   so the PostgreSQL move does not break labels.
 - **Add a stable opaque id.** `locations.code_uuid`, generated once, encoded in the label
   instead of the row id. Survives anything. `ramsey/uuid` is already a dependency and

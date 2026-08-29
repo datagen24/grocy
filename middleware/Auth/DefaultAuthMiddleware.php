@@ -7,7 +7,7 @@ use Grocy\Services\SessionService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
- * The default authentication middleware (GROCY_AUTH_CLASS default value):
+ * The default authentication middleware (VICTUAL_AUTH_CLASS default value):
  * authenticates against the users created in Grocy itself. Accepts a session
  * cookie for all routes and additionally an API key for API routes; logins
  * are verified against the password hash in the users table (rehashing to

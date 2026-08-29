@@ -115,7 +115,7 @@
 			<p>
 				<a class="btn btn-outline-primary btn-sm"
 					href="{{ $U('/battery/' . $battery->id . '/grocycode?download=true') }}">{{ $__t('Download') }}</a>
-				@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+				@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 				<a class="btn btn-outline-primary btn-sm battery-grocycode-label-print"
 					data-battery-id="{{ $battery->id }}"
 					href="#">

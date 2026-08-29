@@ -34,10 +34,10 @@
 # reconciled onto one set, so that running the suite is a command rather than a recipe.
 #
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD   PostgreSQL connection (libpq's own names)
-#   SUITE_PGSQL_VIEW_DB                  database for the view tests    (default grocy_full)
-#   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default grocy_trig)
-#   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default grocy_migrate)
-#   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default grocy_rollback)
+#   SUITE_PGSQL_VIEW_DB                  database for the view tests    (default victual_full)
+#   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default victual_trig)
+#   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default victual_migrate)
+#   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
 #   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
@@ -49,22 +49,22 @@
 
 set -euo pipefail
 
-GROCY_ROOT="${GROCY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-export GROCY_ROOT
+VICTUAL_ROOT="${VICTUAL_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+export VICTUAL_ROOT
 
-SUITE_DIR="$GROCY_ROOT/.devtools/pgsql"
-SUITE_SCRATCH="${SUITE_SCRATCH:-${TMPDIR:-/tmp}/grocy-suite}"
+SUITE_DIR="$VICTUAL_ROOT/.devtools/pgsql"
+SUITE_SCRATCH="${SUITE_SCRATCH:-${TMPDIR:-/tmp}/victual-suite}"
 
 PGHOST="${PGHOST:-127.0.0.1}"
 PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-grocy}"
-PGPASSWORD="${PGPASSWORD:-grocy}"
+PGUSER="${PGUSER:-victual}"
+PGPASSWORD="${PGPASSWORD:-victual}"
 export PGHOST PGPORT PGUSER PGPASSWORD
 
-VIEW_DB="${SUITE_PGSQL_VIEW_DB:-grocy_full}"
-TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-grocy_trig}"
-MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-grocy_migrate}"
-ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-grocy_rollback}"
+VIEW_DB="${SUITE_PGSQL_VIEW_DB:-victual_full}"
+TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-victual_trig}"
+MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
+ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 
 WHICH="${1:-all}"
 
@@ -73,7 +73,7 @@ say() { printf '%s\n' "$*"; }
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 
 command -v php >/dev/null || fail 'php not found on PATH'
-[ -f "$GROCY_ROOT/packages/autoload.php" ] || fail 'packages/ is missing — run composer install first'
+[ -f "$VICTUAL_ROOT/packages/autoload.php" ] || fail 'packages/ is missing — run composer install first'
 
 mkdir -p "$SUITE_SCRATCH"
 
@@ -105,14 +105,14 @@ if [ "${SUITE_COVERAGE:-0}" = "1" ]; then
 	rm -rf "$COVERAGE_INI_DIR"
 	mkdir -p "$COVERAGE_INI_DIR"
 
-	cat > "$COVERAGE_INI_DIR/99-grocy-coverage.ini" <<-INI
-		auto_prepend_file=$GROCY_ROOT/.devtools/coverage/prepend.php
-		pcov.directory=$GROCY_ROOT
+	cat > "$COVERAGE_INI_DIR/99-victual-coverage.ini" <<-INI
+		auto_prepend_file=$VICTUAL_ROOT/.devtools/coverage/prepend.php
+		pcov.directory=$VICTUAL_ROOT
 		pcov.enabled=1
 	INI
 
 	export PHP_INI_SCAN_DIR=":$COVERAGE_INI_DIR"
-	export GROCY_COVERAGE_DIR="$COVERAGE_DIR"
+	export VICTUAL_COVERAGE_DIR="$COVERAGE_DIR"
 
 	say "measuring coverage into $COVERAGE_DIR"
 fi
@@ -120,7 +120,7 @@ fi
 # --- The pristine SQLite database -------------------------------------------------
 #
 # Built here rather than expected at an operator-known path, so that the suite has no
-# prerequisite a clean checkout cannot satisfy. bin/grocy-migrate creates the schema;
+# prerequisite a clean checkout cannot satisfy. bin/victual-migrate creates the schema;
 # fixtures/00_base.sql adds the rows the tests refer to.
 
 PRISTINE="$SUITE_SCRATCH/pristine.db"
@@ -135,15 +135,15 @@ build_pristine() {
 	rm -rf "$datapath"
 	mkdir -p "$datapath"
 
-	GROCY_DATAPATH="$datapath" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
+	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
 		|| fail 'could not migrate the pristine SQLite database'
 
-	cp "$datapath/grocy.db" "$MIGRATED_ONLY"
+	cp "$datapath/victual.db" "$MIGRATED_ONLY"
 
-	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/grocy.db" "$SUITE_DIR/fixtures/00_base.sql" \
+	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/victual.db" "$SUITE_DIR/fixtures/00_base.sql" \
 		|| fail 'could not apply the base fixture to the pristine database'
 
-	mv "$datapath/grocy.db" "$PRISTINE"
+	mv "$datapath/victual.db" "$PRISTINE"
 	rm -rf "$datapath"
 }
 
@@ -177,7 +177,7 @@ build_pgsql() {
 		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
 	PHPCONFIG
 
-	GROCY_DATAPATH="$datapath" DIFFTEST_DB_NAME="$dbname" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
+	VICTUAL_DATAPATH="$datapath" DIFFTEST_DB_NAME="$dbname" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
 		|| fail "could not migrate $dbname"
 
 	rm -rf "$datapath"
@@ -187,7 +187,7 @@ failures=0
 
 # --- Migration tests --------------------------------------------------------------
 #
-# Both databases are built by bin/grocy-migrate and then left alone. Nothing is seeded
+# Both databases are built by bin/victual-migrate and then left alone. Nothing is seeded
 # into either side, because the question is what migrating alone produces — the state
 # every other phase, and every real installation, starts from.
 
@@ -260,17 +260,17 @@ run_rollback_tests() {
 	rm -rf "$datapath"
 	mkdir -p "$datapath"
 
-	GROCY_DATAPATH="$datapath" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
+	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
 		|| fail 'could not migrate the rollback test database'
-	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/grocy.db" "$SUITE_DIR/fixtures/00_base.sql" \
+	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/victual.db" "$SUITE_DIR/fixtures/00_base.sql" \
 		|| fail 'could not apply the base fixture for the rollback tests'
 
 	# Kept aside before the tests run, so PostgreSQL starts from the same rows rather
 	# than from whatever the SQLite cases left behind.
-	cp "$datapath/grocy.db" "$sqlite_db"
+	cp "$datapath/victual.db" "$sqlite_db"
 
 	say ""
-	if ! GROCY_DATAPATH="$datapath" php "$SUITE_DIR/rollback-tests.php"; then
+	if ! VICTUAL_DATAPATH="$datapath" php "$SUITE_DIR/rollback-tests.php"; then
 		failures=$((failures + 1))
 	fi
 
@@ -309,16 +309,16 @@ run_rollback_tests() {
 	# the fixture does apply directly. The import stays because it is the more
 	# representative state, not because the alternative is broken.
 	#
-	# --force because build_pgsql above ran bin/grocy-migrate, which seeds a fresh database
+	# --force because build_pgsql above ran bin/victual-migrate, which seeds a fresh database
 	# with the initial data of a new installation, and the import refuses a target that
 	# holds rows unless told. Those particular rows are exactly what this import replaces —
 	# it truncates before it copies — so overwriting them is the intent, not a risk.
-	DIFFTEST_DB_NAME="$ROLLBACK_DB" GROCY_DATAPATH="$pgdatapath" \
-		php "$GROCY_ROOT/bin/grocy-db-import" "$sqlite_db" --force > /dev/null \
+	DIFFTEST_DB_NAME="$ROLLBACK_DB" VICTUAL_DATAPATH="$pgdatapath" \
+		php "$VICTUAL_ROOT/bin/victual-db-import" "$sqlite_db" --force > /dev/null \
 		|| fail 'could not import the rollback fixture into PostgreSQL'
 
 	say ""
-	if ! GROCY_DATAPATH="$pgdatapath" DIFFTEST_DB_NAME="$ROLLBACK_DB" php "$SUITE_DIR/rollback-tests.php"; then
+	if ! VICTUAL_DATAPATH="$pgdatapath" DIFFTEST_DB_NAME="$ROLLBACK_DB" php "$SUITE_DIR/rollback-tests.php"; then
 		failures=$((failures + 1))
 	fi
 
@@ -385,7 +385,7 @@ if [ -n "$COVERAGE_DIR" ]; then
 	# variable is enough — prepend.php returns immediately without it — and is what has
 	# to be done rather than clearing PHP_INI_SCAN_DIR, which would also drop the
 	# platform's own ini directory and with it every extension the report needs.
-	env -u GROCY_COVERAGE_DIR php "$GROCY_ROOT/.devtools/coverage/report.php" "${report_args[@]}" \
+	env -u VICTUAL_COVERAGE_DIR php "$VICTUAL_ROOT/.devtools/coverage/report.php" "${report_args[@]}" \
 		|| failures=$((failures + 1))
 fi
 

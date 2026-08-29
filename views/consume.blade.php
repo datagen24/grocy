@@ -77,7 +77,7 @@
 				class="text-info font-italic d-none">' . $__t('Tare weight handling enabled - please weigh the whole container, the amount to be posted will be automatically calculcated') . '</div>'
 			))
 
-			<div class="form-group @if(!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
+			<div class="form-group @if(!VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
 				<label for="location_id">{{ $__t('Location') }}</label>
 				<select required
 					class="custom-control custom-select location-combobox"
@@ -127,7 +127,7 @@
 				</select>
 			</div>
 
-			@if (GROCY_FEATURE_FLAG_RECIPES)
+			@if (VICTUAL_FEATURE_FLAG_RECIPES)
 			@include('components.recipepicker', array(
 			'recipes' => $recipes,
 			'isRequired' => false,
@@ -138,7 +138,7 @@
 			<button id="save-consume-button"
 				class="btn btn-success">{{ $__t('OK') }}</button>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 			<button id="save-mark-as-open-button"
 				class="btn btn-secondary permission-STOCK_OPEN">{{ $__t('Mark as opened') }}</button>
 			@endif

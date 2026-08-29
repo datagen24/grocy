@@ -49,7 +49,7 @@ class DatabaseMigrationService extends BaseService
 	 *
 	 * @param bool $seedInitialData Whether a database created from the baseline also gets
 	 *                              the initial data that the migration history would have
-	 *                              inserted. Only bin/grocy-db-import passes false: it is
+	 *                              inserted. Only bin/victual-db-import passes false: it is
 	 *                              about to fill the database from an existing one, and
 	 *                              seeding first would leave it looking non-empty to its
 	 *                              own overwrite check.
@@ -264,9 +264,9 @@ class DatabaseMigrationService extends BaseService
 			return;
 		}
 
-		global $GROCY_DEFAULT_USER_SETTINGS;
+		global $VICTUAL_DEFAULT_USER_SETTINGS;
 
-		foreach ($GROCY_DEFAULT_USER_SETTINGS as $key => $value)
+		foreach ($VICTUAL_DEFAULT_USER_SETTINGS as $key => $value)
 		{
 			DatabaseService::GetInstance()->ExecuteDbStatement(
 				'INSERT INTO user_settings_defaults (key, value) VALUES (?, ?) '

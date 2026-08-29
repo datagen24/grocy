@@ -143,7 +143,7 @@
 									title="{{ $__t('The higher this number is, the more ingredients currently in stock are due soon, overdue or already expired') }}"></i>
 							</th>
 							<th data-shadow-rowgroup-column="8"
-								class="@if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif allow-grouping">{{ $__t('Requirements fulfilled') }}</th>
+								class="@if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif allow-grouping">{{ $__t('Requirements fulfilled') }}</th>
 							<th class="d-none">Hidden status for sorting of "Requirements fulfilled" column</th>
 							<th class="d-none">Hidden status for filtering by status</th>
 							<th class="d-none">Hidden recipe ingredient product names</th>
@@ -198,7 +198,7 @@
 											href="{{ $U('/recipe/' . $recipe->id . '/grocycode?download=true') }}">
 											<span class="dropdown-item-text">{!! str_replace('Grocycode', '<span class="ls-n1">Grocycode</span>', $__t('Download %s Grocycode', $__t('Recipe'))) !!}</span>
 										</a>
-										@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+										@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 										<a class="dropdown-item recipe-grocycode-label-print"
 											data-recipe-id="{{ $recipe->id }}"
 											type="button"
@@ -218,7 +218,7 @@
 							<td>
 								{{ FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->due_score }}
 							</td>
-							<td class="@if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif">
+							<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif">
 								@if(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->need_fulfilled == 1)<i class="fa-solid fa-check text-success"></i>@elseif(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->need_fulfilled_with_shopping_list == 1)<i class="fa-solid fa-exclamation text-warning"></i>@else<i class="fa-solid fa-times text-danger"></i>@endif
 								<span class="timeago-contextual">@if(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->need_fulfilled == 1){{ $__t('Enough in stock') }}@elseif(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->need_fulfilled_with_shopping_list == 1){{ $__n(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->missing_products_count, 'Not enough in stock, %s ingredient missing but already on the shopping list', 'Not enough in stock, %s ingredients missing but already on the shopping list') }}@else{{ $__n(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->missing_products_count, 'Not enough in stock, %s ingredient missing', 'Not enough in stock, %s ingredients missing') }}@endif</span>
 							</td>
@@ -332,7 +332,7 @@
 							<div class="d-flex justify-content-between align-items-center">
 								<h3 class="card-title mb-0">{{ $recipe->name }}</h3>
 								<div class="card-icons d-flex flex-wrap justify-content-end flex-shrink-1">
-									<a class="btn @if(!GROCY_FEATURE_FLAG_STOCK) d-none @endif recipe-consume"
+									<a class="btn @if(!VICTUAL_FEATURE_FLAG_STOCK) d-none @endif recipe-consume"
 										href="#"
 										data-toggle="tooltip"
 										title="{{ $__t('Consume all ingredients needed by this recipe') }}"
@@ -340,7 +340,7 @@
 										data-recipe-name="{{ $recipe->name }}">
 										<i class="fa-solid fa-utensils"></i>
 									</a>
-									<a class="btn @if(!GROCY_FEATURE_FLAG_SHOPPINGLIST) d-none @endif recipe-shopping-list @if(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->need_fulfilled_with_shopping_list == 1) disabled @endif"
+									<a class="btn @if(!VICTUAL_FEATURE_FLAG_SHOPPINGLIST) d-none @endif recipe-shopping-list @if(FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $recipe->id)->need_fulfilled_with_shopping_list == 1) disabled @endif"
 										href="#"
 										data-toggle="tooltip"
 										title="{{ $__t('Put missing products on shopping list') }}"
@@ -407,7 +407,7 @@
 						<div class="row ml-1">
 							@if(!empty($calories) && $calories > 0)
 							<div class="col-4">
-								<label>{{ GROCY_ENERGY_UNIT }}</label>&nbsp;
+								<label>{{ VICTUAL_ENERGY_UNIT }}</label>&nbsp;
 								<i class="fa-solid fa-question-circle text-muted d-print-none"
 									data-toggle="tooltip"
 									data-trigger="hover click"
@@ -415,7 +415,7 @@
 								<h3 class="locale-number locale-number-generic pt-0">{{ $calories }}</h3>
 							</div>
 							@endif
-							@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+							@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 							<div class="col-4">
 								<label>{{ $__t('Costs') }}&nbsp;
 									<i class="fa-solid fa-question-circle text-muted d-print-none"
@@ -531,7 +531,7 @@
 											@endif
 											{{ FindObjectInArrayByPropertyValue($products, 'id', $selectedRecipePosition->product_id)->name }}
 										</span>
-										@if(GROCY_FEATURE_FLAG_STOCK)
+										@if(VICTUAL_FEATURE_FLAG_STOCK)
 										<span class="
 												d-print-none">
 											@if(FindObjectInArrayByPropertyValue($recipePositionsResolved, 'recipe_pos_id', $selectedRecipePosition->id)->need_fulfilled == 1)<i class="fa-solid fa-check text-success"></i>@elseif(FindObjectInArrayByPropertyValue($recipePositionsResolved, 'recipe_pos_id', $selectedRecipePosition->id)->need_fulfilled_with_shopping_list == 1)<i class="fa-solid fa-exclamation text-warning"></i>@else<i class="fa-solid fa-times text-danger"></i>@endif
@@ -548,8 +548,8 @@
 											<i class="fa-solid fa-exchange-alt"></i> {{ FindObjectInArrayByPropertyValue($products, 'id', $selectedRecipePosition->product_id_effective)->name }}
 										</span>
 										@endif
-										@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) <span class="float-right font-italic ml-2 locale-number locale-number-currency">{{ $selectedRecipePosition->costs }}</span> @endif
-										<span class="float-right font-italic"><span class="locale-number locale-number-generic">{{ $selectedRecipePosition->calories }}</span> {{ GROCY_ENERGY_UNIT }}</span>
+										@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) <span class="float-right font-italic ml-2 locale-number locale-number-currency">{{ $selectedRecipePosition->costs }}</span> @endif
+										<span class="float-right font-italic"><span class="locale-number locale-number-generic">{{ $selectedRecipePosition->calories }}</span> {{ VICTUAL_ENERGY_UNIT }}</span>
 										@if(!empty($selectedRecipePosition->recipe_variable_amount))
 										<div class="small text-muted font-italic">{{ $__t('Variable amount') }}</div>
 										@endif

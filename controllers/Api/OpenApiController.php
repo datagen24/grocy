@@ -31,7 +31,7 @@ class OpenApiController extends BaseApiController
 		$apiKeys = $this->DB->api_keys();
 		if (!User::HasPermissions(User::PERMISSION_ADMIN))
 		{
-			$apiKeys = $apiKeys->where('user_id', GROCY_USER_ID);
+			$apiKeys = $apiKeys->where('user_id', VICTUAL_USER_ID);
 		}
 
 		return $this->RenderPage($response, 'manageapikeys', [

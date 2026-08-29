@@ -34,9 +34,9 @@
 				data-status-filter="duesoon"
 				data-next-x-days="{{ $nextXDays }}"
 				class="warning-message status-filter-message responsive-message mr-2 @if($nextXDays == 0) d-none @endif"></div>
-			@if(GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS)
+			@if(VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
 			<div id="info-assigned-to-me-chores"
-				data-user-filter="xx{{ GROCY_USER_ID }}xx"
+				data-user-filter="xx{{ VICTUAL_USER_ID }}xx"
 				class="secondary-message user-filter-message responsive-button"></div>
 			@endif
 			<div class="float-right mt-1 @if($embedded) pr-5 @endif">
@@ -86,7 +86,7 @@
 			</select>
 		</div>
 	</div>
-	@if(GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS)
+	@if(VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS)
 	<div class="col-12 col-md-6 col-xl-3">
 		<div class="input-group">
 			<div class="input-group-prepend">
@@ -120,7 +120,7 @@
 					<th>{{ $__t('Chore') }}</th>
 					<th>{{ $__t('Next estimated tracking') }}</th>
 					<th>{{ $__t('Last tracked') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif allow-grouping">{{ $__t('Assigned to') }}</th>
+					<th class="@if(!VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif allow-grouping">{{ $__t('Assigned to') }}</th>
 					<th class="d-none">Hidden status</th>
 					<th class="d-none">Hidden assigned to user id</th>
 
@@ -205,7 +205,7 @@
 									href="{{ $U('/chore/' . $curentChoreEntry->chore_id . '/grocycode?download=true') }}">
 									{!! str_replace('Grocycode', '<span class="ls-n1">Grocycode</span>', $__t('Download %s Grocycode', $__t('Chore'))) !!}
 								</a>
-								@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+								@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 								<a class="dropdown-item chore-grocycode-label-print"
 									data-chore-id="{{ $curentChoreEntry->chore_id }}"
 									type="button"
@@ -253,7 +253,7 @@
 						@endif
 					</td>
 
-					<td class="@if(!GROCY_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_CHORES_ASSIGNMENTS) d-none @endif">
 						<span id="chore-{{ $curentChoreEntry->chore_id }}-next-execution-assigned-user">
 							@if(!empty($curentChoreEntry->next_execution_assigned_to_user_id))
 							{{ FindObjectInArrayByPropertyValue($users, 'id', $curentChoreEntry->next_execution_assigned_to_user_id)->display_name }}

@@ -14,7 +14,7 @@ The fork has exactly one safety net and it is entirely manual.
 their views return. It is a good tool — it is what proves the PostgreSQL port rather than
 asserting it. But its interface is:
 
-    docker run --rm --network grocynet -v "$PWD":/app -v /path/to/scratch:/scratch \
+    docker run --rm --network victualnet -v "$PWD":/app -v /path/to/scratch:/scratch \
       -v /path/to/scratch/data:/data \
       -e DIFFTEST_SQLITE_DSN=… -e DIFFTEST_PGSQL_DSN=… \
       victual-dev php /app/.devtools/pgsql/difftest.php seed.sql <view> [<view> …]
@@ -22,21 +22,21 @@ asserting it. But its interface is:
 and `seed.sql` is not in the repository. Neither is the list of views. There are 45 views
 in the baseline; which of them a given change should be tested against is knowledge that
 lives in whoever ran it last. `DIFFTEST_SKIP_COPY=1` exists to run the comparison against
-a database populated by `bin/grocy-db-import` — a genuinely valuable second mode that is
+a database populated by `bin/victual-db-import` — a genuinely valuable second mode that is
 documented in a comment and nowhere else.
 
 **`trigdifftest.php`** is in better shape: eight scripts are committed under
 `.devtools/pgsql/trigger-tests/`, it has an `-- @expect-error` convention for asserting
 that a trigger rejects something, and it compares every table rather than a named list.
-It still needs the same eight-line docker invocation, a `grocy_en.db` pristine database
+It still needs the same eight-line docker invocation, a `victual_en.db` pristine database
 at a path only the operator knows, and a scratch directory.
 
-**The two scripts do not share an environment.** `difftest.php` reads `GROCY_ROOT` and
+**The two scripts do not share an environment.** `difftest.php` reads `VICTUAL_ROOT` and
 `DIFFTEST_SQLITE_DSN`, `DIFFTEST_PGSQL_DSN`, `DIFFTEST_PGSQL_USER`,
 `DIFFTEST_PGSQL_PASSWORD`, `DIFFTEST_SKIP_COPY`; `trigdifftest.php` reads a disjoint
 `TRIGTEST_*` set — `TRIGTEST_SQLITE_PATH`, `TRIGTEST_PRISTINE_PATH`, `TRIGTEST_PGSQL_DSN`,
 `TRIGTEST_PGSQL_USER`, `TRIGTEST_PGSQL_PASSWORD` — with its own defaults pointing at a
-different database name (`grocy_trig`) on the same host. So "the environment variables"
+different database name (`victual_trig`) on the same host. So "the environment variables"
 is really two namespaces describing two different setups of the same pair of engines, and
 reconciling them into one is part of the runner's job rather than a detail of it.
 
@@ -45,7 +45,7 @@ invocations name a `victual-dev` image; there is no `Dockerfile`, no compose fil
 no `Makefile` anywhere in the tree, so that image is something the operator built once
 from instructions that were never written down. And `TRIGTEST_PRISTINE_PATH` wants a
 *migrated* SQLite database, which nothing in the repo can produce from a command line:
-`bin/grocy-db-import` exits at line 68 when `DB_DRIVER` is sqlite, and migrations
+`bin/victual-db-import` exits at line 68 when `DB_DRIVER` is sqlite, and migrations
 otherwise run only as a side effect of the first `GET /`. Both gaps are inside this
 plan's scope; see piece 1.
 
@@ -67,9 +67,9 @@ a set comparison fails immediately on both until they are fixed.
 
 **Every tool measures from a state that is copied, not migrated.** `difftest.php`,
 `trigdifftest.php` and the rollback phase each populate PostgreSQL with
-`bin/grocy-db-import` from an already-migrated SQLite database, so every case starts from
+`bin/victual-db-import` from an already-migrated SQLite database, so every case starts from
 a PostgreSQL database whose rows came across from the other engine. Nothing has ever
-asserted anything about what `bin/grocy-migrate` produces on its own. That blind spot hid a real defect for the whole
+asserted anything about what `bin/victual-migrate` produces on its own. That blind spot hid a real defect for the whole
 life of the port: the PostgreSQL baseline is DDL only, while a third of the migrations it
 stands in for also insert rows, so a freshly migrated PostgreSQL database had no admin
 user, an empty permission hierarchy and no quantity units — and exited zero. It surfaced
@@ -111,10 +111,10 @@ checkout" is not reachable and verification 6 below is not achievable:
   refers to in both existing invocations and it does not exist in this repository — so
   the suite's first requirement is the image the suite runs in. Once it is committed,
   CI uses the same image rather than assembling its own (Q3).
-- **`bin/grocy-migrate`, pulled forward out of [10](10-cold-start-statelessness.md).**
+- **`bin/victual-migrate`, pulled forward out of [10](10-cold-start-statelessness.md).**
   `trigdifftest.php` needs `TRIGTEST_PRISTINE_PATH` to point at a *migrated* SQLite
   database and nothing in the repo can produce one from the CLI today
-  (`bin/grocy-db-import` exits early on SQLite; migrations otherwise run only on the
+  (`bin/victual-db-import` exits early on SQLite; migrations otherwise run only on the
   first `GET /`). A small CLI entry point that runs the migrations against the
   configured database is the missing link, it is already scoped in 10, and the suite
   cannot build its own fixtures without it. It moves here; 10 keeps the rest of its
@@ -127,7 +127,7 @@ Then `.devtools/pgsql/run-tests.sh` (or a small PHP runner — Q1) that:
   invocation and both environment-variable namespaces in the script instead of in a
   README code block — reconciling `DIFFTEST_*` and `TRIGTEST_*` onto one set of
   connection settings is part of the work, not a rename;
-- generates the pristine SQLite database with `bin/grocy-migrate` rather than expecting
+- generates the pristine SQLite database with `bin/victual-migrate` rather than expecting
   one at an operator-known path;
 - compares a freshly migrated database on each engine against the other, before any
   fixture is applied to either — the one thing no other phase can check, since every one
@@ -263,7 +263,7 @@ things deliberately and confirm the suite notices.
    criterion; everything above is secondary to it. If it takes two environment-variable
    namespaces, an image nobody has the recipe for and a scratch directory that only one
    person knows the path to, it has not been built. The Dockerfile, the compose file and
-   `bin/grocy-migrate` from piece 1 are what make this check passable at all.
+   `bin/victual-migrate` from piece 1 are what make this check passable at all.
 8. **Recursive CTE coverage.** Add a throwaway fixture with a three-level product tree and
    a recursive view over it, and confirm the runner compares it correctly on both engines.
    This is a check on the *tool*, not on the schema — [07](07-nested-products.md) and
@@ -290,7 +290,7 @@ is strictly better than 11 asserting them by hand.
 
 **After [10](10-cold-start-statelessness.md)** is mildly preferable but not required — a
 suite that boots an instance is simpler to write once the first request is not a redirect.
-One piece of 10 does move earlier, though: `bin/grocy-migrate` comes forward into piece 1,
+One piece of 10 does move earlier, though: `bin/victual-migrate` comes forward into piece 1,
 because the trigger suite needs a migrated SQLite database it can build itself. 10 keeps
 everything else it owns and inherits a working migrate command when it starts.
 
@@ -405,7 +405,7 @@ it worked.
 
 Medium, with a wide range depending on Q7. Piece 1 is half a day if the seeds are
 recoverable and two days if they must be written from scratch, plus most of a day for the
-two prerequisites it now carries — the Dockerfile and compose file, and `bin/grocy-migrate`
+two prerequisites it now carries — the Dockerfile and compose file, and `bin/victual-migrate`
 brought forward from [10](10-cold-start-statelessness.md). That is still the single
 best-value item in the whole hardening set, because it is what makes every subsequent
 plan's verification section actually runnable, and the dev environment is reused by every

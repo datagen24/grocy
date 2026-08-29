@@ -183,7 +183,7 @@ class StockController extends BaseController
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$userSettings = $usersService->GetUserSettings(GROCY_USER_ID);
+		$userSettings = $usersService->GetUserSettings(VICTUAL_USER_ID);
 		$nextXDays = $userSettings['stock_due_soon_days'];
 
 		$where = 'is_in_stock_or_below_min_stock = 1';
@@ -718,7 +718,7 @@ class StockController extends BaseController
 	public function Stockentries(Request $request, Response $response, array $args)
 	{
 		$usersService = UsersService::GetInstance();
-		$nextXDays = $usersService->GetUserSettings(GROCY_USER_ID)['stock_due_soon_days'];
+		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['stock_due_soon_days'];
 
 		return $this->RenderPage($response, 'stockentries', [
 			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),

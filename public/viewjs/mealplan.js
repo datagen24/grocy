@@ -108,7 +108,7 @@ $(".calendar").each(function()
 			{
 				var weekRecipeResolved = FindObjectInArrayByPropertyValue(recipesResolved, "recipe_id", weekRecipe.id);
 
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 				{
 					weekCosts = weekRecipeResolved.costs;
 					weekCostsHtml = __t("Week costs") + ': <span class="locale-number locale-number-currency">' + weekCosts.toString() + "</span> ";
@@ -121,7 +121,7 @@ $(".calendar").each(function()
 				}
 
 				var weekRecipeOrderMissingButtonHtml = "";
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_SHOPPINGLIST)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 				{
 					weekRecipeOrderMissingButtonHtml = '<a class="ml-2 btn btn-outline-primary btn-xs recipe-order-missing-button d-print-none ' + weekRecipeOrderMissingButtonDisabledClasses + '" href="#" data-toggle="tooltip" title="' + __t("Put missing products on shopping list") + '" data-recipe-id="' + weekRecipe.id.toString() + '" data-recipe-name="' + weekRecipe.name + '" data-recipe-type="' + weekRecipe.type + '"><i class="fa-solid fa-cart-plus"></i></a>';
 				}
@@ -187,7 +187,7 @@ $(".calendar").each(function()
 					var fulfillmentIconHtml = '<i class="fa-solid fa-times text-danger"></i>';
 				}
 				var costsAndCaloriesPerServing = ""
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 				{
 					costsAndCaloriesPerServing = '<h5 class="small text-truncate mb-1"><span class="locale-number locale-number-currency">' + resolvedRecipe.costs + '</span> / <span class="locale-number locale-number-generic">' + resolvedRecipe.calories / mealPlanEntry.recipe_servings + '</span> ' + Grocy.EnergyUnit + ' ' + __t('per serving') + '</h5>';
 				}
@@ -196,14 +196,14 @@ $(".calendar").each(function()
 					costsAndCaloriesPerServing = '<h5 class="small text-truncate mb-1"><span class="locale-number locale-number-generic">' + resolvedRecipe.calories / mealPlanEntry.recipe_servings + '</span> ' + Grocy.EnergyUnit + ' ' + __t('per serving') + '</h5>';
 				}
 
-				if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK)
+				if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK)
 				{
 					fulfillmentIconHtml = "";
 					fulfillmentInfoHtml = "";
 				}
 
 				var shoppingListButtonHtml = "";
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_SHOPPINGLIST)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 				{
 					shoppingListButtonHtml = '<a class="btn btn-outline-primary btn-xs recipe-order-missing-button ' + recipeOrderMissingButtonDisabledClasses + '" href="#" data-toggle="tooltip" title="' + __t("Put missing products on shopping list") + '" data-recipe-id="' + recipe.id.toString() + '" data-mealplan-servings="' + mealPlanEntry.recipe_servings + '" data-recipe-name="' + recipe.name + '" data-recipe-type="' + recipe.type + '"><i class="fa-solid fa-cart-plus"></i></a>';
 				}
@@ -266,7 +266,7 @@ $(".calendar").each(function()
 				}
 
 				var costsAndCaloriesPerServing = ""
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 				{
 					costsAndCaloriesPerServing = '<h5 class="small text-truncate mb-1"><span class="locale-number locale-number-currency">' + productDetails.last_price * mealPlanEntry.product_amount + '</span> / <span class="locale-number locale-number-generic">' + productDetails.product.calories + '</span> ' + Grocy.EnergyUnit + ' </h5>';
 				}
@@ -276,7 +276,7 @@ $(".calendar").each(function()
 				}
 
 				var shoppingListButtonHtml = "";
-				if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_SHOPPINGLIST)
+				if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 				{
 					shoppingListButtonHtml = '<a class="btn btn-outline-primary btn-xs show-as-dialog-link ' + productOrderMissingButtonDisabledClasses + '" href="' + U("/shoppinglistitem/new?embedded&updateexistingproduct&list=1&product=") + mealPlanEntry.product_id + '&amount=' + mealPlanEntry.product_amount + '" data-toggle="tooltip" title="' + __t("Add to shopping list") + '" data-product-id="' + productDetails.product.id.toString() + '" data-product-name="' + productDetails.product.name + '" data-product-amount="' + mealPlanEntry.product_amount + '"><i class="fa-solid fa-cart-plus"></i></a>';
 				}
@@ -326,7 +326,7 @@ $(".calendar").each(function()
 					var dayRecipeResolved = FindObjectInArrayByPropertyValue(recipesResolved, "recipe_id", dayRecipe.id);
 
 					var costsAndCaloriesPerDay = ""
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 					{
 						costsAndCaloriesPerDay = '<h5 class="small text-truncate"><span class="locale-number locale-number-currency">' + dayRecipeResolved.costs + '</span> / <span class="locale-number locale-number-generic">' + dayRecipeResolved.calories + '</span> ' + Grocy.EnergyUnit + ' ' + __t('per day') + '</h5>';
 					}
@@ -380,7 +380,7 @@ $(".calendar").each(function()
 				RefreshLocaleNumberDisplay();
 				$('[data-toggle="tooltip"]').tooltip();
 
-				if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK)
+				if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK)
 				{
 					$(".recipe-order-missing-button").addClass("d-none");
 					$(".recipe-consume-button").addClass("d-none");
@@ -509,7 +509,7 @@ $(document).on("click", ".copy-day-button", function(e)
 // Focus (and camera barcode scanner) handling when the modals open
 $("#add-recipe-modal").on("shown.bs.modal", function(e)
 {
-	if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING)
+	if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING)
 	{
 		Grocy.Components.CameraBarcodeScanner.Init();
 	}
@@ -524,7 +524,7 @@ $("#add-note-modal").on("shown.bs.modal", function(e)
 
 $("#add-product-modal").on("shown.bs.modal", function(e)
 {
-	if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING)
+	if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING)
 	{
 		Grocy.Components.CameraBarcodeScanner.Init();
 	}

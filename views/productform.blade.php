@@ -114,7 +114,7 @@
 					name="description">@if($mode == 'edit'){{ $product->description }}@endif</textarea>
 			</div>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 			<div class="form-group">
 				<label for="location_id">{{ $__t('Default location') }}</label>
 				<select required
@@ -149,7 +149,7 @@
 					@endforeach
 				</select>
 
-				@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+				@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
 						&&
@@ -176,7 +176,7 @@
 			@endif
 
 			@php $prefillById = ''; if($mode=='edit') { $prefillById = $product->shopping_location_id; } @endphp
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			@include('components.shoppinglocationpicker', array(
 			'label' => 'Default store',
 			'prefillById' => $prefillById,
@@ -200,7 +200,7 @@
 			'additionalCssClasses' => 'locale-number-input locale-number-quantity-amount'
 			))
 
-			<div class="form-group @if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING) mb-1 @endif">
+			<div class="form-group @if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING) mb-1 @endif">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
 						&&
@@ -215,7 +215,7 @@
 				</div>
 			</div>
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
@@ -231,7 +231,7 @@
 			</div>
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 			<div class="form-group">
 				<label class="d-block my-0"
 					for="location_id">{{ $__t('Due date type') }}
@@ -285,7 +285,7 @@
 			'hint' => $__t('For purchases this amount of days will be added to today for the due date suggestion') . ' (' . $__t('-1 means that this product will be never overdue') . ')'
 			))
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 			@php if($mode == 'edit') { $value = $product->default_best_before_days_after_open; } else { $value = 0; } @endphp
 			@include('components.numberpicker', array(
 			'id' => 'default_best_before_days_after_open',
@@ -311,7 +311,7 @@
 				value="1">
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
 			@php if($mode == 'edit') { $value = $product->default_best_before_days_after_freezing; } else { $value = 0; } @endphp
 			@include('components.numberpicker', array(
 			'id' => 'default_best_before_days_after_freezing',
@@ -478,7 +478,7 @@
 			))
 			@php $additionalAttributes = '' @endphp
 
-			@if(GROCY_FEATURE_FLAG_RECIPES)
+			@if(VICTUAL_FEATURE_FLAG_RECIPES)
 			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
@@ -537,7 +537,7 @@
 			'additionalCssClasses' => 'locale-number-input locale-number-quantity-amount'
 			))
 
-			@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+			@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 			<div class="form-group">
 				<label for="default_stock_label_type">{{ $__t('Default stock entry label') }}</label>
 				<i class="fa-solid fa-question-circle text-muted"
@@ -574,7 +574,7 @@
 			</div>
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			<div class="form-group">
 				<label class="d-block my-0"
 					for="default_purchase_price_type">{{ $__t('Default purchase price type') }}
@@ -625,7 +625,7 @@
 			</div>
 			@endif
 
-			@if(GROCY_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
+			@if(VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_OPENED_TRACKING)
 			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input @if($mode=='edit'
@@ -688,7 +688,7 @@
 
 	<div class="col-lg-6 col-12">
 
-		<div class="row @if($mode == 'create' || !GROCY_FEATURE_FLAG_STOCK) d-none @endif">
+		<div class="row @if($mode == 'create' || !VICTUAL_FEATURE_FLAG_STOCK) d-none @endif">
 			<div class="col">
 				<div class="title-related-links">
 					<h4>
@@ -725,10 +725,10 @@
 									href="#"><i class="fa-solid fa-eye"></i></a>
 							</th>
 							<th>{{ $__t('Barcode') }}</th>
-							<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping">{{ $__t('Store') }}</th>
+							<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping">{{ $__t('Store') }}</th>
 							<th class="allow-grouping">{{ $__t('Quantity unit') }}</th>
 							<th>{{ $__t('Amount') }}</th>
-							<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Last price') }}</th>
+							<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Last price') }}</th>
 							<th>{{ $__t('Note') }}</th>
 
 							@include('components.userfields_thead', array(
@@ -758,7 +758,7 @@
 							<td>
 								{{ $barcode->barcode }}
 							</td>
-							<td class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif"
+							<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif"
 								id="barcode-shopping-location">
 								@if (FindObjectInArrayByPropertyValue($shoppinglocations, 'id', $barcode->shopping_location_id) !== null)
 								{{ FindObjectInArrayByPropertyValue($shoppinglocations, 'id', $barcode->shopping_location_id)->name }}
@@ -774,7 +774,7 @@
 								<span class="locale-number locale-number-quantity-amount">{{ $barcode->amount }}</span>
 								@endif
 							</td>
-							<td class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
+							<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">
 								<span class="locale-number locale-number-currency">{{ $barcode->last_price }}</span>
 							</td>
 							<td>
@@ -814,7 +814,7 @@
 					<p>
 						<a class="btn btn-outline-primary btn-sm"
 							href="{{ $U('/product/' . $product->id . '/grocycode?download=true') }}">{{ $__t('Download') }}</a>
-						@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+						@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 						<a class="btn btn-outline-primary btn-sm product-grocycode-label-print"
 							data-product-id="{{ $product->id }}"
 							href="#">
@@ -826,7 +826,7 @@
 			</div>
 		</div>
 
-		<div class="row @if(GROCY_FEATURE_FLAG_STOCK) mt-5 @endif @if($mode == 'create') d-none @endif">
+		<div class="row @if(VICTUAL_FEATURE_FLAG_STOCK) mt-5 @endif @if($mode == 'create') d-none @endif">
 			<div class="col">
 				<div class="title-related-links">
 					<h4>

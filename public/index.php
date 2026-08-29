@@ -4,23 +4,23 @@
 
 if (file_exists(__DIR__ . '/../embedded.txt'))
 {
-	define('GROCY_IS_EMBEDDED_INSTALL', true);
-	define('GROCY_DATAPATH', file_get_contents(__DIR__ . '/../embedded.txt'));
-	define('GROCY_USER_ID', 1);
+	define('VICTUAL_IS_EMBEDDED_INSTALL', true);
+	define('VICTUAL_DATAPATH', file_get_contents(__DIR__ . '/../embedded.txt'));
+	define('VICTUAL_USER_ID', 1);
 }
 else
 {
-	define('GROCY_IS_EMBEDDED_INSTALL', false);
+	define('VICTUAL_IS_EMBEDDED_INSTALL', false);
 
 	$datapath = 'data';
 
-	if (getenv('GROCY_DATAPATH') !== false)
+	if (getenv('VICTUAL_DATAPATH') !== false)
 	{
-		$datapath = getenv('GROCY_DATAPATH');
+		$datapath = getenv('VICTUAL_DATAPATH');
 	}
-	elseif (array_key_exists('GROCY_DATAPATH', $_SERVER))
+	elseif (array_key_exists('VICTUAL_DATAPATH', $_SERVER))
 	{
-		$datapath = $_SERVER['GROCY_DATAPATH'];
+		$datapath = $_SERVER['VICTUAL_DATAPATH'];
 	}
 
 	if ($datapath[0] != '/')
@@ -28,7 +28,7 @@ else
 		$datapath = __DIR__ . '/../' . $datapath;
 	}
 
-	define('GROCY_DATAPATH', $datapath);
+	define('VICTUAL_DATAPATH', $datapath);
 }
 
 require_once __DIR__ . '/../helpers/PrerequisiteChecker.php';

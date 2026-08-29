@@ -5,7 +5,7 @@
 use Grocy\Services\DatabaseService;
 use Grocy\Services\LocalizationService;
 
-$localizationService = LocalizationService::GetInstance(GROCY_DEFAULT_LOCALE);
+$localizationService = LocalizationService::GetInstance(VICTUAL_DEFAULT_LOCALE);
 $db = DatabaseService::GetInstance()->GetDbConnection();
 
 $defaultShoppingList = $db->shopping_lists()->where('id = 1')->fetch();

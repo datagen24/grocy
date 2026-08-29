@@ -73,7 +73,7 @@
 			</select>
 		</div>
 	</div>
-	@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+	@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 	<div class="col-12 col-md-6 col-xl-3">
 		<div class="input-group">
 			<div class="input-group-prepend">
@@ -147,7 +147,7 @@
 					<th>{{ $__t('Amount') }}</th>
 					<th>{{ $__t('Transaction time') }}</th>
 					<th class="allow-grouping">{{ $__t('Transaction type') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif allow-grouping">{{ $__t('Location') }}</th>
+					<th class="@if(!VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif allow-grouping">{{ $__t('Location') }}</th>
 					<th class="allow-grouping">{{ $__t('Done by') }}</th>
 					<th>{{ $__t('Note') }}</th>
 
@@ -177,7 +177,7 @@
 								<i class="fa-solid fa-ellipsis-v"></i>
 							</button>
 							<div class="table-inline-menu dropdown-menu dropdown-menu-right">
-								@if(GROCY_FEATURE_FLAG_SHOPPINGLIST)
+								@if(VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 								<a class="dropdown-item show-as-dialog-link permission-SHOPPINGLIST_ITEMS_ADD"
 									type="button"
 									href="{{ $U('/shoppinglistitem/new?embedded&updateexistingproduct&list=1&product=' . $stockLogEntry->product_id ) }}">
@@ -195,7 +195,7 @@
 									href="{{ $U('/consume?embedded&product=' . $stockLogEntry->product_id ) }}">
 									<span class="dropdown-item-icon"><i class="fa-solid fa-utensils"></i></span> <span class="dropdown-item-text">{{ $__t('Consume') }}</span>
 								</a>
-								@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+								@if(VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 								<a class="dropdown-item show-as-dialog-link permission-STOCK_TRANSFER"
 									type="button"
 									href="{{ $U('/transfer?embedded&product=' . $stockLogEntry->product_id) }}">
@@ -207,7 +207,7 @@
 									href="{{ $U('/inventory?embedded&product=' . $stockLogEntry->product_id ) }}">
 									<span class="dropdown-item-icon"><i class="fa-solid fa-list"></i></span> <span class="dropdown-item-text">{{ $__t('Inventory') }}</span>
 								</a>
-								@if(GROCY_FEATURE_FLAG_RECIPES)
+								@if(VICTUAL_FEATURE_FLAG_RECIPES)
 								<div class="dropdown-divider"></div>
 								<a class="dropdown-item"
 									type="button"
@@ -246,7 +246,7 @@
 									href="{{ $U('/product/' . $stockLogEntry->product_id . '/grocycode?download=true') }}">
 									{!! str_replace('Grocycode', '<span class="ls-n1">Grocycode</span>', $__t('Download %s Grocycode', $__t('Product'))) !!}
 								</a>
-								@if(GROCY_FEATURE_FLAG_LABEL_PRINTER)
+								@if(VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 								<a class="dropdown-item product-grocycode-label-print"
 									data-product-id="{{ $stockLogEntry->product_id }}"
 									type="button"
@@ -281,7 +281,7 @@
 						<span class="font-italic text-muted">{{ $__t('Spoiled') }}</span>
 						@endif
 					</td>
-					<td class="@if(!GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
+					<td class="@if(!VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING) d-none @endif">
 						{{ $stockLogEntry->location_name }}
 					</td>
 					<td>

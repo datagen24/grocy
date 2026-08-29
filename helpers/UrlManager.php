@@ -4,7 +4,7 @@ namespace Grocy\Helpers;
 
 /**
  * Builds absolute application URLs, taking the configured base URL
- * (GROCY_BASE_URL) and URL rewriting support into account.
+ * (VICTUAL_BASE_URL) and URL rewriting support into account.
  */
 class UrlManager
 {
@@ -28,7 +28,7 @@ class UrlManager
 	/**
 	 * Builds a full URL for the given relative path.
 	 *
-	 * When URL rewriting is disabled (GROCY_DISABLE_URL_REWRITING), "/index.php"
+	 * When URL rewriting is disabled (VICTUAL_DISABLE_URL_REWRITING), "/index.php"
 	 * is inserted before the path - except for resources (static files), which
 	 * are always served directly.
 	 *
@@ -38,7 +38,7 @@ class UrlManager
 	 */
 	public function ConstructUrl($relativePath, $isResource = false)
 	{
-		if (GROCY_DISABLE_URL_REWRITING === false || $isResource === true)
+		if (VICTUAL_DISABLE_URL_REWRITING === false || $isResource === true)
 		{
 			return rtrim($this->BasePath, '/') . $relativePath;
 		}

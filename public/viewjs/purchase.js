@@ -44,7 +44,7 @@ $('#save-purchase-button').on('click', function (e)
 			jsonData.note = jsonForm.note;
 			jsonData.stock_label_type = jsonForm.stock_label_type;
 
-			if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			{
 				jsonData.price = 0;
 			}
@@ -86,11 +86,11 @@ $('#save-purchase-button').on('click', function (e)
 				jsonData.best_before_date = null;
 			}
 
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+			if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 			{
 				jsonData.shopping_location_id = Grocy.Components.ShoppingLocationPicker.GetValue();
 			}
-			if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+			if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 			{
 				jsonData.location_id = Grocy.Components.LocationPicker.GetValue();
 			}
@@ -152,7 +152,7 @@ $('#save-purchase-button').on('click', function (e)
 
 					// Fire the configured label printer webhook (Grocy.Webhooks.labelprinter), either once per
 					// purchase (single label) or once per individual stock entry created (label per unit)
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 					{
 						if (Grocy.Webhooks.labelprinter !== undefined)
 						{
@@ -161,7 +161,7 @@ $('#save-purchase-button').on('click', function (e)
 								var webhookData = {};
 								webhookData.product = productDetails.product.name;
 								webhookData.grocycode = 'grcy:p:' + jsonForm.product_id + ":" + result[0].stock_id;
-								if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+								if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 								{
 									webhookData.due_date = __t('DD') + ': ' + result[0].best_before_date;
 								}
@@ -178,7 +178,7 @@ $('#save-purchase-button').on('click', function (e)
 											var webhookData = {};
 											webhookData.product = productDetails.product.name;
 											webhookData.grocycode = 'grcy:p:' + jsonForm.product_id + ":" + stockEntry.stock_id;
-											if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+											if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 											{
 												webhookData.due_date = __t('DD') + ': ' + result[0].best_before_date;
 											}
@@ -223,7 +223,7 @@ $('#save-purchase-button').on('click', function (e)
 							toastr.success(successMessage);
 							Grocy.Components.ProductPicker.FinishFlow();
 
-							if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING && BoolVal(Grocy.UserSettings.show_warning_on_purchase_when_due_date_is_earlier_than_next))
+							if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING && BoolVal(Grocy.UserSettings.show_warning_on_purchase_when_due_date_is_earlier_than_next))
 							{
 								if (moment(jsonData.best_before_date).isBefore(CurrentProductDetails.next_due_date))
 								{
@@ -239,21 +239,21 @@ $('#save-purchase-button').on('click', function (e)
 							$(".input-group-productamountpicker").trigger("change");
 							$('#price').val('');
 							$("#tare-weight-handling-info").addClass("d-none");
-							if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+							if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 							{
 								Grocy.Components.LocationPicker.Clear();
 							}
-							if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+							if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 							{
 								Grocy.Components.DateTimePicker.Clear();
 							}
-							if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+							if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 							{
 								Grocy.Components.ShoppingLocationPicker.SetValue('');
 							}
 							Grocy.Components.ProductPicker.GetInputElement().focus();
 							Grocy.Components.ProductCard.Refresh(jsonForm.product_id);
-							if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+							if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 							{
 								$("#stock_label_type").val(0);
 							}
@@ -337,7 +337,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 					$(".input-group-productamountpicker").trigger("change");
 
 					// Prefill the store: prefer the product's last used shopping location, fall back to its default one
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 					{
 						if (productDetails.last_shopping_location_id != null)
 						{
@@ -349,7 +349,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 						}
 					}
 
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 					{
 						Grocy.Components.LocationPicker.SetId(productDetails.location.id);
 					}
@@ -388,7 +388,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 					// Suggest a due date based on the product's default due days (and freezer defaults, if applicable)
 					PrefillBestBeforeDate(productDetails.product, productDetails.location);
 
-					if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+					if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 					{
 						$("#stock_label_type").val(productDetails.product.default_stock_label_type);
 						$("#stock_label_type").trigger("change");
@@ -443,7 +443,7 @@ if (Grocy.Components.ProductPicker !== undefined)
 											Grocy.Components.ProductAmountPicker.SetQuantityUnit(barcode.qu_id);
 										}
 
-										if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING && barcode.shopping_location_id != null)
+										if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING && barcode.shopping_location_id != null)
 										{
 											Grocy.Components.ShoppingLocationPicker.SetId(barcode.shopping_location_id);
 										}
@@ -501,7 +501,7 @@ if (Grocy.Components.ProductPicker !== undefined)
  */
 function PrefillBestBeforeDate(product, location)
 {
-	if (!Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+	if (!Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
 	{
 		return;
 	}
@@ -526,7 +526,7 @@ function PrefillBestBeforeDate(product, location)
 		}
 	}
 
-	if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING && BoolVal(location.is_freezer) && product.default_best_before_days_after_freezing != 0)
+	if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_FREEZING && BoolVal(location.is_freezer) && product.default_best_before_days_after_freezing != 0)
 	{
 		dueDateFreezer = moment().add(product.default_best_before_days_after_freezing, 'days').format('YYYY-MM-DD');
 
@@ -569,7 +569,7 @@ if (Grocy.Components.LocationPicker !== undefined)
 {
 	Grocy.Components.LocationPicker.GetPicker().on('change', function (e)
 	{
-		if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
+		if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
 		{
 			Grocy.Api.Get('objects/locations/' + Grocy.Components.LocationPicker.GetValue(),
 				function (location)
@@ -876,7 +876,7 @@ function ScanModeSubmit(singleUnit = true)
 }
 
 // "Label per unit" hint: shows how many labels will be printed (one per stock unit) based on the current stock amount
-if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_LABEL_PRINTER)
+if (Grocy.FeatureFlags.VICTUAL_FEATURE_FLAG_LABEL_PRINTER)
 {
 	$("#stock_label_type, #amount").on("change", function (e)
 	{
