@@ -57,14 +57,22 @@ field should reject an unknown one with the `400` this plan is already giving
 `?query[]=` filter does not share the bug — it interpolates the field into a raw condition
 string, so PostgreSQL folds it like any bare identifier.
 
-**A related divergence in the same method is *not* a status-code question and is called
-out here so it is not mistaken for one.** `FilterData`'s `~` and `!~` operators emit
-`LIKE`, which is case-insensitive on SQLite and case-sensitive on PostgreSQL, so the same
-filter returns different rows on the two engines with no error at all — hazard 16. The fix
-is in-convention (a `GetLikeCondition()` on the dialect, mirroring the existing
-`GetRegexpCondition()`), but it changes answers a client already gets on one engine or the
-other, so it is a decision for [17](17-ecosystem-clients.md) to price rather than a port
-bug to quietly correct. It belongs in this plan's breaking-changes list if it lands here.
+**A related divergence in the same method was *not* a status-code question, and has since
+been fixed** — noted here because it is the reason `FilterData` no longer spells its own
+operators. `FilterData`'s `~` and `!~` emitted `LIKE`, which is case-insensitive on SQLite
+and case-sensitive on PostgreSQL, so the same filter returned different rows on the two
+engines with no error at all (hazard 16). It now calls `GetLikeCondition()` on the dialect,
+mirroring `GetRegexpCondition()`, and PostgreSQL gets `ILIKE`. SQLite's behaviour was taken
+as the reference, so no client pointed at a SQLite instance sees any change; a client
+pointed at PostgreSQL now gets the rows the API always documented.
+
+**What that leaves for this plan** is the non-text case, which is still a status code and
+still wrong. `?query[]=id~2` matches on SQLite, which coerces, and raises
+`operator does not exist: integer ~~* unknown` on PostgreSQL, which reaches
+`ExceptionController` as an unclassified throwable and is answered 500. It was a 500 with
+`LIKE` too, so the fix neither caused nor cured it. A filter naming a field of the wrong
+type for the operator is a client error and belongs in the `400` bucket with
+`Invalid query`, on both engines.
 
 **Missing objects are 404 or 400 depending on the verb.** `GetObject` throws a Slim
 `HttpNotFoundException`; `EditObject` and `DeleteObject` return

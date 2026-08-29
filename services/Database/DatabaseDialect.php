@@ -46,6 +46,25 @@ abstract class DatabaseDialect
 	abstract public function GetRegexpCondition(string $field): string;
 
 	/**
+	 * The SQL condition implementing the API's "~" and "!~" (substring match) query
+	 * operators, with a single positional placeholder for the pattern.
+	 *
+	 * This exists for the same reason GetRegexpCondition() does, and is easier to miss:
+	 * the operator is spelled differently per engine because the obvious spelling does not
+	 * mean the same thing on both. SQLite's LIKE ignores ASCII case by default, PostgreSQL's
+	 * does not, so a literal LIKE in the controller answers the same request with different
+	 * rows depending on the engine - silently, since the response shape is identical either
+	 * way. SQLite's case insensitivity is the documented behaviour of this API, so the
+	 * PostgreSQL side matches it rather than the other way round.
+	 *
+	 * @param bool $negated The "!~" form, which must negate the match rather than be wrapped
+	 *                      in NOT by the caller - the two are the same here but only because
+	 *                      both engines treat NULL identically, and that is worth pinning
+	 *                      down in one place instead of at every call site.
+	 */
+	abstract public function GetLikeCondition(string $field, bool $negated): string;
+
+	/**
 	 * An SQL expression yielding the current local (not UTC) timestamp.
 	 */
 	abstract public function GetNowExpression(): string;

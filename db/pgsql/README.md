@@ -302,8 +302,9 @@ It needs a PostgreSQL built with ICU, which the official images are. Without ICU
 migration fails at that statement, which is the right place to find out.
 
 ### Hazard 16: `LIKE` is case insensitive on SQLite and case sensitive on PostgreSQL
-This is the one hazard on the list that produces a wrong *answer* rather than an error, on
-a public endpoint, with nothing to notice it.
+**Fixed in the dialect - kept here because the shape recurs.** This was the one hazard on
+the list that produced a wrong *answer* rather than an error, on a public endpoint, with
+nothing to notice it.
 
 SQLite's `LIKE` ignores ASCII case by default (`PRAGMA case_sensitive_like` is off).
 PostgreSQL's `LIKE` is case sensitive; `ILIKE` is the case insensitive form. The two engines
@@ -331,13 +332,40 @@ engine and never enters `BaseApiController`, which is the blind spot
 [14](../../docs/plans/14-contract-and-regression-scaffolding.md)'s coverage section was
 added to make visible.
 
-The in-convention fix is the one `GetRegexpCondition()` already models: a
+**Fixed.** The fix is the one `GetRegexpCondition()` already models:
 `GetLikeCondition(string $field, bool $negated)` on the dialect, returning `LIKE` /
 `NOT LIKE` on SQLite and `ILIKE` / `NOT ILIKE` on PostgreSQL, with `FilterData` calling it
-instead of spelling the operator. Note this is a client visible behaviour decision, not a
-pure port fix: whichever way it goes, one engine's current answers change. It belongs with
-[11](../../docs/plans/11-api-error-handling.md), which owns this surface, and
-[17](../../docs/plans/17-ecosystem-clients.md), which owns what a change here costs a client.
+instead of spelling the operator itself. SQLite's behaviour is the reference and PostgreSQL
+now matches it, because SQLite's is what the API has always documented and what any existing
+client was written against.
+
+Verified by instantiating both dialects and running the SQL they actually emit against a
+real SQLite and a real PostgreSQL 16, on the fixture above plus a `NULL` row:
+
+| Operator | SQLite | PostgreSQL before | PostgreSQL after |
+|---|---|---|---|
+| `~` | 1, 2 | 2 | 1, 2 |
+| `!~` | 3 | - | 3 |
+
+The `!~` row is the one worth having checked rather than assumed: `NOT ILIKE` leaves the
+`NULL` name out on both engines, so negation did not quietly become three-valued on one side.
+
+The OpenAPI spec described these operators as "LIKE" and "not LIKE", which was the SQLite
+spelling rather than the contract. It now says "contains, case insensitive", which is what
+both engines do.
+
+Two things this does **not** fix, recorded so they are not mistaken for it:
+
+- **`~` against a non-text column still diverges.** SQLite coerces, so `?query[]=id~2`
+  matches; PostgreSQL has no `~~` or `~~*` operator for `integer` and raises
+  `operator does not exist`, reaching the 500 path. That was true of `LIKE` before this
+  change and is equally true of `ILIKE` after it - the failure is identical, so this is a
+  pre-existing difference rather than a regression, and it is
+  [11](../../docs/plans/11-api-error-handling.md)'s to answer with a status code.
+- **The suite still cannot see any of this.** The fix landed on the strength of a
+  hand-written check, not a regression test, because the differential suite has no phase
+  that can express "the same API request returns the same rows on both engines". See
+  [14](../../docs/plans/14-contract-and-regression-scaffolding.md).
 
 Do not reach for the `nocase` collation of hazard 15 to solve this. It is nondeterministic,
 and PostgreSQL rejects `LIKE` against a nondeterministic collation outright.

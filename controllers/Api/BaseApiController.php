@@ -149,10 +149,12 @@ class BaseApiController extends BaseController
 					$data = $data->where($matches['field'] . ' != ?' . $sqlOrNull, $matches['value']);
 					break;
 				case '~':
-					$data = $data->where($matches['field'] . ' LIKE ?', '%' . $matches['value'] . '%');
+					// Spelled differently per engine (SQLite's LIKE is case insensitive,
+					// PostgreSQL's is not and needs ILIKE), but the API contract is the same
+					$data = $data->where(DatabaseService::GetInstance()->GetDialect()->GetLikeCondition($matches['field'], false), '%' . $matches['value'] . '%');
 					break;
 				case '!~':
-					$data = $data->where($matches['field'] . ' NOT LIKE ?', '%' . $matches['value'] . '%');
+					$data = $data->where(DatabaseService::GetInstance()->GetDialect()->GetLikeCondition($matches['field'], true), '%' . $matches['value'] . '%');
 					break;
 				case '<':
 					$data = $data->where($matches['field'] . ' < ?', $matches['value']);

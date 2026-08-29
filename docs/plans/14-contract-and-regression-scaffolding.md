@@ -243,15 +243,25 @@ coverage figure would have. See [.devtools/coverage/README.md](../../.devtools/c
 
 **A fourth defect of exactly that shape was found later, and it is the argument for piece
 2 covering behaviour and not only shape.** `db/pgsql/README.md`'s hazard 16: the `~`
-operator of the generic list filter emits `LIKE`, which is case-insensitive on SQLite and
-case-sensitive on PostgreSQL, so `?query[]=name~milk` returns "Milk" on one engine and not
-the other. Nothing in the suite can see it — the SQL never appears in a view or a trigger,
+operator of the generic list filter emitted `LIKE`, which is case-insensitive on SQLite and
+case-sensitive on PostgreSQL, so `?query[]=name~milk` returned "Milk" on one engine and not
+the other. Nothing in the suite could see it — the SQL never appears in a view or a trigger,
 it is assembled in `BaseApiController`, and the response *shape* is identical either way,
 so even piece 2's key-set-and-type snapshot would pass on both engines while the row sets
-differ. The lesson for piece 2 is that the engine-vs-engine leg needs at least a few cases
-that compare the *rows* a parameterised endpoint returns, not only the shape of them; the
-generic `query[]`/`order` surface is the obvious place to spend that, since it is one code
-path serving every entity.
+differ.
+
+It has since been fixed, and *how* it was fixed is the sharper argument. The fix landed on
+a hand-written check — instantiate both dialects, run the SQL they emit against both
+engines, compare the rows — because there was nowhere in the suite to put a regression test
+for it. That check now exists only in a commit message. Every future change to this code
+path is therefore exactly as unprotected as the one that introduced the defect.
+
+So piece 2's engine-vs-engine leg needs at least a few cases that compare the **rows** a
+parameterised endpoint returns, not only the shape of them. The generic `query[]`/`order`
+surface is where to spend that first: it is one code path serving every entity, it is the
+only place in the tree where the two dialects can disagree about a *result set* rather than
+a value, and it now has two known cases to assert — `~` agreeing across engines, and `!~`
+excluding NULL identically.
 
 ### Schema
 

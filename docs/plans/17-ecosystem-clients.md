@@ -195,17 +195,26 @@ Error *message* text is not a tracked coupling. No client in scope matches on it
 [14](14-contract-and-regression-scaffolding.md)'s snapshot has no reason to freeze message
 strings, and plan 11 stays free to reword them.
 
-**One thing on this surface is a client-visible decision rather than a status code**, and it
-arrives with no plan of its own: `db/pgsql/README.md`'s hazard 16. The `~` operator of the
-generic list filter emits `LIKE`, so `?query[]=name~milk` matches "Milk" on SQLite and does
-not on PostgreSQL. Making the two engines agree — the in-convention fix is an `ILIKE` on the
-PostgreSQL dialect — necessarily changes the answers some client already gets, on whichever
-engine it is pointed at. Neither tracked client is known to use `query[]` today, which makes
-this cheap to decide *now* and expensive to decide after the forked Home Assistant
-integration is written against one of the two behaviours. The manifest of item 1 under "How
-this plan stays current" would not catch it either: the path, the method and the response
-shape are all unchanged, and only the rows differ. Same lesson as Coupling 0 — a path list
-is not the contract.
+**One thing on this surface was a client-visible decision rather than a status code, and it
+was decided the cheap way round while it was still cheap.** `db/pgsql/README.md`'s hazard 16:
+the `~` operator of the generic list filter emitted `LIKE`, so `?query[]=name~milk` matched
+"Milk" on SQLite and did not on PostgreSQL. Making the engines agree necessarily changes the
+answers some client gets on one of them, so the direction mattered: SQLite's case-insensitive
+behaviour was taken as the reference and PostgreSQL was moved to `ILIKE`. That is the choice
+that costs a client nothing it can observe — SQLite is what every existing client has ever
+been pointed at, and it is what the spec documented — and it was taken before the forked
+Home Assistant integration exists to be written against the other behaviour. Deciding it
+after would have meant changing a client this household maintains.
+
+Two things to carry forward from it, both of which sharpen "How this plan stays current":
+
+- **The endpoint manifest of item 1 would not have caught this.** The path, the method and
+  the response shape were all unchanged; only the rows differed. Same lesson as Coupling 0,
+  from the opposite direction — a path list is not the contract.
+- **The client-impact line of item 2 is what caught it**, in the sense that writing one for
+  this change is what forced the direction to be chosen rather than defaulted. The line here
+  reads: no observable change for either tracked client, because both are SQLite-era clients
+  and SQLite is the side that did not move.
 
 ## Coupling 4 — hierarchies presented to a client that assumes flatness
 

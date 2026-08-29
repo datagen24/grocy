@@ -66,6 +66,16 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
+	 * Plain LIKE, which SQLite already applies case insensitively for ASCII
+	 * (PRAGMA case_sensitive_like is off by default). This is the reference behaviour the
+	 * PostgreSQL dialect mimics with ILIKE.
+	 */
+	public function GetLikeCondition(string $field, bool $negated): string
+	{
+		return $field . ($negated ? ' NOT LIKE ?' : ' LIKE ?');
+	}
+
+	/**
 	 * Local (process time zone) timestamp with second precision - the reference
 	 * behaviour the PostgreSQL dialect mimics.
 	 */

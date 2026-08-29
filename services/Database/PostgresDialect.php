@@ -71,6 +71,17 @@ class PostgresDialect extends DatabaseDialect
 	}
 
 	/**
+	 * ILIKE, not LIKE - PostgreSQL's LIKE is case sensitive where SQLite's is not.
+	 */
+	public function GetLikeCondition(string $field, bool $negated): string
+	{
+		// ILIKE folds case using the database collation, so it agrees with SQLite's ASCII
+		// only folding on ASCII and is more correct beyond it - the same trade this port
+		// already makes for COLLATE NOCASE (hazard 15 in db/pgsql/README.md)
+		return $field . ($negated ? ' NOT ILIKE ?' : ' ILIKE ?');
+	}
+
+	/**
 	 * LOCALTIMESTAMP truncated to seconds, equivalent to SQLite's
 	 * datetime('now', 'localtime') given the SET TIME ZONE in OnConnected().
 	 */
