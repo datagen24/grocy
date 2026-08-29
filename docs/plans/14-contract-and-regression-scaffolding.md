@@ -65,6 +65,25 @@ compares the two — and the pair matters for the parity assertion in piece 2: a
 written as "every route is in the spec" passes on the second one, and a check written as
 a set comparison fails immediately on both until they are fixed.
 
+**Both tools measure from a state that is copied, not migrated.** `difftest.php` and
+`trigdifftest.php` each populate PostgreSQL with `bin/grocy-db-import` from an
+already-migrated SQLite database, so every case starts from a PostgreSQL database whose
+rows came across from the other engine. Nothing has ever asserted anything about what
+`bin/grocy-migrate` produces on its own. That blind spot hid a real defect for the whole
+life of the port: the PostgreSQL baseline is DDL only, while a third of the migrations it
+stands in for also insert rows, so a freshly migrated PostgreSQL database had no admin
+user, an empty permission hierarchy and no quantity units — and exited zero. It surfaced
+far downstream, as `recipes_pos` refusing an ingredient for want of a quantity unit
+conversion, and it was misdiagnosed once as a bad trigger port before anyone thought to
+count rows on a database nobody had touched.
+
+The check that closes it is small — migrate on both engines, change nothing, compare every
+table — and it is now the suite's first phase (`migratedifftest.php`, run by
+`run-tests.sh migrate`). It is listed here because the *shape* of the gap generalises: a
+suite that only ever measures states it constructed itself cannot see a defect in how the
+state is constructed. Every future phase should be asked which of its inputs it takes on
+trust.
+
 **Two facts that shape what the fixtures can be:**
 
 - `DemoDataGeneratorService` is SQLite-only (defect 13 skipped it on other engines rather
@@ -110,6 +129,9 @@ Then `.devtools/pgsql/run-tests.sh` (or a small PHP runner — Q1) that:
   connection settings is part of the work, not a rename;
 - generates the pristine SQLite database with `bin/grocy-migrate` rather than expecting
   one at an operator-known path;
+- compares a freshly migrated database on each engine against the other, before any
+  fixture is applied to either — the one thing the view and trigger phases cannot check,
+  since both build their PostgreSQL side by importing from SQLite;
 - runs every committed view seed against its declared view list;
 - runs every script in `trigger-tests/`;
 - exits non-zero if any comparison differs;
@@ -207,25 +229,29 @@ things deliberately and confirm the suite notices.
 2. **The trigger suite still passes unchanged.** All eight existing scripts must produce
    identical results through the new runner as through the current manual invocation. If
    the runner changes any of them, the runner is wrong.
-3. **The runner fails loudly on a missing fixture.** `trigdifftest.php` already refuses to
+3. **The migration phase catches a missing seed.** Remove the initial-data seeding from
+   `DatabaseMigrationService` and confirm the phase exits non-zero and names every table
+   that differs. Done: it reports seven, `users` and `permission_hierarchy` among them.
+   Revert.
+4. **The runner fails loudly on a missing fixture.** `trigdifftest.php` already refuses to
    report "identical state" for a script it could not read; the new runner must have the
    same property for seeds and for a database it could not connect to. A suite that
    silently skips is the failure mode to design against.
-4. **The contract snapshot catches a schema change.** Add a column to a view that is
+5. **The contract snapshot catches a schema change.** Add a column to a view that is
    exposed through an endpoint, regenerate, and confirm the diff shows exactly that key
    appearing on exactly that route. Then change a column's type and confirm the type diff
    shows. Revert both.
-5. **The contract snapshot survives the accepted differences.** Run it against both
+6. **The contract snapshot survives the accepted differences.** Run it against both
    engines with the fixture and confirm a clean result — `products_average_price.price`
    and `chores.start_date` must not produce a diff. If they do, Q4's exemption mechanism
    is needed rather than optional.
-6. **The whole suite runs from a clean checkout** on a machine that has not run it before,
+7. **The whole suite runs from a clean checkout** on a machine that has not run it before,
    with only the documented prerequisites, in one command. This is the actual acceptance
    criterion; everything above is secondary to it. If it takes two environment-variable
    namespaces, an image nobody has the recipe for and a scratch directory that only one
    person knows the path to, it has not been built. The Dockerfile, the compose file and
    `bin/grocy-migrate` from piece 1 are what make this check passable at all.
-7. **Recursive CTE coverage.** Add a throwaway fixture with a three-level product tree and
+8. **Recursive CTE coverage.** Add a throwaway fixture with a three-level product tree and
    a recursive view over it, and confirm the runner compares it correctly on both engines.
    This is a check on the *tool*, not on the schema — [07](07-nested-products.md) and
    [08](08-nested-locations.md) depend on it working and it has never been exercised.

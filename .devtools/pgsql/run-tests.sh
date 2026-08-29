@@ -3,25 +3,29 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [views|triggers]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers]
 #
-# Two kinds of check, for two reasons. Views are compared by what they return, because
+# Three kinds of check, for three reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
-# compared afterwards.
+# compared afterwards. And before either of those means anything, the two engines have to
+# start from the same place: the migration check compares two databases that have been
+# migrated and nothing else, which is the one thing the other two phases cannot see,
+# since both populate PostgreSQL by copying an already-migrated SQLite database.
 #
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
-# difftest.php and trigdifftest.php, which share their normalisation rules with the
-# application through Grocy\Services\Database\ValueComparison.
+# difftest.php, trigdifftest.php and migratedifftest.php, which share their normalisation
+# rules with the application through Grocy\Services\Database\ValueComparison.
 #
 # Connection settings come from the environment. The two PHP tools were written with
 # disjoint variable namespaces (DIFFTEST_* and TRIGTEST_*) and this is where they are
 # reconciled onto one set, so that running the suite is a command rather than a recipe.
 #
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD   PostgreSQL connection (libpq's own names)
-#   SUITE_PGSQL_VIEW_DB                  database for the view tests   (default grocy_full)
+#   SUITE_PGSQL_VIEW_DB                  database for the view tests    (default grocy_full)
 #   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default grocy_trig)
+#   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default grocy_migrate)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #
 # Under docker compose all of these are already set; see docker-compose.yml.
@@ -42,6 +46,7 @@ export PGHOST PGPORT PGUSER PGPASSWORD
 
 VIEW_DB="${SUITE_PGSQL_VIEW_DB:-grocy_full}"
 TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-grocy_trig}"
+MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-grocy_migrate}"
 
 WHICH="${1:-all}"
 
@@ -62,6 +67,10 @@ mkdir -p "$SUITE_SCRATCH"
 
 PRISTINE="$SUITE_SCRATCH/pristine.db"
 
+# The same database one step earlier: migrated, and nothing else. That is what the
+# migration phase compares against, and it has to be taken before the fixture goes in.
+MIGRATED_ONLY="$SUITE_SCRATCH/migrated-only.db"
+
 build_pristine() {
 	local datapath="$SUITE_SCRATCH/pristine-data"
 
@@ -70,6 +79,8 @@ build_pristine() {
 
 	GROCY_DATAPATH="$datapath" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
 		|| fail 'could not migrate the pristine SQLite database'
+
+	cp "$datapath/grocy.db" "$MIGRATED_ONLY"
 
 	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/grocy.db" "$SUITE_DIR/fixtures/00_base.sql" \
 		|| fail 'could not apply the base fixture to the pristine database'
@@ -115,6 +126,26 @@ build_pgsql() {
 }
 
 failures=0
+
+# --- Migration tests --------------------------------------------------------------
+#
+# Both databases are built by bin/grocy-migrate and then left alone. Nothing is seeded
+# into either side, because the question is what migrating alone produces — the state
+# every other phase, and every real installation, starts from.
+
+run_migration_tests() {
+	build_pgsql "$MIGRATE_DB"
+
+	export MIGRATEDIFF_SQLITE_PATH="$MIGRATED_ONLY"
+	export MIGRATEDIFF_PGSQL_DSN="pgsql:host=$PGHOST;port=$PGPORT;dbname=$MIGRATE_DB"
+	export MIGRATEDIFF_PGSQL_USER="$PGUSER"
+	export MIGRATEDIFF_PGSQL_PASSWORD="$PGPASSWORD"
+
+	say ""
+	if ! php "$SUITE_DIR/migratedifftest.php"; then
+		failures=$((failures + 1))
+	fi
+}
 
 # --- View tests -------------------------------------------------------------------
 #
@@ -190,10 +221,11 @@ say "building the pristine SQLite database"
 build_pristine
 
 case "$WHICH" in
+	migrate) run_migration_tests ;;
 	views) run_view_tests ;;
 	triggers) run_trigger_tests ;;
-	all) run_view_tests; run_trigger_tests ;;
-	*) fail "unknown target: $WHICH (expected views, triggers or all)" ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers or all)" ;;
 esac
 
 say ""

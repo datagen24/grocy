@@ -3,6 +3,7 @@
 namespace Grocy\Services;
 
 use Grocy\Services\Database\DatabaseDialect;
+use Grocy\Services\Database\InitialDataSeeder;
 
 /**
  * Brings the database schema up to date on application start, for either engine.
@@ -45,13 +46,20 @@ class DatabaseMigrationService extends BaseService
 	 * every not-yet-applied migration file in ascending number order. When anything was
 	 * applied, generated-id counters are resynced (migrations insert explicit ids) and
 	 * the engine's optimize statement (e.g. VACUUM/ANALYZE) is run.
+	 *
+	 * @param bool $seedInitialData Whether a database created from the baseline also gets
+	 *                              the initial data that the migration history would have
+	 *                              inserted. Only bin/grocy-db-import passes false: it is
+	 *                              about to fill the database from an existing one, and
+	 *                              seeding first would leave it looking non-empty to its
+	 *                              own overwrite check.
 	 */
-	public function MigrateDatabase()
+	public function MigrateDatabase(bool $seedInitialData = true)
 	{
 		$dialect = DatabaseService::GetInstance()->GetDialect();
 
 		$this->EnsureMigrationsTable($dialect);
-		$this->ApplyBaselineSchemaWhenNeeded($dialect);
+		$this->ApplyBaselineSchemaWhenNeeded($dialect, $seedInitialData);
 
 		$migrationCounter = 0;
 		foreach (self::GetMigrationFiles($dialect) as $migrationNumber => $migrationFile)
@@ -180,10 +188,19 @@ class DatabaseMigrationService extends BaseService
 
 	/**
 	 * On an engine which starts from a baseline rather than from the migration history,
-	 * loads that baseline into an empty database and records the migrations it stands in
-	 * for as already applied.
+	 * loads that baseline into an empty database, seeds the data those migrations would
+	 * have inserted, and records the migrations it stands in for as already applied.
+	 *
+	 * Schema and data go in together on purpose. The baseline files are DDL only, while
+	 * a third of the migrations they stand in for also insert rows - the admin user, the
+	 * permission hierarchy, the default quantity units - so loading the schema alone
+	 * produces a database that migrates cleanly and cannot be logged into. See
+	 * InitialDataSeeder.
+	 *
+	 * @param bool $seedInitialData False to load the schema alone, for a caller which is
+	 *                              about to import an existing database into it
 	 */
-	private function ApplyBaselineSchemaWhenNeeded(DatabaseDialect $dialect)
+	private function ApplyBaselineSchemaWhenNeeded(DatabaseDialect $dialect, bool $seedInitialData)
 	{
 		$baselinePath = $dialect->GetBaselineSchemaPath();
 
@@ -215,6 +232,11 @@ class DatabaseMigrationService extends BaseService
 			foreach ($baselineFiles as $baselineFile)
 			{
 				DatabaseService::GetInstance()->ExecuteDbStatement(file_get_contents($baselineFile));
+			}
+
+			if ($seedInitialData)
+			{
+				(new InitialDataSeeder($pdo, $dialect))->Seed();
 			}
 
 			for ($migration = 1; $migration <= self::BASELINE_MIGRATION_ID; $migration++)

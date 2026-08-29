@@ -77,8 +77,12 @@ echo PHP_EOL;
 
 try
 {
+	// Schema only. A target created from a baseline is otherwise seeded with the rows a
+	// fresh installation starts from - an admin user, the permission hierarchy, the
+	// default quantity units - and every one of them would be a row this import is about
+	// to replace, while making the target look non-empty to the overwrite check below.
 	echo 'Making sure the target schema is up to date...' . PHP_EOL;
-	DatabaseMigrationService::GetInstance()->MigrateDatabase();
+	DatabaseMigrationService::GetInstance()->MigrateDatabase(false);
 
 	$source = new \PDO('sqlite:' . $sourcePath);
 	$source->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
