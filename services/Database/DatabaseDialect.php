@@ -57,6 +57,13 @@ abstract class DatabaseDialect
 	 * way. SQLite's case insensitivity is the documented behaviour of this API, so the
 	 * PostgreSQL side matches it rather than the other way round.
 	 *
+	 * The agreement is guaranteed for ASCII and only for ASCII. SQLite's LIKE folds A-Z and
+	 * nothing else; PostgreSQL's ILIKE folds per the database collation, so on a UTF-8
+	 * database a pattern of "æ" also matches "Æ" where SQLite would not. That residual is
+	 * deliberate - the alternative is reimplementing one engine's folding table in the
+	 * other - and it is what `run-tests.sh filter` measures and prints on every run rather
+	 * than leaving to be rediscovered. The API documents the same limit.
+	 *
 	 * @param bool $negated The "!~" form, which must negate the match rather than be wrapped
 	 *                      in NOT by the caller - the two are the same here but only because
 	 *                      both engines treat NULL identically, and that is worth pinning

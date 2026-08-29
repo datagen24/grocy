@@ -350,9 +350,28 @@ real SQLite and a real PostgreSQL 16, on the fixture above plus a `NULL` row:
 The `!~` row is the one worth having checked rather than assumed: `NOT ILIKE` leaves the
 `NULL` name out on both engines, so negation did not quietly become three-valued on one side.
 
+**The agreement is ASCII only, and that is the interesting part of this hazard.** SQLite's
+`LIKE` folds `A-Z` and nothing else; `ILIKE` folds according to the database collation, so
+the two still part company past ASCII:
+
+| Pattern | SQLite | PostgreSQL (`C.UTF-8`) |
+|---|---|---|
+| `milk` against `Milk` / `milk chocolate` | both | both |
+| `æ` against `ÆBLE` / `æble` | `æble` | both |
+
+Closing that would mean reimplementing one engine's folding table inside the other, which
+is a great deal of machinery for a case no fixture in this repository contains. It is not
+closed, so it is measured: the `filter` phase of `run-tests.sh` prints both engines' answers
+and the database collation on every run, and asserts the invariant that actually holds -
+identical on ASCII, and beyond ASCII PostgreSQL may fold *more* than SQLite but never less.
+An exact non-ASCII assertion would be wrong to write, because which characters fold is a
+property of the database's collation rather than of this code: the same test would fail on a
+`C`-locale database for something that is not a defect.
+
 The OpenAPI spec described these operators as "LIKE" and "not LIKE", which was the SQLite
-spelling rather than the contract. It now says "contains, case insensitive", which is what
-both engines do.
+spelling rather than the contract. It now says "contains, case insensitive for ASCII", and
+spells the non-ASCII limit out, because "case insensitive" unqualified would have promised
+the agreement this section has just said does not hold.
 
 Two things this does **not** fix, recorded so they are not mistaken for it:
 
@@ -362,10 +381,13 @@ Two things this does **not** fix, recorded so they are not mistaken for it:
   change and is equally true of `ILIKE` after it - the failure is identical, so this is a
   pre-existing difference rather than a regression, and it is
   [11](../../docs/plans/11-api-error-handling.md)'s to answer with a status code.
-- **The suite still cannot see any of this.** The fix landed on the strength of a
-  hand-written check, not a regression test, because the differential suite has no phase
-  that can express "the same API request returns the same rows on both engines". See
-  [14](../../docs/plans/14-contract-and-regression-scaffolding.md).
+- ~~**The suite still cannot see any of this.**~~ It can now. This was true when the fix
+  landed and was the honest thing to record; the gap is closed by a `filter` phase in
+  `run-tests.sh`, which asks each dialect for the condition it emits, runs both against
+  their own engine and compares the rows. It is the first phase that compares *application*
+  behaviour rather than SQL, and it was checked the way
+  [14](../../docs/plans/14-contract-and-regression-scaffolding.md) asks - by putting the
+  defect back and confirming the phase fails (three ASCII cases, `[1,2] vs [2]`).
 
 Do not reach for the `nocase` collation of hazard 15 to solve this. It is nondeterministic,
 and PostgreSQL rejects `LIKE` against a nondeterministic collation outright.

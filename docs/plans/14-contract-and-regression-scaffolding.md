@@ -250,18 +250,29 @@ it is assembled in `BaseApiController`, and the response *shape* is identical ei
 so even piece 2's key-set-and-type snapshot would pass on both engines while the row sets
 differ.
 
-It has since been fixed, and *how* it was fixed is the sharper argument. The fix landed on
-a hand-written check — instantiate both dialects, run the SQL they emit against both
-engines, compare the rows — because there was nowhere in the suite to put a regression test
-for it. That check now exists only in a commit message. Every future change to this code
-path is therefore exactly as unprotected as the one that introduced the defect.
+It has since been fixed, and the fix brought a fifth phase with it, because there was
+nowhere in the suite to put a regression test for it. **`run-tests.sh filter`**
+(`filterdifftest.php`) asks each dialect for the condition it emits for `~` and `!~`, runs
+both against their own engine and compares the rows. It is the first phase that compares
+*application* behaviour rather than SQL, and it was verified the mutation-shaped way this
+plan's Verification section asks for: the defect was put back and the phase failed on three
+ASCII cases (`[1,2] vs [2]`).
 
-So piece 2's engine-vs-engine leg needs at least a few cases that compare the **rows** a
-parameterised endpoint returns, not only the shape of them. The generic `query[]`/`order`
-surface is where to spend that first: it is one code path serving every entity, it is the
-only place in the tree where the two dialects can disagree about a *result set* rather than
-a value, and it now has two known cases to assert — `~` agreeing across engines, and `!~`
-excluding NULL identically.
+It also demonstrates the thing this plan keeps having to relearn about its own suite — that
+a phase is only as good as what it takes on trust. The condition under test is not written
+out in the test; it is fetched from `GetLikeCondition()`, so a future change to the dialect
+is caught rather than mirrored into the fixture. And the non-ASCII case is asserted
+*directionally* (PostgreSQL may fold more than SQLite, never less) rather than exactly,
+because which characters fold is a property of the database's collation: an exact assertion
+would fail on a `C`-locale database for something that is not a defect. A test that has to
+be loosened later is worse than one that states the invariant it actually has.
+
+**What is still owed to piece 2** is the general case. The `filter` phase covers one
+operator pair on one code path; the snapshot still needs cases that compare the **rows** a
+parameterised endpoint returns, not only the shape of them, for the rest of the
+`query[]`/`order` surface. That surface is one code path serving every entity, and it is
+the only place in the tree where the two dialects can disagree about a *result set* rather
+than a value.
 
 ### Schema
 
