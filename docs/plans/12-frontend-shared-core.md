@@ -74,6 +74,36 @@ pages break at runtime with no static signal.
 The third is server-side, but it is the write path the frontend's consume dialog uses and
 it is in the same "one spelling can never match" family, so it belongs with the rest.
 
+## What this is an on-ramp to
+
+Worth stating before the steps, because it costs nothing to aim at and is expensive to
+retrofit: **the endpoint of this work is a frontend that is a real client of the API**,
+not merely one whose JavaScript has stopped drifting.
+
+That matters now rather than someday, because [17](17-ecosystem-clients.md)'s answers
+committed this household to two more first-party clients — a Home Assistant integration
+and a Swift module with per-platform UI targets. Three clients against one API is what
+the architecture already is; the browser is simply the one that has been allowed to skip
+the API and read the database directly.
+
+How directly is measured in [14](14-contract-and-regression-scaffolding.md)'s section 2b:
+173 direct `$this->DB->` call sites across the view controllers, and eight pages whose
+data has no API path in the shape they render. Most reads *are* reachable — the gap is
+narrower than the call-site count suggests — but reachable via several calls plus a
+client-side join is a different claim from the README's "the web frontend uses exactly
+this API for pretty much everything", which is true of writes and approximately true of
+reads.
+
+None of that is this plan's work — 14 owns the surface and the contract. What this plan
+owes it is a `request()` core and list/form factories that a page can be built on
+*without* server-injected data, so that when a page's read does arrive as an endpoint,
+converting it is a change to one call rather than an argument with the template. Steps 1
+and 2 do that already. The thing to avoid is the version of this plan that tidies the
+JavaScript while deepening its reliance on Blade-injected globals.
+
+There is no tier-separation project on this roadmap and there does not need to be. It is
+what falls out once the API stops treating the browser as special.
+
 ## Proposed change
 
 The order matters: **fix the bugs first, then refactor.** A refactor that also changes

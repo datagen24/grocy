@@ -142,6 +142,13 @@ the schema the wire contract. Existing endpoints keep their response shape, and 
 that would change one is called out explicitly — see the ground rules in
 [docs/plans/README.md](docs/plans/README.md).
 
+The sentence above is upstream's and is more true of writes than of reads. The web
+frontend's pages are server-rendered from direct database reads, so a handful of them —
+the stock journal summary, the spendings report, the location content sheet — show data
+the API cannot currently return in that shape, and the stock overview needs several calls
+and a client-side join to reassemble. Closing that is scheduled work; the measurement is
+in [plan 14](docs/plans/14-contract-and-regression-scaffolding.md).
+
 ### Barcode readers & camera scanning
 
 Some fields (with a barcode icon) also allow to select a value by scanning a barcode. It

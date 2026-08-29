@@ -71,6 +71,14 @@ rename and the registry claims happen at announcement time, not in a commit.
   "bad filter".
 - **14 before 11** — 11 changes status codes across ~74 routes; better shown as a diff
   than asserted by hand.
+- **The API's read surface grows before 14 piece 2 freezes it.** Measured in 14's section
+  2b: the web UI reads the database directly in 173 places, and eight pages have no API
+  path in the shape they render — a stock overview among them. That is a dependency of the
+  Swift client [17](17-ecosystem-clients.md) commits to, not a tier-split ambition, and a
+  snapshot taken first would freeze an incomplete contract and turn every addition into a
+  snapshot change. Two of the gaps are decisions rather than code: exposing
+  `products_price_history` widens who can see the household's purchase history, and the
+  permissions page's `ADMIN`-versus-`USERS_READ` mismatch may be deliberate.
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
 - **18 wants 10 to be real, and 10 wants 18 to exist.** 18's whole justification is a pod
@@ -374,7 +382,10 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 ### Wave 5 — the assistant and the lists
 
 - **14 piece 2** — the response-contract snapshot, now that 11 has stabilized the
-  failure paths it records. This freezes the API surface 02 builds on. It also takes
+  failure paths it records. This freezes the API surface 02 builds on, **and the surface
+  has to be complete first** — 14's section 2b lists the eight reads the web UI does
+  directly today with no API equivalent in the shape it renders, and the Swift client
+  needs the same ones. It also takes
   three sweep items that are contract work rather than fixes: body validation against
   the entity's OpenAPI schema (S16 — `id` and `row_created_timestamp` stop being
   writable through the generic endpoints), a length/complexity bound on the `§` regex

@@ -471,6 +471,15 @@ the client half way on the header so this fork is not the only way to reach the 
 >   before that means generating twice.
 >
 > This narrows Q3 to its real half: distribution. It also settles Q4 — see there.
+>
+> **One thing this commits the server to.** A Swift module generated from the spec can
+> only render what the API returns, and the API does not currently return everything the
+> web UI shows — [14](14-contract-and-regression-scaffolding.md)'s section 2b measures the
+> gap, and a stock overview is the first thing on the list. So the read surface is not a
+> someday concern of a hypothetical tier split: it is a scheduled dependency of a client
+> decided here, and it has to grow before 14 piece 2 freezes the contract the module is
+> generated from. This is exactly the client-impact line this plan's own mechanism section
+> asks every plan to carry, arriving for once before the work rather than after it.
 
 ## How this plan stays current
 
