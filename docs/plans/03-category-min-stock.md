@@ -115,6 +115,32 @@ a group is short. Reusing the existing "below minimum stock" styling is the chea
    `IFNULL(p.active, 0) = 1`.
 
    > **Response:** Agreed, exclude.
+5. **Does a group minimum mean the node or the whole subtree?** Raised by the nested
+   `product_groups` scope this plan absorbed from [07](07-nested-products.md)'s Q6, and not
+   a question this plan had while groups were flat.
+
+   > **Response:** Subtree. A minimum on a group is satisfied by any product at any depth
+   > beneath it.
+   >
+   > Products live at the leaves of this taxonomy, so a node-only minimum on an interior
+   > group like `Dairy` would be satisfiable by nothing at all — node-only makes minimums
+   > useless in exactly the place you would want to set one.
+   >
+   > Real usage decides the rest. Minimums go on leaf products almost always, on mid-nodes
+   > rarely, on the root practically never. Leaves are indifferent to the semantics, since a
+   > leaf's subtree is itself; mid-nodes are where subtree earns its keep — "always have
+   > some hard cheese", satisfied by any cheddar underneath. The known trap, a root-level
+   > subtree minimum satisfied by any two random dairy items, only fires at depths we will
+   > not set minimums at.
+   >
+   > Cost accepted: minimum-checking becomes recursive over `product_groups` — a recursive
+   > CTE on both engines — which makes tree depth a runtime cost for the first time.
+   > Bounded and fine at this scale.
+   >
+   > This is a fresh decision, not an inherited one. [07](07-nested-products.md)'s
+   > "whole subtree" answer was about stock roll-up and was superseded when Q6 moved the
+   > taxonomy out of `products`; it happens to land the same way here, for different
+   > reasons.
 
 ## Effort
 

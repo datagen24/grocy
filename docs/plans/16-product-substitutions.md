@@ -126,11 +126,18 @@ for, which is the mistake 07 was making.
 
 ### Where it surfaces
 
-**Recipes — advisory, not auto-satisfying (Q3).** `recipes_pos_resolved` gains new columns
-naming the best available substitute; `need_fulfilled` and `missing_amount` keep their
-current meaning. So a recipe wanting 200 g of shredded, with none in stock and a block on
-the shelf, still reads as *not* fulfilled — and says "you have a block". That is the
-behaviour the owner described: be told, not silently satisfied.
+**Recipes — an additive field, not a changed one (Q3).** `recipes_pos_resolved` gains
+`need_fulfilled_with_substitutions` alongside columns naming the best available substitute;
+`need_fulfilled` and `missing_amount` keep their exact current meaning and every existing
+consumer of them is untouched. A recipe wanting 200 g of shredded, with none in stock and a
+block on the shelf, still reads as not fulfilled on the hard boolean, reads as fulfilled on
+the advisory one, and says "you have a block". The UI shows both.
+
+Two fields rather than one changed field is what makes this stageable: if the advisory
+computation proves reliable, consumers adopt it deliberately instead of `need_fulfilled`
+shifting under them. It is also the measurement — the divergence between the two, against
+what actually got cooked, is how Q2's hand-maintained factors get corrected rather than
+merely trusted. Turning that divergence into a usable label is question 7, which is open.
 
 **Stock overview — no change.** No roll-up, no new rows in `stock_current`, `/stock`
 untouched. This also keeps the Home Assistant consumer out of it, which 07's review note
@@ -153,7 +160,10 @@ at implementation time; `0256.sqlite.sql` is taken and `0257.pgsql.sql` is claim
 
 `recipes_pos_resolved` gains columns, which is additive by the ground rule — but it is
 called out here rather than slipped in, because it is a view two other things read.
-Nothing existing changes type or meaning, and specifically `need_fulfilled` does not.
+Nothing existing changes type or meaning, and specifically `need_fulfilled` does not: per
+Q3 the substitution-aware answer arrives as `need_fulfilled_with_substitutions`, a second
+field, precisely so that the day someone wants the two merged is a deliberate breaking
+change with a migration path rather than a surprise.
 
 ### UI
 
@@ -180,8 +190,11 @@ this checkable at all:
 2. **A trigger script** for the guards, compared by `trigdifftest.php`: self-reference and
    duplicate rejected on both engines.
 3. **A regression check that `need_fulfilled` did not move.** The point of Q3's answer is
-   that fulfilment semantics are unchanged; the recipe seeds that exist today should
-   produce identical `need_fulfilled` and `missing_amount` before and after.
+   that the existing fulfilment semantics are unchanged; the recipe seeds that exist today
+   must produce identical `need_fulfilled` and `missing_amount` before and after. The new
+   `need_fulfilled_with_substitutions` is checked separately, including the case where it
+   differs from the hard boolean — that divergence is the feature, so a seed that never
+   produces one would let a field stuck at a constant pass unnoticed.
 4. **Deleting a product** removes rows pointing at it from both directions, checked as
    trigger behaviour rather than assumed from foreign keys.
 
@@ -229,6 +242,23 @@ this checkable at all:
 3. **Advisory or auto-satisfying?** Proposed advisory, per the reasoning above. The
    opposite choice makes `need_fulfilled` substitution-aware, which changes an existing
    response and would need saying so loudly.
+
+   > **Response:** Neither, as posed — the question was a false binary. **An additive
+   > field.** `need_fulfilled` keeps its exact current meaning and every consumer of it is
+   > untouched; a new field, working name `need_fulfilled_with_substitutions`, carries what
+   > the system believes is true once substitutions and their factors are applied. The UI
+   > shows both: the hard boolean and the advisory computation.
+   >
+   > Additive by the letter of the ground rule — no existing response changes meaning — and
+   > it stages the breaking change properly. If the advisory field proves reliable,
+   > consumers opt into it deliberately, rather than `need_fulfilled` shifting under them
+   > one release.
+   >
+   > It has a second purpose. The divergence between the two fields, set against what I
+   > actually cook, is a training set for refining the substitution rows and their factors
+   > over time — which is the loop that makes Q2's hand-maintained factors converge instead
+   > of drifting. Divergence alone is not enough signal to do that with; capturing the
+   > outcome needs a trackable field, and that is question 7 below.
 4. **Transitivity?** Proposed no. Recorded as a limit rather than an omission.
 5. **Should a substitution be scoped to a context** — fine in a recipe, wrong on the
    shopping list, or fine for cooking but not for a specific recipe that depends on the
@@ -237,6 +267,25 @@ this checkable at all:
 6. **Where do substitutions get recorded in practice?** A dedicated page is the obvious
    answer and probably the wrong one — the moment you want a substitute is while looking at
    a product or a failing recipe. Worth deciding with 12's patterns in hand rather than now.
+7. **How is the substitution outcome recorded as a trackable field?** Raised by Q3's
+   answer, and deliberately unanswered.
+
+   The training set Q3 describes needs a *label*, not just the divergence between
+   `need_fulfilled` and `need_fulfilled_with_substitutions`. The label is what actually
+   happened: the recipe was cooked anyway, so the substitution was accepted — or the
+   ingredient was shopped for instead, so it was rejected.
+
+   - **Implicit** — infer acceptance from a consume event fired while the hard boolean is
+     false and the advisory one is true. Free, and noisy: cooking something else, consuming
+     for an unrelated reason, or cooking two days later all read the same.
+   - **Explicit** — an accept/reject field on the recommendation itself. Clean signal, at
+     the cost of kitchen-time friction, which is the surest way to get a field nobody fills
+     in.
+
+   Where the field lives is equally undecided: on the consume event, on the substitution
+   row, or in a dedicated recommendation-outcome table. The last is the only one that can
+   record a rejection, since a rejection produces no consume event to hang anything off —
+   worth weighing before the cheaper options are taken.
 
 ## Effort
 
