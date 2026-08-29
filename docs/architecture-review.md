@@ -198,32 +198,32 @@ weak spot.**
 enforced by copying, and the copies are drifting.**
 
 - The wiring is exemplary for a no-framework app: layout auto-loads
-  `/viewjs/{view}.js`, all API traffic goes through `Grocy.Api.*` (zero `$.ajax`/
+  `/viewjs/{view}.js`, all API traffic goes through `Victual.Api.*` (zero `$.ajax`/
   `fetch` bypasses), inline Blade scripts are data-injection only, and every
   view/viewjs/route name lines up.
 - **Silent failures are the default error path:** 148 error callbacks in 41 files do
   nothing but `console.error(xhr)` — a failed delete gives the user nothing. The fix
-  is central, not 148-fold: make `Grocy.Api`'s error parameter default to
-  `Grocy.FrontendHelpers.ShowGenericError`.
+  is central, not 148-fold: make `Victual.Api`'s error parameter default to
+  `Victual.FrontendHelpers.ShowGenericError`.
 - **Clone families:** ~14 master-data list scripts and ~15 entity-form scripts are
   byte-identical modulo entity name (~2,300 lines total); the delete-confirm dialog
-  appears 31 times; `Grocy.Api` itself repeats its 30-line XHR handler six times (and
+  appears 31 times; `Victual.Api` itself repeats its 30-line XHR handler six times (and
   has no timeout/`onerror` handling — a dropped connection during save leaves the UI
   busy-locked forever); `datetimepicker2` is a full 344-line clone of
   `datetimepicker` existing only so two pickers can share a page. Drift is already
   observable: sibling lists disagree about the embedded-dialog reload convention,
   `userobjectform.js` lost the Enter-to-submit handler its siblings have,
   `stockjournal.js`/`userpermissions.js` hand-roll `toastr.error(JSON.parse(...))`.
-  **Direction:** three small shared helpers — `GrocyEntityList(entity, opts)`,
-  `GrocyEntityForm(entity, url)`, and a single private `request()` core inside
-  `Grocy.Api` — would collapse ~1,500 lines and end the drift. Do it before plans
+  **Direction:** three small shared helpers — `VictualEntityList(entity, opts)`,
+  `VictualEntityForm(entity, url)`, and a single private `request()` core inside
+  `Victual.Api` — would collapse ~1,500 lines and end the drift. Do it before plans
   05/06/08 add more list/form pairs to copy from.
 - `purchase.js` doubles as an unguarded shared library on three other pages (pulled
   in via `@push` in their Blade views); extract the shared dialog logic instead.
 - Minor: list-page Blade chrome repeats across ~14 templates (partials exist and are
   used elsewhere — apply the idiom); `mealplan`/`recipes` blades inject bare globals
-  instead of namespacing under `Grocy.*`; two components aren't registered under
-  `Grocy.Components`.
+  instead of namespacing under `Victual.*`; two components aren't registered under
+  `Victual.Components`.
 
 ## Services and database layer
 
@@ -325,7 +325,7 @@ specifically de-risk them.
 Found while documenting (annotated in-code, deliberately not fixed in a
 comment-only pass):
 
-- `public/viewjs/userform.js` — sets `Grocy.DeleteUserePictureOnSave` (typo, extra
+- `public/viewjs/userform.js` — sets `Victual.DeleteUserePictureOnSave` (typo, extra
   "e") where the submit handler checks `DeleteUserPictureOnSave`: choosing a new
   picture likely fails to cancel a pending "delete current picture" flag.
 - `public/viewjs/tasks.js` — the user-filter handler builds an anchored regex in an

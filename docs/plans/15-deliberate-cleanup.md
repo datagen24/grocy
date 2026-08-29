@@ -284,7 +284,7 @@ rename separately, exactly as the response to 05's Q4 concluded.
    > `middleware/Auth/`. It also sidesteps the release-cadence problem the stub
    > depends on.
 2. **`SameSite`: `Lax` or `Strict`?** `Lax` is the safe default and keeps normal
-   navigation working. `Strict` is better and would break any flow where grocy is reached
+   navigation working. `Strict` is better and would break any flow where Victual is reached
    from another origin — the iCal feed does not use cookies, but embedded install mode
    (`VICTUAL_IS_EMBEDDED_INSTALL`) might. I lean `Lax` unless embedded mode is confirmed
    unused. `Secure` should be conditional on the request being HTTPS rather than

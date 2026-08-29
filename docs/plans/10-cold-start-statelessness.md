@@ -72,7 +72,7 @@ from the data path.
 
 ### Bake the cache at image build time
 
-`bin/grocy-warm-cache`: compiles every template under `views/` and writes the Slim
+`bin/victual-warm-cache`: compiles every template under `views/` and writes the Slim
 route cache, then exits. Run it as the last step of the image build. The result is
 deterministic per source tree, so it is a layer, not state.
 
@@ -128,7 +128,7 @@ someone runs migrations outside the CLI entry point.
 With the cache baked and migrations moved, `app.php:52-77` deletes entirely: no
 `EmptyFolder`, no marker file, no `opcache_reset` (meaningless in an immutable image
 that is replaced rather than updated in place), no 302. Upgrades in a mutable
-deployment are then covered by "run `bin/grocy-warm-cache` after updating", which
+deployment are then covered by "run `bin/victual-warm-cache` after updating", which
 `update.sh` can do.
 
 ### Skip the SQLite checks on a PostgreSQL-only deployment
@@ -294,12 +294,12 @@ owns that constraint today, so it is recorded in both.
    > Q6 fail-fast message should name the setting and `bin/victual-migrate`, so the
    > failure is its own documentation.
 5. **Does the migration CLI also warm the cache?** They are different lifecycles — one is
-   per image build, the other is per deployment — but a single `bin/grocy-init` that does
+   per image build, the other is per deployment — but a single `bin/victual-init` that does
    both is one less thing to forget. I lean to keeping them separate commands and letting
    the image build and the initContainer each call the one they need.
 
    > **Response:** Agreed, keep them separate. They run at different lifecycle
-   > moments (image build vs deployment); a combined `grocy-init` blurs exactly the
+   > moments (image build vs deployment); a combined `victual-init` blurs exactly the
    > distinction this plan exists to draw.
 6. **What happens when the app boots against a database that is behind the code?**
    Today it silently migrates. With migrations moved out, the options are: fail fast with

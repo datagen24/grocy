@@ -114,7 +114,7 @@ No change. Same three routes, same headers, same 404 behaviour. `files` is delib
 
 1. **What happens to files already on disk when the setting is flipped?** The one open
    decision.
-   - **(a) Explicit import.** `bin/grocy-files-import` walks `/data/storage` into the
+   - **(a) Explicit import.** `bin/victual-files-import` walks `/data/storage` into the
      database; before it runs, images 404. One source of truth at any moment.
    - **(b) Read-through fallback.** Database first, filesystem for anything missing.
      Flipping Just Works, but a file can live in two places indefinitely.

@@ -11,7 +11,7 @@ typing anything.
 
 This is not primarily "scan a shelf with your phone". The intent is a fixed or handheld
 camera that reads a marker on a shelf, knows which location it is looking at, and reports
-what it sees back into Grocy. That changes three things a phone-first design would get
+what it sees back into Victual. That changes three things a phone-first design would get
 wrong, and they are worth deciding before any code:
 
 1. **Labels are physical and long lived; database ids are not.** A printed label stuck to a
@@ -24,7 +24,7 @@ wrong, and they are worth deciding before any code:
 
 ## Today
 
-Grocy already has an internal barcode format, `Grocycode` (`helpers/Grocycode.php`):
+Victual already has an internal barcode format, `Grocycode` (`helpers/Grocycode.php`):
 
 ```php
 public const PRODUCT = 'p';
@@ -86,9 +86,9 @@ Two separate concerns:
 - **Interactive scanning** — the existing scan-input handler resolves a Grocycode and acts
   on it. A location code should preselect that location as the target for subsequent scans,
   so you scan the shelf then scan items onto it. That implies a small "current location"
-  notion Grocy does not have today.
+  notion Victual does not have today.
 - **Machine reporting** — an external system needs an endpoint that says "these products,
-  these amounts, are at this location". Grocy has `/stock/transfer` and inventory endpoints,
+  these amounts, are at this location". Victual has `/stock/transfer` and inventory endpoints,
   which mutate one product at a time and assume a human decided. A camera system reporting
   observed contents is a different shape, and is closer to inventory reconciliation than to
   a transfer. See Q2 — this is the part that needs real design, and it may be better as its
@@ -122,7 +122,7 @@ A print action on the locations list and form, mirroring products.
    > extra data while the row id stays authoritative. Labels carry only the stable
    > identifier.
 2. **What shape should the machine reporting endpoint take?** The interesting one. A camera
-   reporting "I see 3 of product X at location 7" is an *observation*, and Grocy has no
+   reporting "I see 3 of product X at location 7" is an *observation*, and Victual has no
    concept of one — it has authoritative stock that humans mutate. Options range from
    mapping observations onto the existing inventory endpoint (simple, but an incorrect
    observation silently corrupts stock) to recording observations separately and letting a
