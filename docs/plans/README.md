@@ -10,7 +10,7 @@ answer inline as a `> **Response:**` block, so question and answer read together
 |---|---|---|---|---|
 | — | [Database abstraction / PostgreSQL](../../db/pgsql/README.md) | — | — | **done** |
 | 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small |
-| 02 | [MCP endpoint](02-mcp-endpoint.md) | — | — | medium |
+| 02 | [MCP endpoint](02-mcp-endpoint.md) ([interface spec](../mcp-interface-spec.md)) | — | — | medium |
 | 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small |
 | 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium |
 | 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | — | medium |
