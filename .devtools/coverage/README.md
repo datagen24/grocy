@@ -13,8 +13,8 @@ artifact.
 ## What the number means
 
 It is line coverage of `services/`, `controllers/`, `helpers/`, `middleware/`, `plugins/`
-and the three top-level PHP files, by a suite that is not a unit test suite. Two phases
-drive SQL straight at each engine and never enter PHP application code at all; the third
+and the three top-level PHP files, by a suite that is not a unit test suite. Three phases
+drive SQL straight at each engine and barely enter PHP application code at all; the fourth
 goes through `StockService`. So most controllers are at zero by design, and the total is
 low for a reason that is not a quality judgement.
 
@@ -27,7 +27,8 @@ deleted. `report.php` takes `--min=NN` if a future change wants one deliberately
 ## How it is wired
 
 The suite is a couple of dozen short-lived PHP processes: `difftest.php` once per seed,
-`trigdifftest.php`, `rollback-tests.php` once per engine, `bin/grocy-migrate` and
+`migratedifftest.php`, `trigdifftest.php`, `rollback-tests.php` once per engine,
+`bin/grocy-migrate` and
 `bin/grocy-db-import` several times each. Rather than editing each call site — which means
 remembering to edit the next one too — `run-tests.sh` writes a throwaway `php.ini`
 fragment setting `auto_prepend_file` and puts it on `PHP_INI_SCAN_DIR`. Every PHP process

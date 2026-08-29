@@ -3,31 +3,40 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [views|triggers|rollback]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback]
 #
-# Three kinds of check, for three reasons. Views are compared by what they return, because
+# Four kinds of check, for four reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
 #
-# The third asks something the first two cannot. Both of them drive SQL straight at each
-# engine and never enter the application, so neither would notice if a write path stopped
-# being transactional. The rollback tests go through StockService, fail an operation
-# halfway, and check the ledger is where it started — on each engine in turn rather than
-# against the other.
+# Before either of those means anything, though, the two engines have to start from the
+# same place. The migration check compares two databases that have been migrated and
+# nothing else, which is precisely what the other three cannot see: every one of them
+# populates PostgreSQL by copying an already-migrated SQLite database, so all of them
+# start from a state that was constructed rather than migrated. That blind spot hid a
+# real defect — the PostgreSQL baseline being schema only, so a fresh database had no
+# admin user and no quantity units — so this phase runs first.
+#
+# The fourth asks something none of the others can. The first three drive SQL straight at
+# each engine and never enter the application, so none would notice if a write path
+# stopped being transactional. The rollback tests go through StockService, fail an
+# operation halfway, and check the ledger is where it started — on each engine in turn
+# rather than against the other.
 #
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
-# difftest.php and trigdifftest.php, which share their normalisation rules with the
-# application through Grocy\Services\Database\ValueComparison.
+# difftest.php, trigdifftest.php and migratedifftest.php, which share their normalisation
+# rules with the application through Grocy\Services\Database\ValueComparison.
 #
 # Connection settings come from the environment. The two PHP tools were written with
 # disjoint variable namespaces (DIFFTEST_* and TRIGTEST_*) and this is where they are
 # reconciled onto one set, so that running the suite is a command rather than a recipe.
 #
 #   PGHOST, PGPORT, PGUSER, PGPASSWORD   PostgreSQL connection (libpq's own names)
-#   SUITE_PGSQL_VIEW_DB                  database for the view tests   (default grocy_full)
+#   SUITE_PGSQL_VIEW_DB                  database for the view tests    (default grocy_full)
 #   SUITE_PGSQL_TRIGGER_DB               database for the trigger tests (default grocy_trig)
+#   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default grocy_migrate)
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default grocy_rollback)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
@@ -54,6 +63,7 @@ export PGHOST PGPORT PGUSER PGPASSWORD
 
 VIEW_DB="${SUITE_PGSQL_VIEW_DB:-grocy_full}"
 TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-grocy_trig}"
+MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-grocy_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-grocy_rollback}"
 
 WHICH="${1:-all}"
@@ -115,6 +125,10 @@ fi
 
 PRISTINE="$SUITE_SCRATCH/pristine.db"
 
+# The same database one step earlier: migrated, and nothing else. That is what the
+# migration phase compares against, and it has to be taken before the fixture goes in.
+MIGRATED_ONLY="$SUITE_SCRATCH/migrated-only.db"
+
 build_pristine() {
 	local datapath="$SUITE_SCRATCH/pristine-data"
 
@@ -123,6 +137,8 @@ build_pristine() {
 
 	GROCY_DATAPATH="$datapath" php "$GROCY_ROOT/bin/grocy-migrate" --quiet \
 		|| fail 'could not migrate the pristine SQLite database'
+
+	cp "$datapath/grocy.db" "$MIGRATED_ONLY"
 
 	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/grocy.db" "$SUITE_DIR/fixtures/00_base.sql" \
 		|| fail 'could not apply the base fixture to the pristine database'
@@ -169,6 +185,26 @@ build_pgsql() {
 
 failures=0
 
+# --- Migration tests --------------------------------------------------------------
+#
+# Both databases are built by bin/grocy-migrate and then left alone. Nothing is seeded
+# into either side, because the question is what migrating alone produces — the state
+# every other phase, and every real installation, starts from.
+
+run_migration_tests() {
+	build_pgsql "$MIGRATE_DB"
+
+	export MIGRATEDIFF_SQLITE_PATH="$MIGRATED_ONLY"
+	export MIGRATEDIFF_PGSQL_DSN="pgsql:host=$PGHOST;port=$PGPORT;dbname=$MIGRATE_DB"
+	export MIGRATEDIFF_PGSQL_USER="$PGUSER"
+	export MIGRATEDIFF_PGSQL_PASSWORD="$PGPASSWORD"
+
+	say ""
+	if ! php "$SUITE_DIR/migratedifftest.php"; then
+		failures=$((failures + 1))
+	fi
+}
+
 # --- View tests -------------------------------------------------------------------
 #
 # Each seed declares the views it exercises in a leading "-- @views" comment, parsed in
@@ -211,7 +247,7 @@ run_view_tests() {
 
 # --- Rollback tests ---------------------------------------------------------------
 #
-# Unlike the two phases above, this one runs against one engine at a time: the question
+# Unlike the three phases above, this one runs against one engine at a time: the question
 # is whether a failed operation leaves that engine's ledger intact, which has no
 # cross-engine comparison in it.
 
@@ -260,15 +296,25 @@ run_rollback_tests() {
 	PHPCONFIG
 
 	# The PostgreSQL side is populated by importing the SQLite database just used, rather
-	# than by applying the fixture again. That is the supported way a PostgreSQL
-	# deployment gets its data, so it is the state worth testing against — and it avoids
-	# depending on inserts behaving identically on both engines, which is a separate
-	# question from whether a rollback works. (They do not, currently: applying the
-	# fixture straight to PostgreSQL fails, because products_ins leaves
-	# cache__quantity_unit_conversions_resolved empty there while SQLite's populates it.
-	# Unrelated to this phase and recorded on its own.)
+	# than by applying the fixture again. That is the supported way an existing
+	# installation's data reaches PostgreSQL, so it is the state worth testing against —
+	# and it keeps this phase's subject to rollback alone rather than also to whether
+	# inserts behave identically on both engines, which the other three phases answer.
+	#
+	# An earlier version of this comment said applying the fixture straight to PostgreSQL
+	# fails, and blamed products_ins for leaving cache__quantity_unit_conversions_resolved
+	# empty. Both halves were wrong. The trigger was a faithful port; what was missing was
+	# the seed data the PostgreSQL baseline never inserted, so quantity_units was empty and
+	# the view the trigger copies from had nothing in it for any product. With that fixed
+	# the fixture does apply directly. The import stays because it is the more
+	# representative state, not because the alternative is broken.
+	#
+	# --force because build_pgsql above ran bin/grocy-migrate, which seeds a fresh database
+	# with the initial data of a new installation, and the import refuses a target that
+	# holds rows unless told. Those particular rows are exactly what this import replaces —
+	# it truncates before it copies — so overwriting them is the intent, not a risk.
 	DIFFTEST_DB_NAME="$ROLLBACK_DB" GROCY_DATAPATH="$pgdatapath" \
-		php "$GROCY_ROOT/bin/grocy-db-import" "$sqlite_db" > /dev/null \
+		php "$GROCY_ROOT/bin/grocy-db-import" "$sqlite_db" --force > /dev/null \
 		|| fail 'could not import the rollback fixture into PostgreSQL'
 
 	say ""
@@ -314,11 +360,12 @@ say "building the pristine SQLite database"
 build_pristine
 
 case "$WHICH" in
+	migrate) run_migration_tests ;;
 	views) run_view_tests ;;
 	triggers) run_trigger_tests ;;
 	rollback) run_rollback_tests ;;
-	all) run_view_tests; run_trigger_tests; run_rollback_tests ;;
-	*) fail "unknown target: $WHICH (expected views, triggers, rollback or all)" ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then

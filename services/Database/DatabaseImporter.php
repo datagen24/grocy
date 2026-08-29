@@ -316,6 +316,11 @@ class DatabaseImporter
 	/**
 	 * Refuses to overwrite a target that already holds data, unless $force. The
 	 * migrations table is exempt - a freshly migrated target always has rows there.
+	 *
+	 * A target migrated by bin/grocy-migrate rather than by this command is not empty
+	 * either: that path seeds the initial data of a fresh installation, which is the
+	 * whole point of it. Hence the second half of the message - the rows are safe to
+	 * lose, but only the operator can say so.
 	 */
 	private function AssertTargetIsEmpty(array $tables, bool $force)
 	{
@@ -337,7 +342,9 @@ class DatabaseImporter
 			{
 				throw new \Exception(
 					'The target database already contains data (' . $table . ' has ' . $count . ' rows). '
-					. 'Importing replaces everything in it. Pass --force if that is what you want.'
+					. 'Importing replaces everything in it. Pass --force if that is what you want - '
+					. 'which is also the answer when the only thing in there is the initial data '
+					. 'bin/grocy-migrate seeds into a fresh database.'
 				);
 			}
 		}

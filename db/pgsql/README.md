@@ -10,11 +10,55 @@ installation needs instead.
     baseline/03_functions.sql     grocy_user_setting() and its defaults table
     baseline/03_views_group*.sql  views with no dependencies on other views
     baseline/04_views_*.sql       views layered on top of those
+    baseline/06_triggers_*.sql    the SQLite triggers as PL/pgSQL
 
-`baseline/` is a squashed schema equivalent to the state SQLite reaches after migrations
-0001-0255. PostgreSQL installations load it once instead of replaying a migration history
-they were never part of; `DatabaseMigrationService` then records migrations 1-255 as
-applied and continues from 0256 onwards.
+`baseline/` is DDL only. Together with `services/Database/InitialDataSeeder.php` it
+reaches the state SQLite reaches after migrations 0001-0255 - schema and rows both.
+PostgreSQL installations load the pair once instead of replaying a migration history they
+were never part of; `DatabaseMigrationService` then records migrations 1-255 as applied
+and continues from 0256 onwards.
+
+## Both halves, or the database is not usable
+
+The seeder is not an optional extra. A third of the migrations the baseline stands in for
+insert rows as well as changing the schema: `0027.php` creates the admin account,
+`0031.php` the default quantity units and location, `0062`/`0063` the default shopping
+list, `0110.sql` the thirty-row permission hierarchy, `0149.sql` the internal meal plan
+section. Recording them as applied without running them leaves a PostgreSQL database that
+migrates successfully, reports itself up to date, and has nobody who can log into it.
+
+It also degrades quietly rather than loudly. With no rows in `quantity_units`, the final
+join in `quantity_unit_conversions_resolved` matches nothing, so the view is empty for
+every product, so `products_ins` copies nothing into
+`cache__quantity_unit_conversions_resolved`, and anything resolving a quantity unit fails
+somewhere far from the cause - the report that led here was `recipes_pos` rejecting an
+ingredient with "Provided qu_id doesn't have a related conversion for that product". The
+trigger was faithful; it had nothing to copy.
+
+Two consequences worth knowing about the seed data:
+
+- **It has to be PHP, not SQL in `baseline/`.** Four of the six names are translated
+  through `LocalizationService` into `GROCY_DEFAULT_LOCALE` (Piece, Pack, Fridge,
+  Shopping list) and the admin password is hashed with a fresh Argon2id salt per
+  installation. None of that can be a literal in a `.sql` file.
+- **Some of the ids are historical accidents, reproduced deliberately.** `0006.sql` seeds
+  a placeholder location and quantity unit which `0021.sql` deletes, so the real defaults
+  land at location 2 and quantity units 2 and 3 with nothing at id 1. That gap is load
+  bearing: `migrations/8888.php` creates a location with the literal id 1 when
+  `FEATURE_FLAG_STOCK_LOCATION_TRACKING` is off, and would find id 1 already taken if
+  PostgreSQL had numbered "Fridge" from 1.
+
+## Supported ways to get a PostgreSQL database
+
+Both, and they are checked:
+
+    php bin/grocy-migrate          a new installation, from nothing
+    php bin/grocy-db-import        an existing SQLite installation, moved
+
+`bin/grocy-db-import` calls `MigrateDatabase(false)` - schema, no seed - because it is
+about to fill the database from the source and every seeded row would be one it replaces.
+That also keeps its "target already contains data" check meaning what it says. Migrating
+first and importing afterwards therefore needs `--force`, and the error message says so.
 
 **Every migration from 0256 on has to leave both engines correct.** Write a portable
 `migrations/0256.sql`, or a pair of `migrations/0256.sqlite.sql` and
@@ -47,8 +91,18 @@ reason; use it rather than assuming the highest file in `migrations/` applies ev
 
 ## Testing a change
 
-Loading cleanly proves very little. `.devtools/pgsql/difftest.php` puts both engines into
-an identical table state and compares what their views actually return:
+Loading cleanly proves very little. The suite is one command:
+
+    .devtools/pgsql/run-tests.sh [migrate|views|triggers]
+
+Four phases. `migratedifftest.php` migrates a database on each engine, touches neither
+afterwards, and compares every table - that is the equivalence claim above, written as a
+test, and it is the phase the missing seed data would have failed. The other three all
+populate PostgreSQL by copying an already-migrated SQLite database, which is why none of
+them could ever have caught it.
+
+`.devtools/pgsql/difftest.php` puts both engines into an identical table state and
+compares what their views actually return:
 
     docker run --rm --network grocynet \
       -v "$PWD":/app -v /path/to/scratch:/scratch -v /path/to/scratch/data:/data \
@@ -346,6 +400,11 @@ target, then copies every row across.
 It refuses to run when the target already holds data (pass `--force` to replace it) and
 when the two schemas are at different migration levels - start the old installation once
 so it migrates itself up to date first.
+
+A target that `bin/grocy-migrate` has already been run against holds data too: the initial
+data of a fresh installation. `--force` is the right answer there - the import truncates
+before it copies, so nothing is duplicated - but it is deliberately not automatic, because
+this command cannot tell those rows from a month of real use.
 
 Triggers are disabled for the duration of the copy. The rows being copied were already
 shaped by the source's triggers, so letting the target's fire again would cascade deletes
