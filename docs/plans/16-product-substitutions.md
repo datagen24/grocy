@@ -86,6 +86,9 @@ product_substitutions
 	product_id              INT NOT NULL   -- what the recipe or list asks for
 	substitute_product_id   INT NOT NULL   -- what may be used instead
 	priority                INT NOT NULL DEFAULT 0  -- higher wins; ties broken by name
+	factor                  REAL           -- nullable, see Q2: substitute amount per
+	                                       -- unit of product_id, in the substitute's
+	                                       -- stock unit
 	note                    TEXT           -- "shred it first"
 	row_created_timestamp   DATETIME
 ```
@@ -108,6 +111,12 @@ already establish:
 A new view, `products_substitutions_available`, listing for each product every substitute
 that currently has stock, ordered by `priority` then the substitute's name — a list, not a
 single winner, which is the first thing the existing view cannot do.
+
+Per Q2 it carries the substitute's amount *and* whether that amount is comparable: a row
+with a `factor`, or one whose two products share a stock unit, yields a converted amount a
+caller may test against a requirement; a row with neither yields a name and no number. That
+distinction is a column, not a convention — a null factor must never reach a caller as a
+silent 1.
 
 `products_current_substitutions` is left exactly as it is. It answers a different question
 about a different relation, two shipped views join it, and the additive-API ground rule
@@ -163,7 +172,11 @@ this checkable at all:
    `recipes_pos_resolved`, compared across both engines by `difftest.php`. Cases: no
    substitute; one with stock; one without stock; two competing on `priority`; a directed
    pair where only one direction is recorded — the last is the one that would silently
-   pass if direction were dropped.
+   pass if direction were dropped. Per Q2, also one row of each comparability state:
+   `factor` set, `factor` null with matching stock units, `factor` null with differing
+   units. The third must yield no comparable amount on either engine — a null coerced to
+   1.0 by one engine's arithmetic is exactly the false "you have enough" Q2 names, and is
+   the kind of difference `difftest.php` exists to catch.
 2. **A trigger script** for the guards, compared by `trigdifftest.php`: self-reference and
    duplicate rejected on both engines.
 3. **A regression check that `need_fulfilled` did not move.** The point of Q3's answer is
@@ -184,6 +197,35 @@ this checkable at all:
    stock unit and rejecting the row otherwise; or leaving amounts uncompared and only
    naming the substitute. **Needs answering before the view is written** — it decides
    whether the view can say "you have enough" or only "you have some".
+
+   > **Response:** A nullable `factor` column on the substitution row, with
+   > comparability *derived* rather than assumed. Three states, and what the view is
+   > allowed to claim follows from which one a row is in:
+   >
+   > | Row state | Comparison | What the view may say |
+   > | --- | --- | --- |
+   > | `factor` present | needed amount × factor, in the substitute's stock unit | "you have enough" |
+   > | `factor` null, stock units match | 1:1 | "you have enough" |
+   > | `factor` null, stock units differ | none | "you have some", at most |
+   >
+   > Rejecting rows whose products do not share a stock unit is dead on arrival in this
+   > pantry. We are US customary and this is a chef's pantry, so cross-unit pairs are a
+   > class rather than an edge case: block → shredded, whole → ground spices, flour
+   > varieties, sticks → cups of butter. And name-only would neuter most of the rows I
+   > actually care about — the ones worth recording are exactly the ones where the units
+   > differ.
+   >
+   > Factors are hand-maintained at first, but Hermes will maintain them over
+   > [02](02-mcp-endpoint.md)'s MCP endpoint as the knowledge base builds. The column is
+   > the interface the agent writes to, which is why it is a plain nullable number on the
+   > row rather than anything cleverer.
+   >
+   > **Named failure mode:** a factor is a fixed per-pair ratio, but a volume↔weight
+   > crossing is a density claim. A wrong factor produces a confident false "you have
+   > enough" — the worst output this feature can produce, because it is indistinguishable
+   > from a right one. That accuracy burden sits on the agent maintaining the factors, not
+   > on the schema. The schema's only job is to keep the three states above
+   > distinguishable, so that a null is never silently treated as a 1.
 3. **Advisory or auto-satisfying?** Proposed advisory, per the reasoning above. The
    opposite choice makes `need_fulfilled` substitution-aware, which changes an existing
    response and would need saying so loudly.
