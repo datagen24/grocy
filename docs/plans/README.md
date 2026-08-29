@@ -35,6 +35,12 @@ the plans noted below start minting more of what they clean up.
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4 | 11, 13, 14 (per item) | small + one large open question |
 
+## Meta
+
+| # | Plan | Upstream | Depends on | Size |
+|---|---|---|---|---|
+| 16 | [Project rename](16-project-rename.md) | — | before first deployment | small–medium |
+
 **Blocking and de-risking, in one place:**
 
 - **12 before [05](05-store-shopping-lists.md), [06](06-location-barcodes.md),
