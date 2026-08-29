@@ -72,9 +72,10 @@ class SystemApiController extends BaseApiController
 			$constants = get_defined_constants();
 			foreach ($constants as $constant => $value)
 			{
-				if (substr($constant, 0, 19) === 'VICTUAL_FEATURE_FLAG_')
+				if (str_starts_with($constant, 'VICTUAL_FEATURE_FLAG_'))
 				{
-					$returnArray[substr($constant, 6)] = $value;
+					// Without the "VICTUAL_" prefix, the shape the exposed settings above use
+					$returnArray[substr($constant, 8)] = $value;
 				}
 			}
 

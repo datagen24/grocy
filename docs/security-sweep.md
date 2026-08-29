@@ -2,6 +2,11 @@
 
 Run against `origin/master` at `6060de5` (PR #23). Static review only: every finding
 below was checked by opening the file; nothing was booted and nothing was exploited.
+
+**Status, 2026-08-29:** the wave 0.5 hotfix has landed — S1, S2, S3, S7, S23 and R1 are
+fixed and verified on a booted instance. See [What the hotfix
+changed](#what-the-hotfix-changed) below, which also records where the fix departed from
+the remediation this document proposed and why. Everything else stands as written.
 References are to symbols rather than line numbers, per the rigor review's D5.
 
 Scope: authentication and sessions, API keys, CORS/CSRF, permission checks, input
@@ -33,13 +38,13 @@ and came from plan 16: every feature flag is dropped from the UI and the API (R1
 
 | # | Sev | Finding | Where | Fix |
 |---|---|---|---|---|
-| S1 | **High** | **Sanitiser un-escapes after purifying.** `GetParsedAndFilteredRequestBody` runs HTMLPurifier, then `str_replace`s `&lt;`/`&gt;`/`&amp;` back to raw characters. Text that arrived as entity-encoded `&lt;script&gt;` leaves the purifier as the (safe) entity text and is then converted to a literal `<script>` and stored. Views then emit these fields unescaped: `stockoverview.blade.php` (`{!! $currentStockEntry->product_description !!}`), `recipes.blade.php` (`{!! $recipe->description !!}`, position notes), `shoppinglist.blade.php` (item notes, three places), `components/userfields_tbody.blade.php` (userfield values). Any account with `MASTER_DATA_EDIT`, `RECIPES` or `SHOPPINGLIST_ITEMS_ADD` gets stored XSS against every user including admins. Inherited from upstream. | `controllers/Api/BaseApiController.php::GetParsedAndFilteredRequestBody` | Delete the three `str_replace` calls. If some non-HTML column needs a literal `&`, handle it per column, not globally. |
-| S2 | **High** | **Files API: no permission check, arbitrary upload, inline serve with sniffed type.** `FilesApiController::DeleteFile/ServeFile/UploadFile` never call `User::CheckPermission`; every other API controller does. `UploadFile` accepts any body under any extension; `ServeFile` answers with `Content-Type: mime_content_type($filePath)` and `Content-Disposition: inline`. An `.svg`/`.html` upload (or HTML named `manual.pdf`) executes in the app origin, and the UI links straight to it (`userfields_tbody.blade.php` userfile links, `equipmentform.blade.php` `<embed>` of manuals). Any zero-permission account can also `unlink` every picture and manual in all five groups. No `X-Content-Type-Options: nosniff` and no CSP anywhere in the tree. | `controllers/Api/FilesApiController.php`, `services/FilesService.php::DeleteFile` | Permission per group on PUT/DELETE (`MASTER_DATA_EDIT` for productpictures/equipmentmanuals, `RECIPES` for recipepictures, `USERS_EDIT`/self for userpictures); allow-list extensions per group and validate images with `getimagesize`; `attachment` disposition unless the sniffed type is a safe image; add `nosniff` and a `sandbox` CSP on the files route. |
-| S3 | **High** | **Session cookie has no `HttpOnly`, `Secure` or `SameSite`.** `BaseAuthMiddleware::SetSessionCookie` is a bare `setcookie(name, key, PHP_INT_MAX >> 32)`. The key *is* the credential (`SessionAuthMiddleware` reads `$_COOKIE` straight into `IsValidSession`). Without `HttpOnly`, S1/S2 become session theft; without `SameSite` (on browsers that do not default to Lax) the CSRF surface in S8 is reachable. Client-side expiry is ~2106 regardless of the 30-day server expiry. This is plan 15-B2, currently scheduled in wave 2 behind 11. | `middleware/Auth/BaseAuthMiddleware.php::SetSessionCookie` | `setcookie(name, key, ['httponly'=>true, 'samesite'=>'Lax', 'secure'=>isHttps, 'path'=>base path, 'expires'=>…])`. Pull 15-B2 forward; it is one line and nothing reads the cookie from JavaScript. |
+| S1 | **High** — *fixed* | **Sanitiser un-escapes after purifying.** `GetParsedAndFilteredRequestBody` runs HTMLPurifier, then `str_replace`s `&lt;`/`&gt;`/`&amp;` back to raw characters. Text that arrived as entity-encoded `&lt;script&gt;` leaves the purifier as the (safe) entity text and is then converted to a literal `<script>` and stored. Views then emit these fields unescaped: `stockoverview.blade.php` (`{!! $currentStockEntry->product_description !!}`), `recipes.blade.php` (`{!! $recipe->description !!}`, position notes), `shoppinglist.blade.php` (item notes, three places), `components/userfields_tbody.blade.php` (userfield values). Any account with `MASTER_DATA_EDIT`, `RECIPES` or `SHOPPINGLIST_ITEMS_ADD` gets stored XSS against every user including admins. Inherited from upstream. | `controllers/Api/BaseApiController.php::GetParsedAndFilteredRequestBody` | Delete the three `str_replace` calls. If some non-HTML column needs a literal `&`, handle it per column, not globally. |
+| S2 | **High** — *fixed* | **Files API: no permission check, arbitrary upload, inline serve with sniffed type.** `FilesApiController::DeleteFile/ServeFile/UploadFile` never call `User::CheckPermission`; every other API controller does. `UploadFile` accepts any body under any extension; `ServeFile` answers with `Content-Type: mime_content_type($filePath)` and `Content-Disposition: inline`. An `.svg`/`.html` upload (or HTML named `manual.pdf`) executes in the app origin, and the UI links straight to it (`userfields_tbody.blade.php` userfile links, `equipmentform.blade.php` `<embed>` of manuals). Any zero-permission account can also `unlink` every picture and manual in all five groups. No `X-Content-Type-Options: nosniff` and no CSP anywhere in the tree. | `controllers/Api/FilesApiController.php`, `services/FilesService.php::DeleteFile` | Permission per group on PUT/DELETE (`MASTER_DATA_EDIT` for productpictures/equipmentmanuals, `RECIPES` for recipepictures, `USERS_EDIT`/self for userpictures); allow-list extensions per group and validate images with `getimagesize`; `attachment` disposition unless the sniffed type is a safe image; add `nosniff` and a `sandbox` CSP on the files route. |
+| S3 | **High** — *fixed* | **Session cookie has no `HttpOnly`, `Secure` or `SameSite`.** `BaseAuthMiddleware::SetSessionCookie` is a bare `setcookie(name, key, PHP_INT_MAX >> 32)`. The key *is* the credential (`SessionAuthMiddleware` reads `$_COOKIE` straight into `IsValidSession`). Without `HttpOnly`, S1/S2 become session theft; without `SameSite` (on browsers that do not default to Lax) the CSRF surface in S8 is reachable. Client-side expiry is ~2106 regardless of the 30-day server expiry. This is plan 15-B2, currently scheduled in wave 2 behind 11. | `middleware/Auth/BaseAuthMiddleware.php::SetSessionCookie` | `setcookie(name, key, ['httponly'=>true, 'samesite'=>'Lax', 'secure'=>isHttps, 'path'=>base path, 'expires'=>…])`. Pull 15-B2 forward; it is one line and nothing reads the cookie from JavaScript. |
 | S4 | **High** (when `ReverseProxyAuthMiddleware` is configured) | **Reverse-proxy auth trusts a request header with no trusted-proxy check.** In the default `REVERSE_PROXY_AUTH_USE_ENV = false` mode `AuthenticateRequest` reads `$request->getHeader(VICTUAL_REVERSE_PROXY_AUTH_HEADER)` and, if no user matches, `CreateUser`s one — with `DEFAULT_PERMISSIONS`, i.e. ADMIN (S5). Nothing compares `REMOTE_ADDR` to a proxy allowlist, so anyone who can reach the PHP backend directly, or whose proxy does not strip inbound `REMOTE_USER`, is admin. On the k3s target, "reach the backend directly" is any pod in the namespace. | `middleware/Auth/ReverseProxyAuthMiddleware.php::AuthenticateRequest` | Add a `REVERSE_PROXY_AUTH_TRUSTED_PROXIES` CIDR list checked against `REMOTE_ADDR`, refuse when unset; prefer `USE_ENV` (server-populated) and document that the proxy must strip the header inbound. |
 | S5 | **Med** | **`DEFAULT_PERMISSIONS = ['ADMIN']` mints admins on three paths.** `UsersService::CreateUser` grants it unconditionally, so: any LDAP user matching `LDAP_USER_FILTER` is admin on first login; any reverse-proxy username is admin (S4); and a user holding only `USERS_CREATE` can `POST /api/users` an admin and log in as it — a direct escalation past the permission model. | `config-dist.php` `Setting('DEFAULT_PERMISSIONS', …)`, `services/UsersService.php::CreateUser` | Default to a minimal set; never grant a permission the creating user lacks. |
 | S6 | **Med** | **`USERS_EDIT` can reset any user's password, including admins.** `UsersApiController::EditUser` checks `USERS_EDIT` (or `USERS_EDIT_SELF`) and `UsersService::EditUser` rehashes any non-empty password. No check that the target's permissions are a subset of the caller's; no current-password confirmation on self-edit. | `controllers/Api/UsersApiController.php::EditUser`, `services/UsersService.php::EditUser` | Refuse to edit users holding permissions the caller lacks; require the current password for self password change. |
-| S7 | **Med** | **Sanitiser allow-list admits `iframe[src]` from any origin, `id` on every element and `data:` URIs.** `HTML.SafeIframe` with `URI.SafeIframeRegexp = '%^.*%'` and `*[style|class|id]`. Independently of S1, a master-data editor can embed an arbitrary external page in every user's stock overview (phishing overlay) and DOM-clobber the front-end via `id`. | `controllers/Api/BaseApiController.php::GetParsedAndFilteredRequestBody` | Drop `iframe` and `id` from `HTML.Allowed`, or pin `SafeIframeRegexp` to specific hosts. |
+| S7 | **Med** — *fixed* | **Sanitiser allow-list admits `iframe[src]` from any origin, `id` on every element and `data:` URIs.** `HTML.SafeIframe` with `URI.SafeIframeRegexp = '%^.*%'` and `*[style|class|id]`. Independently of S1, a master-data editor can embed an arbitrary external page in every user's stock overview (phishing overlay) and DOM-clobber the front-end via `id`. | `controllers/Api/BaseApiController.php::GetParsedAndFilteredRequestBody` | Drop `iframe` and `id` from `HTML.Allowed`, or pin `SafeIframeRegexp` to specific hosts. |
 | S8 | **Med** | **CSRF on state-changing routes that take no JSON body, and two state-changing GETs.** Most API writes are incidentally protected by the `Content-Type: application/json` check. Routes that act on path parameters only are not: `POST /api/stock/bookings/{id}/undo`, `/stock/transactions/{id}/undo`, `/stock/products/{a}/merge/{b}`, `/tasks/{id}/undo`, `/chores/executions/{id}/undo`, `/chores/{a}/merge/{b}`, `/recipes/{id}/copy`. `GET /logout` and `GET /manageapikeys/new` (creates an API key with an attacker-chosen description) are state-changing GETs, reachable even under `SameSite=Lax`. `PUT /api/users/{id}/permissions` uses raw `getParsedBody()` and so accepts form encoding. | `routes.php`, `controllers/Api/OpenApiController.php::CreateNewApiKey`, `controllers/LoginController.php::Logout`, `controllers/Api/UsersApiController.php::SetUserPermissions` | S3's `SameSite=Lax` closes most of it; make key creation and logout POST; add an `Origin` check for cookie-authenticated non-GET API requests. |
 | S9 | **Med** | **500 page discloses trace, paths and system info to anyone, unescaped.** `ExceptionController` renders `errors/500` for every non-HTTP exception on a UI route; the `$displayErrorDetails` guard only covers the API branch. `errors/base.blade.php` prints `getFile():getLine()`, `getMessage()`, `getTraceAsString()` and `json_encode($systemInfo)` (PHP, OS, DB version) with `{!! !!}`. The `/` route is unauthenticated and runs migrations, so a migration failure shows this to anonymous users. Reflected XSS if any exception message ever carries request data (none found today — latent sink). | `controllers/ExceptionController.php`, `views/errors/base.blade.php` | Gate the detail block on `VICTUAL_MODE === 'dev'`; switch to `{{ }}`. |
 | S10 | **Med** | **Unbounded upload size and unbounded downscale cache.** `UploadFile` streams the raw body with no cap (a raw PUT is not subject to `post_max_size`). `FilesService::GetFilePath` names cache files from unclamped `best_fit_width`/`best_fit_height` (only `is_numeric`), so every distinct pair decodes and resizes the image again and writes a new file. Disk/CPU DoS for any account. | `controllers/Api/FilesApiController.php::UploadFile`, `services/FilesService.php::GetFilePath` | Cap upload size (413 above ~20 MB); clamp best-fit to a small allow-list of sizes. |
@@ -55,16 +60,135 @@ and came from plan 16: every feature flag is dropped from the UI and the API (R1
 | S20 | **Low** | **`Host` header builds absolute redirect URLs.** `UrlManager::GetBaseUrl` uses `$_SERVER['HTTP_HOST']` when `BASE_URL` is `/`. Only exploitable if the web server accepts arbitrary `Host` values. | `helpers/UrlManager.php` | Require `BASE_URL` in the deployment docs, or validate `Host`. |
 | S21 | **Low** | **Wildcard CORS on every response.** `Access-Control-Allow-Origin: *`, `Allow-Headers: *`, no `Allow-Credentials` — so cookies are not sent cross-origin and this is surface, not a hole. The preflight route is unnamed so `BaseAuthMiddleware` answers `OPTIONS` with 401 (functional, not security). | `middleware/CorsMiddleware.php`, `routes.php` | Restrict to configured origins once 17 decides which browser clients exist. |
 | S22 | **Low** | **Integer ids concatenated into SQL, guarded upstream.** `StockService::MergeProducts` and `ChoresService::MergeChores` build `UPDATE … WHERE product_id = ' . $id` strings; safe only because the controllers `FILTER_VALIDATE_INT` first. `stock_id` strings are interpolated in quotes and are `uniqid()`-generated today. | `services/StockService.php::MergeProducts`, `services/ChoresService.php::MergeChores` | Pass as `?` params — `ExecuteDbStatement` already takes them. |
-| S23 | **Low** | **Content-Disposition filename unquoted.** `ServeFile` concatenates the decoded name into `filename="…"`; `IsValidFileName` does not reject `"`. slim/psr7 rejects CR/LF so this is not header injection. | `controllers/Api/FilesApiController.php::ServeFile` | `filename*=UTF-8''` + `rawurlencode`. |
+| S23 | **Low** — *fixed* | **Content-Disposition filename unquoted.** `ServeFile` concatenates the decoded name into `filename="…"`; `IsValidFileName` does not reject `"`. slim/psr7 rejects CR/LF so this is not header injection. | `controllers/Api/FilesApiController.php::ServeFile` | `filename*=UTF-8''` + `rawurlencode`. |
 | S24 | **Low** | **GitHub Actions pinned to tags, not SHAs.** No secrets in the workflow and no `pull_request_target`, so supply-chain only. | `.github/workflows/tests.yml` | Pin to full SHAs. |
 | S25 | **Info** | **Dev container runs as root and `COPY . /app` with no `.dockerignore`** (copies `.git` and `data/`); compose and CI use `victual`/`victual` Postgres credentials. All documented as non-production, tmpfs DB, no published ports. Matters only when 10 bakes a production image from this Dockerfile. | `Dockerfile`, `docker-compose.yml` | `.dockerignore`, non-root `USER`, before 10 publishes an image. |
 | S26 | **Info** | **`DISABLE_AUTH`/non-production modes.** `MODE` is settable via env or `settingoverrides/MODE.txt`; `dev` disables auth entirely and enables API error details. `DISABLE_AUTH` defines `VICTUAL_USER_ID = 1` while the middleware picks the lowest-id user — they diverge if user 1 is deleted. | `app.php`, `middleware/Auth/BaseAuthMiddleware.php`, `services/SessionService.php` | Note only. |
+
+## What the hotfix changed
+
+Landed 2026-08-29, one PR, before wave 1. Each item was verified on a booted
+instance rather than by reading the diff, per the roadmap's rule. Three of the six
+departed from the remediation proposed above; each departure is recorded here with
+the evidence that forced it.
+
+**S1 — the sanitiser.** The proposed fix was to delete the three `str_replace` calls.
+Booting the purifier against real input showed that doing so alone would store
+`Ben &amp; Jerry's` for `Ben & Jerry's` in *every* text column, which then displays as
+`Ben &amp;amp; Jerry's` wherever a view escapes it — every product name with an
+ampersand, and the same for `<` and `>`. Decoding only `&amp;` and leaving `&lt;` alone
+looked like a way to keep both properties, and is not: `&LT;script&GT;` survives the
+purifier as entity text, the `&amp;` decode turns it into `&LT;script&GT;`, and a
+browser decodes `&LT;` to `<` in a raw-rendered column. That was tested, not reasoned
+about.
+
+So the fix is the escape hatch the remediation column named — per column rather than
+globally. `GetParsedAndFilteredRequestBody` now takes the entity name, and
+`HTML_RENDERED_COLUMNS` lists the five columns whose stored value is rendered as HTML:
+`products`, `recipes`, `equipment`, `chores` and `shopping_lists`, all `description`.
+Those keep the purifier's output exactly as it came out — the S1 chain is closed for
+precisely the columns that are rendered raw. Every other column is text: still purified,
+then un-escaped as before, so nothing about how `&` displays changes.
+
+Two things follow from that split, and both are part of this change:
+
+- **The text columns that were being rendered raw are now escaped in the view**, since
+  they are text and nothing purifies markup out of them any more:
+  `shoppinglist.blade.php` (item notes, three places), `recipes.blade.php` (position
+  notes) and `components/userfields_tbody.blade.php` (the checklist branch). The two
+  genuinely-HTML sites — `stockoverview.blade.php`'s `product_description` and
+  `recipes.blade.php`'s `description` — are unchanged and now safe by their column's
+  treatment.
+- **`chores.description` is treated as an HTML column** although nothing offers a rich
+  text editor for it, because `public/viewjs/components/chorecard.js` renders it with
+  `.html()`. The alternative — escaping it in that file — belongs to
+  [12](plans/12-frontend-shared-core.md), which owns `public/viewjs` and which this
+  hotfix is required not to touch.
+
+**S7, in the same edit.** `iframe` and `id` are gone from `HTML.Allowed`, along with
+`HTML.SafeIframe`, the `%^.*%` `SafeIframeRegexp` and `Attr.EnableID`. Verified: an
+`<iframe>` posted into a description is dropped entirely and `<div id="submit">` comes
+back as `<div>`. `data:` stays in `URI.AllowedSchemes` — the editor stores a pasted
+image as one, and HTMLPurifier only accepts a data URI that really decodes to a JPEG,
+GIF or PNG. Removing it would have broken pasted images to close nothing.
+
+**S2 — the files API.** Permission per group on upload and delete, an extension
+allow-list per group, `getimagesize` on anything stored under an image extension, and
+serving from a fixed type list with `X-Content-Type-Options: nosniff`. Reads are
+deliberately left open to any authenticated user: every picture in the UI and both
+tracked clients in [17](plans/17-ecosystem-clients.md) fetch them, and the finding is
+about writes and content type, not about who may look.
+
+Two departures:
+
+- **`equipmentmanuals` is gated on `EQUIPMENT`, not `MASTER_DATA_EDIT`.**
+  `GenericEntityApiController` gates the equipment rows themselves on `EQUIPMENT`, so
+  `MASTER_DATA_EDIT` would have locked the manual out of the hands of exactly the
+  account that may edit the record it hangs off. Verified both ways: an
+  `EQUIPMENT`-only account uploads a manual and is refused a product picture.
+- **PDFs are served inline**, not as an attachment. `equipmentform.blade.php` shows the
+  manual in an `<embed>`, and an attachment disposition would have replaced a working
+  feature with a download prompt. It is served with an exact `application/pdf` and
+  `nosniff`, so it is never treated as a document in this origin. Images are inline
+  only when the sniffed type is one of JPEG, PNG, GIF or WebP — SVG is deliberately
+  absent and therefore downloads. Everything else is `attachment` with
+  `application/octet-stream`.
+
+  `userfiles` takes the document formats a household attaches to a record and none of
+  the ones a browser executes: no `svg`, `html`, `xhtml`, `xml` or `js`. A format that
+  turns out to be wanted is one line in `GROUP_ALLOWED_EXTENSIONS`.
+
+**S23 rode along**, per the roadmap's rule for S20–S24: the `Content-Disposition`
+filename is now RFC 5987 encoded (`filename*=UTF-8''` plus `rawurlencode`), so a quote
+in a name cannot end the parameter.
+
+**S3 / 15-B2 — the session cookie.** `HttpOnly` and `SameSite=Lax` always, `Secure`
+when the request arrived over HTTPS (honoring `X-Forwarded-Proto`, as `UrlManager`
+already does), `path` from `VICTUAL_BASE_PATH`, and an expiry that mirrors the session
+row rather than 2106. 15's questions 2 and 3 already held the answers and this
+implements them, including Q3's "if that lifetime is currently infinite, give it a
+bound": `SessionService::CreateSession` no longer writes `PHP_INT_MAX` for a
+stay-logged-in session but `VICTUAL_SESSION_STAY_LOGGED_IN_DAYS`, defaulting to 90.
+A login without the box ticked gets a browser-session cookie against the existing
+30-day row. Verified by reading the actual `Set-Cookie` for all three cases against
+the `sessions` rows.
+
+The call is still `setcookie()` rather than a PSR-7 response header — 15-B2's other
+half, left where it was because `ProcessLogin` is a static with no response to write
+to, and 15-C1 rewrites that construction anyway.
+
+**R1 — the feature flags.** `str_starts_with` in both loops, and `substr($constant, 8)`
+in the API one, so the UI sees `VICTUAL_FEATURE_FLAG_*` (what `public/viewjs` indexes
+by) and `/system/config` answers `FEATURE_FLAG_*` (the shape its other keys use).
+Verified: 21 flags in `Victual.FeatureFlags`, 21 in the API response, and the consume
+form shows its location field again.
+
+### What the hotfix deliberately did not do
+
+- **S10's upload cap and downscale clamp**, which the roadmap gives to wave 1 track A
+  along with the move to database storage. The upload path is open in this change and
+  the cap would be three lines; it is left where the roadmap put it rather than widened
+  into a hotfix.
+- **Document the 403 in `victual.openapi.json`.** The files routes now answer 403 where
+  they answered nothing, but no operation in the spec documents a 403 today, including
+  the many that have always thrown `PermissionMissingException`. Adding it to these
+  three alone would make the spec less consistent, not more; the status-code sweep is
+  [11](plans/11-api-error-handling.md)'s and the snapshot is 14 piece 2's.
+- **Anything in `public/viewjs` or `middleware/Auth` beyond the cookie line** — wave 1
+  track B and wave 2 own those files, and the hotfix's premise is that it collides with
+  neither.
+
+### Found while fixing, 2026-08-29
+
+| # | Sev | Finding | Where | Fix |
+|---|---|---|---|---|
+| S27 | **Low** | **The permissions API stores `permission_id` unvalidated, and a wrong value fails silently.** `SetPermissions` (`PUT`) and `AddPermission` (`POST`) write the body's `permission_id` into `user_permissions` verbatim — no check that it exists in `permission_hierarchy`, and the column takes a string. `PUT …/permissions` with `{"permissions":["STOCK"]}` answers 204 and writes a row that grants nothing, because `uihelper_user_permissions` joins on the numeric id. The failure is closed rather than open — the user ends up with *fewer* permissions, not more — but an administrator is told the grant succeeded when it did not, which is the same class of silent authorization failure as R1. Found while building a low-privilege account to verify S2's permission gate. | `controllers/Api/UsersApiController.php::SetPermissions`, `::AddPermission` | Validate each id against `permission_hierarchy` and answer 400 otherwise. Body-schema validation is 14 piece 2's (S16); this one is small enough to ride with 15-C1's user-permission work in wave 2. |
 
 ### Regression found on the way
 
 | # | Finding | Where | Fix |
 |---|---|---|---|
-| R1 | **Every feature flag is dropped from the UI and from `GET /api/system/config`.** Both loops test `substr($constant, 0, 19) === 'VICTUAL_FEATURE_FLAG_'`. The prefix is 21 characters (`GROCY_FEATURE_FLAG_` was 19), so the comparison never matches. `BaseController` therefore sets `featureFlags` to `[]`, `Victual.FeatureFlags` is empty in the layout, and all 64 `Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_*` checks in `public/viewjs` evaluate false — location tracking, price tracking, recipe consume, chore assignments, camera scanning and the rest are silently off in the browser while the PHP-side menus still show them. The API loop additionally uses `substr($constant, 6)` where the prefix is now 8, so it would answer `_FEATURE_FLAG_*` keys once the length is fixed. Introduced by plan 16 (`4fffaf4`/`be8f6b0` era) and not caught by 16's verification, which is worth recording in 16's Executed section. The Home Assistant integration reads `/system/config` feature flags, so this is also a 17 coupling. | `controllers/BaseController.php` (feature-flag loop), `controllers/Api/SystemApiController.php::GetConfig` | Use `str_starts_with($constant, 'VICTUAL_FEATURE_FLAG_')` and `substr($constant, 8)`; add a contract test in 14 piece 2 that `/system/config` returns at least `FEATURE_FLAG_STOCK`. |
+| R1 | *fixed* — **Every feature flag is dropped from the UI and from `GET /api/system/config`.** Both loops test `substr($constant, 0, 19) === 'VICTUAL_FEATURE_FLAG_'`. The prefix is 21 characters (`GROCY_FEATURE_FLAG_` was 19), so the comparison never matches. `BaseController` therefore sets `featureFlags` to `[]`, `Victual.FeatureFlags` is empty in the layout, and all 64 `Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_*` checks in `public/viewjs` evaluate false — location tracking, price tracking, recipe consume, chore assignments, camera scanning and the rest are silently off in the browser while the PHP-side menus still show them. The API loop additionally uses `substr($constant, 6)` where the prefix is now 8, so it would answer `_FEATURE_FLAG_*` keys once the length is fixed. Introduced by plan 16 (`4fffaf4`/`be8f6b0` era) and not caught by 16's verification, which is worth recording in 16's Executed section. The Home Assistant integration reads `/system/config` feature flags, so this is also a 17 coupling. | `controllers/BaseController.php` (feature-flag loop), `controllers/Api/SystemApiController.php::GetConfig` | Use `str_starts_with($constant, 'VICTUAL_FEATURE_FLAG_')` and `substr($constant, 8)`; add a contract test in 14 piece 2 that `/system/config` returns at least `FEATURE_FLAG_STOCK`. |
 
 ## Checked and found sound
 

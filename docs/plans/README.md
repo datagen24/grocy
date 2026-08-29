@@ -40,7 +40,7 @@ anything at all — see the hotfix in wave 0.5 below.
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
-| — | [Security sweep hotfix](../security-sweep.md) (S1, S2, S3, R1) | [docs/security-sweep.md](../security-sweep.md) | — | small | **open — lands before wave 1** |
+| — | [Security sweep hotfix](../security-sweep.md) (S1, S2, S3, S7, S23, R1) | [docs/security-sweep.md](../security-sweep.md) | — | small | **landed** — see the sweep's [What the hotfix changed](../security-sweep.md#what-the-hotfix-changed) |
 
 ## Meta
 
@@ -155,10 +155,11 @@ pod. Waves are strictly ordered; tracks inside a wave touch disjoint files and c
 as parallel sessions.
 
 Wave 0 is complete and wave 1's track C is done; the rest is unstarted. Wave 4's shape
-is no longer settled — see 07-Q6 there. Two things now sit between wave 0 and wave 1:
+is no longer settled — see 07-Q6 there. Two things sat between wave 0 and wave 1:
 a hotfix the security sweep forced, and a decision 17 has been owed since 16 landed.
 Neither is a wave; both are a single sitting, and wave 1 does not start until both are
-done.
+done. **The hotfix has landed; the decision has not** — 17-Q2 and 17-Q4 are still
+unanswered, so wave 1 is still not open.
 
 ### Wave 0 — decisions and scaffolding (one sitting) — **complete**
 
@@ -216,6 +217,19 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   downloads rather than renders; read the `Set-Cookie` header; POST a product
   description of `&lt;script&gt;` and confirm it comes back as text; open the consume
   form with location tracking enabled and confirm the field is there.
+
+  **Landed 2026-08-29**, all four verified that way and each one stronger than the
+  check above asked for: the `.svg` is refused at upload rather than served as a
+  download, the `Set-Cookie` was read for all three of its cases against the
+  `sessions` rows, the stored `&lt;script&gt;` was confirmed inert in a real browser
+  (no dialog, no script node, present as text), and the consume form was screenshotted
+  with its location field back. Two adjacent one-liners rode along: **S7** as the
+  roadmap says, and **S23** under the S20–S24 rule. Three items departed from the
+  sweep's proposed remediation — the sanitiser is fixed per column rather than by
+  deleting three lines, equipment manuals are gated on `EQUIPMENT` rather than
+  `MASTER_DATA_EDIT`, and PDFs are still served inline — each recorded, with the
+  evidence, in the sweep's [What the hotfix
+  changed](../security-sweep.md#what-the-hotfix-changed).
 - **17-Q2 and 17-Q4, answered.** Q4 (does the server keep accepting `GROCY-API-KEY`,
   and for how long) gates 11; Q2 (does the Home Assistant fork poll through grocy-py or
   reimplement against `/system/db-changed-time`) gates 10, because thirty-second polling
@@ -326,10 +340,14 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 - **Deleted, whenever a PR next touches the root**: `update.sh` (sweep S13, rigor
   review H3) — it wipes the install and unpacks an unsigned upstream Grocy zip. Added
   to 15's non-breaking table so it has a home; it needs no wave.
-- **Not scheduled, recorded**: sweep S20–S24 (Host-header redirects, wildcard CORS,
-  integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, `Content-Disposition`
-  quoting, Actions pinned to tags). Each is a one-liner that rides with whichever wave
-  opens the file; S21 waits on 17 to say which browser clients exist.
+- **S27**, found while verifying the hotfix — the permissions API accepts an unvalidated
+  `permission_id` and silently grants nothing when it is not a real one. Small, and in
+  the file 15-C1 opens, so it rides with wave 2 rather than getting a slot.
+- **Not scheduled, recorded**: sweep S20–S22 and S24 (Host-header redirects, wildcard
+  CORS, integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to
+  tags). Each is a one-liner that rides with whichever wave opens the file; S21 waits on
+  17 to say which browser clients exist. S23 (`Content-Disposition` quoting) is the rule
+  working as intended: the hotfix had that line open and took it.
 
 Every wave ends mergeable: nothing in a later wave reworks what an earlier wave
 shipped, and each track lands through its own PR with its plan's Verification section

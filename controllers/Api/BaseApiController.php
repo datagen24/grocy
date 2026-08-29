@@ -335,13 +335,40 @@ class BaseApiController extends BaseController
 	}
 
 	private static $htmlPurifierInstance = null;
+
+	/**
+	 * Columns whose stored value is rendered as HTML rather than as text, per entity.
+	 *
+	 * These are the only columns a rich text editor writes to, or that a view or a
+	 * viewjs handler passes to `{!! !!}` / `.html()`. Their purified output is stored
+	 * exactly as HTMLPurifier produced it. Every other column is text: it is purified
+	 * too, but the entity encoding the purifier applies to text is undone again
+	 * afterwards, so a name containing "&" stays "&" rather than becoming "&amp;"
+	 * everywhere it is displayed.
+	 *
+	 * Undoing that encoding on an HTML rendered column is what security sweep finding
+	 * S1 was: `&lt;script&gt;` arrives as text, survives the purifier as harmless entity
+	 * text, and the un-escaping turns it into a live tag that the view then emits raw.
+	 */
+	const HTML_RENDERED_COLUMNS = [
+		'products' => ['description'],
+		'recipes' => ['description'],
+		'equipment' => ['description'],
+		'chores' => ['description'],
+		'shopping_lists' => ['description']
+	];
+
 	/**
 	 * Returns the parsed JSON request body with all scalar string values run through HTMLPurifier.
 	 * Throws a Slim HttpException (status 400) when the Content-Type is not application/json.
 	 *
+	 * @param string|null $entity Name of the entity the body is written to, when the caller
+	 * knows it. Decides which columns are treated as HTML - see HTML_RENDERED_COLUMNS. A
+	 * caller that passes nothing gets every column treated as text, which is correct for
+	 * every controller other than the generic entity one: none of them writes an HTML column.
 	 * @return array|null Null when the body could not be parsed as JSON
 	 */
-	protected function GetParsedAndFilteredRequestBody($request)
+	protected function GetParsedAndFilteredRequestBody($request, ?string $entity = null)
 	{
 		if ($request->getHeaderLine('Content-Type') != 'application/json')
 		{
@@ -352,16 +379,21 @@ class BaseApiController extends BaseController
 		{
 			$htmlPurifierConfig = \HTMLPurifier_Config::createDefault();
 			$htmlPurifierConfig->set('Cache.SerializerPath', VICTUAL_DATAPATH . '/viewcache');
-			$htmlPurifierConfig->set('HTML.Allowed', 'div,b,strong,i,em,u,a[href|title|target],iframe[src|width|height|frameborder],ul,ol,li,p[style],br,span[style],img[style|width|height|alt|src],table[border|width|style],tbody,tr,td,th,blockquote,*[style|class|id],h1,h2,h3,h4,h5,h6');
-			$htmlPurifierConfig->set('Attr.EnableID', true);
-			$htmlPurifierConfig->set('HTML.SafeIframe', true);
+			// No iframe: HTML.SafeIframe with a "match anything" regexp let a master data
+			// editor embed an arbitrary external page in every other user's stock overview.
+			// No id: it is not needed by anything that writes these columns and DOM
+			// clobbering an element id is a way to confuse the front end. Sweep finding S7.
+			$htmlPurifierConfig->set('HTML.Allowed', 'div,b,strong,i,em,u,a[href|title|target],ul,ol,li,p[style],br,span[style],img[style|width|height|alt|src],table[border|width|style],tbody,tr,td,th,blockquote,*[style|class],h1,h2,h3,h4,h5,h6');
 			$htmlPurifierConfig->set('CSS.AllowedProperties', 'font,font-size,font-weight,font-style,font-family,text-decoration,padding-left,color,background-color,text-align,width,height');
+			// "data" stays: the editor stores a pasted image as a data URI, and HTMLPurifier
+			// only accepts one that really decodes to a JPEG, GIF or PNG.
 			$htmlPurifierConfig->set('URI.AllowedSchemes', ['data' => true, 'http' => true, 'https' => true]);
-			$htmlPurifierConfig->set('URI.SafeIframeRegexp', '%^.*%'); // Allow any iframe source
 			$htmlPurifierConfig->set('CSS.MaxImgLength', null);
 
 			self::$htmlPurifierInstance = new \HTMLPurifier($htmlPurifierConfig);
 		}
+
+		$htmlColumns = self::HTML_RENDERED_COLUMNS[$entity] ?? [];
 
 		$requestBody = $request->getParsedBody();
 		foreach ($requestBody as $key => &$value)
@@ -372,11 +404,16 @@ class BaseApiController extends BaseController
 			{
 				$value = self::$htmlPurifierInstance->purify($value);
 
-				// Allow some special chars
-				// Maybe also possible through HTMLPurifier config (http://htmlpurifier.org/live/configdoc/plain.html)
-				$value = str_replace('&amp;', '&', $value);
-				$value = str_replace('&gt;', '>', $value);
-				$value = str_replace('&lt;', '<', $value);
+				if (!in_array($key, $htmlColumns))
+				{
+					// A text column is stored as the text that was typed, so that "&" is "&"
+					// wherever it is displayed. Nothing renders these raw - the views escape
+					// them - so text that looks like markup is stored as such and displayed
+					// as such. Never do this to an HTML column (see the constant above).
+					$value = str_replace('&amp;', '&', $value);
+					$value = str_replace('&gt;', '>', $value);
+					$value = str_replace('&lt;', '<', $value);
+				}
 			}
 		}
 

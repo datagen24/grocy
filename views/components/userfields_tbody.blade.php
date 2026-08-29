@@ -20,7 +20,7 @@ $excludeFieldTypes = [];
 	@if($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_CHECKBOX)
 	@if($userfieldObject->value == 1)<i class="fa-solid fa-check"></i>@endif
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_PRESET_CHECKLIST)
-	{!! str_replace(',', '<br>', $userfieldObject->value) !!}
+	{!! str_replace(',', '<br>', htmlspecialchars($userfieldObject->value ?? '')) !!}
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_LINK)
 	<a href="{{ $userfieldObject->value }}"
 		target="_blank">{{ $userfieldObject->value }}</a>

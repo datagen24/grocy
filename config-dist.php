@@ -101,6 +101,11 @@ Setting('ENTRY_PAGE', 'stock');
 // places where user context is needed will then use the default (first existing) user
 Setting('DISABLE_AUTH', false);
 
+// How many days a login that ticked "Stay logged in permanently" stays valid for.
+// A login without it always expires after 30 days. Both are enforced server side;
+// the session cookie mirrors whichever applies
+Setting('SESSION_STAY_LOGGED_IN_DAYS', 90);
+
 // A valid fully qualified class name of the authentication middlware to use:
 //  Victual\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Victual
 //  Victual\Middleware\Auth\ReverseProxyAuthMiddleware: When your reverse proxy handles authentication (see options below)

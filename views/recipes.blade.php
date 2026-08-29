@@ -555,7 +555,7 @@
 										@endif
 
 										@if(!empty($selectedRecipePosition->note))
-										<div class="text-muted">{!! nl2br($selectedRecipePosition->note ?? '') !!}</div>
+										<div class="text-muted">{!! nl2br(htmlspecialchars($selectedRecipePosition->note ?? '')) !!}</div>
 										@endif
 									</li>
 									@php $lastProductGroup = $selectedRecipePosition->product_group; @endphp
