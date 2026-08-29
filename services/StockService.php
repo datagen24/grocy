@@ -1846,7 +1846,7 @@ class StockService extends BaseService
 						'location_id' => $stockEntry->location_id,
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
-						'transaction_Id' => $transactionId,
+						'transaction_id' => $transactionId,
 						'user_id' => GROCY_USER_ID,
 						'note' => $stockEntry->note
 					]);
@@ -1864,7 +1864,7 @@ class StockService extends BaseService
 						'location_id' => $locationIdTo,
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
-						'transaction_Id' => $transactionId,
+						'transaction_id' => $transactionId,
 						'user_id' => GROCY_USER_ID,
 						'note' => $stockEntry->note
 					]);
@@ -1894,7 +1894,7 @@ class StockService extends BaseService
 						'location_id' => $stockEntry->location_id,
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
-						'transaction_Id' => $transactionId,
+						'transaction_id' => $transactionId,
 						'user_id' => GROCY_USER_ID,
 						'note' => $stockEntry->note
 					]);
@@ -1912,7 +1912,7 @@ class StockService extends BaseService
 						'location_id' => $locationIdTo,
 						'shopping_location_id' => $stockEntry->shopping_location_id,
 						'correlation_id' => $correlationId,
-						'transaction_Id' => $transactionId,
+						'transaction_id' => $transactionId,
 						'user_id' => GROCY_USER_ID,
 						'note' => $stockEntry->note
 					]);
