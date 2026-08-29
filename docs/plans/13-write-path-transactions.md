@@ -52,8 +52,8 @@ Two structural details that shape the fix:
 table in the target (`:70`), then copies row batches, then asserts the row counts match
 (`AssertRowCountsMatch`, `:288`). There is no transaction around any of it: a failure
 partway through leaves the target truncated and half-repopulated, with nothing to roll
-back to. The post-check compares counts only — which is exactly the check that the fifteen
-documented type-coercion hazards in `db/pgsql/README.md` would all pass.
+back to. The post-check compares counts only — which is exactly the check that all fifteen
+of the type-coercion hazards (1-15) in `db/pgsql/README.md` would pass.
 
 ## Proposed change
 
@@ -339,7 +339,7 @@ then the entrypoints that use it, then the importer.
   looks fine and has quietly stopped maintaining itself. The row-count check became a
   column-by-column value comparison through `ValueComparison` — the same normalisation
   [14](14-contract-and-regression-scaffolding.md)'s suite uses — per question 5, because
-  every one of `db/pgsql/README.md`'s fifteen coercion hazards arrives with the right
+  every one of `db/pgsql/README.md`'s fifteen coercion hazards (1-15) arrives with the right
   number of rows and the wrong values inside them.
 
 Verified as the Verification section asks: a probe that injects a real failure mid-operation

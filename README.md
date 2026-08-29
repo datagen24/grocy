@@ -86,8 +86,8 @@ a squashed baseline rather than by replaying grocy's SQLite migration history.
 
 To move an existing SQLite installation across, use `bin/victual-db-import`, which preserves
 row ids exactly. See [db/pgsql/README.md](db/pgsql/README.md) for the porting rules, the
-fifteen documented type-coercion hazards, and the two accepted behavioural differences
-between the engines.
+seventeen documented porting hazards — fifteen type-coercion ones and two case-sensitivity
+ones — and the two accepted behavioural differences between the engines.
 
 ### Platform support
 

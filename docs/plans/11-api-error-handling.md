@@ -45,6 +45,27 @@ Neither is caught by the list endpoints, so a malformed `?order=` or `?query[]=`
 error, entirely — reaches `ExceptionController` as an unclassified throwable and is
 answered 500.
 
+**And a malformed `?order=` is not the only way that parameter reaches a 500 — on
+PostgreSQL only.** `QueryData` passes the field straight to LessQL's `orderBy()`, which
+quotes it with the dialect's delimiter. Quoting is case-insensitive on SQLite and case-
+sensitive on PostgreSQL, so `?order=Name` sorts on one engine and raises
+`column "Name" does not exist` on the other — a `PDOException` reaching the same
+unclassified path, and the same 500. That is hazard 17 in `db/pgsql/README.md`, and it is
+this plan's to answer because the answer is a status code: whatever validates the sort
+field should reject an unknown one with the `400` this plan is already giving
+`Invalid sort order`, rather than letting it become an engine-dependent 500. Note the
+`?query[]=` filter does not share the bug — it interpolates the field into a raw condition
+string, so PostgreSQL folds it like any bare identifier.
+
+**A related divergence in the same method is *not* a status-code question and is called
+out here so it is not mistaken for one.** `FilterData`'s `~` and `!~` operators emit
+`LIKE`, which is case-insensitive on SQLite and case-sensitive on PostgreSQL, so the same
+filter returns different rows on the two engines with no error at all — hazard 16. The fix
+is in-convention (a `GetLikeCondition()` on the dialect, mirroring the existing
+`GetRegexpCondition()`), but it changes answers a client already gets on one engine or the
+other, so it is a decision for [17](17-ecosystem-clients.md) to price rather than a port
+bug to quietly correct. It belongs in this plan's breaking-changes list if it lands here.
+
 **Missing objects are 404 or 400 depending on the verb.** `GetObject` throws a Slim
 `HttpNotFoundException`; `EditObject` and `DeleteObject` return
 `GenericErrorResponse($response, 'Object not found', 400)`.

@@ -241,6 +241,18 @@ SQL at each engine and never enter application code, so for a while nothing in t
 executed a single line of `StockService` against PostgreSQL and no report said so. A
 coverage figure would have. See [.devtools/coverage/README.md](../../.devtools/coverage/README.md).
 
+**A fourth defect of exactly that shape was found later, and it is the argument for piece
+2 covering behaviour and not only shape.** `db/pgsql/README.md`'s hazard 16: the `~`
+operator of the generic list filter emits `LIKE`, which is case-insensitive on SQLite and
+case-sensitive on PostgreSQL, so `?query[]=name~milk` returns "Milk" on one engine and not
+the other. Nothing in the suite can see it — the SQL never appears in a view or a trigger,
+it is assembled in `BaseApiController`, and the response *shape* is identical either way,
+so even piece 2's key-set-and-type snapshot would pass on both engines while the row sets
+differ. The lesson for piece 2 is that the engine-vs-engine leg needs at least a few cases
+that compare the *rows* a parameterised endpoint returns, not only the shape of them; the
+generic `query[]`/`order` surface is the obvious place to spend that, since it is one code
+path serving every entity.
+
 ### Schema
 
 None. This plan adds no migration and touches no view. It does add fixture SQL, which is
@@ -433,7 +445,7 @@ it worked.
    the effort estimate below roughly doubles.
 
    > **Response:** Timebox recovery to an hour. The eight trigger-tests plus the
-   > README's fifteen documented hazards are map enough to rewrite from — bounded
+   > README's documented hazards are map enough to rewrite from — bounded
    > work, not doubled. Don't let archaeology block piece 1.
 
 ## Executed

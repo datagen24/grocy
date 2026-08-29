@@ -40,8 +40,9 @@ judged against here, and they are stricter than they look:
   counterpart and a deliberate omission look identical in a directory listing. An
   engine-specific file that shadows a portable one of the same number likewise has to say
   `@overrides-generic`. See [db/pgsql/README.md](../db/pgsql/README.md), which holds the
-  full rule and also documents fifteen porting hazards worth reading before writing SQL
-  for both engines.
+  full rule and also documents seventeen porting hazards worth reading before writing SQL
+  for both engines — hazards 16 and 17 are case sensitivity, and are the two that bite PHP
+  rather than SQL.
 - **Verification means a booted instance**, not a lint pass and not "it loads cleanly".
   Schema changes are checked with `.devtools/pgsql/difftest.php` for views and
   `trigdifftest.php` for trigger behaviour; new views must return identical output on both

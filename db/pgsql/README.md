@@ -301,6 +301,115 @@ comparison behave the same as SQLite.
 It needs a PostgreSQL built with ICU, which the official images are. Without ICU the
 migration fails at that statement, which is the right place to find out.
 
+### Hazard 16: `LIKE` is case insensitive on SQLite and case sensitive on PostgreSQL
+This is the one hazard on the list that produces a wrong *answer* rather than an error, on
+a public endpoint, with nothing to notice it.
+
+SQLite's `LIKE` ignores ASCII case by default (`PRAGMA case_sensitive_like` is off).
+PostgreSQL's `LIKE` is case sensitive; `ILIKE` is the case insensitive form. The two engines
+therefore disagree on every `LIKE` the application emits, and the application emits it in
+exactly one place - `BaseApiController::FilterData()`, for the `~` and `!~` operators of the
+generic list filter:
+
+```php
+case '~':
+    $data = $data->where($matches['field'] . ' LIKE ?', '%' . $matches['value'] . '%');
+```
+
+That reaches every `GET /api/objects/{entity}` and everything else routed through
+`FilteredApiResponse`. Measured on a three row table (`Milk`, `milk chocolate`, `Butter`)
+with `name LIKE '%milk%'`:
+
+| Engine | Rows returned |
+|---|---|
+| SQLite | `Milk`, `milk chocolate` |
+| PostgreSQL | `milk chocolate` |
+| PostgreSQL with `ILIKE` | `Milk`, `milk chocolate` |
+
+No error, no log line, no failing view diff - the differential suite drives SQL at each
+engine and never enters `BaseApiController`, which is the blind spot
+[14](../../docs/plans/14-contract-and-regression-scaffolding.md)'s coverage section was
+added to make visible.
+
+The in-convention fix is the one `GetRegexpCondition()` already models: a
+`GetLikeCondition(string $field, bool $negated)` on the dialect, returning `LIKE` /
+`NOT LIKE` on SQLite and `ILIKE` / `NOT ILIKE` on PostgreSQL, with `FilterData` calling it
+instead of spelling the operator. Note this is a client visible behaviour decision, not a
+pure port fix: whichever way it goes, one engine's current answers change. It belongs with
+[11](../../docs/plans/11-api-error-handling.md), which owns this surface, and
+[17](../../docs/plans/17-ecosystem-clients.md), which owns what a change here costs a client.
+
+Do not reach for the `nocase` collation of hazard 15 to solve this. It is nondeterministic,
+and PostgreSQL rejects `LIKE` against a nondeterministic collation outright.
+
+### Hazard 17: an identifier that reaches LessQL is quoted, and quoting is case sensitive
+`PostgresDialect::GetIdentifierDelimiter()` returns `"` with the comment "Victual's tables
+and columns are all lower case, so quoting them is safe". That is true of the schema - all
+37 tables, all their columns and all 45 views are lower case, verified by parsing every
+migration and the whole baseline - and it is not true of the *inputs*.
+
+LessQL quotes every identifier it is handed:
+
+```php
+// Result::orderBy()
+$clone->orderBy[] = $this->db->quoteIdentifier($column) . " " . $direction;
+```
+
+and `BaseApiController::QueryData()` hands it a request parameter verbatim:
+
+```php
+$data = $data->orderBy($parts[0]);   // $parts[0] is ?order=<field>
+```
+
+So `?order=Name` becomes `` ORDER BY `Name` `` on SQLite, where backtick quoting still
+resolves case insensitively, and `ORDER BY "Name"` on PostgreSQL, where it does not:
+
+    ERROR: column "Name" does not exist
+    HINT: Perhaps you meant to reference the column "t.name".
+
+Same request, 200 on one engine and 500 on the other. The frontend never sends `order=`, so
+this is reachable only by an API client - which is to say by both of the clients
+[17](../../docs/plans/17-ecosystem-clients.md) tracks.
+
+The `query[]` filter is *not* affected, and the reason is worth knowing because it is
+accidental: `FilterData` interpolates the field into a raw condition string
+(`$matches['field'] . ' = ?'`) rather than passing it as an identifier, so LessQL never
+quotes it and PostgreSQL folds it to lower case like any other bare identifier.
+`?query[]=Name=Milk` works on both engines. One code path is safe because it builds SQL by
+string concatenation and the other is broken because it does the tidier thing.
+
+Whatever fixes this should normalise or reject the identifier rather than widen the quoting,
+and rejecting it is also a `400` that [11](../../docs/plans/11-api-error-handling.md) already
+wants instead of the current `500`.
+
+## What was checked and found clean
+
+The audit behind hazards 16 and 17 swept the whole tree for case sensitivity differences.
+The negative results are recorded here so the next person does not repeat them:
+
+- **No mixed case tables, views or columns exist on either engine.** Every `CREATE TABLE`,
+  `CREATE VIEW` and `ALTER TABLE … ADD COLUMN` across all 256 migrations and the baseline was
+  parsed; every identifier is lower case. The premise `GetIdentifierDelimiter()` relies on
+  holds for the schema.
+- **Trigger names are mixed case and it does not matter.** `products_INS`,
+  `trg_stock_log_DEL` and the rest are created unquoted, so PostgreSQL folds them, and
+  nothing ever names one: `DatabaseImporter::SetTriggersEnabled()` uses
+  `ALTER TABLE … DISABLE TRIGGER USER`, which names no trigger at all.
+- **`newest_Id`** (`migrations/0054.sql`) is the only mixed case alias in any SQL. It is a
+  derived table's output column, joined as `slg.newest_id`, unquoted on both sides, in a
+  migration that runs on SQLite only. Harmless, and it would stop being harmless the moment
+  someone quoted either spelling.
+- **`sl.NAME`** (`StockReportsController.php:118`) is the only upper case column reference in
+  PHP. Unquoted, so it folds. Cosmetic.
+- **Hazard 15's `nocase` collation does what it claims.** `deterministic = false` makes `=`
+  case insensitive, so `StockService`'s barcode lookup matches the same rows as SQLite -
+  checked directly, not assumed.
+- **The `§` regexp operator agrees across engines.** SQLite's `REGEXP` is backed by
+  `mb_ereg`, which is case sensitive; PostgreSQL's `~` is case sensitive. Consistent, and
+  `~*` was correctly not used.
+- **User defined entity and userfield names are values, not identifiers.** They are compared
+  with `=` against a column with no `COLLATE`, so both engines are case sensitive and agree.
+
 ## Accepted differences
 
 Two differences are known, deliberate and judged harmless. Do not try to "fix" them.

@@ -195,6 +195,18 @@ Error *message* text is not a tracked coupling. No client in scope matches on it
 [14](14-contract-and-regression-scaffolding.md)'s snapshot has no reason to freeze message
 strings, and plan 11 stays free to reword them.
 
+**One thing on this surface is a client-visible decision rather than a status code**, and it
+arrives with no plan of its own: `db/pgsql/README.md`'s hazard 16. The `~` operator of the
+generic list filter emits `LIKE`, so `?query[]=name~milk` matches "Milk" on SQLite and does
+not on PostgreSQL. Making the two engines agree — the in-convention fix is an `ILIKE` on the
+PostgreSQL dialect — necessarily changes the answers some client already gets, on whichever
+engine it is pointed at. Neither tracked client is known to use `query[]` today, which makes
+this cheap to decide *now* and expensive to decide after the forked Home Assistant
+integration is written against one of the two behaviours. The manifest of item 1 under "How
+this plan stays current" would not catch it either: the path, the method and the response
+shape are all unchanged, and only the rows differ. Same lesson as Coupling 0 — a path list
+is not the contract.
+
 ## Coupling 4 — hierarchies presented to a client that assumes flatness
 
 [07](07-nested-products.md) and [08](08-nested-locations.md) add depth to
