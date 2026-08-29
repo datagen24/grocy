@@ -39,7 +39,7 @@ the plans noted below start minting more of what they clean up.
 
 | # | Plan | Upstream | Depends on | Size |
 |---|---|---|---|---|
-| 16 | [Project rename](16-project-rename.md) | — | 15 (breaking tier only) | small outward, breaking tier batched |
+| 16 | [Project rename](16-project-rename.md) | — | before first deployment | small–medium |
 
 **Blocking and de-risking, in one place:**
 

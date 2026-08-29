@@ -1,11 +1,16 @@
 # 16. Project rename
 
-**Goal:** Give the fork its own name — repo, branding, and eventually internal
-identifiers — with the breaking parts batched deliberately rather than leaked.
-**Depends on:** nothing for the outward rename; [15](15-deliberate-cleanup.md)'s
-breaking batch (or any release that is already breaking) for the internal renames.
-**Status:** direction settled (see Q1), execution staged. The outward rename can
-happen any time; the internal tiers land per the touchpoint table below.
+**Goal:** Give the fork its own name — repo, branding, and internal
+identifiers — landing the would-be-breaking parts while nothing is deployed
+to break.
+**Depends on:** nothing — and the internal renames depend on *happening before
+the first deployment*, not on any other plan (the earlier lean on
+[15](15-deliberate-cleanup.md)'s breaking batch is the fallback, not the plan).
+**Status:** direction settled (see Q1), namespaces checked (see Q3), execution
+staged. No instance of this fork is deployed anywhere yet — the household runs
+upstream grocy — so the internal renames are currently free and get strictly
+more expensive the day the first instance deploys. That window drives the
+timing below.
 
 ## Background
 
@@ -49,19 +54,19 @@ names.
 Survey of everything carrying the old name, tiered by what renaming it breaks.
 Counts from the tree as of this plan's writing.
 
-### Tier 0 — never rename (wire formats and immutable history)
+### Tier 0 — never rename (wire formats)
 
 - **The grocycode magic `grcy:`** (`helpers/Grocycode.php`,
-  [docs/grocycode.md](../grocycode.md)). It is encoded in physical printed
-  labels on real shelves. Renaming the magic invalidates every label ever
-  printed and every scanner integration. It is a wire format: keep `grcy`
-  forever, documented as a historical artifact — at most accept a second magic
-  alongside it someday. Do not let a rename sweep "fix" this.
-- **Shipped migrations.** Migration files are immutable history; any that
-  mention old identifiers keep mentioning them. Renames of database-level
-  objects happen in *new* migrations only.
+  [docs/grocycode.md](../grocycode.md)). No fork instance is deployed, but the
+  household's *upstream* grocy instance prints labels with this magic, and
+  `bin/grocy-db-import` exists precisely to bring that instance's database —
+  and its shelf full of printed labels — into the fork. Renaming the magic
+  breaks that migration path and every upstream-printed label. It is a wire
+  format: keep `grcy` forever, documented as a historical artifact — at most
+  accept a second magic alongside it someday. Do not let a rename sweep "fix"
+  this.
 
-### Tier 1 — breaking for deployed instances (batch with a breaking release)
+### Tier 1 — would break deployed instances; free while none exist
 
 - **Env-var prefix `GROCY_*`** — every setting is overridable via the prefix
   (`helpers/extensions.php:244`), and `GROCY_DATAPATH` is load-bearing at boot
@@ -69,20 +74,21 @@ Counts from the tree as of this plan's writing.
 - **In-database identifiers**: `grocy_user_setting()`,
   `grocy_next_internal_recipe_id`, `grocy_sqlite_percent_w`,
   `grocy_mealplan_week_name` (`db/pgsql/baseline/`, referenced from views and
-  migrations). Renaming requires a migration pair on live databases plus a
-  baseline update.
+  migrations). On a live database these would need a rename-migration pair;
+  with none deployed, a baseline edit plus a sweep of the migrations that
+  reference them suffices — but only while nothing has run them.
 - **`grocy.db` default filename** (`services/Database/SqliteDialect.php:154`) —
-  existing volumes hold the file under that name; a rename needs a fallback
-  probe or an explicit migration step.
+  a deployed volume would hold the file under that name and need a fallback
+  probe; renamed before first deployment, it is a one-line change.
 - **DB defaults** `DB_NAME`/`DB_USER` = `grocy` (`config-dist.php:33-34`) and
   the compose file's matching PostgreSQL service values. Defaults only, but
   changing them strands anyone who relied on them.
-- **`bin/grocy-migrate` / `bin/grocy-db-import`** — ops entry points that may
-  live in cron jobs and runbooks; rename with compat symlinks or not at all
-  until the batch.
+- **`bin/grocy-migrate` / `bin/grocy-db-import`** — ops entry points that
+  would live in cron jobs and runbooks once deployed; today they live only in
+  docs and plans, so a rename is a doc sweep.
 - **Session cookie `grocy_session`**
-  (`services/SessionService.php:11`) — renaming logs every user out once.
-  Cheap, but it belongs in the batch's changelog, not a side effect.
+  (`services/SessionService.php:11`) — renaming logs every user of a deployed
+  instance out once; with none, free.
 
 ### Tier 2 — internal, non-breaking but high-churn (schedule around open branches)
 
@@ -140,19 +146,41 @@ Counts from the tree as of this plan's writing.
    dictionary word, so check registries (GitHub, npm, Docker Hub, domains)
    more carefully than the rarer *victualer* would need.
 
+   > **Response:** Checked 2026-08-29:
+   >
+   > | Name | GitHub user/org | npm | Docker Hub namespace |
+   > |---|---|---|---|
+   > | victual | **taken** (`Victual`, u/73016391) | free | **taken** (idle user "aXe_ru", joined 2025-07, zero repos) |
+   > | victualer | free | free | free |
+   > | victualler | **taken** (`Victualler`, u/105707722) | free | free |
+   >
+   > The squats don't block the plan: the repo renames in place to
+   > `datagen24/victual` (GitHub auto-redirects the old path), and the Docker
+   > image lives under the maintainer's own namespace either way. They do rule
+   > out a vanity `victual` org/namespace — if one is ever wanted, *victualer*
+   > is the clean claim on all three registries, which pleasingly matches the
+   > actor name. Claim the free names (npm `victual`, Docker/GitHub
+   > `victualer`) at announcement time, not before. Domains not yet checked.
+
 4. **Scope of the rename.** Repo and branding only, or also internal
    identifiers — DB name defaults, config env-var prefixes (`GROCY_*` → ?),
    Docker image name, user-agent strings on barcode API calls? Internal renames
    are the breaking part; decide whether they land with the rename or lag
    behind a compatibility window.
 
-   > **Response:** Split per the touchpoint tiers above. The outward rename
-   > (repo, branding, docs, Tier 3) is free and happens first. Tier 1 —
-   > `GROCY_*` prefixes, DB defaults, database identifiers, bin scripts — rides
-   > with a release that is already breaking, of which
-   > [15](15-deliberate-cleanup.md) is the standing accumulator, rather than
-   > making the rename its own migration event. Tier 2 lands opportunistically
-   > (namespace between waves, JS global with plan 12). Tier 0 never lands.
+   > **Response:** Split per the touchpoint tiers above, but the timing
+   > changed on learning there are **no deployed instances of this fork** —
+   > the earlier instinct to park Tier 1 on [15](15-deliberate-cleanup.md)'s
+   > breaking batch assumed something running that could break. Nothing is.
+   > So: the outward rename (repo, branding, docs, Tier 3) happens first, and
+   > Tier 1 — `GROCY_*` prefixes, DB defaults, database identifiers, the
+   > `grocy.db` filename, bin scripts, the session cookie — follows as part of
+   > the rename itself, **before the first deployment ever happens**, while
+   > "breaking" is still a category error. Every day of heavy development
+   > mints more code under the old identifiers; the batch-with-15 fallback
+   > remains only if the rename somehow slips past first deployment. Tier 2
+   > lands opportunistically (namespace between waves, JS global with
+   > [12](12-frontend-shared-core.md)). Tier 0 never lands.
 
 5. **Upstream attribution.** grocy is the origin and its license terms follow
    the code. Decide the attribution wording in README/about and whether any
@@ -171,10 +199,13 @@ Counts from the tree as of this plan's writing.
    boundary that's already breaking anyway? Bundling it with an existing
    breaking release costs nothing extra.
 
-   > **Response:** Bundled, per Q4. The household instance takes the Tier 1
-   > changes as part of that breaking release's normal upgrade, with the
-   > env-var and filename renames called out in its changelog. Nothing renames
-   > in place ahead of that boundary.
+   > **Response:** Dissolved: there is no existing instance of the fork to
+   > migrate — the household still runs upstream grocy. The migration story is
+   > therefore the one that already exists (`bin/grocy-db-import` from the
+   > upstream database), and it must work under the *new* names, which is one
+   > more reason to finish Tier 1 before that import ever happens. The
+   > import's inputs — upstream's schema, and grocycodes on printed labels —
+   > keep their upstream names by definition (Tier 0).
 
 7. **Timing.** Rename before or after the next implementation work lands?
    Renaming first means all new docs/plans carry the new name; renaming later
@@ -183,14 +214,18 @@ Counts from the tree as of this plan's writing.
    > **Response:** Sooner. Every plan doc and Response block written from here
    > forward either carries the new name or gets swept later, and the MCP
    > sidecar repo is explicitly waiting on this decision for its real name.
-   > Once Q1 survives its cooling day and Q3's checks pass, the outward rename
-   > (Tier 3 + repo/branding) proceeds before the next implementation wave
-   > starts; the breaking tiers keep their own schedule per Q4.
+   > Once Q1 survives its cooling day (Q3's registry checks are done and
+   > don't block), the outward rename (Tier 3 + repo/branding) proceeds before
+   > the next implementation wave starts, with Tier 1 riding along per Q4 —
+   > the whole rename lands while there is still nothing deployed to break.
 
 ## Constraints
 
 - License continuity from upstream grocy is non-negotiable.
-- Existing instance must survive the rename with data intact (dual-engine).
+- The upstream-to-fork migration path (`bin/grocy-db-import` from the
+  household's upstream grocy database) must work under the new names, on both
+  engines — there is no deployed fork instance to protect, but there is a
+  future import to keep working.
 - The rename itself must not silently change any API surface — if env-var
   prefixes or endpoints change, that is a called-out breaking change per
   ground rules, not a side effect.
