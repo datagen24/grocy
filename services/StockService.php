@@ -283,18 +283,78 @@ class StockService extends BaseService
 				$transactionId = uniqid();
 			}
 
-			if ($stockLabelType == 2)
-			{
-				// Label per unit => single stock entry per unit
+			$labelWebhookPayloads = [];
 
-				for ($i = 1; $i <= $amount; $i++)
+			// The booking, the stock entry it describes and the compacting that may immediately
+			// rewrite both belong to one addition and have to land as one.
+			DatabaseService::GetInstance()->InTransaction(function () use ($productId, $amount, $bestBeforeDate, $transactionType, $purchasedDate, $price, $locationId, $shoppingLocationId, $stockLabelType, $note, $productDetails, &$transactionId, &$labelWebhookPayloads)
+			{
+				if ($stockLabelType == 2)
 				{
-					// The "x" prefix marks per-unit labeled entries - the stock_splits view excludes
-					// them, so CompactStockEntries() will never merge these entries back together
-					$stockId = uniqid('x');
+					// Label per unit => single stock entry per unit
+
+					for ($i = 1; $i <= $amount; $i++)
+					{
+						// The "x" prefix marks per-unit labeled entries - the stock_splits view excludes
+						// them, so CompactStockEntries() will never merge these entries back together
+						$stockId = uniqid('x');
+						$logRow = $this->DB->stock_log()->createRow([
+							'product_id' => $productId,
+							'amount' => 1,
+							'best_before_date' => $bestBeforeDate,
+							'purchased_date' => $purchasedDate,
+							'stock_id' => $stockId,
+							'transaction_type' => $transactionType,
+							'price' => $price,
+							'location_id' => $locationId,
+							'transaction_id' => $transactionId,
+							'shopping_location_id' => $shoppingLocationId,
+							'user_id' => GROCY_USER_ID,
+							'note' => $note
+						]);
+						$logRow->save();
+
+						$stockRow = $this->DB->stock()->createRow([
+							'product_id' => $productId,
+							'amount' => 1,
+							'best_before_date' => $bestBeforeDate,
+							'purchased_date' => $purchasedDate,
+							'stock_id' => $stockId,
+							'price' => $price,
+							'location_id' => $locationId,
+							'shopping_location_id' => $shoppingLocationId,
+							'note' => $note
+						]);
+						$stockRow->save();
+
+						if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER)
+						{
+							$webhookData = array_merge([
+								'product' => $productDetails->product->name,
+								'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockId])),
+								'details' => $productDetails,
+								'stock_entry' => $stockRow,
+							], GROCY_LABEL_PRINTER_PARAMS);
+
+							if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+							{
+								$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $bestBeforeDate;
+							}
+
+							// Built here from the values in hand so the label describes the entry as it
+							// was booked; only the firing waits until after the commit.
+							$labelWebhookPayloads[] = $webhookData;
+						}
+					}
+				}
+				else
+				{
+					// No or single label => one stock entry
+
+					$stockId = uniqid();
 					$logRow = $this->DB->stock_log()->createRow([
 						'product_id' => $productId,
-						'amount' => 1,
+						'amount' => $amount,
 						'best_before_date' => $bestBeforeDate,
 						'purchased_date' => $purchasedDate,
 						'stock_id' => $stockId,
@@ -310,7 +370,7 @@ class StockService extends BaseService
 
 					$stockRow = $this->DB->stock()->createRow([
 						'product_id' => $productId,
-						'amount' => 1,
+						'amount' => $amount,
 						'best_before_date' => $bestBeforeDate,
 						'purchased_date' => $purchasedDate,
 						'stock_id' => $stockId,
@@ -321,7 +381,7 @@ class StockService extends BaseService
 					]);
 					$stockRow->save();
 
-					if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER)
+					if ($stockLabelType == 1 && GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER)
 					{
 						$webhookData = array_merge([
 							'product' => $productDetails->product->name,
@@ -335,65 +395,22 @@ class StockService extends BaseService
 							$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $bestBeforeDate;
 						}
 
-						$runner = new WebhookRunner();
-						$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+						// Built here from the values in hand so the label describes the entry as it was
+						// booked; only the firing waits until after the commit.
+						$labelWebhookPayloads[] = $webhookData;
 					}
 				}
-			}
-			else
+
+				$this->CompactStockEntries($productId);
+			});
+
+			// After the commit: a printed label should mean the stock entry exists, and a printer
+			// call with a 2 s timeout has no business holding a write lock open.
+			foreach ($labelWebhookPayloads as $webhookData)
 			{
-				// No or single label => one stock entry
-
-				$stockId = uniqid();
-				$logRow = $this->DB->stock_log()->createRow([
-					'product_id' => $productId,
-					'amount' => $amount,
-					'best_before_date' => $bestBeforeDate,
-					'purchased_date' => $purchasedDate,
-					'stock_id' => $stockId,
-					'transaction_type' => $transactionType,
-					'price' => $price,
-					'location_id' => $locationId,
-					'transaction_id' => $transactionId,
-					'shopping_location_id' => $shoppingLocationId,
-					'user_id' => GROCY_USER_ID,
-					'note' => $note
-				]);
-				$logRow->save();
-
-				$stockRow = $this->DB->stock()->createRow([
-					'product_id' => $productId,
-					'amount' => $amount,
-					'best_before_date' => $bestBeforeDate,
-					'purchased_date' => $purchasedDate,
-					'stock_id' => $stockId,
-					'price' => $price,
-					'location_id' => $locationId,
-					'shopping_location_id' => $shoppingLocationId,
-					'note' => $note
-				]);
-				$stockRow->save();
-
-				if ($stockLabelType == 1 && GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER)
-				{
-					$webhookData = array_merge([
-						'product' => $productDetails->product->name,
-						'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockId])),
-						'details' => $productDetails,
-						'stock_entry' => $stockRow,
-					], GROCY_LABEL_PRINTER_PARAMS);
-
-					if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
-					{
-						$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $bestBeforeDate;
-					}
-
-					$runner = new WebhookRunner();
-					$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
-				}
+				$runner = new WebhookRunner();
+				$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
 			}
-
-			$this->CompactStockEntries($productId);
 
 			return $transactionId;
 		}
@@ -578,95 +595,100 @@ class StockService extends BaseService
 				$transactionId = uniqid();
 			}
 
-			foreach ($potentialStockEntries as $stockEntry)
+			// One booking per touched stock entry, each paired with a delete or an amount
+			// update - so `stock` and `stock_log` can only ever agree if all of them land.
+			DatabaseService::GetInstance()->InTransaction(function () use ($potentialStockEntries, $amount, $productId, $spoiled, $transactionType, $recipeId, $allowSubproductSubstitution, $productDetails, &$transactionId)
 			{
-				if ($amount == 0)
+				foreach ($potentialStockEntries as $stockEntry)
 				{
-					break;
-				}
-
-				if ($allowSubproductSubstitution && $stockEntry->product_id != $productId)
-				{
-					// A sub product will be used -> use QU conversions
-					$subProduct = $this->DB->products($stockEntry->product_id);
-					$conversion = $this->DB->cache__quantity_unit_conversions_resolved()->where('product_id = :1 AND from_qu_id = :2 AND to_qu_id = :3', $stockEntry->product_id, $productDetails->product->qu_id_stock, $subProduct->qu_id_stock)->fetch();
-					if ($conversion != null)
+					if ($amount == 0)
 					{
-						$amount = $amount * $conversion->factor;
+						break;
+					}
+
+					if ($allowSubproductSubstitution && $stockEntry->product_id != $productId)
+					{
+						// A sub product will be used -> use QU conversions
+						$subProduct = $this->DB->products($stockEntry->product_id);
+						$conversion = $this->DB->cache__quantity_unit_conversions_resolved()->where('product_id = :1 AND from_qu_id = :2 AND to_qu_id = :3', $stockEntry->product_id, $productDetails->product->qu_id_stock, $subProduct->qu_id_stock)->fetch();
+						if ($conversion != null)
+						{
+							$amount = $amount * $conversion->factor;
+						}
+					}
+
+					if ($amount >= $stockEntry->amount)
+					{
+						// Take the whole stock entry
+						$logRow = $this->DB->stock_log()->createRow([
+							'product_id' => $stockEntry->product_id,
+							'amount' => $stockEntry->amount * -1,
+							'best_before_date' => $stockEntry->best_before_date,
+							'purchased_date' => $stockEntry->purchased_date,
+							'used_date' => date('Y-m-d'),
+							'spoiled' => $spoiled,
+							'stock_id' => $stockEntry->stock_id,
+							'transaction_type' => $transactionType,
+							'price' => $stockEntry->price,
+							'opened_date' => $stockEntry->opened_date,
+							'recipe_id' => $recipeId,
+							'transaction_id' => $transactionId,
+							'user_id' => GROCY_USER_ID,
+							'location_id' => $stockEntry->location_id,
+							'note' => $stockEntry->note,
+							'shopping_location_id' => $stockEntry->shopping_location_id
+						]);
+						$logRow->save();
+
+						$stockEntry->delete();
+
+						$amount -= $stockEntry->amount;
+
+						if ($allowSubproductSubstitution && $stockEntry->product_id != $productId && $conversion != null)
+						{
+							// A sub product with QU conversions was used
+							// => Convert the rest amount back to be based on the original (parent) product for the next round
+							$amount = $amount / $conversion->factor;
+						}
+					}
+					else
+					{
+						// Stock entry amount is > than needed amount -> split the stock entry resp. update the amount
+						$restStockAmount = $stockEntry->amount - $amount;
+
+						$logRow = $this->DB->stock_log()->createRow([
+							'product_id' => $stockEntry->product_id,
+							'amount' => $amount * -1,
+							'best_before_date' => $stockEntry->best_before_date,
+							'purchased_date' => $stockEntry->purchased_date,
+							'used_date' => date('Y-m-d'),
+							'spoiled' => $spoiled,
+							'stock_id' => $stockEntry->stock_id,
+							'transaction_type' => $transactionType,
+							'price' => $stockEntry->price,
+							'opened_date' => $stockEntry->opened_date,
+							'recipe_id' => $recipeId,
+							'transaction_id' => $transactionId,
+							'user_id' => GROCY_USER_ID,
+							'location_id' => $stockEntry->location_id,
+							'note' => $stockEntry->note,
+							'shopping_location_id' => $stockEntry->shopping_location_id
+						]);
+						$logRow->save();
+
+						$stockEntry->update([
+							'amount' => $restStockAmount
+						]);
+
+						$amount = 0;
 					}
 				}
 
-				if ($amount >= $stockEntry->amount)
+				if (boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
 				{
-					// Take the whole stock entry
-					$logRow = $this->DB->stock_log()->createRow([
-						'product_id' => $stockEntry->product_id,
-						'amount' => $stockEntry->amount * -1,
-						'best_before_date' => $stockEntry->best_before_date,
-						'purchased_date' => $stockEntry->purchased_date,
-						'used_date' => date('Y-m-d'),
-						'spoiled' => $spoiled,
-						'stock_id' => $stockEntry->stock_id,
-						'transaction_type' => $transactionType,
-						'price' => $stockEntry->price,
-						'opened_date' => $stockEntry->opened_date,
-						'recipe_id' => $recipeId,
-						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
-						'location_id' => $stockEntry->location_id,
-						'note' => $stockEntry->note,
-						'shopping_location_id' => $stockEntry->shopping_location_id
-					]);
-					$logRow->save();
-
-					$stockEntry->delete();
-
-					$amount -= $stockEntry->amount;
-
-					if ($allowSubproductSubstitution && $stockEntry->product_id != $productId && $conversion != null)
-					{
-						// A sub product with QU conversions was used
-						// => Convert the rest amount back to be based on the original (parent) product for the next round
-						$amount = $amount / $conversion->factor;
-					}
+					$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
 				}
-				else
-				{
-					// Stock entry amount is > than needed amount -> split the stock entry resp. update the amount
-					$restStockAmount = $stockEntry->amount - $amount;
-
-					$logRow = $this->DB->stock_log()->createRow([
-						'product_id' => $stockEntry->product_id,
-						'amount' => $amount * -1,
-						'best_before_date' => $stockEntry->best_before_date,
-						'purchased_date' => $stockEntry->purchased_date,
-						'used_date' => date('Y-m-d'),
-						'spoiled' => $spoiled,
-						'stock_id' => $stockEntry->stock_id,
-						'transaction_type' => $transactionType,
-						'price' => $stockEntry->price,
-						'opened_date' => $stockEntry->opened_date,
-						'recipe_id' => $recipeId,
-						'transaction_id' => $transactionId,
-						'user_id' => GROCY_USER_ID,
-						'location_id' => $stockEntry->location_id,
-						'note' => $stockEntry->note,
-						'shopping_location_id' => $stockEntry->shopping_location_id
-					]);
-					$logRow->save();
-
-					$stockEntry->update([
-						'amount' => $restStockAmount
-					]);
-
-					$amount = 0;
-				}
-			}
-
-			if (boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
-			{
-				$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
-			}
+			});
 
 			return $transactionId;
 		}
@@ -1298,7 +1320,12 @@ class StockService extends BaseService
 				$bookingAmount = $newAmount;
 			}
 
-			return $this->AddProduct($productId, $bookingAmount, $bestBeforeDate, self::TRANSACTION_TYPE_INVENTORY_CORRECTION, $purchasedDate, $price, $locationId, $shoppingLocationId, $unusedTransactionId, $stockLabelType, false, $note);
+			// The correction is one delegated booking today, but the boundary belongs to the
+			// entrypoint: "an inventory correction is atomic" should not depend on what it delegates to.
+			return DatabaseService::GetInstance()->InTransaction(function () use ($productId, $bookingAmount, $bestBeforeDate, $purchasedDate, $price, $locationId, $shoppingLocationId, $stockLabelType, $note)
+			{
+				return $this->AddProduct($productId, $bookingAmount, $bestBeforeDate, self::TRANSACTION_TYPE_INVENTORY_CORRECTION, $purchasedDate, $price, $locationId, $shoppingLocationId, $unusedTransactionId, $stockLabelType, false, $note);
+			});
 		}
 		elseif ($newAmount < $productDetails->stock_amount + $containerWeight)
 		{
@@ -1310,7 +1337,11 @@ class StockService extends BaseService
 				$bookingAmount = $newAmount;
 			}
 
-			return $this->ConsumeProduct($productId, $bookingAmount, false, self::TRANSACTION_TYPE_INVENTORY_CORRECTION);
+			// See above.
+			return DatabaseService::GetInstance()->InTransaction(function () use ($productId, $bookingAmount)
+			{
+				return $this->ConsumeProduct($productId, $bookingAmount, false, self::TRANSACTION_TYPE_INVENTORY_CORRECTION);
+			});
 		}
 
 		return null;
@@ -1378,140 +1409,156 @@ class StockService extends BaseService
 			$transactionId = uniqid();
 		}
 
-		foreach ($potentialStockEntries as $stockEntry)
+		$labelWebhookPayloads = [];
+
+		// The booking and the stock entry it describes (and the split-off rest entry) have to
+		// land together, or the ledger records an opening that stock does not show.
+		DatabaseService::GetInstance()->InTransaction(function () use ($potentialStockEntries, $amount, $product, $productDetails, $productId, $allowSubproductSubstitution, &$transactionId, &$labelWebhookPayloads)
 		{
-			if ($amount == 0)
+			foreach ($potentialStockEntries as $stockEntry)
 			{
-				break;
-			}
-
-			$newBestBeforeDate = $stockEntry->best_before_date;
-			if ($product->default_best_before_days_after_open > 0)
-			{
-				$newBestBeforeDate = date('Y-m-d', strtotime('+' . $product->default_best_before_days_after_open . ' days'));
-
-				// The new due date should be never > the original due date
-				if (strtotime($newBestBeforeDate) > strtotime($stockEntry->best_before_date))
+				if ($amount == 0)
 				{
-					$newBestBeforeDate = $stockEntry->best_before_date;
+					break;
 				}
 
-				if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $newBestBeforeDate != $stockEntry->best_before_date)
+				$newBestBeforeDate = $stockEntry->best_before_date;
+				if ($product->default_best_before_days_after_open > 0)
 				{
-					$webhookData = array_merge([
-						'product' => $productDetails->product->name,
-						'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockEntry->stock_id])),
-						'details' => $productDetails,
-						'stock_entry' => $stockEntry,
-					], GROCY_LABEL_PRINTER_PARAMS);
+					$newBestBeforeDate = date('Y-m-d', strtotime('+' . $product->default_best_before_days_after_open . ' days'));
 
-					if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+					// The new due date should be never > the original due date
+					if (strtotime($newBestBeforeDate) > strtotime($stockEntry->best_before_date))
 					{
-						$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $newBestBeforeDate;
+						$newBestBeforeDate = $stockEntry->best_before_date;
 					}
 
-					$runner = new WebhookRunner();
-					$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
-				}
-			}
+					if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $newBestBeforeDate != $stockEntry->best_before_date)
+					{
+						$webhookData = array_merge([
+							'product' => $productDetails->product->name,
+							'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockEntry->stock_id])),
+							'details' => $productDetails,
+							'stock_entry' => $stockEntry,
+						], GROCY_LABEL_PRINTER_PARAMS);
 
-			if ($allowSubproductSubstitution && $stockEntry->product_id != $productId)
-			{
-				// A sub product will be used -> use QU conversions
-				$subProduct = $this->DB->products($stockEntry->product_id);
-				$conversion = $this->DB->cache__quantity_unit_conversions_resolved()->where('product_id = :1 AND from_qu_id = :2 AND to_qu_id = :3', $stockEntry->product_id, $product->qu_id_stock, $subProduct->qu_id_stock)->fetch();
-				if ($conversion != null)
+						if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+						{
+							$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $newBestBeforeDate;
+						}
+
+						// Built here from the values in hand so the label describes the entry as it was
+						// booked; only the firing waits until after the commit.
+						$labelWebhookPayloads[] = $webhookData;
+					}
+				}
+
+				if ($allowSubproductSubstitution && $stockEntry->product_id != $productId)
 				{
-					$amount = $amount * $conversion->factor;
+					// A sub product will be used -> use QU conversions
+					$subProduct = $this->DB->products($stockEntry->product_id);
+					$conversion = $this->DB->cache__quantity_unit_conversions_resolved()->where('product_id = :1 AND from_qu_id = :2 AND to_qu_id = :3', $stockEntry->product_id, $product->qu_id_stock, $subProduct->qu_id_stock)->fetch();
+					if ($conversion != null)
+					{
+						$amount = $amount * $conversion->factor;
+					}
 				}
-			}
 
-			if ($amount >= $stockEntry->amount)
-			{
-				// Mark the whole stock entry as opened
-				$logRow = $this->DB->stock_log()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $stockEntry->amount,
-					'best_before_date' => $stockEntry->best_before_date,
-					'purchased_date' => $stockEntry->purchased_date,
-					'stock_id' => $stockEntry->stock_id,
-					'location_id' => $stockEntry->location_id,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'transaction_type' => self::TRANSACTION_TYPE_PRODUCT_OPENED,
-					'price' => $stockEntry->price,
-					'opened_date' => date('Y-m-d'),
-					'transaction_id' => $transactionId,
-					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
-				]);
-				$logRow->save();
-
-				$stockEntry->update([
-					'open' => 1,
-					'opened_date' => date('Y-m-d'),
-					'best_before_date' => $newBestBeforeDate
-				]);
-
-				$amount -= $stockEntry->amount;
-			}
-			else
-			{
-				// Stock entry amount is > than needed amount -> split the stock entry
-				$restStockAmount = $stockEntry->amount - $amount;
-
-				$newStockRow = $this->DB->stock()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $restStockAmount,
-					'best_before_date' => $stockEntry->best_before_date,
-					'purchased_date' => $stockEntry->purchased_date,
-					'location_id' => $stockEntry->location_id,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'stock_id' => uniqid(),
-					'price' => $stockEntry->price,
-					'note' => $stockEntry->note
-				]);
-				$newStockRow->save();
-
-				$logRow = $this->DB->stock_log()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $amount,
-					'best_before_date' => $stockEntry->best_before_date,
-					'purchased_date' => $stockEntry->purchased_date,
-					'stock_id' => $stockEntry->stock_id,
-					'location_id' => $stockEntry->location_id,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'transaction_type' => self::TRANSACTION_TYPE_PRODUCT_OPENED,
-					'price' => $stockEntry->price,
-					'opened_date' => date('Y-m-d'),
-					'transaction_id' => $transactionId,
-					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
-				]);
-				$logRow->save();
-
-				$stockEntry->update([
-					'amount' => $amount,
-					'open' => 1,
-					'opened_date' => date('Y-m-d'),
-					'best_before_date' => $newBestBeforeDate
-				]);
-
-				$amount = 0;
-			}
-
-			if ($product->move_on_open == 1)
-			{
-				$locationIdTo = $product->default_consume_location_id;
-				if (!empty($locationIdTo) && $locationIdTo != $stockEntry->location_id)
+				if ($amount >= $stockEntry->amount)
 				{
-					$this->TransferProduct($stockEntry->product_id, $stockEntry->amount, $stockEntry->location_id, $locationIdTo, $stockEntry->stock_id, $transactionId);
+					// Mark the whole stock entry as opened
+					$logRow = $this->DB->stock_log()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $stockEntry->amount,
+						'best_before_date' => $stockEntry->best_before_date,
+						'purchased_date' => $stockEntry->purchased_date,
+						'stock_id' => $stockEntry->stock_id,
+						'location_id' => $stockEntry->location_id,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'transaction_type' => self::TRANSACTION_TYPE_PRODUCT_OPENED,
+						'price' => $stockEntry->price,
+						'opened_date' => date('Y-m-d'),
+						'transaction_id' => $transactionId,
+						'user_id' => GROCY_USER_ID,
+						'note' => $stockEntry->note
+					]);
+					$logRow->save();
+
+					$stockEntry->update([
+						'open' => 1,
+						'opened_date' => date('Y-m-d'),
+						'best_before_date' => $newBestBeforeDate
+					]);
+
+					$amount -= $stockEntry->amount;
+				}
+				else
+				{
+					// Stock entry amount is > than needed amount -> split the stock entry
+					$restStockAmount = $stockEntry->amount - $amount;
+
+					$newStockRow = $this->DB->stock()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $restStockAmount,
+						'best_before_date' => $stockEntry->best_before_date,
+						'purchased_date' => $stockEntry->purchased_date,
+						'location_id' => $stockEntry->location_id,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'stock_id' => uniqid(),
+						'price' => $stockEntry->price,
+						'note' => $stockEntry->note
+					]);
+					$newStockRow->save();
+
+					$logRow = $this->DB->stock_log()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $amount,
+						'best_before_date' => $stockEntry->best_before_date,
+						'purchased_date' => $stockEntry->purchased_date,
+						'stock_id' => $stockEntry->stock_id,
+						'location_id' => $stockEntry->location_id,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'transaction_type' => self::TRANSACTION_TYPE_PRODUCT_OPENED,
+						'price' => $stockEntry->price,
+						'opened_date' => date('Y-m-d'),
+						'transaction_id' => $transactionId,
+						'user_id' => GROCY_USER_ID,
+						'note' => $stockEntry->note
+					]);
+					$logRow->save();
+
+					$stockEntry->update([
+						'amount' => $amount,
+						'open' => 1,
+						'opened_date' => date('Y-m-d'),
+						'best_before_date' => $newBestBeforeDate
+					]);
+
+					$amount = 0;
+				}
+
+				if ($product->move_on_open == 1)
+				{
+					$locationIdTo = $product->default_consume_location_id;
+					if (!empty($locationIdTo) && $locationIdTo != $stockEntry->location_id)
+					{
+						$this->TransferProduct($stockEntry->product_id, $stockEntry->amount, $stockEntry->location_id, $locationIdTo, $stockEntry->stock_id, $transactionId);
+					}
 				}
 			}
-		}
 
-		if (boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
+			if (boolval(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
+			{
+				$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
+			}
+		});
+
+		// After the commit: a reprinted label should mean the new due date was actually
+		// stored, and a printer call with a 2 s timeout has no business holding a write lock.
+		foreach ($labelWebhookPayloads as $webhookData)
 		{
-			$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(GROCY_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
+			$runner = new WebhookRunner();
+			$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
 		}
 
 		return $transactionId;
@@ -1725,168 +1772,184 @@ class StockService extends BaseService
 			$transactionId = uniqid();
 		}
 
-		foreach ($potentialStockEntriesAtFromLocation as $stockEntry)
+		$labelWebhookPayloads = [];
+
+		// Both bookings of an entry plus the stock row itself have to land together, or the
+		// stock ends up split across the two locations.
+		DatabaseService::GetInstance()->InTransaction(function () use ($potentialStockEntriesAtFromLocation, $amount, $productDetails, $productId, $locationIdFrom, $locationIdTo, $transactionId, &$labelWebhookPayloads)
 		{
-			if ($amount == 0)
+			foreach ($potentialStockEntriesAtFromLocation as $stockEntry)
 			{
-				break;
-			}
-
-			$newBestBeforeDate = $stockEntry->best_before_date;
-			if (GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
-			{
-				$locationFrom = $this->DB->locations()->where('id', $locationIdFrom)->fetch();
-				$locationTo = $this->DB->locations()->where('id', $locationIdTo)->fetch();
-
-				// Product was moved from a non-freezer to freezer location -> freeze
-				if ($locationFrom->is_freezer == 0 && $locationTo->is_freezer == 1 && ($productDetails->product->default_best_before_days_after_freezing > 0 || $productDetails->product->default_best_before_days_after_freezing == -1))
+				if ($amount == 0)
 				{
-					if ($productDetails->product->default_best_before_days_after_freezing == -1)
+					break;
+				}
+
+				$newBestBeforeDate = $stockEntry->best_before_date;
+				if (GROCY_FEATURE_FLAG_STOCK_PRODUCT_FREEZING)
+				{
+					$locationFrom = $this->DB->locations()->where('id', $locationIdFrom)->fetch();
+					$locationTo = $this->DB->locations()->where('id', $locationIdTo)->fetch();
+
+					// Product was moved from a non-freezer to freezer location -> freeze
+					if ($locationFrom->is_freezer == 0 && $locationTo->is_freezer == 1 && ($productDetails->product->default_best_before_days_after_freezing > 0 || $productDetails->product->default_best_before_days_after_freezing == -1))
 					{
-						$newBestBeforeDate = date('2999-12-31');
+						if ($productDetails->product->default_best_before_days_after_freezing == -1)
+						{
+							$newBestBeforeDate = date('2999-12-31');
+						}
+						else
+						{
+							$newBestBeforeDate = date('Y-m-d', strtotime('+' . $productDetails->product->default_best_before_days_after_freezing . ' days'));
+						}
 					}
-					else
+
+					// Product was moved from a freezer to non-freezer location -> thaw
+					if ($locationFrom->is_freezer == 1 && $locationTo->is_freezer == 0 && $productDetails->product->default_best_before_days_after_thawing > 0)
 					{
-						$newBestBeforeDate = date('Y-m-d', strtotime('+' . $productDetails->product->default_best_before_days_after_freezing . ' days'));
+						$newBestBeforeDate = date('Y-m-d', strtotime('+' . $productDetails->product->default_best_before_days_after_thawing . ' days'));
+					}
+
+					if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $stockEntry->best_before_date != $newBestBeforeDate)
+					{
+						$webhookData = array_merge([
+							'product' => $productDetails->product->name,
+							'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockEntry->stock_id])),
+							'details' => $productDetails,
+							'stock_entry' => $stockEntry,
+						], GROCY_LABEL_PRINTER_PARAMS);
+
+						if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
+						{
+							$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $newBestBeforeDate;
+						}
+
+						// Built here from the values in hand so the label describes the entry as it was
+						// booked; only the firing waits until after the commit.
+						$labelWebhookPayloads[] = $webhookData;
 					}
 				}
 
-				// Product was moved from a freezer to non-freezer location -> thaw
-				if ($locationFrom->is_freezer == 1 && $locationTo->is_freezer == 0 && $productDetails->product->default_best_before_days_after_thawing > 0)
+				$correlationId = uniqid();
+				if ($amount >= $stockEntry->amount)
 				{
-					$newBestBeforeDate = date('Y-m-d', strtotime('+' . $productDetails->product->default_best_before_days_after_thawing . ' days'));
-				}
+					// Take the whole stock entry
+					$logRowForLocationFrom = $this->DB->stock_log()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $stockEntry->amount * -1,
+						'best_before_date' => $stockEntry->best_before_date,
+						'purchased_date' => $stockEntry->purchased_date,
+						'stock_id' => $stockEntry->stock_id,
+						'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_FROM,
+						'price' => $stockEntry->price,
+						'opened_date' => $stockEntry->opened_date,
+						'location_id' => $stockEntry->location_id,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'correlation_id' => $correlationId,
+						'transaction_Id' => $transactionId,
+						'user_id' => GROCY_USER_ID,
+						'note' => $stockEntry->note
+					]);
+					$logRowForLocationFrom->save();
 
-				if (GROCY_FEATURE_FLAG_LABEL_PRINTER && GROCY_LABEL_PRINTER_RUN_SERVER && $productDetails->product->auto_reprint_stock_label == 1 && $stockEntry->best_before_date != $newBestBeforeDate)
+					$logRowForLocationTo = $this->DB->stock_log()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $stockEntry->amount,
+						'best_before_date' => $newBestBeforeDate,
+						'purchased_date' => $stockEntry->purchased_date,
+						'stock_id' => $stockEntry->stock_id,
+						'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_TO,
+						'price' => $stockEntry->price,
+						'opened_date' => $stockEntry->opened_date,
+						'location_id' => $locationIdTo,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'correlation_id' => $correlationId,
+						'transaction_Id' => $transactionId,
+						'user_id' => GROCY_USER_ID,
+						'note' => $stockEntry->note
+					]);
+					$logRowForLocationTo->save();
+
+					$stockEntry->update([
+						'location_id' => $locationIdTo,
+						'best_before_date' => $newBestBeforeDate
+					]);
+
+					$amount -= $stockEntry->amount;
+				}
+				else
 				{
-					$webhookData = array_merge([
-						'product' => $productDetails->product->name,
-						'grocycode' => (string)(new Grocycode(Grocycode::PRODUCT, $productId, [$stockEntry->stock_id])),
-						'details' => $productDetails,
-						'stock_entry' => $stockEntry,
-					], GROCY_LABEL_PRINTER_PARAMS);
+					// Stock entry amount is > than needed amount -> split the stock entry resp. update the amount
+					$restStockAmount = $stockEntry->amount - $amount;
 
-					if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
-					{
-						$webhookData['due_date'] = LocalizationService::GetInstance()->__t('DD') . ': ' . $newBestBeforeDate;
-					}
+					$logRowForLocationFrom = $this->DB->stock_log()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $amount * -1,
+						'best_before_date' => $stockEntry->best_before_date,
+						'purchased_date' => $stockEntry->purchased_date,
+						'stock_id' => $stockEntry->stock_id,
+						'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_FROM,
+						'price' => $stockEntry->price,
+						'opened_date' => $stockEntry->opened_date,
+						'location_id' => $stockEntry->location_id,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'correlation_id' => $correlationId,
+						'transaction_Id' => $transactionId,
+						'user_id' => GROCY_USER_ID,
+						'note' => $stockEntry->note
+					]);
+					$logRowForLocationFrom->save();
 
-					$runner = new WebhookRunner();
-					$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
+					$logRowForLocationTo = $this->DB->stock_log()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $amount,
+						'best_before_date' => $newBestBeforeDate,
+						'purchased_date' => $stockEntry->purchased_date,
+						'stock_id' => $stockEntry->stock_id,
+						'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_TO,
+						'price' => $stockEntry->price,
+						'opened_date' => $stockEntry->opened_date,
+						'location_id' => $locationIdTo,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'correlation_id' => $correlationId,
+						'transaction_Id' => $transactionId,
+						'user_id' => GROCY_USER_ID,
+						'note' => $stockEntry->note
+					]);
+					$logRowForLocationTo->save();
+
+					// This is the existing stock entry -> remains at the source location with the rest amount
+					$stockEntry->update([
+						'amount' => $restStockAmount
+					]);
+
+					// The transferred amount gets into a new stock entry
+					$stockEntryNew = $this->DB->stock()->createRow([
+						'product_id' => $stockEntry->product_id,
+						'amount' => $amount,
+						'best_before_date' => $newBestBeforeDate,
+						'purchased_date' => $stockEntry->purchased_date,
+						'stock_id' => $stockEntry->stock_id,
+						'price' => $stockEntry->price,
+						'location_id' => $locationIdTo,
+						'shopping_location_id' => $stockEntry->shopping_location_id,
+						'open' => $stockEntry->open,
+						'opened_date' => $stockEntry->opened_date,
+						'note' => $stockEntry->note
+					]);
+					$stockEntryNew->save();
+
+					$amount = 0;
 				}
 			}
+		});
 
-			$correlationId = uniqid();
-			if ($amount >= $stockEntry->amount)
-			{
-				// Take the whole stock entry
-				$logRowForLocationFrom = $this->DB->stock_log()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $stockEntry->amount * -1,
-					'best_before_date' => $stockEntry->best_before_date,
-					'purchased_date' => $stockEntry->purchased_date,
-					'stock_id' => $stockEntry->stock_id,
-					'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_FROM,
-					'price' => $stockEntry->price,
-					'opened_date' => $stockEntry->opened_date,
-					'location_id' => $stockEntry->location_id,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'correlation_id' => $correlationId,
-					'transaction_Id' => $transactionId,
-					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
-				]);
-				$logRowForLocationFrom->save();
-
-				$logRowForLocationTo = $this->DB->stock_log()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $stockEntry->amount,
-					'best_before_date' => $newBestBeforeDate,
-					'purchased_date' => $stockEntry->purchased_date,
-					'stock_id' => $stockEntry->stock_id,
-					'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_TO,
-					'price' => $stockEntry->price,
-					'opened_date' => $stockEntry->opened_date,
-					'location_id' => $locationIdTo,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'correlation_id' => $correlationId,
-					'transaction_Id' => $transactionId,
-					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
-				]);
-				$logRowForLocationTo->save();
-
-				$stockEntry->update([
-					'location_id' => $locationIdTo,
-					'best_before_date' => $newBestBeforeDate
-				]);
-
-				$amount -= $stockEntry->amount;
-			}
-			else
-			{
-				// Stock entry amount is > than needed amount -> split the stock entry resp. update the amount
-				$restStockAmount = $stockEntry->amount - $amount;
-
-				$logRowForLocationFrom = $this->DB->stock_log()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $amount * -1,
-					'best_before_date' => $stockEntry->best_before_date,
-					'purchased_date' => $stockEntry->purchased_date,
-					'stock_id' => $stockEntry->stock_id,
-					'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_FROM,
-					'price' => $stockEntry->price,
-					'opened_date' => $stockEntry->opened_date,
-					'location_id' => $stockEntry->location_id,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'correlation_id' => $correlationId,
-					'transaction_Id' => $transactionId,
-					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
-				]);
-				$logRowForLocationFrom->save();
-
-				$logRowForLocationTo = $this->DB->stock_log()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $amount,
-					'best_before_date' => $newBestBeforeDate,
-					'purchased_date' => $stockEntry->purchased_date,
-					'stock_id' => $stockEntry->stock_id,
-					'transaction_type' => self::TRANSACTION_TYPE_TRANSFER_TO,
-					'price' => $stockEntry->price,
-					'opened_date' => $stockEntry->opened_date,
-					'location_id' => $locationIdTo,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'correlation_id' => $correlationId,
-					'transaction_Id' => $transactionId,
-					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
-				]);
-				$logRowForLocationTo->save();
-
-				// This is the existing stock entry -> remains at the source location with the rest amount
-				$stockEntry->update([
-					'amount' => $restStockAmount
-				]);
-
-				// The transferred amount gets into a new stock entry
-				$stockEntryNew = $this->DB->stock()->createRow([
-					'product_id' => $stockEntry->product_id,
-					'amount' => $amount,
-					'best_before_date' => $newBestBeforeDate,
-					'purchased_date' => $stockEntry->purchased_date,
-					'stock_id' => $stockEntry->stock_id,
-					'price' => $stockEntry->price,
-					'location_id' => $locationIdTo,
-					'shopping_location_id' => $stockEntry->shopping_location_id,
-					'open' => $stockEntry->open,
-					'opened_date' => $stockEntry->opened_date,
-					'note' => $stockEntry->note
-				]);
-				$stockEntryNew->save();
-
-				$amount = 0;
-			}
+		// After the commit: a printed label should mean the transfer happened, and a printer
+		// call with a 2 s timeout has no business holding a write lock open.
+		foreach ($labelWebhookPayloads as $webhookData)
+		{
+			$runner = new WebhookRunner();
+			$runner->run(GROCY_LABEL_PRINTER_WEBHOOK, $webhookData, GROCY_LABEL_PRINTER_HOOK_JSON);
 		}
 
 		return $transactionId;
@@ -1926,10 +1989,16 @@ class StockService extends BaseService
 		if (!$skipCorrelatedBookings && !empty($logRow->correlation_id))
 		{
 			$correlatedBookings = $this->DB->stock_log()->where('undone = 0 AND correlation_id = :1', $logRow->correlation_id)->orderBy('id', 'DESC')->fetchAll();
-			foreach ($correlatedBookings as $correlatedBooking)
+
+			// The correlated bookings (a stock edit's old/new pair, a transfer's from/to pair)
+			// are only meaningful undone as a set.
+			DatabaseService::GetInstance()->InTransaction(function () use ($correlatedBookings)
 			{
-				$this->UndoBooking($correlatedBooking->id, true);
-			}
+				foreach ($correlatedBookings as $correlatedBooking)
+				{
+					$this->UndoBooking($correlatedBooking->id, true);
+				}
+			});
 
 			return;
 		}
@@ -1942,75 +2011,26 @@ class StockService extends BaseService
 			throw new \Exception('Booking has subsequent dependent bookings, undo not possible');
 		}
 
-		if ($logRow->transaction_type === self::TRANSACTION_TYPE_PURCHASE || ($logRow->transaction_type === self::TRANSACTION_TYPE_INVENTORY_CORRECTION && $logRow->amount > 0))
+		// Every branch below reverses the booking's effect on `stock` and only then marks the
+		// booking undone - a failure between those two writes would leave a booking whose
+		// undone flag disagrees with the stock it was supposed to restore.
+		DatabaseService::GetInstance()->InTransaction(function () use ($logRow)
 		{
-			// Remove corresponding stock entry
-			$stockRows = $this->DB->stock()->where('stock_id', $logRow->stock_id);
-			$stockRows->delete();
-
-			// Update log entry
-			$logRow->update([
-				'undone' => 1,
-				'undone_timestamp' => date('Y-m-d H:i:s')
-			]);
-		}
-		elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_CONSUME || ($logRow->transaction_type === self::TRANSACTION_TYPE_INVENTORY_CORRECTION && $logRow->amount < 0))
-		{
-			// Add corresponding amount back to stock
-			$stockRow = $this->DB->stock()->createRow([
-				'product_id' => $logRow->product_id,
-				'amount' => $logRow->amount * -1,
-				'best_before_date' => $logRow->best_before_date,
-				'purchased_date' => $logRow->purchased_date,
-				'stock_id' => $logRow->stock_id,
-				'price' => $logRow->price,
-				'opened_date' => $logRow->opened_date,
-				'open' => $logRow->opened_date !== null, // The open flag itself is not logged, so it is derived from the logged opened date
-				'location_id' => $logRow->location_id,
-				'note' => $logRow->note,
-				'shopping_location_id' => $logRow->shopping_location_id
-			]);
-			$stockRow->save();
-
-			// Update log entry
-			$logRow->update([
-				'undone' => 1,
-				'undone_timestamp' => date('Y-m-d H:i:s')
-			]);
-		}
-		elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_TRANSFER_TO)
-		{
-			$stockRow = $this->DB->stock()->where('stock_id = :1 AND location_id = :2', $logRow->stock_id, $logRow->location_id)->fetch();
-			if ($stockRow === null)
+			if ($logRow->transaction_type === self::TRANSACTION_TYPE_PURCHASE || ($logRow->transaction_type === self::TRANSACTION_TYPE_INVENTORY_CORRECTION && $logRow->amount > 0))
 			{
-				throw new \Exception('Booking does not exist or was already undone');
-			}
+				// Remove corresponding stock entry
+				$stockRows = $this->DB->stock()->where('stock_id', $logRow->stock_id);
+				$stockRows->delete();
 
-			$newAmount = $stockRow->amount - $logRow->amount;
-			if ($newAmount == 0)
-			{
-				$stockRow->delete();
-			}
-			else
-			{
-				// Remove corresponding amount back to stock
-				$stockRow->update([
-					'amount' => $newAmount
+				// Update log entry
+				$logRow->update([
+					'undone' => 1,
+					'undone_timestamp' => date('Y-m-d H:i:s')
 				]);
 			}
-
-			// Update log entry
-			$logRow->update([
-				'undone' => 1,
-				'undone_timestamp' => date('Y-m-d H:i:s')
-			]);
-		}
-		elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_TRANSFER_FROM)
-		{
-			// Add corresponding amount back to stock
-			$stockRow = $this->DB->stock()->where('stock_id = :1 AND location_id = :2', $logRow->stock_id, $logRow->location_id)->fetch();
-			if ($stockRow === null)
+			elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_CONSUME || ($logRow->transaction_type === self::TRANSACTION_TYPE_INVENTORY_CORRECTION && $logRow->amount < 0))
 			{
+				// Add corresponding amount back to stock
 				$stockRow = $this->DB->stock()->createRow([
 					'product_id' => $logRow->product_id,
 					'amount' => $logRow->amount * -1,
@@ -2019,86 +2039,141 @@ class StockService extends BaseService
 					'stock_id' => $logRow->stock_id,
 					'price' => $logRow->price,
 					'opened_date' => $logRow->opened_date,
+					'open' => $logRow->opened_date !== null, // The open flag itself is not logged, so it is derived from the logged opened date
+					'location_id' => $logRow->location_id,
 					'note' => $logRow->note,
 					'shopping_location_id' => $logRow->shopping_location_id
 				]);
 				$stockRow->save();
+
+				// Update log entry
+				$logRow->update([
+					'undone' => 1,
+					'undone_timestamp' => date('Y-m-d H:i:s')
+				]);
+			}
+			elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_TRANSFER_TO)
+			{
+				$stockRow = $this->DB->stock()->where('stock_id = :1 AND location_id = :2', $logRow->stock_id, $logRow->location_id)->fetch();
+				if ($stockRow === null)
+				{
+					throw new \Exception('Booking does not exist or was already undone');
+				}
+
+				$newAmount = $stockRow->amount - $logRow->amount;
+				if ($newAmount == 0)
+				{
+					$stockRow->delete();
+				}
+				else
+				{
+					// Remove corresponding amount back to stock
+					$stockRow->update([
+						'amount' => $newAmount
+					]);
+				}
+
+				// Update log entry
+				$logRow->update([
+					'undone' => 1,
+					'undone_timestamp' => date('Y-m-d H:i:s')
+				]);
+			}
+			elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_TRANSFER_FROM)
+			{
+				// Add corresponding amount back to stock
+				$stockRow = $this->DB->stock()->where('stock_id = :1 AND location_id = :2', $logRow->stock_id, $logRow->location_id)->fetch();
+				if ($stockRow === null)
+				{
+					$stockRow = $this->DB->stock()->createRow([
+						'product_id' => $logRow->product_id,
+						'amount' => $logRow->amount * -1,
+						'best_before_date' => $logRow->best_before_date,
+						'purchased_date' => $logRow->purchased_date,
+						'stock_id' => $logRow->stock_id,
+						'price' => $logRow->price,
+						'opened_date' => $logRow->opened_date,
+						'note' => $logRow->note,
+						'shopping_location_id' => $logRow->shopping_location_id
+					]);
+					$stockRow->save();
+				}
+				else
+				{
+					$stockRow->update([
+						'amount' => $stockRow->amount - $logRow->amount
+					]);
+				}
+
+				// Update log entry
+				$logRow->update([
+					'undone' => 1,
+					'undone_timestamp' => date('Y-m-d H:i:s')
+				]);
+			}
+			elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_PRODUCT_OPENED)
+			{
+				// Remove opened flag from corresponding stock entry
+				$stockRows = $this->DB->stock()->where('stock_id = :1 AND amount = :2 AND purchased_date = :3', $logRow->stock_id, $logRow->amount, $logRow->purchased_date)->limit(1);
+				$stockRows->update([
+					'open' => 0,
+					'opened_date' => null,
+					'best_before_date' => $logRow->best_before_date // Is only relevant when the product has "Default due days after opened", but also doesn't hurt for other products
+				]);
+
+				// Update log entry
+				$logRow->update([
+					'undone' => 1,
+					'undone_timestamp' => date('Y-m-d H:i:s')
+				]);
+			}
+			elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_STOCK_EDIT_NEW)
+			{
+				// Update log entry, no action needed
+				$logRow->update([
+					'undone' => 1,
+					'undone_timestamp' => date('Y-m-d H:i:s')
+				]);
+			}
+			elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_STOCK_EDIT_OLD)
+			{
+				// Make sure there is a stock row still
+				$stockRow = $this->DB->stock()->where('id = :1', $logRow->stock_row_id)->fetch();
+
+				if ($stockRow == null)
+				{
+					throw new \Exception('Booking does not exist or was already undone');
+				}
+
+				$openedDate = $logRow->opened_date;
+				$open = true;
+				if ($openedDate == null)
+				{
+					$open = false;
+				}
+
+				$stockRow->update([
+					'amount' => $logRow->amount,
+					'best_before_date' => $logRow->best_before_date,
+					'purchased_date' => $logRow->purchased_date,
+					'price' => $logRow->price,
+					'location_id' => $logRow->location_id,
+					'open' => $open,
+					'opened_date' => $openedDate,
+					'note' => $logRow->note
+				]);
+
+				// Update log entry
+				$logRow->update([
+					'undone' => 1,
+					'undone_timestamp' => date('Y-m-d H:i:s')
+				]);
 			}
 			else
 			{
-				$stockRow->update([
-					'amount' => $stockRow->amount - $logRow->amount
-				]);
+				throw new \Exception('This booking cannot be undone');
 			}
-
-			// Update log entry
-			$logRow->update([
-				'undone' => 1,
-				'undone_timestamp' => date('Y-m-d H:i:s')
-			]);
-		}
-		elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_PRODUCT_OPENED)
-		{
-			// Remove opened flag from corresponding stock entry
-			$stockRows = $this->DB->stock()->where('stock_id = :1 AND amount = :2 AND purchased_date = :3', $logRow->stock_id, $logRow->amount, $logRow->purchased_date)->limit(1);
-			$stockRows->update([
-				'open' => 0,
-				'opened_date' => null,
-				'best_before_date' => $logRow->best_before_date // Is only relevant when the product has "Default due days after opened", but also doesn't hurt for other products
-			]);
-
-			// Update log entry
-			$logRow->update([
-				'undone' => 1,
-				'undone_timestamp' => date('Y-m-d H:i:s')
-			]);
-		}
-		elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_STOCK_EDIT_NEW)
-		{
-			// Update log entry, no action needed
-			$logRow->update([
-				'undone' => 1,
-				'undone_timestamp' => date('Y-m-d H:i:s')
-			]);
-		}
-		elseif ($logRow->transaction_type === self::TRANSACTION_TYPE_STOCK_EDIT_OLD)
-		{
-			// Make sure there is a stock row still
-			$stockRow = $this->DB->stock()->where('id = :1', $logRow->stock_row_id)->fetch();
-
-			if ($stockRow == null)
-			{
-				throw new \Exception('Booking does not exist or was already undone');
-			}
-
-			$openedDate = $logRow->opened_date;
-			$open = true;
-			if ($openedDate == null)
-			{
-				$open = false;
-			}
-
-			$stockRow->update([
-				'amount' => $logRow->amount,
-				'best_before_date' => $logRow->best_before_date,
-				'purchased_date' => $logRow->purchased_date,
-				'price' => $logRow->price,
-				'location_id' => $logRow->location_id,
-				'open' => $open,
-				'opened_date' => $openedDate,
-				'note' => $logRow->note
-			]);
-
-			// Update log entry
-			$logRow->update([
-				'undone' => 1,
-				'undone_timestamp' => date('Y-m-d H:i:s')
-			]);
-		}
-		else
-		{
-			throw new \Exception('This booking cannot be undone');
-		}
+		});
 	}
 
 	/**
@@ -2119,10 +2194,15 @@ class StockService extends BaseService
 			throw new \Exception('This transaction was not found or already undone');
 		}
 
-		foreach ($transactionBookings as $transactionBooking)
+		// A partially undone transaction is a state the ledger cannot represent, so the
+		// bookings are undone all together or not at all.
+		DatabaseService::GetInstance()->InTransaction(function () use ($transactionBookings)
 		{
-			$this->UndoBooking($transactionBooking->id, true);
-		}
+			foreach ($transactionBookings as $transactionBooking)
+			{
+				$this->UndoBooking($transactionBooking->id, true);
+			}
+		});
 	}
 
 	/**
@@ -2157,8 +2237,7 @@ class StockService extends BaseService
 			throw new \Exception('$productIdToKeep cannot equal $productIdToRemove');
 		}
 
-		DatabaseService::GetInstance()->GetDbConnectionRaw()->beginTransaction();
-		try
+		DatabaseService::GetInstance()->InTransaction(function () use ($productIdToKeep, $productIdToRemove)
 		{
 			$productToKeep = $this->DB->products($productIdToKeep);
 			$productToRemove = $this->DB->products($productIdToRemove);
@@ -2178,13 +2257,7 @@ class StockService extends BaseService
 			DatabaseService::GetInstance()->ExecuteDbStatement('UPDATE meal_plan SET product_id = ' . $productIdToKeep . ', product_amount = product_amount * ' . $factor . ' WHERE product_id = ' . $productIdToRemove);
 			DatabaseService::GetInstance()->ExecuteDbStatement('UPDATE shopping_list SET product_id = ' . $productIdToKeep . ', amount = amount * ' . $factor . ' WHERE product_id = ' . $productIdToRemove);
 			DatabaseService::GetInstance()->ExecuteDbStatement('DELETE FROM products WHERE id = ' . $productIdToRemove);
-		}
-		catch (\Exception $ex)
-		{
-			DatabaseService::GetInstance()->GetDbConnectionRaw()->rollback();
-			throw $ex;
-		}
-		DatabaseService::GetInstance()->GetDbConnectionRaw()->commit();
+		});
 	}
 
 	/**
@@ -2215,8 +2288,7 @@ class StockService extends BaseService
 
 		foreach ($splittedStockEntries as $splittedStockEntry)
 		{
-			DatabaseService::GetInstance()->GetDbConnectionRaw()->beginTransaction();
-			try
+			DatabaseService::GetInstance()->InTransaction(function () use ($splittedStockEntry)
 			{
 				$stockIds = explode(',', $splittedStockEntry->stock_id_group);
 				foreach ($stockIds as $stockId)
@@ -2240,13 +2312,7 @@ class StockService extends BaseService
 						DatabaseService::GetInstance()->ExecuteDbStatement('UPDATE stock SET amount = ' . $splittedStockEntry->total_amount . ' WHERE id = ' . $splittedStockEntry->id_to_keep);
 					}
 				}
-			}
-			catch (\Exception $ex)
-			{
-				DatabaseService::GetInstance()->GetDbConnectionRaw()->rollback();
-				throw $ex;
-			}
-			DatabaseService::GetInstance()->GetDbConnectionRaw()->commit();
+			});
 		}
 	}
 
