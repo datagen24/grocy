@@ -4,7 +4,13 @@
 one command, add a response-contract snapshot so the additive-API rule is enforced by a
 failing test rather than by vigilance, and put both behind minimal CI.
 **Depends on:** nothing. Everything else in the roadmap is easier once this exists.
-**Status:** draft for review.
+**Status:** **partly landed.** Pieces 1, 3 and 4 are in the tree — the runnable suite, CI,
+and the coverage reporting added after the plan was written — landed as wave 0 between
+2026-08-27 and 2026-08-29. **Piece 2, the response-contract snapshot, is not built**, and
+remains scheduled for wave 5 after [11](11-api-error-handling.md) has stabilised the
+failure paths it would record. See [Executed](#executed) for what landed and what the
+suite grew in the doing. Everything below is the plan as written and reviewed; where it
+describes piece 1 in the future tense, read the Executed section for the present one.
 
 ## Today
 
@@ -56,14 +62,43 @@ response is a raw LessQL row or view serialised as-is. **The database schema is 
 contract**, and there is no tripwire between a migration and a client. Change a view's
 column type and the JSON changes; nothing anywhere notices.
 
-The route/spec mismatches are a small illustration — there are two, and they point in
-opposite directions: `/api/openapi/specification` is registered at `routes.php:154` and
-missing from `victual.openapi.json`, while `/api/recipes/{recipeId}/copy` is documented in
-the spec with no route behind it. The totals hide both, because the route table and the
-spec each come to 86 operations across 73 paths. They have survived because nothing
-compares the two — and the pair matters for the parity assertion in piece 2: a check
-written as "every route is in the spec" passes on the second one, and a check written as
-a set comparison fails immediately on both until they are fixed.
+The route/spec mismatch is a small illustration, and the story of how it was counted is a
+better argument for piece 2 than the mismatch itself. **Corrected 2026-08-29:** this plan
+and [11](11-api-error-handling.md) both said there were *two* mismatches pointing in
+opposite directions — `/api/openapi/specification` registered at `routes.php:154` and
+missing from `victual.openapi.json`, and `/api/recipes/{recipeId}/copy` documented in the
+spec with no route behind it. Only the first is real. The copy route exists, at
+`routes.php:237`, and has for as long as the recipes controller has had a `CopyRecipe`
+method to point at:
+
+```php
+$group->Post('/recipes/{recipeId}/copy', [RecipesApiController::class, 'CopyRecipe']);
+```
+
+Note the capital `P`. PHP method names are case-insensitive, so Slim registers the route
+and it answers normally; a `grep` for `$group->post(` does not see it. It is the only
+capitalised method verb in `routes.php` — 124 `get`, 34 `post`, 7 `put`, 4 `delete`, and
+this one `Post` — which is exactly the kind of single exception a hand-run extraction gets
+wrong once and then nobody re-checks.
+
+The real numbers: the `/api` group registers **87 operations across 74 paths**, the spec
+documents **86 across 73**, and the one-item difference is `GET /openapi/specification` in
+the routes and not in the spec. The spec has no entry that lacks a route. The earlier
+"86 and 86, and the totals hide both" reading was itself the artifact — two errors, one in
+the spec and one in the extractor, cancelling to an equal count and thereby looking like
+confirmation.
+
+That sharpens what piece 2 has to build rather than weakening it:
+
+- **The extractor is a thing that can be wrong, and must be treated as such.** Match the
+  method verb case-insensitively, and assert the operation count the extraction produces
+  rather than only diffing the two sets — a route silently dropped on the way in makes the
+  comparison agree for the wrong reason, which is precisely what happened here by hand.
+- **The assertion stays a two-way set comparison.** Today's live defect points one way
+  only, so a one-way "every route is in the spec" check would catch it. The other
+  direction — a documented path whose route was deleted — has no live example, but it is
+  exactly the defect this plan spent months believing it had, and a check that cannot see
+  it is a check that would never have corrected the belief.
 
 **Every tool measures from a state that is copied, not migrated.** `difftest.php`,
 `trigdifftest.php` and the rollback phase each populate PostgreSQL with
@@ -152,7 +187,7 @@ importer from [04](04-seed-datasets.md) — is Q2.
 
 A script that, against a booted instance seeded with the same fixture:
 
-- calls every operation in the route table (86, across 73 paths) with a valid key;
+- calls every operation in the route table (87, across 74 paths) with a valid key;
 - records, per route, the **JSON key set** and the **scalar type of each value** — not the
   values themselves, which are fixture-dependent and would make the snapshot brittle;
 - compares that against the OpenAPI schemas, and against the previous snapshot;
@@ -173,12 +208,12 @@ The comparison is three-way and each leg catches something different:
 | snapshot vs OpenAPI schema | a response that never matched its documentation |
 | engine vs engine | a port that diverged on the wire |
 
-Both route/spec mismatches get fixed here — `/api/openapi/specification` added to the
-spec, `/api/recipes/{recipeId}/copy` removed from it or given a route, whichever the
-recipes controller says is right — along with a route-table-vs-spec parity assertion
-written as a two-way set comparison so the next one in either direction cannot survive.
-The assertion has to land with the fixes rather than before them: it fails on both from
-the moment it exists.
+The one real route/spec mismatch gets fixed here — `/api/openapi/specification` added to
+the spec — along with a route-table-vs-spec parity assertion written as a two-way set
+comparison so the next one in either direction cannot survive. `/api/recipes/{recipeId}/copy`
+needs nothing: it is in both, and the belief that it was not is what the extractor
+requirements above exist to prevent. The assertion has to land with the fix rather than
+before it: it fails from the moment it exists.
 
 ### 3. Minimal CI
 
@@ -219,11 +254,11 @@ against it for now.
 ### API
 
 **No change to any endpoint**, with one exception: `victual.openapi.json` gains the missing
-`/api/openapi/specification` path, loses or gains a route for
-`/api/recipes/{recipeId}/copy`, and gains documented error responses for whatever
+`/api/openapi/specification` path, and gains documented error responses for whatever
 [11](11-api-error-handling.md) has converted by then. Adding a path to the spec is
-additive by definition and changes no response; removing a documented path that never had
-a route behind it changes no response either, since nothing was ever answering it.
+additive by definition and changes no response. Nothing is removed from the spec — the
+earlier plan to drop `/api/recipes/{recipeId}/copy` rested on a miscount and would have
+deleted the documentation of a working endpoint.
 
 The plan's *purpose*, though, is API compatibility: after it exists, "existing endpoints
 keep their response shape" — the second ground rule in this README — is a test that fails
@@ -284,7 +319,7 @@ dependents.** Three separate things in the roadmap already assume it exists:
   the schema.
 
 **Before [11](11-api-error-handling.md)**, if both are being done. 11 deliberately changes
-status codes on failure paths across 86 operations, and its own verification section is two
+status codes on failure paths across 87 operations, and its own verification section is two
 full-surface sweeps. Building the sweep here and letting 11 present its changes as a diff
 is strictly better than 11 asserting them by hand.
 
@@ -373,7 +408,7 @@ it worked.
    > standing rule if a type difference ever does surface on a reachable route: the
    > porting rules say that is a port bug — fix the view (a `CAST`), don't exempt
    > it. An exemption mechanism is where wire-format bugs go to become permanent.
-5. **How much of the API does the contract snapshot cover?** All 86 operations is the
+5. **How much of the API does the contract snapshot cover?** All 87 operations is the
    complete answer and is mostly mechanical, since 40-odd of them are the generic
    `/api/objects/{entity}` shape. The stock, recipes and chores endpoints are the ones
    with hand-built responses and the ones where a change is most likely — starting there
@@ -400,6 +435,41 @@ it worked.
    > **Response:** Timebox recovery to an hour. The eight trigger-tests plus the
    > README's fifteen documented hazards are map enough to rewrite from — bounded
    > work, not doubled. Don't let archaeology block piece 1.
+
+## Executed
+
+Wave 0, landed 2026-08-27 to 2026-08-29. Pieces 1, 3 and 4; piece 2 is untouched.
+
+- **`40e1f57f` — the dev/CI environment and the migration CLI.** The `Dockerfile` and
+  `docker-compose.yml` this plan's Today section says do not exist now do, and
+  `bin/victual-migrate` is the CLI pulled forward from
+  [10](10-cold-start-statelessness.md) so `trigdifftest.php` can be handed a migrated
+  SQLite database from a command line. That inversion — 10's CLI preceding 14 — is
+  recorded in the roadmap's order of operations as the one place the wave order overrides
+  the plan numbering.
+- **`d80a88f0` — the suite made runnable.** `.devtools/pgsql/run-tests.sh`, committed
+  fixtures under `fixtures/` and `view-tests/`, and the `normalise()` extraction this plan
+  promised [13](13-write-path-transactions.md) it would make reusable, now
+  `services/Database/ValueComparison.php` — which 13 duly consumed rather than duplicating.
+- **`fd506a85` — CI.** `.github/workflows/tests.yml`: lint plus the suite, with a
+  PostgreSQL service container, which was Q3's open question and is now answered by
+  a working workflow.
+
+Three things the suite grew that the plan did not ask for, each because the plan's own
+"ask every phase which of its inputs it takes on trust" test found a gap:
+
+- **`31401f0`** added `.devtools/pgsql/check-migrations.php`, which enforces the
+  `@engine-exclusive` and `@overrides-generic` markers `db/pgsql/README.md` defines.
+- **`4ae6990`** added `migratedifftest.php`, the migrate-on-both-engines-and-compare phase
+  described in Today, which immediately found the defect Today describes: a freshly
+  migrated PostgreSQL database with no admin user, an empty permission hierarchy and no
+  quantity units.
+- **`d2524a3`** committed the rollback tests, and **`36a3032`** added the coverage
+  reporting that is piece 4.
+
+**What piece 2 still owes**, unchanged by any of the above: the response-contract
+snapshot, the route-table-vs-spec parity assertion, and the one spec fix
+(`/api/openapi/specification`) that assertion lands with.
 
 ## Effort
 

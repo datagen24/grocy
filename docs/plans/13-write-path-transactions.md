@@ -3,8 +3,13 @@
 **Goal:** No stock operation can leave the ledger half-written. Wrap the four unwrapped
 multi-row entrypoints in transactions, and give `DatabaseImporter` the same guarantee.
 **Depends on:** nothing.
-**Status:** draft for review. Prerequisite for letting anything other than a human drive
-writes — in particular [02 MCP](02-mcp-endpoint.md).
+**Status:** **landed in the codebase** (2026-08-29). All seven entrypoints and the
+importer are wrapped; see [Executed](#executed) below for what landed, and for the two
+places the plan's own scope grew in the doing. Everything from here down is the plan as
+written and reviewed, kept because the reasoning is what the code has to keep being
+judged against. Still the prerequisite it was written to be for letting anything other
+than a human drive writes — in particular [02 MCP](02-mcp-endpoint.md) — which is now
+satisfied rather than pending.
 
 ## Today
 
@@ -304,6 +309,48 @@ Against feature plans generally: it blocks none of 01–09 outright.
    > `WithMigrationLock` is principled — engine-neutral composition on the service,
    > engine-specific behavior on the dialect. A cross-referencing docblock each way
    > solves the discoverability worry; colocation would solve nothing.
+
+## Executed
+
+Landed 2026-08-29 in three commits, in the order the plan argues for: the helper first,
+then the entrypoints that use it, then the importer.
+
+- **`7abfd2fa` — the transaction helper.** `DatabaseService::InTransaction(callable)`
+  (`services/DatabaseService.php:221`). An inner call joins an already-open transaction
+  and the outermost caller owns the commit, which is what the nesting problem above
+  needs and what none of these operations wants to differ from — nothing here wants a
+  partial rollback. "Is a transaction already open?" is asked of PDO rather than tracked
+  in a counter, because `DatabaseMigrationService` opens its own transactions directly
+  and a counter would not know about them.
+- **`782289b8` — the entrypoints.** **Seven, not the four this plan's table names**, per
+  question 4: `AddProduct`, `ConsumeProduct`, `InventoryProduct`, `OpenProduct`,
+  `TransferProduct`, `UndoBooking` and `UndoTransaction`. "Every stock write path is
+  transactional" is worth being able to say without exceptions. The four sites that
+  already rolled their own transactions — `MergeProducts`, `CompactStockEntries`,
+  `ChoresService::MergeChores` and `RecipesService::ConsumeRecipe` — were converted to
+  the same helper, so the codebase has one idiom rather than an idiom plus a helper.
+  Each transaction starts after validation, per question 3, so it holds only writes and
+  the SQLite write-lock window stays as short as the work. The label-printer webhooks
+  moved out of the transaction per question 1(a), with payloads still built inside the
+  loop so a label describes the entry as it was booked.
+- **`96f9ec99` — the importer.** The transaction covers the truncate, the trigger
+  toggling and the copy, which it has to: the truncate happens before anything can go
+  wrong, and a failure between disabling and re-enabling triggers leaves a target that
+  looks fine and has quietly stopped maintaining itself. The row-count check became a
+  column-by-column value comparison through `ValueComparison` — the same normalisation
+  [14](14-contract-and-regression-scaffolding.md)'s suite uses — per question 5, because
+  every one of `db/pgsql/README.md`'s fifteen coercion hazards arrives with the right
+  number of rows and the wrong values inside them.
+
+Verified as the Verification section asks: a probe that injects a real failure mid-operation
+and compares the full `stock` and `stock_log` ledger before and after. On unmodified code
+all five cases report DIRTY, every one genuinely throwing; with the change all five are
+CLEAN and the ledger is byte-identical after a failed operation. That baseline is the part
+that makes the result mean anything. Webhook behaviour was measured against a request-counting
+target rather than reasoned about: a successful three-unit labelled purchase fires three
+calls as before, and the same purchase failing on its second unit now fires zero where it
+previously printed a label for a unit that was then rolled back. The differential suite
+passes on both engines.
 
 ## Effort
 

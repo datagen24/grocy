@@ -7,8 +7,10 @@
 
 <!-- Answer each line, or write "none" if nothing here applies. -->
 
-- **Schema change?** State the migration shape — a portable `NNNN.sql`, or a per engine
-  `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair. See `db/pgsql/README.md`.
+- **Schema change?** State the migration shape — a portable `NNNN.sql`, a per engine
+  `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair, or a documented engine-exclusive migration
+  carrying `@engine-exclusive` (or `@overrides-generic`, if it shadows a portable file of
+  the same number). See `db/pgsql/README.md`.
 - **Changes an existing API response?** Say which endpoint and which field or status code.
   New entities and fields are additive and just need a note; anything that changes an
   existing response shape is called out explicitly rather than slipped in.

@@ -3,7 +3,14 @@
 **Goal:** Support product hierarchies more than one level deep.
 **Depends on:** nothing, but do [08 nested locations](08-nested-locations.md) first — same
 pattern, far fewer call sites.
-**Status:** draft for review.
+**Status:** draft for review, and **blocked on its own question 6** — which asks whether
+the requirement is a taxonomy or a packaging relation, and whose recorded response says
+that on the taxonomy reading this plan is mostly unnecessary and the change belongs in
+[03](03-category-min-stock.md) as a nested `product_groups` column instead. Q6 decides
+whether 07 is the largest item on the roadmap or one of the smallest, so it is answered
+before any of this is scheduled, not during. Nothing below assumes that answer; Q1 and Q4
+in particular are written against the taxonomy reading and are rewritten if Q6 lands the
+other way.
 
 ## Today
 
@@ -210,6 +217,13 @@ compared against a deliberate expectation rather than against whatever falls out
 
 ## Effort
 
-Large — the largest item on the roadmap. The recursive view is an afternoon; the audit,
-the decisions above and the regression fixtures are the rest. Worth doing after 08 has
-established the pattern.
+**Conditional on Q6, and the two branches are not the same order of magnitude.**
+
+On the packaging reading, large — the largest item on the roadmap. The recursive view is
+an afternoon; the audit, the decisions above and the regression fixtures are the rest.
+Worth doing after 08 has established the pattern.
+
+On the taxonomy reading, most of that cost belongs to a nullable parent column on
+`product_groups` in [03](03-category-min-stock.md), and what is left here is only the
+genuine same-product-different-packaging cases — small, and possibly nothing at all. The
+roadmap's wave 4 is written around the first branch and says so.
