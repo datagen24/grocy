@@ -164,6 +164,30 @@ Anything else that reasons about schema versions, including
 and `trigdifftest.php` (trigger behaviour). New views must return identical output on both
 engines unless the plan says otherwise and explains why.
 
+**What the always-on cluster services are for.** The k3s cluster runs an MQTT broker,
+Redis and InfluxDB, all of them always on while the application pod is usually asleep.
+That asymmetry is the useful thing about them, and it is easy to reach for the wrong one,
+so the division is by capability rather than by taste:
+
+- **MQTT** — *tell someone something happened*, and hold the last thing said. Retained
+  topics are how a consumer stays correct across an arbitrarily long pod absence
+  ([18](18-mqtt-state-publication.md)). It is not a datastore and has no atomic
+  operations; nothing that needs to count or lock belongs here.
+- **Redis** — *count, lock or expire something, atomically*, where the value must outlive
+  the pod but is not the household's data. `INCR`, `SETNX`, TTLs. Sweep S12's login
+  throttle is the first real case and is not optional: on this deployment an in-process
+  counter is reset for free by an attacker who waits out an idle window.
+- **PostgreSQL** — anything that must still be true after everything restarts, which is
+  the household's actual data and, today, its sessions.
+
+The corollary is worth stating because the intuition runs the other way: **splitting the
+web UI from the application would not create a need for Redis.** The usual reason a
+separated tier wants a shared store is session state across replicas, and sessions are
+already rows in PostgreSQL — shared, and surviving the pod by construction. A static
+frontend holding a bearer token, which is the seam [02](02-mcp-endpoint.md) needs built
+anyway, has no server-side session at that tier at all. Redis earns its place on the
+three jobs above and should be adopted when one of them lands, not as architecture.
+
 ## Order of operations
 
 The single sequence to work from, features and hardening interleaved. Constraints it
