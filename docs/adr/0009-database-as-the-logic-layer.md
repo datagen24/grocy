@@ -215,7 +215,9 @@ Gates, not suggestions. The accepting pull request says how each was met.
   **Before this record may claim a database-enforced policy shared across channels, the
   Anonymizer spike has to pass**, and it is seven things rather than one:
 
-  1. A Victual-role to database-role (or masking-policy) mapping.
+  1. A **deterministic** mapping from a Victual user's combined application roles to
+     exactly one database masking policy, written down as a rule rather than left to the
+     extension's "first in the list wins".
   2. Transaction- and pool-safe role selection, with no identity leaking between requests.
   3. A user receiving masked reads still performing permitted writes — or a deliberate
      read/write connection split, given masked roles are documented read-only.
@@ -285,7 +287,7 @@ Gates, not suggestions. The accepting pull request says how each was met.
      | Masking substitutes a value; it cannot make a key absent | Same `NULL`-doing-two-jobs defect as the plain view. If masking can only return `NULL` or a placeholder, 19 either revises its wire contract or keeps a response-shaping step |
      | Masking views are deliberately constructed interfaces, not an automatic extension over derived views | Every price-bearing view of ours — `products_average_price`, `uihelper_stock_current_overview`, `uihelper_product_details`, `recipes_resolved` — needs explicit coverage, and [ADR-0005](0005-wire-contract-is-the-invariant.md) already lists that exact set |
      | MQTT has no reader identity | Needs an explicitly chosen unprivileged publishing role, never the interactive caller's |
-     | Whether one PostgreSQL role can carry more than one masking policy | Multiple policies can be *defined*; whether a role composes several is unconfirmed, and a Victual user holding several application roles needs an answer |
+     | **A role gets exactly one masking policy.** Several may be *defined*, but where a role is masked in several, only the first in the list applies — they do not compose | This is the gap that shapes the mapping rather than merely complicating it. A Victual user holding several application roles must resolve to **one** database masking policy, deterministically and by a rule written down, because the extension will otherwise pick one silently. Under [ADR-0006](0006-authenticated-issues-in-scope.md) "silently picks the first" is a permission bug waiting to happen: the failure is a user seeing *more* than intended, with nothing in the output to say so |
 
      **One thing the review did not have, and it matters under
      [ADR-0006](0006-authenticated-issues-in-scope.md):** Anonymizer 1.1.0 and 1.2.0 carried

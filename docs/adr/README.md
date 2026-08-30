@@ -33,10 +33,19 @@ anyway, because "who decides" is the question a corpus of proposals is worst at 
 implicitly, and because a Proposed record with no named decider is one nobody is obliged
 to resolve. Backfilled records name the maintainer retrospectively.
 
-**Accepting or rejecting is its own pull request**, touching the ADR's status line and
-nothing else. A record is not accepted by a plan that assumes it, by a PR that implements
-it, or by not being argued with. This keeps the moment of decision reviewable on its own
-terms and keeps a rejected proposal from being adopted by momentum.
+**Accepting or rejecting is its own pull request**, carrying the lifecycle bookkeeping and
+no substantive change. That means exactly four things: the record's status line, its index
+row here, the forward pointer on any record it supersedes, and its own reference to what
+it supersedes. Nothing else — no argument revised on the way through, no consequence
+softened, no prerequisite quietly dropped. A record is not accepted by a plan that assumes
+it, by a PR that implements it, or by not being argued with. This keeps the moment of
+decision reviewable on its own terms and keeps a rejected proposal from being adopted by
+momentum.
+
+The bookkeeping is part of the acceptance rather than a follow-up because a superseded
+record with no forward pointer is the failure this corpus is meant to prevent: the reader
+who finds [0001](0001-postgresql-alongside-sqlite.md) first and never learns it was
+replaced.
 
 **A Proposed record may name acceptance prerequisites** — measurements to take, spikes to
 run, questions to answer — under a heading of that name. Where it does, those are gates
@@ -44,7 +53,8 @@ rather than suggestions, and the accepting pull request says how each was met. A
 whose prerequisites are unmet is not ready to accept even if everyone agrees with it.
 
 **Superseding.** A record is superseded, never edited into a different decision. The new
-record names the old, the old points forward, and both keep their files.
+record names the old, the old points forward, and both keep their files — all of which the
+accepting pull request does, per the rule above.
 
 **Options considered** and **Research** sections appear where the decision was contested
 enough to be worth showing the work. Backfilled records mostly skip them — the reasoning
