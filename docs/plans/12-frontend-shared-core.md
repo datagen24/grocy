@@ -463,6 +463,13 @@ be the one that slips when wave 1 gets busy.
    > Second, the files the question left unbucketed: `equipment.js` (192 lines),
    > `tasks.js` (278) and `stockjournal.js` are mixin adopters — list-shaped with
    > enough page-specific behaviour that the full factory would fight them.
+   >
+   > Third, added 2026-08-30: [19](19-rbac.md)'s `/role/{id}` joins the partial-clone
+   > bucket by construction — it is `userpermissions.js`'s checkbox tree bound to
+   > `role_permissions` — and 19 also edits `userpermissions.js` itself. So that list
+   > grows by one rather than the factory list growing by two, and 19's `/roles` list is
+   > the only clean factory call it brings.
+   >
    > `shoppinglist.js` (708 lines) joins `mealplan.js` and `recipes.js` in the
    > leave-alone bucket; at that size it is its own application, not a list script
    > with extras.

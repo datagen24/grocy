@@ -314,7 +314,7 @@ form shows its location field again.
 |---|---|---|---|---|
 | S29 | **High** — *assigned to [12](plans/12-frontend-shared-core.md)* | **Every "are you sure" dialog and success toast is an HTML sink fed an unescaped name.** Two libraries render their message as HTML by construction: `bootbox` does `body.find('.bootbox-body').html(options.message)`, and `toastr` ships `escapeHtml: false` as its default and this fork never sets it. The frontend then builds those messages by interpolating a name straight from a text column — `__t('Are you sure you want to delete location "%s"?', objectName)` where `objectName` came from a `data-*-name` attribute, and `toastr.success(__t('…%s…', result.product.name))`. Around 45 sites across ~25 files: roughly 24 delete/action confirmations and 20 success toasts, over `products.name`, `recipes.name`, `locations.name`, `chores.name`, `batteries.name`, `tasks.name`, `quantity_units.name`, `product_groups.name`, `shopping_lists.name`, `users.username`, `api_keys.description` and more. `components/productamountpicker.js` builds `<option>` markup from `quantity_units.name` the same way. **Demonstrated, not inferred**: a product named `&lt;img src=x onerror=…&gt;` is stored as a live tag by the S1 path and executes on view. The existing `.escapeHTML()` convention is one call site in the whole tree (`mealplan.js:169`), and even that is defeated when the value is written into a `data-*` attribute and read back with `.attr()`, which returns the decoded string. | `public/viewjs/*.js`, `public/js/victual.js` (toastr options) | Escape at each interpolation. A global `toastr.options.escapeHtml` is **not** available as a shortcut: ten messages carry deliberate markup, including the Undo button in the consume toast, which that flag would turn into visible tag text. Each site also needs checking that the variable is not reused for a URL or an API parameter. |
 | S28 | **Med** — *fixed* | **`javascript:` URIs in userfield links.** `components/userfields_tbody.blade.php` renders `<a href="{{ $userfieldObject->value }}">` for `USERFIELD_TYPE_LINK` and the decoded `$link` for `LINK_WITH_TITLE`. Blade's `{{ }}` escapes the *attribute* and does nothing about the *scheme*, and a userfield value is a text column — no markup for HTMLPurifier to act on, and `URI.AllowedSchemes` only governs hrefs inside purified HTML, never a bare column value a view drops into an `href`. So any `MASTER_DATA_EDIT` account can store `javascript:…` and it runs in this origin on click. Missed by the original sweep because its output-escaping pass looked for unescaped rendering, and this value is escaped; the category it lacked is URL-scheme sinks. Raised in review of the hotfix. | `views/components/userfields_tbody.blade.php`, `helpers/extensions.php` | Fixed in the hotfix: `SafeExternalUrl()` allows relative URLs plus `http`, `https` and `mailto`, and answers `#` otherwise. The probe strips whitespace and control characters before reading the scheme, because browsers ignore those inside one. The value is still shown as the link text, so nothing is hidden — it just does not navigate. |
-| S27 | **Low** | **The permissions API stores `permission_id` unvalidated, and a wrong value fails silently.** `SetPermissions` (`PUT`) and `AddPermission` (`POST`) write the body's `permission_id` into `user_permissions` verbatim — no check that it exists in `permission_hierarchy`, and the column takes a string. `PUT …/permissions` with `{"permissions":["STOCK"]}` answers 204 and writes a row that grants nothing, because `uihelper_user_permissions` joins on the numeric id. The failure is closed rather than open — the user ends up with *fewer* permissions, not more — but an administrator is told the grant succeeded when it did not, which is the same class of silent authorization failure as R1. Found while building a low-privilege account to verify S2's permission gate. | `controllers/Api/UsersApiController.php::SetPermissions`, `::AddPermission` | Validate each id against `permission_hierarchy` and answer 400 otherwise. Body-schema validation is 14 piece 2's (S16); this one is small enough to ride with 15-C1's user-permission work in wave 2. |
+| S27 | **Low** — *wave 2, unparked from 19* | **The permissions API stores `permission_id` unvalidated, and a wrong value fails silently.** `SetPermissions` (`PUT`) and `AddPermission` (`POST`) write the body's `permission_id` into `user_permissions` verbatim — no check that it exists in `permission_hierarchy`, and the column takes a string. `PUT …/permissions` with `{"permissions":["STOCK"]}` answers 204 and writes a row that grants nothing, because `uihelper_user_permissions` joins on the numeric id. The failure is closed rather than open — the user ends up with *fewer* permissions, not more — but an administrator is told the grant succeeded when it did not, which is the same class of silent authorization failure as R1. Found while building a low-privilege account to verify S2's permission gate. | `controllers/Api/UsersApiController.php::SetPermissions`, `::AddPermission` | Validate each id against `permission_hierarchy` and answer 400 otherwise. Body-schema validation is 14 piece 2's (S16); this one is small enough to ride with 15-C1's user-permission work in wave 2. |
 
 ### Regression found on the way
 
@@ -351,43 +351,81 @@ a booted-instance verification (upload an SVG, confirm it downloads rather than 
 same PR because it is two lines and its verification (open the consume form with
 location tracking on) is the same booted instance.
 
-**The permission-model findings belong to [plan 19](plans/19-rbac.md).** That plan landed
-on 2026-08-30 and is scheduled as its own wave 3 track; this paragraph previously said an
-RBAC plan was "in draft on its own branch", which is what it has stopped being. The items
-below are deliberately *not* being solved piecemeal ahead of it, because each of them is a
-symptom of the same thing: there is no model here, only thirty constants and a hierarchy
-view, and not one of them gates a *field*. What 19 decides, these inherit —
 
-- **S5** (`DEFAULT_PERMISSIONS = ['ADMIN']`) is a question about what a newly created user
-  should be, which is a model question and not a config default.
-- **S6** (`USERS_EDIT` can reset an admin's password) needs "may A administer B", which
-  does not exist today in any form.
-- **S27** (unvalidated `permission_id`, silently granting nothing) is a validation bug whose
-  fix depends on what a permission *is* once the model says so.
-- **The `userpictures` residual** below — "may edit some user" standing in for "may edit
-  this user" — is the same gap in miniature, and its current fix is a filename comparison
-  precisely because there is nothing better to ask.
+**The permission-model findings were parked on an RBAC plan; four of the five are now
+unparked.** That plan landed as [19](plans/19-rbac.md) on 2026-08-30, and reading it
+against the code reversed the parking rather than confirming it. 19's own Depends-on line —
+in its first draft, before any review edits — puts it *after* wave 2's S5/S6, so parking S5
+and S6 on 19 inverted the dependency the plan itself states. The distinction the parking missed is between the *rule* and the *model*: the
+subset-of-caller rule needs a caller's resolved set, a target's resolved set and the
+closure of a proposed grant, all of which are `user_permissions_resolved` and
+`permission_tree` as they stand today. 19 widens that view with a union over
+`role_permissions`; a comparison written against it in wave 2 keeps working verbatim.
+
+- **S5** (`DEFAULT_PERMISSIONS = ['ADMIN']`) — **wave 2.** The value is not a model
+  question: `[]` is the premise 19 is written on, whose `VICTUAL_DEFAULT_ROLES` also
+  defaults to empty. Two of the three `CreateUser` call sites have no creator to compare
+  against — `ReverseProxyAuthMiddleware.php:79` and `LdapAuthMiddleware.php:108`, the
+  latter deleted by 15-B1 — so for those the default *is* the whole fix, and only
+  `POST /api/users` gets the subset rule.
+- **S6** (`USERS_EDIT` can reset an admin's password) — **wave 2**, and worse than recorded
+  above. "May A administer B" does have an answer today — B's resolved permissions are a
+  subset of A's — computable from the existing view. And the escalation does not need
+  `USERS_EDIT` at all: `USERS` → `USERS_CREATE` → `USERS_EDIT` → `USERS_READ` is a chain
+  (`migrations/0110.sql:29-43`) and the tree resolves downward, so `USERS_CREATE` alone
+  already resolves to `USERS_EDIT`. An account that may create users may rewrite any
+  admin's password today.
+- **S27** (unvalidated `permission_id`, silently granting nothing) — **wave 2.** One
+  existence check against `permission_hierarchy`. 19 adds rows to that table; it does not
+  change what validating one means.
+- **The `userpictures` residual** — **wave 2**, with S6. It is a route gap rather than a
+  model gap: the route carries no user id, but `users.picture_file_name` recovers the
+  owner, so the check becomes owner-is-caller → `USERS_EDIT_SELF`, else `USERS_EDIT`. The
+  filename comparison is standing in for a lookup, not for a model. Whether S6's subset
+  rule also applies to a picture — may an editor delete the avatar of a user holding
+  permissions they lack — is a separate and smaller question, worth deciding rather than
+  assuming in either direction.
 - **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch**, recorded in
-  [14](plans/14-contract-and-regression-scaffolding.md)'s section 2b, is a question about
-  who may *see* the model rather than change it.
+  [14](plans/14-contract-and-regression-scaffolding.md)'s section 2b, is the one that
+  genuinely belongs to 19, which carries it as its question 9. Wave 2 can still take the
+  answer from the plan rather than wait for it.
 
-19 adds one the sweep did not reach, and it is the reason the plan is two plans wearing one
-number: **`FEATURE_FLAG_STOCK_PRICE_TRACKING` is not a permission and never was.** It is
+S4 was never on that list: it was about trusting a header, not about permissions, and it
+landed in the hotfix. S5 remains the reason it mattered — an auto-created reverse-proxy user
+still gets ADMIN.
+
+S4–S6 (reverse proxy, default permissions, user edit) belong with 11/15-C1 in wave 2,
+where the auth files are open anyway — but 15-B2 (S3) should not wait for them.
+
+**S30 | Info — no permission gates a read of household data.** Surfaced while reviewing
+[19](plans/19-rbac.md) against the code, and recorded here because it is the sweep's shape
+rather than that plan's. `PERMISSION_STOCK` is declared
+(`controllers/Users/User.php:30`) and checked nowhere; every read method on
+`StockApiController` and both `GenericEntityApiController::GetObject` and `::GetObjects`
+run with no `CheckPermission`, and the API route group adds only CORS and JSON middleware.
+The users surface is the sole exception — `UsersController.php:23,93` and
+`UsersApiController::GetUsers` require `USERS_READ`, `::ListPermissions` requires `ADMIN`.
+So every authenticated user reads all stock, all prices, all recipes, all chores and the
+whole permission tree regardless of what they hold. Rated Info rather than a finding
+because on a single-household instance every account is trusted and the permission model
+is about restraint rather than defence — but it is the premise 19's Child role and its
+`RECIPES_VIEW` leaf were drafted against, and it is why 19 carries a question 8 asking
+whether object-level read gating is in scope at all. Nothing in the sweep's original
+output would have caught it: the pass looked for gates that could be bypassed, not for
+gates that were never there.
+
+**S31 | Info — `FEATURE_FLAG_STOCK_PRICE_TRACKING` is not a permission and never was.**
+Surfaced the same way S30 was, reviewing [19](plans/19-rbac.md) against the code, and it is
+the reason that plan is two plans wearing one number. It is
 declared in `config-dist.php` and read only in the presentation layer — 14 Blade views and
 6 `public/viewjs` scripts, where it adds `d-none` to price columns and hides price inputs.
-Nothing under `services/` or `controllers/` consults it, so no API path does. So every user holding `STOCK` can read
+Nothing under `services/` or `controllers/` consults it, so no API path does. Combined with
+S30 — where no read is gated at all — that means *every authenticated user* can read
 `stock.price`, `products_average_price`, `product_price_history` and a recipe's `costs`
 straight from `/objects/…` and `/stock/products/{id}` with the flag off and the columns
 hidden. That is not a defect against any stated policy, because the fork has never stated
 one; it is recorded here so that "the price columns are hidden" is never mistaken for
 "prices are protected".
-
-S4 is not on that list: it was about trusting a header, not about permissions, and it
-landed in the hotfix. S5 remains the reason it mattered — an auto-created reverse-proxy user
-still gets ADMIN — which is a good illustration of why the rest are worth doing together.
-
-S4–S6 (reverse proxy, default permissions, user edit) belong with 11/15-C1 in wave 2,
-where the auth files are open anyway — but 15-B2 (S3) should not wait for them.
 
 Two plans should absorb items rather than a hotfix: **14 piece 2** takes the
 `/system/config` contract test (R1), the body-schema validation that closes S16, and a

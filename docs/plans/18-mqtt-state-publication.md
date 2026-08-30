@@ -326,6 +326,22 @@ change this paragraph has to be edited to permit.
 
    > **Response:**
 
+
+8. **Does the ambient payload carry prices?** [19](19-rbac.md)'s Q5 asks this plan to
+   record the choice and offers three: publish without the fields it annotates
+   `x-visibility`, publish per-role topics, or declare MQTT an admin channel. The first is
+   the only one consistent with what is already here — per-role topics multiply the single
+   discovery payload question 2 argues for, and "admin channel" is a claim about
+   subscribers this design cannot check. I lean to **publish no prices**, with the
+   assembler dropping every `x-visibility` field rather than maintaining a second list, so
+   that MQTT never becomes the channel that answers a question the API refuses. The cost
+   is that a household wanting a spending sensor has to add one deliberately, which is the
+   right default for a payload anything on the broker can read. Note this is a constraint
+   on the assembler rather than on the entity set: question 1 can keep the stock summary
+   and still drop three columns from it.
+
+   > **Response:**
+
 ## Effort
 
 Small, and mostly not the MQTT part.
@@ -368,9 +384,20 @@ connection the application makes that is not the label printer.
   That is a real widening of who can see this data, it is accepted here because the broker
   is on the same private cluster with its own credentials, and it is a reason not to
   publish anything that would not also be shown on a wall tablet — no user records, no
-  notes fields, no API keys, **and no prices or costs**, which is
-  [19](19-rbac.md)'s Q5 answered in this plan rather than deferred to a wave-3 one. See
-  Sequencing for why 18 owes that answer instead of inheriting it.
+
+  notes fields, no API keys, and — **pending question 8** — no prices. Prices are the
+  addition [19](19-rbac.md) forces and the one this plan would otherwise have missed. The
+  wall-tablet test excludes them on its own reasoning, since a broker subscriber is not a
+  logged-in user and cannot be made into one, which is why 19's Q5 is carried here rather
+  than gating that plan; but the lean is recorded as a lean until question 8 has a
+  response, like everything else in that section. The exposure is real either way: if the
+  stock summary's attributes are assembled from `uihelper_stock_current_overview`, which
+  the UI reads and which selects `value`, `last_price` and `average_price`
+  (`migrations/0252.sql:38-39`), they ship by default unless something removes them.
+  Concretely, the v1 entity set in question 1 carries none of `stock.price`,
+  `stock_log.price`, `products_average_price`, `product_price_history`,
+  `products_last_purchased.price`, `last_price`, `avg_price` or a recipe's `costs`, and
+  adding an entity that would is a change this bullet has to be edited to permit.
 - **A publish must never carry a failure into a committed write.** Short connect and
   publish timeouts, exceptions caught and logged, and the write path unaffected. The
   transaction is already closed by then, per 13.

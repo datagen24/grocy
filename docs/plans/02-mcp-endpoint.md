@@ -129,7 +129,28 @@ Then a small, deliberately boring set of writes:
 Each tool checks the acting user's permissions exactly as the equivalent REST route does.
 A read-only user gets read-only tools.
 
+**Three of the read tools above already carry prices**, which matters once
+[19](19-rbac.md) exists: `stock_overview` reads `uihelper_stock_current_overview`, which
+selects `value`, `last_price` and `average_price` (`migrations/0252.sql:38-39`);
+`recipes_i_can_cook` reads `recipes_resolved`, which carries `costs`, `costs_per_serving`
+and `prices_incomplete`; and `shopping_list` reads `uihelper_shopping_list`, which carries
+`last_price_unit`, `last_price_total` and `price` (`migrations/0251.sql:7-9`). The other
+three carry none — `products_volatile_status` and `stock_missing_products` have no price
+column, and `products_view`'s `qu_factor_price_to_stock` is a unit factor rather than a
+price.
+Question 5's answer keeps them out of the payload by construction — hand-built
+name/amount/due-date responses rather than raw view rows — which is protection by accident
+rather than by policy. 19 makes it policy: the tool registry declares its response fields,
+and the ones annotated `x-visibility` drop for a key whose user lacks the leaf. Since the
+sidecar resolves its key to a user and every REST call is permission-checked as that user
+(question 6's response), redaction is inherited and needs no MCP-specific mechanism. The
+residual is a key-management question rather than a permissions one, and it is this plan's:
+**one shared MCP key means one user's price visibility for every household member the
+assistant talks to.** Either the key is per person, or its user holds no
+`STOCK_PRICES_VIEW`.
+
 ### Where the code goes — *superseded, see the note above*
+
 
 ~~`controllers/Api/McpController.php` for the protocol, `services/Mcp/` for the tool
 registry, so tools are declared in one place with their schema, permission and handler
