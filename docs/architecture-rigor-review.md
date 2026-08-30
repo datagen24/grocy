@@ -89,7 +89,7 @@ means the finding was verified gone, not that a commit claimed it.
 | B3 | **closed** | The README's wave 4 opens on "07-Q6, answered before anything in this wave is scheduled" and names both branches; 03's Status row carries the possible parent column. |
 | B4 | **open** | 03's Views and API sections still specify the third `UNION` branch in `stock_missing_products` that its own Q1 response replaced with a separate view. |
 | B5 | **closed** | `CONTRIBUTING.md`, `PULL_REQUEST_TEMPLATE.md` and 05's schema section all state the three forms and the `@engine-exclusive` marker. |
-| B6 | **open, and further out of date** | `db/pgsql/README.md:96` still says `[migrate\|views\|triggers]`. The review found four selectors; there are now five — `filter` landed with the `~` operator fix, per 14's section 3. |
+| B6 | **open, and further out of date; now owned** | `db/pgsql/README.md:96` still says `[migrate\|views\|triggers]`. The review found four selectors; there are now five — `filter` landed with the `~` operator fix, per 14's section 3. Routed to [14](plans/14-contract-and-regression-scaffolding.md), which owns the suite, to be fixed by whatever next opens that file. |
 | B7 | **open** | `docs/grocycode.md` still says three entity types (the code has four), still mandates `[0-9]+` for the object id (06-Q1 puts a UUID there), still says "double-colon separated" against its own single-colon examples, and still argues DataMatrix over the QR that 06 adds. `docs/label-printing.md:31` still spells the magic `grocy:` where `Grocycode::MAGIC` is `grcy`. |
 | B8 | **open** | `docs/mcp-interface-spec.md:276` still takes `store_id` for `purchase_product`, a name 05-Q4 and 15-Q5 both declined. |
 | B9 | **open** | 02's status line says superseded; its Mount point, Where the code goes and API sections still specify `/api/mcp`, `McpController` and `services/Mcp/`. |
@@ -99,7 +99,7 @@ means the finding was verified gone, not that a commit claimed it.
 | D2 | **closed 2026-08-30** | All eighteen other plans now carry one, and the roadmap states the rule alongside the Verification rule. Three turned out not to be "none" where the plan implied it was — 12's strict `transaction_type`, 07's one-level assumption going quietly false, and 16's, which is the case that motivated the mechanism. See 17's note on its item 2. |
 | D3 | **closed** | All three README tables have a Status column. |
 | D4 | no action | 09 remains the deliberate counter-example. |
-| D5 | **partly adopted** | The security sweep adopted it explicitly and says so in its own preamble. The plans did not: 12, 15 and others still cite bare line numbers, and 15-C2's `StockReportsController.php:71,90,107` is the kind that rots first. |
+| D5 | **partly adopted, now a stated rule** | The security sweep adopted it explicitly in its own preamble; the plans had not, and 15-C2's `StockReportsController.php:71,90,107` is the kind that rots first. The roadmap's ground rules now carry it for new citations. Existing bare line numbers are deliberately not swept — rewriting a hundred references by hand is the likeliest way to introduce a wrong one, and a stale line number is a weaker failure than a confidently wrong symbol. |
 | H1 | **open** | `.gitignore:5` is still `/.phpdoc`, anchored to the root. Routed to 15. |
 | H2 | not reproducible here | `git worktree list` shows one worktree in this checkout. A working-copy condition, not a repository one. |
 | H3 | **open — and two documents say otherwise** | See below. |

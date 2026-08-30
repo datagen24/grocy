@@ -231,6 +231,14 @@ Anything else that reasons about schema versions, including
 and `trigdifftest.php` (trigger behaviour). New views must return identical output on both
 engines unless the plan says otherwise and explains why.
 
+**Cite symbols, not line numbers.** `ApiKeyAuthMiddleware::IsValidApiKey` rather than
+`ApiKeyAuthMiddleware.php:50` — which the MCP spec cited, and which was already `:49` by
+the time anyone read it. Where a line is worth quoting, quote the code next to it so the
+reference survives the shift. The security sweep adopted this in its own preamble and the
+plans have not; the older bare line numbers are left alone rather than swept, because
+rewriting a hundred of them by hand is how a wrong one gets introduced. New citations
+follow the rule. This is the rigor review's D5.
+
 **What the always-on cluster services are for.** The k3s cluster runs an MQTT broker,
 Redis and InfluxDB, all of them always on while the application pod is usually asleep.
 That asymmetry is the useful thing about them, and it is easy to reach for the wrong one,
@@ -363,7 +371,7 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   written here, not forked, so the licence question is closed and only distribution is
   open); Q1, the version string, is still open and still blocks nothing.
 
-### Wave 1 — platform (three parallel tracks, disjoint files)
+### Wave 1 — platform (four parallel tracks, disjoint files; C is done)
 
 - **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
   easier to reason about once cold start no longer rewrites requests. Together they end
@@ -414,7 +422,7 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   (S9 — 11 already owns the error surface); login throttling and a forced change while
   the seeded `admin`/`admin` hash is in use (S12).
 
-### Wave 3 — first features on the new platform
+### Wave 3 — first features on the new platform (four tracks)
 
 - **09 implementation**, if wave 0's experiment justified it — inheriting sweep S14
   first (filter `__barcode` to a filename-safe class, allow-list the image extension,

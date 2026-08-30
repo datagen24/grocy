@@ -601,8 +601,18 @@ Three things the suite grew that the plan did not ask for, each because the plan
   reporting that is piece 4.
 
 **What piece 2 still owes**, unchanged by any of the above: the response-contract
-snapshot, the route-table-vs-spec parity assertion, and the one spec fix
-(`/api/openapi/specification`) that assertion lands with.
+snapshot, the route-table-vs-spec parity assertion, and the two spec fixes
+(`/api/openapi/specification`, and `info.version`'s `"xxx"` placeholder) that assertion
+lands with.
+
+**And one documentation debt this plan owns because it owns the suite.**
+`db/pgsql/README.md` still describes the runner as `[migrate|views|triggers]` and still
+says "the other three all populate PostgreSQL by copying". Both were true when they were
+written and neither is now: `rollback` migrates PostgreSQL independently, `filter` compares
+application behaviour rather than SQL, and there are five selectors. The rigor review
+caught it at four (its B6) and it has drifted one further since. Whichever change next
+opens that file fixes the two sentences; it is a doc edit outside `docs/`, which is the
+only reason it is recorded here rather than done.
 
 ## Effort
 
