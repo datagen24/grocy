@@ -65,44 +65,54 @@ This section did not exist when the review was written, and its absence was the 
 own blind spot. The security sweep numbers its findings S1–S29 and the roadmap tracks every
 one of them by number — which wave takes it, which plan absorbs it, why one was deferred
 and then un-deferred. This document numbered its findings the same way and nothing tracked
-them, so a reader a day later could not tell which of the twenty-nine were still true. Ten
-of them were not; eleven were, including two that had been *recorded as fixed elsewhere*
-while the fix was never made.
+them, so a reader a day later could not tell which of the twenty-nine were still true.
+
+The count, once someone checked: **ten had already been fixed**, quietly, by the doc-drift
+pass that followed the review. **Two needed no action** and said so. **Seventeen were still
+open**, and two of those were worse than open — they had been *recorded as fixed
+elsewhere*, in the roadmap and in the sweep, while the fix was never made. Of the
+seventeen, **nine are closed by the branch that added this table**, one (D5) becomes a
+stated rule rather than a sweep, and **seven carry an owning plan** because they are code
+or config changes and this branch is scoped to `docs/`.
 
 Every row below was re-checked against the tree on 2026-08-30, at `4fa97e8`. "Closed"
-means the finding was verified gone, not that a commit claimed it.
+means the finding was verified gone, not that a commit claimed it — a distinction this
+document has more reason than most to insist on, since two of its rows are exactly the
+case where a commit claimed it and it was not so. Rows marked "closed 2026-08-30" were
+closed by the same branch that added this table; rows marked "closed" without a date were
+already fixed before it.
 
 | # | State | Evidence, or where it now lives |
 |---|---|---|
 | A1 | **closed** | 13's status line reads "landed in the codebase (2026-08-29)" and it carries an Executed section. |
 | A2 | **closed** | 14 reads "partly landed", with an Executed section covering pieces 1, 3 and 4 and what piece 2 still owes. |
-| A3 | **open** | 13-Q2 is reconciled, but [10](plans/10-cold-start-statelessness.md)'s second-seam paragraph still warns the helper must "count depth rather than assume it opens the outermost transaction". The shipped helper asks `PDO::inTransaction()`, which resolves the worry outright. |
-| A4 | **open** | `DatabaseService::InTransaction`'s docblock still says "see `DatabaseDialect` for the per-engine locking used around migrations"; `DatabaseDialect` has 20 methods and no lock among them. Routed to [15](plans/15-deliberate-cleanup.md)'s non-breaking table. |
+| A3 | **closed 2026-08-30** | 10's second-seam paragraph required the helper to "count depth"; the shipped helper asks `PDO::inTransaction()`, which is strictly better — a counter cannot see `DatabaseMigrationService`'s own transactions and would *cause* the mis-nesting the paragraph feared. The paragraph now says so and marks the constraint discharged. |
+| A4 | **open, owned** | `DatabaseService::InTransaction`'s docblock still says "see `DatabaseDialect` for the per-engine locking used around migrations"; `DatabaseDialect` has 20 methods and no lock among them. Now **15-C12**, and noted in 10, which is the plan that would build the lock and make the pointer resolve instead. |
 | A5 | **closed** | Both plans corrected. 14 now says "Only the first is real. The copy route exists" and keeps the parity check on its remaining leg. The real gap — `/api/openapi/specification` absent from the spec — is still confirmed (`grep -c` returns 0) and is piece 2's to land. |
 | A6 | **closed, and re-measured** | Still exactly as the plan says: 148 `console.error` in 41 `public/viewjs/*.js` plus 9 in 5 `viewjs/components`, total 157. The `DeleteUserePictureOnSave` typo and the `transaction_type` override are both still present and still annotated in-code. Four more `console.error` live in `public/js/`, outside the plan's scope and outside its verification grep — which is correct, not a miscount. |
 | A7 | **open, owned** | `victual.openapi.json` still has `"ExposedEntityEditRequiresAdmin": {"enum": []}`. [11](plans/11-api-error-handling.md)-Q6 owns the populate-or-delete decision. |
 | A8 | **open, owned** | Unchanged: `composer.json` `8.5.*`, `PrerequisiteChecker` `8.5.0`, `Dockerfile` `php:8.5`, CI `8.4`. [15](plans/15-deliberate-cleanup.md)-C7 owns it and the review's "cheapest rigor win in the tree" verdict stands. |
-| A9 | **open** | `.github/workflows/tests.yml` lints PHP with `php -l` and runs no `node --check`. Routed to 15. |
+| A9 | **open, owned** | `.github/workflows/tests.yml` lints PHP with `php -l` and runs no `node --check`. Now **15-C14**, which states the choice the review left open: add it, or amend 14 — but not neither, which is where it had sat. |
 | A10 | **open, split** | `version.json` is `4.6.0`; the spec's `info.version` is still the literal `"xxx"`. The *fork's* version string is [17](plans/17-ecosystem-clients.md)-Q1 and still open. The *spec placeholder* is a different artefact and is now [14](plans/14-contract-and-regression-scaffolding.md) piece 2's, landing with the `/api/openapi/specification` fix. |
 | B1 | **closed** | 17 carries "Coupling 0 — the rename already broke both clients", and 16's Executed section carries a "Correction, recorded after the fact" block against its own "since no client exists" justification. Q4 answered it: no shim. |
 | B2 | **closed** | The violation is recorded in the README's sequencing rule and in 16, with what it cost. |
 | B3 | **closed** | The README's wave 4 opens on "07-Q6, answered before anything in this wave is scheduled" and names both branches; 03's Status row carries the possible parent column. |
-| B4 | **open** | 03's Views and API sections still specify the third `UNION` branch in `stock_missing_products` that its own Q1 response replaced with a separate view. |
+| B4 | **closed 2026-08-30** | 03's Views and API sections now describe `product_groups_missing`, say why the obvious third-`UNION` design loses (every row of `stock_missing_products` is keyed by a `products.id` that `AddMissingProductsToShoppingList` dereferences, and a group shortfall has no product to name), and fold in Q2–Q4. Effort no longer prices the design Q1 declined. |
 | B5 | **closed** | `CONTRIBUTING.md`, `PULL_REQUEST_TEMPLATE.md` and 05's schema section all state the three forms and the `@engine-exclusive` marker. |
 | B6 | **open, and further out of date; now owned** | `db/pgsql/README.md:96` still says `[migrate\|views\|triggers]`. The review found four selectors; there are now five — `filter` landed with the `~` operator fix, per 14's section 3. Routed to [14](plans/14-contract-and-regression-scaffolding.md), which owns the suite, to be fixed by whatever next opens that file. |
-| B7 | **open** | `docs/grocycode.md` still says three entity types (the code has four), still mandates `[0-9]+` for the object id (06-Q1 puts a UUID there), still says "double-colon separated" against its own single-colon examples, and still argues DataMatrix over the QR that 06 adds. `docs/label-printing.md:31` still spells the magic `grocy:` where `Grocycode::MAGIC` is `grcy`. |
-| B8 | **open** | `docs/mcp-interface-spec.md:276` still takes `store_id` for `purchase_product`, a name 05-Q4 and 15-Q5 both declined. |
-| B9 | **open** | 02's status line says superseded; its Mount point, Where the code goes and API sections still specify `/api/mcp`, `McpController` and `services/Mcp/`. |
+| B7 | **closed 2026-08-30** | All four corrected against `Grocycode.php`: four entity types with `r` for Recipes and 06's coming `l`, an opaque object id with 06-Q1's UUID named, single colon throughout, and DataMatrix restated as the default rather than the format. `label-printing.md`'s `grocy:` is now `grcy:`. The file carries a note on why a format that never changes still needs its documentation checked. |
+| B8 | **closed 2026-08-30** | `purchase_product` takes `shopping_location_id`, the deferred `list` descriptor matches, and the spec records why the nicer noun loses — a sidecar parameter named `store_id` over a REST field named `shopping_location_id` pays the two-names-forever cost 15-Q5 refused, in a second place. |
+| B9 | **closed 2026-08-30** | The three reversed sections are struck and annotated with what the sidecar does instead; the surviving reasoning (auth seam, permissions, tool shortlist) is left standing, since the spec's design reads as over-engineered without the integrated version to compare against. The API section's "purely additive routes" becomes the truer claim: no new routes at all, and what 02 needs from this repo is 14 piece 2. |
 | B10 | **closed** | The Status table's "Depends on" column now carries 12 for 05 and 06, 12 and 14 for 08, and 11/13/14/15-C1 for 02. |
-| B11 | **open** | 04 still says its importer "goes through LessQL so triggers fire" without noting that `bin/victual-db-import` deliberately disables them, or why both are right. |
+| B11 | **closed 2026-08-30** | 04 now says why the two differ: `db-import` replays already-shaped rows whose derived tables are consistent, so triggers would recompute from data that already reflects them; a seed dataset is raw master data and the triggers are what produce the derived state. |
 | D1 | **closed as a pattern** | 13, 14 and 16 all carry Executed sections; the roadmap's preamble states the rule ("the Executed section, not the prose, is the record of the code"). |
 | D2 | **closed 2026-08-30** | All eighteen other plans now carry one, and the roadmap states the rule alongside the Verification rule. Three turned out not to be "none" where the plan implied it was — 12's strict `transaction_type`, 07's one-level assumption going quietly false, and 16's, which is the case that motivated the mechanism. See 17's note on its item 2. |
 | D3 | **closed** | All three README tables have a Status column. |
 | D4 | no action | 09 remains the deliberate counter-example. |
 | D5 | **partly adopted, now a stated rule** | The security sweep adopted it explicitly in its own preamble; the plans had not, and 15-C2's `StockReportsController.php:71,90,107` is the kind that rots first. The roadmap's ground rules now carry it for new citations. Existing bare line numbers are deliberately not swept — rewriting a hundred references by hand is the likeliest way to introduce a wrong one, and a stale line number is a weaker failure than a confidently wrong symbol. |
-| H1 | **open** | `.gitignore:5` is still `/.phpdoc`, anchored to the root. Routed to 15. |
+| H1 | **open, owned** | `.gitignore:5` is still `/.phpdoc`, anchored to the root, so `branding/.phpdoc/` stays untracked-and-unignored. Now **15-C13**. |
 | H2 | not reproducible here | `git worktree list` shows one worktree in this checkout. A working-copy condition, not a repository one. |
-| H3 | **open — and two documents say otherwise** | See below. |
+| H3 | **closed 2026-08-30 — and it was the worst of these** | `update.sh` is now **15-C11**, with `.devtools/create_release_package.bat`. It is worth reading the note below rather than the row: two documents recorded a placement that had never been made, and each read as evidence for the other. |
 
 **H3 is the one worth reading twice, because it is this review's own failure mode
 happening to it.** The finding was that `update.sh` had no owning plan. The README's tail
@@ -121,6 +131,21 @@ The pattern in both is the same one the roadmap already learned from S4 and wrot
 false one.* The difference is that S4's inconsistency was caught in review. These two were
 not, because nothing re-reads a routing sentence once it is written. That is the argument
 for this table existing rather than for any single row in it.
+
+Both are settled as of 2026-08-30. `update.sh` is 15-C11; S25 is plan 10's, in a section
+of its own, on the roadmap's reasoning rather than the sweep's — 15's table is for cleanup
+that can ride with any PR that opens the file, and hardening a production image cannot,
+because it is meaningless before the image exists and mandatory in the same commit as it.
+The sweep now points at 10 instead of claiming it.
+
+**A closing note on this table, which is the part most likely to rot next.** It is a
+snapshot with a date on it, and the failure it documents is precisely that snapshots
+without dates get read as current. Every row was verified against the tree at `4fa97e8`
+and several were closed the same day by the branch that added the table, so the states
+here are not a work log — they are a claim about the tree, and the tree moves. Re-verify
+before trusting a row, and prefer the plans: an item routed to 15-C11 or 10 lives in a
+plan that gets read when the work is scheduled, which is more than this document can say
+for itself.
 
 ## Method
 
