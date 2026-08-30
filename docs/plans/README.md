@@ -33,6 +33,13 @@ and block no feature plan, but 12 and 14 should land before the plans noted belo
 minting more of what they clean up, and the sweep's four High findings land before
 anything at all — **which they did**, on 2026-08-29; see the hotfix in wave 0.5 below.
 
+That sentence was written when the hotfix carried three of the four. S4 was deferred to
+wave 2 with the rest of the auth work, which made "all four High findings land first" false
+as stated, and the gap was caught in review rather than by the roadmap noticing its own
+inconsistency. S4 is now in the hotfix too, so the sentence is true again — see wave 0.5.
+The lesson is cheaper than the fix: a deferral that contradicts a stated gate has to change
+the gate's wording at the same time, or the wording quietly becomes a claim nobody checks.
+
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
 | 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0) |
@@ -122,11 +129,19 @@ rename and the registry claims happen at announcement time, not in a commit.
   and except 15-B2 (cookie flags), which the sweep pulls into the hotfix: it is one
   line, nothing reads the cookie from JavaScript, and it is what turns the sweep's two
   stored-XSS findings from "script runs" into "session stolen".
-- **The sweep's auth findings ride with wave 2, not ahead of it.** S4 (reverse-proxy
-  trust), S5 (`DEFAULT_PERMISSIONS`), S6 (`USERS_EDIT` escalation), S17 (dead iCal
-  branch, cross-instance construction), S18 (`AUTH_CLASS` type check) and S19 all live
-  in the files 11 and 15-C1/B1 rewrite. Fixing them first means doing the auth refactor
-  twice; they are added to 15's tables and land in that wave.
+- **The sweep's auth findings ride with wave 2, not ahead of it — except S4.** S5
+  (`DEFAULT_PERMISSIONS`), S6 (`USERS_EDIT` escalation), S17 (dead iCal branch,
+  cross-instance construction), S18 (`AUTH_CLASS` type check) and S19 all live in the files
+  11 and 15-C1/B1 rewrite. Fixing them first means doing the auth refactor twice; they are
+  added to 15's tables and land in that wave.
+
+  **S4 came out of that set in review and landed with the hotfix.** The
+  do-the-refactor-twice argument is about the *refactor*, and it does not transfer to the
+  *hole*: a High finding is only safely deferred while the backend it affects is
+  unconfigured, which is a fact about the current deployment rather than a property of the
+  code, and a config change is all it takes to falsify. The guard is a few lines and moves
+  with the class when 15-C1 rewrites it. S5 remains the reason S4 mattered — an
+  auto-created reverse-proxy user still gets ADMIN — and stays in this wave.
 - **Three sweep items are constraints on plans, not work of their own.** S11 (the
   query-string API key path) must not be inherited by [02](02-mcp-endpoint.md)'s bearer
   seam, and S4's trusted-proxy pattern is the model for it; S14 (barcode filename and
@@ -260,6 +275,11 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   - **S3 / 15-B2** — `BaseAuthMiddleware::SetSessionCookie` gains `HttpOnly`,
     `SameSite=Lax`, `Secure` when HTTPS, and a real expiry. 15-B2's open question about
     `Strict` versus embedded mode is answered `Lax` here; 15 records it.
+  - **S4** — added in review, out of wave 2. `ReverseProxyAuthMiddleware` refuses the
+    username header unless `REMOTE_ADDR` matches `REVERSE_PROXY_AUTH_TRUSTED_PROXIES`,
+    and an unset list refuses everything rather than trusting everything. Not applied to
+    `USE_ENV` mode, where the value is server-populated and a proxy list would break a
+    correct Apache-authenticates-locally setup.
   - **R1** — `BaseController` and `SystemApiController::GetConfig` test
     `substr($constant, 0, 19)` against a 21-character prefix, so every feature flag is
     dropped from the UI and the API. `str_starts_with` and `substr(…, 8)`. A regression

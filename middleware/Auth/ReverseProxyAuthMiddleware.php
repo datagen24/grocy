@@ -59,6 +59,10 @@ class ReverseProxyAuthMiddleware extends BaseAuthMiddleware
 		}
 		else
 		{
+			// The header is client-settable, so it is only worth anything if the request
+			// demonstrably came from the proxy that sets it. Sweep finding S4.
+			$this->CheckRequestCameFromTrustedProxy();
+
 			$username = $request->getHeader(VICTUAL_REVERSE_PROXY_AUTH_HEADER);
 			if (count($username) !== 1 || (count($username) === 1 && strlen($username[0]) === 0))
 			{
@@ -76,6 +80,42 @@ class ReverseProxyAuthMiddleware extends BaseAuthMiddleware
 		}
 
 		return $user;
+	}
+
+	/**
+	 * Refuses the request unless it arrived from an address in
+	 * VICTUAL_REVERSE_PROXY_AUTH_TRUSTED_PROXIES.
+	 *
+	 * Without this the username header is simply believed, so anyone who can reach the
+	 * backend directly - on the k3s target, any pod in the namespace - authenticates as
+	 * whoever they say they are, and is created as a user if they do not exist. An unset
+	 * list refuses everything rather than trusting everything: a header-mode deployment
+	 * that has not named its proxy is not one whose header means anything.
+	 *
+	 * Deliberately not applied to VICTUAL_REVERSE_PROXY_AUTH_USE_ENV mode. There the
+	 * username comes from $_SERVER, which the web server populates and a client header
+	 * cannot reach (PHP exposes those as HTTP_*), so it is not forgeable the same way -
+	 * and that mode covers setups like Apache doing its own authentication, where
+	 * REMOTE_ADDR is the end user rather than a proxy and requiring a proxy list would
+	 * break a correct configuration. USE_ENV is the mode to prefer.
+	 *
+	 * @throws \Exception When the list is unset or the request did not come from it
+	 */
+	protected function CheckRequestCameFromTrustedProxy(): void
+	{
+		$trustedProxies = trim((string)VICTUAL_REVERSE_PROXY_AUTH_TRUSTED_PROXIES);
+
+		if ($trustedProxies === '')
+		{
+			throw new \Exception('ReverseProxyAuthMiddleware: REVERSE_PROXY_AUTH_TRUSTED_PROXIES is not configured, so the ' . VICTUAL_REVERSE_PROXY_AUTH_HEADER . ' header cannot be trusted. Set it to the address or CIDR range of your reverse proxy, or use REVERSE_PROXY_AUTH_USE_ENV instead.');
+		}
+
+		$remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+
+		if (!IsIpInCidrList($remoteAddress, $trustedProxies))
+		{
+			throw new \Exception('ReverseProxyAuthMiddleware: request did not come from a trusted proxy');
+		}
 	}
 
 	/**

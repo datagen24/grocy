@@ -116,6 +116,13 @@ Setting('AUTH_CLASS', 'Victual\Middleware\Auth\DefaultAuthMiddleware');
 // Options when using ReverseProxyAuthMiddleware
 Setting('REVERSE_PROXY_AUTH_HEADER', 'REMOTE_USER'); // The name of the HTTP header which your reverse proxy uses to pass the username (on successful authentication)
 Setting('REVERSE_PROXY_AUTH_USE_ENV', false); // Set to true if the username is passed as an environment variable
+// Which addresses may set the header above, as a comma separated list of IPs and/or CIDR
+// ranges, e.g. '10.42.0.0/16, 192.168.1.10'. Required in header mode: the header is
+// client-settable, so without this anyone who can reach this application directly can
+// authenticate as any user. Not used when REVERSE_PROXY_AUTH_USE_ENV is true, where the
+// username comes from the server environment rather than from the request.
+// Your proxy must also be configured to strip this header from inbound requests
+Setting('REVERSE_PROXY_AUTH_TRUSTED_PROXIES', '');
 
 // Options when using LdapAuthMiddleware
 Setting('LDAP_ADDRESS', ''); // Example value "ldap://vm-dc2019.local.berrnd.net"

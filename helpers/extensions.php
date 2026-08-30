@@ -353,6 +353,96 @@ function IsJsonString($text)
  * @return bool
  */
 /**
+ * Whether an IP address falls inside a CIDR range, or equals a bare address.
+ *
+ * Handles IPv4 and IPv6 by comparing the packed forms, so a v4 address is never
+ * considered inside a v6 range or the reverse. An unparseable address or range is
+ * not a match rather than an error - the caller's decision is "trusted or not",
+ * and anything it cannot understand is not trusted.
+ *
+ * @param string $ip
+ * @param string $cidr An address, or an address with a /prefix
+ * @return bool
+ */
+function IsIpInCidr($ip, $cidr)
+{
+	$ipBinary = @inet_pton($ip);
+	if ($ipBinary === false)
+	{
+		return false;
+	}
+
+	if (!str_contains($cidr, '/'))
+	{
+		$cidrBinary = @inet_pton($cidr);
+		return $cidrBinary !== false && $ipBinary === $cidrBinary;
+	}
+
+	[$subnet, $prefixLength] = explode('/', $cidr, 2);
+	$subnetBinary = @inet_pton(trim($subnet));
+
+	// Different lengths mean one is IPv4 and the other IPv6, which never match
+	if ($subnetBinary === false || strlen($subnetBinary) !== strlen($ipBinary))
+	{
+		return false;
+	}
+
+	if (!is_numeric(trim($prefixLength)))
+	{
+		return false;
+	}
+
+	$prefixLength = intval(trim($prefixLength));
+	if ($prefixLength < 0 || $prefixLength > strlen($ipBinary) * 8)
+	{
+		return false;
+	}
+
+	$wholeBytes = intdiv($prefixLength, 8);
+	$remainingBits = $prefixLength % 8;
+
+	if ($wholeBytes > 0 && substr($ipBinary, 0, $wholeBytes) !== substr($subnetBinary, 0, $wholeBytes))
+	{
+		return false;
+	}
+
+	if ($remainingBits > 0)
+	{
+		$mask = chr((0xFF << (8 - $remainingBits)) & 0xFF);
+		if ((substr($ipBinary, $wholeBytes, 1) & $mask) !== (substr($subnetBinary, $wholeBytes, 1) & $mask))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Whether an IP address matches any entry of a comma separated list of addresses and
+ * CIDR ranges. An empty list matches nothing, which is the point: a caller using this
+ * to decide whether to trust something must configure the list to trust anything.
+ *
+ * @param string $ip
+ * @param string $list e.g. "10.0.0.0/8, 192.168.1.5, fd00::/8"
+ * @return bool
+ */
+function IsIpInCidrList($ip, $list)
+{
+	foreach (explode(',', (string)$list) as $entry)
+	{
+		$entry = trim($entry);
+
+		if ($entry !== '' && IsIpInCidr($ip, $entry))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * Whether a stored URL is safe to place in an href.
  *
  * Escaping the value protects the attribute, not the navigation: `{{ }}` renders

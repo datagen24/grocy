@@ -41,7 +41,7 @@ and came from plan 16: every feature flag is dropped from the UI and the API (R1
 | S1 | **High** — *fixed* | **Sanitiser un-escapes after purifying.** `GetParsedAndFilteredRequestBody` runs HTMLPurifier, then `str_replace`s `&lt;`/`&gt;`/`&amp;` back to raw characters. Text that arrived as entity-encoded `&lt;script&gt;` leaves the purifier as the (safe) entity text and is then converted to a literal `<script>` and stored. Views then emit these fields unescaped: `stockoverview.blade.php` (`{!! $currentStockEntry->product_description !!}`), `recipes.blade.php` (`{!! $recipe->description !!}`, position notes), `shoppinglist.blade.php` (item notes, three places), `components/userfields_tbody.blade.php` (userfield values). Any account with `MASTER_DATA_EDIT`, `RECIPES` or `SHOPPINGLIST_ITEMS_ADD` gets stored XSS against every user including admins. Inherited from upstream. | `controllers/Api/BaseApiController.php::GetParsedAndFilteredRequestBody` | Delete the three `str_replace` calls. If some non-HTML column needs a literal `&`, handle it per column, not globally. |
 | S2 | **High** — *fixed* | **Files API: no permission check, arbitrary upload, inline serve with sniffed type.** `FilesApiController::DeleteFile/ServeFile/UploadFile` never call `User::CheckPermission`; every other API controller does. `UploadFile` accepts any body under any extension; `ServeFile` answers with `Content-Type: mime_content_type($filePath)` and `Content-Disposition: inline`. An `.svg`/`.html` upload (or HTML named `manual.pdf`) executes in the app origin, and the UI links straight to it (`userfields_tbody.blade.php` userfile links, `equipmentform.blade.php` `<embed>` of manuals). Any zero-permission account can also `unlink` every picture and manual in all five groups. No `X-Content-Type-Options: nosniff` and no CSP anywhere in the tree. | `controllers/Api/FilesApiController.php`, `services/FilesService.php::DeleteFile` | Permission per group on PUT/DELETE (`MASTER_DATA_EDIT` for productpictures/equipmentmanuals, `RECIPES` for recipepictures, `USERS_EDIT`/self for userpictures); allow-list extensions per group and validate images with `getimagesize`; `attachment` disposition unless the sniffed type is a safe image; add `nosniff` and a `sandbox` CSP on the files route. |
 | S3 | **High** — *fixed* | **Session cookie has no `HttpOnly`, `Secure` or `SameSite`.** `BaseAuthMiddleware::SetSessionCookie` is a bare `setcookie(name, key, PHP_INT_MAX >> 32)`. The key *is* the credential (`SessionAuthMiddleware` reads `$_COOKIE` straight into `IsValidSession`). Without `HttpOnly`, S1/S2 become session theft; without `SameSite` (on browsers that do not default to Lax) the CSRF surface in S8 is reachable. Client-side expiry is ~2106 regardless of the 30-day server expiry. This is plan 15-B2, currently scheduled in wave 2 behind 11. | `middleware/Auth/BaseAuthMiddleware.php::SetSessionCookie` | `setcookie(name, key, ['httponly'=>true, 'samesite'=>'Lax', 'secure'=>isHttps, 'path'=>base path, 'expires'=>…])`. Pull 15-B2 forward; it is one line and nothing reads the cookie from JavaScript. |
-| S4 | **High** (when `ReverseProxyAuthMiddleware` is configured) | **Reverse-proxy auth trusts a request header with no trusted-proxy check.** In the default `REVERSE_PROXY_AUTH_USE_ENV = false` mode `AuthenticateRequest` reads `$request->getHeader(VICTUAL_REVERSE_PROXY_AUTH_HEADER)` and, if no user matches, `CreateUser`s one — with `DEFAULT_PERMISSIONS`, i.e. ADMIN (S5). Nothing compares `REMOTE_ADDR` to a proxy allowlist, so anyone who can reach the PHP backend directly, or whose proxy does not strip inbound `REMOTE_USER`, is admin. On the k3s target, "reach the backend directly" is any pod in the namespace. | `middleware/Auth/ReverseProxyAuthMiddleware.php::AuthenticateRequest` | Add a `REVERSE_PROXY_AUTH_TRUSTED_PROXIES` CIDR list checked against `REMOTE_ADDR`, refuse when unset; prefer `USE_ENV` (server-populated) and document that the proxy must strip the header inbound. |
+| S4 | **High** (when `ReverseProxyAuthMiddleware` is configured) — *fixed* | **Reverse-proxy auth trusts a request header with no trusted-proxy check.** In the default `REVERSE_PROXY_AUTH_USE_ENV = false` mode `AuthenticateRequest` reads `$request->getHeader(VICTUAL_REVERSE_PROXY_AUTH_HEADER)` and, if no user matches, `CreateUser`s one — with `DEFAULT_PERMISSIONS`, i.e. ADMIN (S5). Nothing compares `REMOTE_ADDR` to a proxy allowlist, so anyone who can reach the PHP backend directly, or whose proxy does not strip inbound `REMOTE_USER`, is admin. On the k3s target, "reach the backend directly" is any pod in the namespace. | `middleware/Auth/ReverseProxyAuthMiddleware.php::AuthenticateRequest` | Add a `REVERSE_PROXY_AUTH_TRUSTED_PROXIES` CIDR list checked against `REMOTE_ADDR`, refuse when unset; prefer `USE_ENV` (server-populated) and document that the proxy must strip the header inbound. |
 | S5 | **Med** | **`DEFAULT_PERMISSIONS = ['ADMIN']` mints admins on three paths.** `UsersService::CreateUser` grants it unconditionally, so: any LDAP user matching `LDAP_USER_FILTER` is admin on first login; any reverse-proxy username is admin (S4); and a user holding only `USERS_CREATE` can `POST /api/users` an admin and log in as it — a direct escalation past the permission model. | `config-dist.php` `Setting('DEFAULT_PERMISSIONS', …)`, `services/UsersService.php::CreateUser` | Default to a minimal set; never grant a permission the creating user lacks. |
 | S6 | **Med** | **`USERS_EDIT` can reset any user's password, including admins.** `UsersApiController::EditUser` checks `USERS_EDIT` (or `USERS_EDIT_SELF`) and `UsersService::EditUser` rehashes any non-empty password. No check that the target's permissions are a subset of the caller's; no current-password confirmation on self-edit. | `controllers/Api/UsersApiController.php::EditUser`, `services/UsersService.php::EditUser` | Refuse to edit users holding permissions the caller lacks; require the current password for self password change. |
 | S7 | **Med** — *fixed* | **Sanitiser allow-list admits `iframe[src]` from any origin, `id` on every element and `data:` URIs.** `HTML.SafeIframe` with `URI.SafeIframeRegexp = '%^.*%'` and `*[style|class|id]`. Independently of S1, a master-data editor can embed an arbitrary external page in every user's stock overview (phishing overlay) and DOM-clobber the front-end via `id`. | `controllers/Api/BaseApiController.php::GetParsedAndFilteredRequestBody` | Drop `iframe` and `id` from `HTML.Allowed`, or pin `SafeIframeRegexp` to specific hosts. |
@@ -222,6 +222,41 @@ Two notes on what the cookie change touches:
   S19 — `Logout` deletes the session row without clearing the cookie — means the stale one
   is not cleaned up either. Nothing is deployed today so nothing is affected; whoever
   fixes S19 in wave 2 should clear the old path at the same time.
+
+**S4 — reverse-proxy trust**, pulled forward out of wave 2 in review of the hotfix. The
+roadmap deferred it on the grounds that 11 and 15-C1 rewrite these files anyway and fixing
+it now means doing the auth refactor twice. That reasoning holds for the *refactor* and not
+for the *hole*: file ownership is a scheduling convention, and "High if configured" is only
+safe while nobody configures it, which is a fact about today rather than a property of the
+code.
+
+`ReverseProxyAuthMiddleware` now refuses the header unless `REMOTE_ADDR` matches
+`REVERSE_PROXY_AUTH_TRUSTED_PROXIES`, a comma-separated list of addresses and CIDR ranges
+(`IsIpInCidrList`, which compares packed forms so a v4 address is never inside a v6 range).
+**An unset list refuses everything** rather than trusting everything — a header-mode
+deployment that has not named its proxy is not one whose header means anything — so the
+default configuration is now safe rather than dangerous.
+
+Deliberately *not* applied to `REVERSE_PROXY_AUTH_USE_ENV` mode. There the username comes
+from `$_SERVER`, which the web server populates and a client header cannot reach, since PHP
+exposes request headers as `HTTP_*`. Requiring a proxy list there would also break a correct
+setup: Apache doing its own authentication sets `REMOTE_USER` with no proxy in front, so
+`REMOTE_ADDR` is the end user. `USE_ENV` remains the mode to prefer, and the config comment
+now says the proxy must strip the header inbound.
+
+Verified as a set of three on a booted instance with `AUTH_CLASS` actually set to the
+reverse-proxy backend — the first attempt tested nothing, because `Setting()` is
+first-write-wins and an appended override never took effect:
+
+| Case | Result |
+|---|---|
+| No trusted list, forged `REMOTE_USER: eve` | Refused, naming the setting. No user created |
+| List contains the caller, `REMOTE_USER: eve` | Authenticated, user created — the legitimate path still works |
+| List configured but caller outside it | Refused: "request did not come from a trusted proxy" |
+
+What is *not* closed by this: S5, which is why the finding is dangerous in the first place —
+an auto-created reverse-proxy user still gets `DEFAULT_PERMISSIONS`, i.e. ADMIN. That stays
+in wave 2 with the rest of the permission work.
 
 **R1 — the feature flags.** `str_starts_with` in both loops, and `substr($constant, 8)`
 in the API one, so the UI sees `VICTUAL_FEATURE_FLAG_*` (what `public/viewjs` indexes
