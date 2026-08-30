@@ -11,11 +11,23 @@ class SessionService extends BaseService
 	const SESSION_COOKIE_NAME = 'victual_session';
 
 	/**
+	 * How long a session created with "stay logged in" is valid for, in seconds.
+	 *
+	 * Bounded rather than infinite: a stolen session key is a credential, and one that
+	 * never expires is one nothing ever takes away. VICTUAL_SESSION_STAY_LOGGED_IN_DAYS
+	 * configures it. Sweep finding S3 / plan 15-B2, question 3.
+	 */
+	public static function GetStayLoggedInLifetimeSeconds(): int
+	{
+		return intval(VICTUAL_SESSION_STAY_LOGGED_IN_DAYS) * 86400;
+	}
+
+	/**
 	 * Creates a session for the user and returns the new session key.
 	 *
 	 * @param int $userId
-	 * @param bool $stayLoggedInPermanently True makes the session effectively never expire,
-	 * false expires it 30 days from now
+	 * @param bool $stayLoggedInPermanently True expires the session
+	 * VICTUAL_SESSION_STAY_LOGGED_IN_DAYS from now, false expires it 30 days from now
 	 * @return string The 50 character random session key
 	 */
 	public function CreateSession($userId, $stayLoggedInPermanently = false)
@@ -26,7 +38,7 @@ class SessionService extends BaseService
 		// Default is that sessions expire in 30 days
 		if ($stayLoggedInPermanently === true)
 		{
-			$expires = date('Y-m-d H:i:s', PHP_INT_SIZE == 4 ? PHP_INT_MAX : PHP_INT_MAX >> 32); // Never
+			$expires = date('Y-m-d H:i:s', time() + self::GetStayLoggedInLifetimeSeconds());
 		}
 
 		$sessionRow = $this->DB->sessions()->createRow([

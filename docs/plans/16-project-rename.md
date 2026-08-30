@@ -316,6 +316,27 @@ four are the same category as items that were, and all four landed with them:
 - **The 500 page**, which sent people to *upstream's* issue tracker for
   failures in this fork's code.
 
+### What the verification missed
+
+- **Every feature flag, dropped from the UI and the API.** The `GROCY_FEATURE_FLAG_`
+  prefix is 19 characters and `VICTUAL_FEATURE_FLAG_` is 21, and both loops that
+  select the flag constants compared only the first 19 — `BaseController`'s and
+  `SystemApiController::GetConfig`'s. Neither ever matched again, so
+  `Victual.FeatureFlags` was `{}` in every page and all 64 flag checks in
+  `public/viewjs` read false: location tracking, price tracking, camera scanning,
+  chore assignments and the rest were silently off in the browser while the
+  server-rendered menus still offered them. `GetConfig` also stripped six
+  characters where the prefix is now eight, so its keys would have been
+  `_FEATURE_FLAG_*` had the comparison matched.
+
+  This is the shape of regression a rename produces and a diff does not show: both
+  loops still read as if they worked. It was found by the 2026-08-29 security sweep
+  rather than by this plan's verification, which is the thing worth recording —
+  nothing in the verification opened a page and looked for a field that should be
+  there. It is fixed in the wave 0.5 hotfix as R1, with `str_starts_with` in place
+  of both length comparisons, and 14 piece 2 gains a `/system/config` contract test
+  so it cannot recur silently.
+
 ### What deliberately did not move
 
 - **Tier 0**, widened slightly in the doing: the `grcy:` magic, and with it the

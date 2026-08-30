@@ -101,6 +101,11 @@ Setting('ENTRY_PAGE', 'stock');
 // places where user context is needed will then use the default (first existing) user
 Setting('DISABLE_AUTH', false);
 
+// How many days a login that ticked "Stay logged in permanently" stays valid for.
+// A login without it always expires after 30 days. Both are enforced server side;
+// the session cookie mirrors whichever applies
+Setting('SESSION_STAY_LOGGED_IN_DAYS', 90);
+
 // A valid fully qualified class name of the authentication middlware to use:
 //  Victual\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Victual
 //  Victual\Middleware\Auth\ReverseProxyAuthMiddleware: When your reverse proxy handles authentication (see options below)
@@ -111,6 +116,13 @@ Setting('AUTH_CLASS', 'Victual\Middleware\Auth\DefaultAuthMiddleware');
 // Options when using ReverseProxyAuthMiddleware
 Setting('REVERSE_PROXY_AUTH_HEADER', 'REMOTE_USER'); // The name of the HTTP header which your reverse proxy uses to pass the username (on successful authentication)
 Setting('REVERSE_PROXY_AUTH_USE_ENV', false); // Set to true if the username is passed as an environment variable
+// Which addresses may set the header above, as a comma separated list of IPs and/or CIDR
+// ranges, e.g. '10.42.0.0/16, 192.168.1.10'. Required in header mode: the header is
+// client-settable, so without this anyone who can reach this application directly can
+// authenticate as any user. Not used when REVERSE_PROXY_AUTH_USE_ENV is true, where the
+// username comes from the server environment rather than from the request.
+// Your proxy must also be configured to strip this header from inbound requests
+Setting('REVERSE_PROXY_AUTH_TRUSTED_PROXIES', '');
 
 // Options when using LdapAuthMiddleware
 Setting('LDAP_ADDRESS', ''); // Example value "ldap://vm-dc2019.local.berrnd.net"

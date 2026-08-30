@@ -7,6 +7,16 @@ plans one item at a time.
 ordering fix there, the refactor here);
 [14](14-contract-and-regression-scaffolding.md) for anything verified by result-set diff.
 **Status:** draft for review. Deliberately a grab bag — see "Why one plan" below.
+15-B2 (session cookie) landed early, in the wave 0.5 hotfix; see its Executed note.
+
+> **Read the RBAC plan before starting C1.** One is in draft on its own branch as of
+> 2026-08-30, and the sweep's permission findings — S5, S6, S27 and the `userpictures`
+> residual — are parked against it rather than being fixed piecemeal here. C1's
+> authenticator extraction is the natural place to *carry* whatever that plan decides, and
+> the wrong place to pre-empt it: a refactor that hardens a permission model about to be
+> replaced is work done twice, which is the argument this roadmap already accepted for
+> deferring the auth findings once. The roadmap's own rule about reading 17 before 11 and
+> 16 exists because that was not done; this is the same rule, applied on time.
 
 ## Why one plan
 
@@ -157,11 +167,29 @@ Note the interaction with the defects table: item 2's `/api/system/config` allow
 the `LDAP_*` settings are no longer exposed, so removing them has no API consequence — a
 blocklist would have made this a two-part change.
 
-### B2 — session cookie
+### B2 — session cookie — **landed in the wave 0.5 hotfix**
 
 `HttpOnly` unconditionally (nothing reads the cookie from JavaScript). `SameSite` and
 `Secure` and the expiry each need a decision — Q2, Q3. Move the call inside PSR-7 while
 in there, so the response carries the header rather than PHP's output layer emitting it.
+
+> **Executed, 2026-08-29.** Pulled forward by the [security sweep](../security-sweep.md)
+> as S3, because it is what turns that sweep's two stored-XSS findings from "script runs"
+> into "session stolen". Q2 and Q3's recorded answers are what shipped: `HttpOnly` and
+> `SameSite=Lax` always, `Secure` when the request arrived over HTTPS
+> (`X-Forwarded-Proto` honored, as `UrlManager` already does), `path` from
+> `VICTUAL_BASE_PATH`, and the expiry mirroring the session row — a browser-session
+> cookie for a normal login, and the stay-logged-in lifetime when that box was ticked.
+>
+> Q3's "if that lifetime is currently infinite, give it a bound" is included:
+> `SessionService::CreateSession` no longer writes `PHP_INT_MAX` but
+> `VICTUAL_SESSION_STAY_LOGGED_IN_DAYS`, a new setting defaulting to 90. That is a
+> behaviour change for anyone who ticked the box expecting forever, and the only part of
+> this item that is not purely additive.
+>
+> **What did not land is the PSR-7 half.** `ProcessLogin` is a static with no response
+> object to write a header to, so the call is still `setcookie()`. Moving it wants the
+> construction C1 rewrites, and belongs there rather than in a hotfix.
 
 ### B3 — the rename, if it happens
 

@@ -108,8 +108,9 @@ class LdapAuthMiddleware extends BaseAuthMiddleware
 					$user = UsersService::GetInstance()->CreateUser($ldapUidAttribute, $ldapFirstName, $ldapLastName, '');
 				}
 
-				$sessionKey = SessionService::GetInstance()->CreateSession($user->id, $postParams['stay_logged_in'] == 'on');
-				self::SetSessionCookie($sessionKey);
+				$stayLoggedInPermanently = $postParams['stay_logged_in'] == 'on';
+				$sessionKey = SessionService::GetInstance()->CreateSession($user->id, $stayLoggedInPermanently);
+				self::SetSessionCookie($sessionKey, $stayLoggedInPermanently);
 
 				return true;
 			}

@@ -215,6 +215,77 @@ needs nothing: it is in both, and the belief that it was not is what the extract
 requirements above exist to prevent. The assertion has to land with the fix rather than
 before it: it fails from the moment it exists.
 
+### 2b. The read surface has to be complete before it is frozen
+
+Piece 2 freezes the API's response contract. That is only worth doing to a surface that
+covers what its consumers need, and a measurement taken on 2026-08-29 says this one does
+not yet — not because the API is small, but because the web UI has never been a consumer
+of it for reads.
+
+**What was measured.** Every non-API controller was inventoried: 12 files, 81 route
+handlers, 71 rendered templates, 173 direct `$this->DB->` call sites across 34 distinct
+tables and views, plus eight more reached only through raw SQL. Each of those was then
+classified against the API — is it an `ExposedEntity`, is there a dedicated endpoint, and
+if so does that endpoint actually return the same shape.
+
+**Most of it is genuinely covered, and by more than name.** All the master-data list and
+form pages, the chores, batteries and tasks pages, recipes and the meal plan, and the
+shopping list are reachable. Several look like gaps and are not: `chores_current`,
+`batteries_current`, `tasks_current`, `recipes_resolved` and `stock_missing_products` are
+each read by an API endpoint that calls **the same service method** the page controller
+calls, so the parity is real. `cache__quantity_unit_conversions_resolved` is the exposed
+`quantity_unit_conversions_resolved` view under its materialized name. The chores and
+batteries journals do their joining in the template from raw log rows plus lookup lists,
+which is exactly what a client would do.
+
+**Eight things are not covered**, and they are the ones that would have to be discovered
+by a client author rather than by a planner:
+
+| Page or need | Status | What is actually missing |
+|---|---|---|
+| Stock overview | **Nominal coverage only** | `GET /api/stock` returns `stock_current` plus a raw `products` row. The page renders `uihelper_stock_current_overview`, which joins `products_view` — and `products_view` is not exposed. Most of the difference is reconstructable from about eight calls, but `calories`, `calories_aggregated` and the two `quick_*_amount_qu_consume` columns require reimplementing that view's quantity-unit conversion joins in the client |
+| Stock entries | Same `products_view` gap | Plus there is no "all stock entries across all products, pre-joined" call — only per-product or per-id |
+| Stock journal | No endpoint at all | `uihelper_stock_journal` has no route. Reconstructable from four collections joined client-side |
+| Stock journal summary | **Unrenderable** | `SUM(...) GROUP BY` in the view, and the generic endpoints have no aggregation at all — only filter, sort, limit, offset. The only alternative is shipping the whole `stock_log` to the client |
+| Location content sheet | N+1 | `stock_current_location_content` is not exposed; the client would call the per-product locations route once per product |
+| Spendings report | **Unreachable** | `products_price_history` is in no enum and behind no route |
+| Calendar | Wrong shape | Only the iCal export exists; a JSON event feed does not |
+| User permissions page | Shape *and* permission mismatch | The API returns raw unresolved rows and requires `ADMIN`; the page renders the `permission_hierarchy`-joined resolved shape and requires only `USERS_READ` |
+
+**The smallest set that closes it**, which is the piece-2-adjacent work: expose
+`products_view` or fold its `qu_factor_*` and `has_sub_products` columns into the
+`products` payload (fixes the first two rows at once); a stock journal read; an
+aggregation answer for the summary; `stock_current_location_content`; a decision on
+`products_price_history`; and a JSON calendar feed.
+
+**Why this belongs to 14 rather than to a plan of its own.** The ordering is the whole
+point: a snapshot taken before the surface grows freezes an incomplete contract and then
+makes every addition a snapshot change, which is exactly the churn piece 2 exists to
+prevent. So grow the surface, then freeze it. Three of the entries above are also
+`ExposedEntity` decisions rather than code, and the additive-API ground rule says those
+are argued explicitly rather than slipped in.
+
+Two of them are not merely technical and should not be decided by whoever writes the
+endpoint. **`products_price_history`** is the household's purchase history and exposing it
+is a deliberate widening, not an oversight to correct. **The permissions page mismatch**
+may be intentional — loosening a resolved-permission read from `ADMIN` to `USERS_READ`
+has consequences the server-rendered page's stricter phrasing might have been protecting.
+Both want a recorded answer, in the manner of this roadmap's other open questions.
+
+> **The permissions one is deferred to an RBAC plan**, in draft on its own branch as of
+> 2026-08-30. It is not a missing endpoint but a question about who may see the permission
+> model, and answering it here would fix a number in one view while the model it reflects
+> is being redesigned. The sweep lists the other findings waiting on the same plan. What
+> this section still owes regardless: whatever that plan lands on has to be reachable
+> through the API before piece 2 freezes the contract, since the permissions page is one of
+> the eight.
+
+**Caveat on the measurement.** The view definitions were read from the SQLite migration
+files, taking the highest-numbered migration touching each view as authoritative. The
+PostgreSQL definitions in `db/pgsql/` were not cross-checked, and this fork has real
+per-engine divergence elsewhere — so the column lists above want a spot-check against the
+PostgreSQL side before anyone builds from them.
+
 ### 3. Minimal CI
 
 `php -l` over every `.php` file, `node --check` over every `.js` file, and the suite from
@@ -361,6 +432,10 @@ dependents.** Three separate things in the roadmap already assume it exists:
 - [02 MCP](02-mcp-endpoint.md) is the reason the response-contract snapshot is worth
   building at all: it puts a second consumer on an API whose wire format is an accident of
   the schema.
+
+**Piece 2 after the read surface grows**, per 2b above. This is a new constraint and it
+is the one most likely to be missed, because nothing about the snapshot script depends on
+it — the script works fine against an incomplete surface and freezes it just as happily.
 
 **Before [11](11-api-error-handling.md)**, if both are being done. 11 deliberately changes
 status codes on failure paths across 87 operations, and its own verification section is two

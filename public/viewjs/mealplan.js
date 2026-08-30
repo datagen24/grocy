@@ -238,6 +238,10 @@ $(".calendar").each(function()
 					return false;
 				}
 
+				// Same reason as recipe.name above: this is concatenated into markup below,
+				// and products.name is a text column, so it can contain markup as typed
+				productDetails.product.name = productDetails.product.name.escapeHTML();
+
 				if (productDetails.last_price === null)
 				{
 					productDetails.last_price = 0;
@@ -306,7 +310,7 @@ $(".calendar").each(function()
 			{
 				element.html('\
 				<div> \
-					<h5 class="text-wrap text-break mb-1 ' + additionalTitleCssClasses + '">' + mealPlanEntry.note + '</h5> \
+					<h5 class="text-wrap text-break mb-1 ' + additionalTitleCssClasses + '">' + mealPlanEntry.note.escapeHTML() + '</h5> \
 					<h5 class="d-print-none"> \
 						<a class="btn btn-outline-info btn-xs edit-meal-plan-entry-button" href="#" data-toggle="tooltip" title="' + __t("Edit this item") + '"><i class="fa-solid fa-edit"></i></a> \
 						<a class="btn btn-outline-danger btn-xs remove-note-button" href="#" data-toggle="tooltip" title="' + __t("Delete this item") + '"><i class="fa-solid fa-trash"></i></a> \
@@ -791,7 +795,9 @@ $(document).on("keydown", "#servings", function(e)
 
 $(document).on('click', '.recipe-order-missing-button', function(e)
 {
-	var objectName = $(e.currentTarget).attr('data-recipe-name');
+	// Escaped again on the way out: attr() returns the decoded value, so whatever
+	// escaping built the attribute is not in effect once it is read back
+	var objectName = $(e.currentTarget).attr('data-recipe-name').escapeHTML();
 	var objectId = $(e.currentTarget).attr('data-recipe-id');
 	var button = $(this);
 	var servings = $(e.currentTarget).attr('data-mealplan-servings');
@@ -865,7 +871,9 @@ $(document).on('click', '.product-consume-button', function(e)
 			Victual.Api.Get('stock/products/' + productId,
 				function(result)
 				{
-					var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toString() + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+					// toastr renders its message as HTML (escapeHtml defaults to false), so the
+					// product name is escaped before it goes in - see sweep finding S29
+					var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toString() + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name.escapeHTML()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 
 					Victual.Api.Put('objects/meal_plan/' + mealPlanEntryId, { "done": 1 },
 						function(result)
@@ -897,7 +905,8 @@ $(document).on('click', '.product-consume-button', function(e)
 
 $(document).on('click', '.recipe-consume-button', function(e)
 {
-	var objectName = $(e.currentTarget).attr('data-recipe-name');
+	// See the note above on attr() returning the decoded value
+	var objectName = $(e.currentTarget).attr('data-recipe-name').escapeHTML();
 	var objectId = $(e.currentTarget).attr('data-recipe-id');
 	var mealPlanEntryId = $(e.currentTarget).attr('data-mealplan-entry-id');
 

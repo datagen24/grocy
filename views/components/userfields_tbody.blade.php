@@ -20,9 +20,9 @@ $excludeFieldTypes = [];
 	@if($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_CHECKBOX)
 	@if($userfieldObject->value == 1)<i class="fa-solid fa-check"></i>@endif
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_PRESET_CHECKLIST)
-	{!! str_replace(',', '<br>', $userfieldObject->value) !!}
+	{!! str_replace(',', '<br>', htmlspecialchars($userfieldObject->value ?? '')) !!}
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_LINK)
-	<a href="{{ $userfieldObject->value }}"
+	<a href="{{ SafeExternalUrl($userfieldObject->value) }}"
 		target="_blank">{{ $userfieldObject->value }}</a>
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_LINK_WITH_TITLE)
 	@php
@@ -35,7 +35,7 @@ $excludeFieldTypes = [];
 	$link = $data->link;
 	}
 	@endphp
-	<a href="{{ $link }}"
+	<a href="{{ SafeExternalUrl($link) }}"
 		target="_blank">{{ $title }}</a>
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_FILE && !empty($userfieldObject->value))
 	<a href="{{ $U('/api/files/userfiles/'. $userfieldObject->value) }}"

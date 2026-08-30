@@ -68,7 +68,7 @@ class DefaultAuthMiddleware extends BaseAuthMiddleware
 		if ($user !== null && password_verify($inputPassword, $user->password))
 		{
 			$sessionKey = SessionService::GetInstance()->CreateSession($user->id, $stayLoggedInPermanently);
-			self::SetSessionCookie($sessionKey);
+			self::SetSessionCookie($sessionKey, $stayLoggedInPermanently);
 
 			if (password_needs_rehash($user->password, PASSWORD_ARGON2ID))
 			{

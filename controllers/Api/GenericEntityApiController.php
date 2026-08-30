@@ -56,7 +56,7 @@ class GenericEntityApiController extends BaseApiController
 				User::CheckPermission($request, User::PERMISSION_ADMIN);
 			}
 
-			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
+			$requestBody = $this->GetParsedAndFilteredRequestBody($request, $args['entity']);
 
 			try
 			{
@@ -198,7 +198,7 @@ class GenericEntityApiController extends BaseApiController
 				User::CheckPermission($request, User::PERMISSION_ADMIN);
 			}
 
-			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
+			$requestBody = $this->GetParsedAndFilteredRequestBody($request, $args['entity']);
 
 			try
 			{
