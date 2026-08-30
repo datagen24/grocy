@@ -69,6 +69,21 @@ them are routing sentences in *this file* that were never true.
 |---|---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
+| 20 | [Single engine, and the database as the logic layer](20-database-as-the-logic-layer.md) | — | nothing; claims on 10, 18, 02, 19, 01 if adopted | unestimated | **concept — not a commitment and not in the wave order** |
+
+**20 is a concept, not a plan, and it is listed here so that it is tracked somewhere
+rather than nowhere** — the lesson this file already learned from the rigor review. It
+proposes retiring SQLite as a runtime engine (keeping it as an import format) and moving
+report and read logic into views, and it argues that those are one decision rather than
+two. Nothing depends on it, it blocks nothing, and it is deliberately absent from the wave
+order below. If it is adopted it becomes a plan and acquires sequencing then.
+
+Two of its findings apply to [10](10-cold-start-statelessness.md) and
+[18](18-mqtt-state-publication.md) **whether or not the concept is ever adopted** — 10's
+`pg_advisory_lock` is unsafe under transaction-mode connection pooling, and `LISTEN` does
+not survive that pooling mode either. See 20's *Findings that stand on their own*. If the
+concept is rejected, those two should be lifted into their owning plans rather than
+discarded with it.
 
 The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
 so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
