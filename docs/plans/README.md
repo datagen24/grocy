@@ -105,7 +105,7 @@ rename and the registry claims happen at announcement time, not in a commit.
 
   **[19](19-rbac.md) is now a contributor to this rule and the answer to both decisions.**
   Its piece 1 adds `/roles`, `/roles/{id}/permissions`, `/users/{id}/roles`, a `roles`
-  exposed entity and a `via_role` field on an existing response — all read surface, and all
+  exposed entity and a `via_roles` field on an existing response — all read surface, and all
   of it has to exist before the freeze, which is why piece 1 is in wave 3 rather than
   later. And the two parked decisions are 19's: `STOCK_PRICES_VIEW` is what makes exposing
   `products_price_history` a bounded widening rather than an open one, and 19's question 9
@@ -533,7 +533,7 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   writable through the generic endpoints), a length/complexity bound on the `§` regex
   operator written into the filter contract `filterdifftest.php` already measures
   (S15), and a test that `/system/config` returns at least `FEATURE_FLAG_STOCK` so R1
-  cannot recur. It also grows a fourth comparison leg and a second fixture identity, for
+  cannot recur. It also grows two more comparison legs and a second fixture identity, for
   19 piece 2 below — built here rather than there, because a per-identity snapshot is an
   extension of the snapshot mechanism and not a consumer of it.
 - **[19](19-rbac.md) piece 2 — price visibility**, co-scheduled with 14 piece 2 and

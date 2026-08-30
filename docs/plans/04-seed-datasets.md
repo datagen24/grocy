@@ -43,6 +43,13 @@ not. Users stay out: a user is an identity rather than a row.
 Entities reference each other by **name**, not id, so a dataset is portable between
 installs and merges into an existing one. The importer resolves names to ids as it goes.
 
+**Roles are the one exception and key on `code` instead**, because a role's `name` is an
+editable display label ([19](19-rbac.md)'s schema) and its `code` — `ADMIN`, `ADULT`,
+`CHILD` — is immutable. Matching a role by name would mean that a household which renamed
+"Child" to "Kids" gets a second role on the next import, or has its rename overwritten;
+matching on `code` is the same stability argument this format already makes for permission
+names, applied to the column that actually has it.
+
 ### Import path
 
 `bin/victual-seed-import <dataset.json> [--dry-run]`, mirroring `bin/victual-db-import`:

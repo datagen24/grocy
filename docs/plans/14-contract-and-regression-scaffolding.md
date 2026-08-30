@@ -200,7 +200,7 @@ forever. Key sets and types are the actual contract, and are what a migration si
 changes. Q4 covers whether the two accepted differences need an explicit exemption even
 at the type level.
 
-The comparison is three-way and each leg catches something different:
+The comparison is five-way once piece 2 lands, and each leg catches something different:
 
 | Comparison | Catches |
 |---|---|
@@ -208,16 +208,29 @@ The comparison is three-way and each leg catches something different:
 | snapshot vs OpenAPI schema | a response that never matched its documentation |
 | engine vs engine | a port that diverged on the wire |
 | Admin snapshot vs restricted-identity snapshot | a field that should be redacted and is not, or one redacted that should not be — asserted as *equal minus exactly the `x-visibility` keys*. The only leg that requires a difference rather than forbidding one. |
+| schemas + snapshot bodies vs the sensitive-field vocabulary | a price or cost field nobody classified — the leak the leg above is structurally blind to, since an unannotated field is identical for both identities |
 
 **Piece 2 runs per identity, not once.** [19](19-rbac.md) makes response *content* a
 function of the caller, so "a valid key" no longer describes the contract. Every operation
 is called twice against the same fixture — once as Admin, once as a fixture user without
 `STOCK_PRICES_VIEW` — and the restricted snapshot is asserted to equal the
-Admin one with exactly the `x-visibility`-annotated keys removed. That is what stops a
-future endpoint leaking a price by omission: a new path returning `price` without the
-annotation fails the diff for the restricted user. Both legs are needed, because a field
-absent for *everyone* satisfies the restricted leg exactly as a correctly redacted one
-does, and only the Admin leg shows it was there to redact.
+Admin one with exactly the `x-visibility`-annotated keys removed. Both legs are needed,
+because a field absent for *everyone* satisfies the restricted leg exactly as a correctly
+redacted one does, and only the Admin leg shows it was there to redact.
+
+**What the double snapshot does not do is catch an unclassified field**, and 19's first
+draft claimed it did — that a new path returning `price` without the annotation fails the
+diff. It passes: with no annotation and no policy row nothing redacts the field, both
+identities receive it, and "Admin minus the annotated fields" still equals the restricted
+response. The diff polices fields somebody has already classified; an unclassified leak is
+its blind spot. So this piece carries a **second, independent assertion — a completeness
+check** — that walks the OpenAPI schemas *and* the recorded snapshot bodies for field names
+in the price/cost vocabulary (`price`, `cost`, `value`, `amount_paid`, and their prefixed
+and suffixed forms) and fails on any that carries neither `x-visibility` nor an explicit
+`x-visibility: none` with a stated reason. The snapshot bodies are in scope alongside the
+schemas because the hand-built responses are not all schema-backed. It is cheap, it is the
+leg that actually generalises to a future endpoint, and its allow-list of deliberate
+exceptions is the deliverable rather than a by-product.
 
 That restricted user holds the `STOCK` **leaves** (`STOCK_CONSUME`, `STOCK_OPEN`, …) and
 not `STOCK` itself: `STOCK_PRICES_VIEW` hangs under `STOCK` and the tree resolves

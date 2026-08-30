@@ -139,7 +139,8 @@ grants with the grants of every role they hold.
 ```sql
 CREATE TABLE roles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT NOT NULL UNIQUE,
+    code        TEXT NOT NULL UNIQUE,         -- immutable identity: ADMIN, ADULT, CHILD
+    name        TEXT NOT NULL UNIQUE,         -- editable display label
     description TEXT,
     builtin     TINYINT NOT NULL DEFAULT 0,   -- seeded rows: renamable, not deletable
     row_created_timestamp DATETIME DEFAULT (datetime('now', 'localtime'))
@@ -156,6 +157,15 @@ CREATE TABLE user_roles (
 );
 ```
 
+**`code` exists because `name` is editable and the built-in roles are both renamable and
+re-shippable, which cannot both be true of one column.** [04](04-seed-datasets.md)'s format
+references entities by name; a household that renames "Child" to "Kids" would leave a later
+seed import unable to find the row it means, so it either creates a second Child role or
+overwrites the rename. `code` is what the seed keys on, what a migration matches when it
+adds a permission to a built-in role, and what an API caller can rely on; `name` is what
+the UI shows and the household may change. `code` is immutable for `builtin` rows and
+assigned once for custom ones, and `PUT /roles/{id}` never accepts it.
+
 `user_permissions_resolved` becomes:
 
 ```sql
@@ -170,9 +180,16 @@ WHERE pt.id IN (
 );
 ```
 
-`uihelper_user_permissions` gains a `via_role` column (name of the first role that grants
-it, else NULL) so the checkbox tree can show a grant as inherited and read-only rather
-than silently ticked. This is a dual-engine migration (PostgreSQL has no `AUTOINCREMENT`
+`uihelper_user_permissions` gains a `via_roles` column so the checkbox tree can show a
+grant as inherited and read-only rather than silently ticked. It is the **comma-separated
+list of the `code`s of every role granting that permission to that user, sorted
+ascending**, or NULL for a permission held only directly. "The first role that grants it"
+was the first draft and is wrong twice over: it is not deterministic — SQLite and
+PostgreSQL are free to return the rows of an unordered join in different orders, which
+would make `difftest.php` fail on a correct implementation — and it discards information
+the UI wants, since a permission inherited from two roles survives the removal of either
+one. Sorting on the immutable `code` rather than the editable `name` keeps the column
+stable across a rename, and the UI resolves codes to display names for the tooltip. This is a dual-engine migration (PostgreSQL has no `AUTOINCREMENT`
 and `TINYINT` becomes `SMALLINT`), and the `permission_tree` recursive CTE already runs on
 both, so the closure needs no new engine-specific SQL.
 
@@ -223,7 +240,8 @@ GET    /roles/{id}/permissions
 PUT    /roles/{id}/permissions         replace set (subset-of-caller rule applies)
 GET    /users/{id}/roles
 PUT    /users/{id}/roles               replace set (subset-of-caller rule applies)
-GET    /users/{id}/permissions         unchanged shape; each row gains "via_role": string|null
+GET    /users/{id}/permissions         additive: each row gains "via_roles": string|null
+                                       (see Client impact; the permission question is Q9)
 ```
 
 All role management is behind `USERS_EDIT`; reading roles is behind `USERS_READ`. Editing
@@ -354,9 +372,27 @@ Every redactable field gets `x-visibility: STOCK_PRICES_VIEW` in `victual.openap
 and is no longer listed as `required` on its schema. [14](14-contract-and-regression-scaffolding.md)'s
 contract snapshot is run twice per affected path, once as Admin and once as a fixture
 user without the leaf, and the second snapshot is asserted to equal the first minus
-exactly the `x-visibility` fields. That assertion is the proof the feature works, and it
-is also what stops a future endpoint leaking a price: a new path that returns `price`
-without the annotation fails the snapshot diff for the fixture user.
+exactly the `x-visibility` fields. That assertion is the proof that redaction *works* — and
+on its own it proves nothing about redaction being *complete*, which the first draft
+claimed it did.
+
+The claim was that a new path returning `price` without the annotation fails the diff for
+the fixture user. It passes. With no annotation and no `FIELD_POLICY` row, nothing redacts
+the field, both identities receive it, and "Admin minus the annotated fields" still equals
+the restricted response. The diff can only ever police fields somebody has already
+classified, so an unclassified leak is exactly the case it is blind to.
+
+Completeness therefore needs its own assertion, and it is a different shape: **every field
+this repository can return that matches the sensitive set must be classified**, whether it
+is redacted or deliberately not. Concretely, walk the OpenAPI schemas and the recorded
+snapshot bodies for field names matching the price/cost vocabulary — `price`, `cost`,
+`value`, `amount_paid` and their prefixed and suffixed forms — and fail on any that carries
+neither `x-visibility` nor an explicit `x-visibility: none` with a one-line reason. The
+snapshot bodies are needed alongside the schemas because the hand-built responses
+(`/stock/products/{id}`, the MCP tool payloads 02 describes) are not all schema-backed. The
+allow-list is the deliverable: `qu_factor_price_to_stock` is a unit factor and is annotated
+`none`, and every future exception has to be written down rather than merely absent. This
+lives with the harness in 14 piece 2, alongside the double snapshot.
 
 Both legs are load-bearing, and it is worth saying why since the assertion is described as
 the proof. A field that is absent *for everyone* — dropped by a bug, renamed, never
@@ -374,9 +410,19 @@ track prices at all".
 
 ## Client impact
 
-**Piece 1: none. Piece 2: fields that were always present become optional, which is the
-kind of change a lenient decoder handles and a strict one does not.** Roles add an entity
-and a grant path and take nothing away. Piece 2 removes `price`, `costs` and their
+**Piece 1: one additive field. Piece 2: fields that were always present become optional,
+which is the kind of change a lenient decoder handles and a strict one does not.** Roles
+otherwise add an entity and a grant path and take nothing away.
+
+Piece 1's field is `via_roles` on every row of `GET /users/{id}/permissions`. Calling that
+"unchanged shape" was this plan's own first draft and it is the mistake this section exists
+to catch: additive is not the same as invisible. A strict decoder that rejects unknown keys
+breaks on it exactly as a strict decoder breaks on a removed key in piece 2 — the same
+compatibility model, applied in the other direction — and neither tracked client is known
+to read this endpoint, which is what makes it affordable rather than what makes it absent.
+It goes in [14](14-contract-and-regression-scaffolding.md)'s contract snapshot as an
+addition on a path piece 2 later removes fields from, so both directions are recorded on
+the same endpoint. Piece 2 removes `price`, `costs` and their
 relatives from responses to users who lack `STOCK_PRICES_VIEW` — `stock.price`,
 `stock_log.price`, `products_average_price`, `product_price_history`,
 `products_last_purchased.price`, and `last_price`/`avg_price` on `/stock/products/{id}`.
@@ -398,7 +444,8 @@ topic, and has no Response yet. See Q5.
 2. Upgrade test: a pre-19 fixture with users holding `STOCK` directly; after migration
    every one of them still receives every price field on every path in the table above.
 3. Roles: create Adult and Child from the seed, assign each to a fixture user, snapshot
-   `GET /users/{id}/permissions` and assert `via_role` on every inherited row; remove the
+   `GET /users/{id}/permissions` and assert `via_roles` on every inherited row, carrying
+   both role codes in sorted order where two roles grant the same permission; remove the
    role, assert the rows revert.
 4. Subset rule: as an Adult, `PUT /users/{id}/roles` with Admin → 403; `PUT
    /roles/{child}/permissions` adding `MASTER_DATA_EDIT` → 403.
@@ -437,7 +484,7 @@ topic, and has no Response yet. See Q5.
 - **After 12** for the UI, or accept that `/roles` is the last pre-12 form written. The
   API does not wait on 12.
 - **Before 14 piece 2**, not after it. Piece 1 adds `/roles`, `/roles/{id}/permissions`,
-  `/users/{id}/roles`, a `roles` exposed entity and a `via_role` field on an existing
+  `/users/{id}/roles`, a `roles` exposed entity and a `via_roles` field on an existing
   response — all read surface, and the roadmap's rule is that the read surface grows
   before the snapshot freezes it.
 - It touches `User.php`, `0110`-successor views, `UsersApiController` and the users
@@ -573,7 +620,7 @@ topic, and has no Response yet. See Q5.
    `UsersController` renders `/user/{id}/permissions` behind `USERS_READ` in the resolved,
    hierarchy-joined shape; the API returns raw unresolved rows behind `ADMIN`. So a
    `USERS_READ` user can open the page, tick boxes and get a 403 on save. This plan
-   changes what that endpoint returns (`via_role`) without deciding either half, and 14
+   changes what that endpoint returns (`via_roles`) without deciding either half, and 14
    cannot freeze the contract until it does — it is one of the eight reads 2b lists. The
    resolved shape is the one both consumers want; the permission is the real question, and
    roles sharpen it, because "who may read the permission model" and "who may read *this
@@ -598,8 +645,10 @@ leaves, a `CheckPermission` on every read path in the tree, and an upgrade in wh
 who hold nothing stop being able to read anything. Answer Q8 before sizing this.
 
 Piece 2 (visibility): medium. Two permission leaves, the policy constant, the funnel in
-`BaseApiController`, the Blade helper, the OpenAPI annotations, and the double snapshot
-in 14. The snapshot work is the bulk of it and is also the part that pays back on every
-future endpoint. Three to four sittings, of which the first is answering Q1, Q3 and Q8 —
+`BaseApiController`, the Blade helper, the OpenAPI annotations, and 14's double snapshot
+plus its completeness check. The snapshot work is the bulk of it and is also the part that
+pays back on every future endpoint; the completeness check is the smaller half and the one
+that keeps paying after this plan, since it fails on a field nobody thought about rather
+than on one somebody already classified. Three to four sittings, of which the first is answering Q1, Q3 and Q8 —
 Q2 the plan answers itself (a constant), and Q4, Q5 and Q9 are now questions for 02, 18
 and wave 2 rather than for this plan.
