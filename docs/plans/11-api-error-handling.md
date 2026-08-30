@@ -262,19 +262,21 @@ codes, and that needs to be explicit rather than slipped in:
 | `POST`/`PUT`/`DELETE` `/api/objects/{userfields\|userentities}` as a non-admin | 200 | 403 |
 | `?query[]=` or `?order=` naming a field the caller may not see | 200, filtered | 400 |
 
-That last row is added by [19](19-rbac.md) rather than by this plan, and is recorded here
-because this is where the status-code contract lives. It is the third request shape in this
-list that used to answer 200 and now answers 400. Mechanically it is one call site:
+The **final** row is added by [19](19-rbac.md) rather than by this plan, and is recorded
+here because this is where the status-code contract lives. It is the only shape in the
+list that goes from 200 to 400; the other rows that used to succeed now deny, with 401 or
+403. Mechanically it is one call site:
 `AssertFieldExists()` already refuses a field the entity does not have, from both the
 `query[]` and the `order` path, and it gains the caller's field policy alongside the column
 list. Note that a filter on a redacted field and a filter on a nonexistent one deliberately
 share the 400 and differ only in message — a distinct code would confirm the field exists,
 which is the hole the redaction closes. Nothing else in 19 needs a slot in the taxonomy
-below: a redacted field is a 200 with a shorter body, and a refused call is this plan's
+above: a redacted field is a 200 with a shorter body, and a refused call is this plan's
 403, so the two are distinguishable without a new error kind.
 
-That last row is Q6's answer and is a deliberate behaviour change, not a code
-correction: populating `ExposedEntityEditRequiresAdmin` turns a gate that can never fire
+The `userfields`/`userentities` row, second from the end, is Q6's answer and is a
+deliberate behaviour change, not a code correction: populating
+`ExposedEntityEditRequiresAdmin` turns a gate that can never fire
 into one that does, and a non-admin who can edit master data today can create user fields
 today. Accepted — definition-level entities reshape the data model — but it is the one
 row here that denies something that currently succeeds, so it belongs on the

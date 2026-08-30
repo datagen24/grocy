@@ -353,9 +353,9 @@ location tracking on) is the same booted instance.
 
 **The permission-model findings were parked on an RBAC plan; four of the five are now
 unparked.** That plan landed as [19](plans/19-rbac.md) on 2026-08-30, and reading it
-against the code reversed the parking rather than confirming it — 19's own Depends-on line
-puts it *after* wave 2's S5/S6, so parking S5 and S6 on 19 inverted the dependency the plan
-states. The distinction the parking missed is between the *rule* and the *model*: the
+against the code reversed the parking rather than confirming it. 19's own Depends-on line —
+in its first draft, before any review edits — puts it *after* wave 2's S5/S6, so parking S5
+and S6 on 19 inverted the dependency the plan itself states. The distinction the parking missed is between the *rule* and the *model*: the
 subset-of-caller rule needs a caller's resolved set, a target's resolved set and the
 closure of a proposed grant, all of which are `user_permissions_resolved` and
 `permission_tree` as they stand today. 19 widens that view with a union over
@@ -363,8 +363,10 @@ closure of a proposed grant, all of which are `user_permissions_resolved` and
 
 - **S5** (`DEFAULT_PERMISSIONS = ['ADMIN']`) — **wave 2.** The value is not a model
   question: `[]` is the premise 19 is written on, whose `VICTUAL_DEFAULT_ROLES` also
-  defaults to empty. `ReverseProxyAuthMiddleware` creates users with no creator to compare
-  against, so there the default *is* the whole fix.
+  defaults to empty. Two of the three `CreateUser` call sites have no creator to compare
+  against — `ReverseProxyAuthMiddleware.php:79` and `LdapAuthMiddleware.php:108`, the
+  latter deleted by 15-B1 — so for those the default *is* the whole fix, and only
+  `POST /api/users` gets the subset rule.
 - **S6** (`USERS_EDIT` can reset an admin's password) — **wave 2**, and worse than recorded
   above. "May A administer B" does have an answer today — B's resolved permissions are a
   subset of A's — computable from the existing view. And the escalation does not need
@@ -377,8 +379,11 @@ closure of a proposed grant, all of which are `user_permissions_resolved` and
   change what validating one means.
 - **The `userpictures` residual** — **wave 2**, with S6. It is a route gap rather than a
   model gap: the route carries no user id, but `users.picture_file_name` recovers the
-  owner, so the check becomes owner-is-caller → `USERS_EDIT_SELF`, else `USERS_EDIT` plus
-  the subset rule. The filename comparison is standing in for a lookup, not for a model.
+  owner, so the check becomes owner-is-caller → `USERS_EDIT_SELF`, else `USERS_EDIT`. The
+  filename comparison is standing in for a lookup, not for a model. Whether S6's subset
+  rule also applies to a picture — may an editor delete the avatar of a user holding
+  permissions they lack — is a separate and smaller question, worth deciding rather than
+  assuming in either direction.
 - **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch**, recorded in
   [14](plans/14-contract-and-regression-scaffolding.md)'s section 2b, is the one that
   genuinely belongs to 19, which carries it as its question 9. Wave 2 can still take the
@@ -391,17 +396,22 @@ still gets ADMIN.
 S4–S6 (reverse proxy, default permissions, user edit) belong with 11/15-C1 in wave 2,
 where the auth files are open anyway — but 15-B2 (S3) should not wait for them.
 
-**One finding this sweep did not have a category for, surfaced by 19 and recorded here
-because it is the sweep's shape rather than the plan's: no read path checks a permission.**
-`PERMISSION_STOCK` is declared (`controllers/Users/User.php:30`) and checked nowhere; every
-read method on `StockApiController` and both `GenericEntityApiController::GetObject` and
-`::GetObjects` run with no `CheckPermission`, and the API route group adds only CORS and
-JSON middleware. So every authenticated user reads all stock, all prices, all recipes and
-the whole permission tree regardless of what they hold. This is not an exploitable hole on
-a single-household instance where every account is trusted, which is why it is recorded
-rather than rated — but it is the premise 19's Child role and its `RECIPES_VIEW` leaf were
-drafted against, and it is why 19 now carries a question 8 asking whether object-level read
-gating is in scope at all.
+**S30 | Info — no permission gates a read of household data.** Surfaced while reviewing
+[19](plans/19-rbac.md) against the code, and recorded here because it is the sweep's shape
+rather than that plan's. `PERMISSION_STOCK` is declared
+(`controllers/Users/User.php:30`) and checked nowhere; every read method on
+`StockApiController` and both `GenericEntityApiController::GetObject` and `::GetObjects`
+run with no `CheckPermission`, and the API route group adds only CORS and JSON middleware.
+The users surface is the sole exception — `UsersController.php:23,93` and
+`UsersApiController::GetUsers` require `USERS_READ`, `::ListPermissions` requires `ADMIN`.
+So every authenticated user reads all stock, all prices, all recipes, all chores and the
+whole permission tree regardless of what they hold. Rated Info rather than a finding
+because on a single-household instance every account is trusted and the permission model
+is about restraint rather than defence — but it is the premise 19's Child role and its
+`RECIPES_VIEW` leaf were drafted against, and it is why 19 carries a question 8 asking
+whether object-level read gating is in scope at all. Nothing in the sweep's original
+output would have caught it: the pass looked for gates that could be bypassed, not for
+gates that were never there.
 
 Two plans should absorb items rather than a hotfix: **14 piece 2** takes the
 `/system/config` contract test (R1), the body-schema validation that closes S16, and a

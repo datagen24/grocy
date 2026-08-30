@@ -14,7 +14,9 @@ snapshot that proves redaction; piece 1 needs neither, and verifies its views ag
 14 **piece 1**, which landed in wave 0. Feeds [04](04-seed-datasets.md) (the three
 roles are a seed) and constrains [02](02-mcp-endpoint.md) and
 [18](18-mqtt-state-publication.md) (both are channels that carry prices — see Q4 and Q5).
-**Status:** draft for review, **split across two waves** — piece 1 in wave 3 as its own
+**Status:** draft for review, **blocked on its own question 8** (does this plan gate reads
+at all — the answer changes piece 1's size and its wave), and **split across two waves** —
+piece 1 in wave 3 as its own
 track, piece 2 in wave 5 alongside 14 piece 2, whose snapshot harness it extends. Piece 1
 is in wave 3 rather than later because it grows the API read surface, which the roadmap
 requires to happen *before* 14 piece 2 freezes the contract; piece 2 is in wave 5 because
@@ -30,13 +32,16 @@ one of the 30 permissions in `permission_hierarchy` gates an **action**: consume
 open, transfer, edit master data, mark a chore done. Not one gates a **field**.
 
 It is worse than that, and the plan is written against the wrong baseline if this is not
-said first: **no permission gates a read either.** `PERMISSION_STOCK` is declared at
-`controllers/Users/User.php:30` and checked in exactly zero places; every read method on
-`StockApiController` — current stock, product details, stock entries, price history — and
-both `GenericEntityApiController::GetObject` and `::GetObjects`
+said first: **no permission gates a read of household data.** `PERMISSION_STOCK` is
+declared at `controllers/Users/User.php:30` and checked in exactly zero places; every read
+method on `StockApiController` — current stock, product details, stock entries, price
+history — and both `GenericEntityApiController::GetObject` and `::GetObjects`
 (`controllers/Api/GenericEntityApiController.php:242,277`) run with no `CheckPermission`
-at all, and `routes.php:268` adds only CORS and JSON middleware to the group. So *every
-authenticated user* already sees `stock.price`, `stock_log.price`,
+at all, and `routes.php:268` adds only CORS and JSON middleware to the group. The users
+surface is the sole exception and the only gated read anywhere:
+`UsersController.php:23,93` and `UsersApiController::GetUsers` (`:174`) require
+`USERS_READ`, and `::ListPermissions` (`:210`) requires `ADMIN` — which is the mismatch
+question 9 is about. Everywhere else, *every authenticated user* already sees `stock.price`, `stock_log.price`,
 `products_average_price`, `product_price_history`, `products_last_purchased.price`, a
 product's `last_price` and `avg_price` in `/stock/products/{id}`, and every recipe's
 `costs` — holding nothing. The action permissions gate writes; reads are open to anyone
@@ -74,7 +79,7 @@ seeds on each id and walks to its children (`migrations/0110.sql:98-109`). Two
 consequences this plan has to design around. First, granting a parent grants every leaf
 under it, so a role cannot be built by naming a parent and excluding some of its children
 — there is no deny. Second, `USERS` → `USERS_CREATE` → `USERS_EDIT` → `USERS_READ` is a
-chain rather than a fan (`migrations/0110.sql:29-43`), so **`USERS_CREATE` alone already
+chain rather than a fan (`migrations/0110.sql:24-43`), so **`USERS_CREATE` alone already
 resolves to `USERS_EDIT` and `USERS_READ`**: an account that may create users may today
 rewrite any admin's password. That is sweep S6 as a structural fact rather than a missing
 check, and it is what S6's fix in wave 2 has to be written against. The read/write split
@@ -274,7 +279,8 @@ const FIELD_POLICY = [
         'recipes_pos_resolved'      => ['costs'],
         'recipes_resolved'          => ['costs', 'costs_per_serving', 'prices_incomplete'],
         'uihelper_stock_current_overview' => ['value', 'last_price', 'average_price'],
-        'products_price_history'    => ['*'],
+        'products_price_history'    => ['*'],  // the /objects path; the route is refused
+        'uihelper_shopping_list'    => ['last_price_unit', 'last_price_total', 'price'],
         'product_details'           => ['last_price', 'avg_price'],
         'stock_entry'               => ['price'],
         'recipe_fulfillment'        => ['costs'],
@@ -282,15 +288,20 @@ const FIELD_POLICY = [
 ];
 ```
 
-The last four rows were missing from the first draft and each is a real channel, not
-belt-and-braces. `recipes_resolved` is returned wholesale by `GET /recipes/fulfillment`
+Four of those rows were missing from the first draft — `recipes_resolved`,
+`uihelper_shopping_list`, `uihelper_stock_current_overview` and `products_price_history` —
+and each is a real channel rather than belt-and-braces. `recipes_resolved` is returned wholesale by `GET /recipes/fulfillment`
 through `FilteredApiResponse` (`controllers/Api/RecipesApiController.php:73`), so it is
 both unredacted *and* filterable today; it also carries `prices_incomplete`, which is
 `MIN(costs) = 0` (`migrations/0247.sql:15`) and therefore survives the redaction of
-`costs` while still answering a question about them — an oracle, and the reason a policy
-has to enumerate derived columns rather than columns named `price`.
-`uihelper_stock_current_overview` (`migrations/0219.sql:74-75`) is what the Blade stock
-overview renders, what [02](02-mcp-endpoint.md)'s `stock_overview` tool reads and what
+`costs` while still answering a question about them. It leaks one bit — some ingredient
+has no recorded cost — rather than a value, which is enough to make the point: a policy
+has to enumerate derived columns, not columns named `price`.
+`uihelper_shopping_list` selects `last_price_unit`, `last_price_total` and `price`
+(`migrations/0251.sql:7-9`) and is an exposed entity, so it is a live ungated price
+channel today rather than a future one.
+`uihelper_stock_current_overview` (`migrations/0252.sql:38-39` — the highest-numbered
+migration defining it; 0219 is superseded) is what the Blade stock overview renders, what [02](02-mcp-endpoint.md)'s `stock_overview` tool reads and what
 [18](18-mqtt-state-publication.md) would publish as attributes; it is not an API path
 today, but [14](14-contract-and-regression-scaffolding.md)'s section 2b requires it to
 become one before piece 2 freezes the contract, so it will be. And
@@ -379,12 +390,13 @@ track prices at all".
    must reject an id absent from `permission_hierarchy` / `roles` with 400 rather than
    accepting it silently. Assert it, because this plan doubles the number of places the
    bug can exist.
-10. The **`userpictures` residual** — "may edit some user" standing in for "may edit
-   this user" (`controllers/Api/FilesApiController.php:143-151`). Ownership is
-   recoverable without a user id in the route, via `users.picture_file_name`, so the
-   check becomes owner-is-caller → `USERS_EDIT_SELF`, else `USERS_EDIT` plus the subset
-   rule. It is wave 2's to fix with S6, and this plan asserts it still holds afterwards
-   rather than inheriting it.
+10. The **`userpictures` residual** stays closed under roles. Wave 2 replaces "may edit
+    some user" with an ownership lookup through `users.picture_file_name`
+    (`controllers/Api/FilesApiController.php:143-151`); assert here that a user whose only
+    `USERS_EDIT` arrives *through a role* is bound by it identically to one holding it
+    directly. That is the general shape of this plan's risk — a rule written against
+    direct grants and silently not re-checked against inherited ones — and this is the
+    cheapest place to catch it.
 
 ## Sequencing
 
@@ -407,8 +419,10 @@ track prices at all".
 
 **Piece 2 — wave 5, co-scheduled with 14 piece 2.**
 
-- **After 11** — the redaction funnel and the 403/400 bodies are 11's `ApiResponse` and
-  error helper; building them here first would mean building them twice.
+- **After 11** — the 403 body a refusal returns and the 400 a refused filter returns are
+  11's error helper; building them here first would mean building them twice. Note this is
+  11's *error* path only: the redaction funnel is `FilteredApiResponse()`, which 11 does
+  not touch, and the first draft's claim that 11 was centralising it was wrong.
 - **With 14 piece 2, not after it.** The double snapshot is not a consumer of that harness
   but an extension of it: the harness has to run a path under two identities and diff the
   results, which single-identity snapshotting does not do. Build it once, in 14, with this
@@ -423,8 +437,10 @@ track prices at all".
   table the first draft referred to.
 - **Before 02 exposes any stock tool** — see Q4. **Not before 18**, which the first draft
   asked for and which is not achievable: 18 is wave 1 track D, two waves ahead of piece 1.
-  Q5 is discharged by 18 recording the exclusion in its own security notes instead, which
-  is where that reasoning already lives.
+  Q5 moves to 18 instead, as its question 8, since 18's security notes are where that
+  reasoning already lives. Moved, not answered: 18 records a lean to publish no prices and
+  has no response yet, so this plan should read 18's question 8 before piece 2 rather than
+  assume it.
 
 ## Open questions
 
@@ -483,8 +499,8 @@ track prices at all".
 
 8. **Does this plan also gate reads, and if so does that land with piece 1 or piece 2?**
    This is the largest question the plan has and it was not in the first draft, because
-   the draft assumed reads were already gated. They are not: no read path anywhere checks
-   a permission. Three things follow. The Child role's *withheld* permissions are real
+   the draft assumed reads were already gated. Outside the users surface, they are not:
+   no read of household data checks a permission. Three things follow. The Child role's *withheld* permissions are real
    (writes are checked) but its *granted* ones are decorative — it could hold nothing and
    still read all stock. `RECIPES_VIEW` narrows a permission that does not currently gate
    reading, so as drafted it grants nothing that is not already universal. And piece 2's
@@ -512,10 +528,16 @@ track prices at all".
    cannot freeze the contract until it does — it is one of the eight reads 2b lists. The
    resolved shape is the one both consumers want; the permission is the real question, and
    roles sharpen it, because "who may read the permission model" and "who may read *this
-   user's* grants" come apart once a grant can arrive through a bundle. The API section
-   above already implies the answer — read behind `USERS_READ`, write behind `USERS_EDIT`,
-   which the tree supports since `USERS_EDIT` resolves down to `USERS_READ` — so this may
-   simply be taken from this plan in wave 2 rather than waited for.
+   user's* grants" come apart once a grant can arrive through a bundle.
+
+   What this plan states is the rule for its own new endpoints — role management behind
+   `USERS_EDIT`, reading roles behind `USERS_READ`, which the tree supports since
+   `USERS_EDIT` resolves down to `USERS_READ`. It does **not** decide the existing
+   `GET /users/{id}/permissions`, which the API section above leaves at "unchanged shape".
+   The obvious extension is to apply the same rule there and return the resolved shape both
+   consumers want, and wave 2 may take that rather than wait — but it is an extension of
+   this plan's rule, not a decision this plan has recorded, and it wants an answer here
+   before anyone relies on it.
 
 ## Effort
 

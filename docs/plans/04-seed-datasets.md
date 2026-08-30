@@ -34,8 +34,11 @@ JSON, one file per dataset, covering the master data entities only — `quantity
 `products`, `product_barcodes` — and, from [19](19-rbac.md), `roles` and
 `role_permissions`. Deliberately not stock, chores, recipes or user *accounts*: roles are
 in because they are name-keyed master data like everything else here, and because 19's
-three built-in roles want to be re-shippable rather than migration-only; users are out
-because a user is an identity rather than a row.
+three built-in roles want to be re-shippable rather than migration-only. `role_permissions`
+comes with them not as master data in its own right but as the role's content — a role
+without its grants is an empty name — and it is the one place this format's
+reference-by-name rule does real work, since permission names are stable and their ids are
+not. Users stay out: a user is an identity rather than a row.
 
 Entities reference each other by **name**, not id, so a dataset is portable between
 installs and merges into an existing one. The importer resolves names to ids as it goes.

@@ -23,7 +23,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
 | 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2 |
-| 19 | [Roles and data-visibility permissions](19-rbac.md) | — | 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
+| 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
 ## Hardening
 
@@ -71,9 +71,9 @@ rename and the registry claims happen at announcement time, not in a commit.
 - **12 before [05](05-store-shopping-lists.md), [06](06-location-barcodes.md),
   [08](08-nested-locations.md) and [19](19-rbac.md)** — each adds a list/form pair, and 12
   is what stops them being copies of the old pattern. 19 is the partial case: its `/roles`
-  list is a factory call, but `/role/{id}` and the modified `/user/{id}/permissions` are
-  mixin adopters alongside `userpermissions.js`, which 12's Q5 response has already
-  bucketed.
+  list is a factory call, but `/role/{id}` is the same checkbox tree as
+  `userpermissions.js` bound to a different table, and 19 modifies that file too — so 12's
+  partial-clone list grows by one rather than its factory list growing by two.
 - **14 before [07](07-nested-products.md) and [08](08-nested-locations.md)** — both plan
   their fixtures against tooling this makes runnable, and neither has ever exercised a
   recursive CTE through it.
@@ -97,8 +97,11 @@ rename and the registry claims happen at announcement time, not in a commit.
   of it has to exist before the freeze, which is why piece 1 is in wave 3 rather than
   later. And the two parked decisions are 19's: `STOCK_PRICES_VIEW` is what makes exposing
   `products_price_history` a bounded widening rather than an open one, and 19's question 9
-  carries the permissions-page mismatch that 14's 2b handed it. Neither needs 19 to *land*
-  first — wave 2 can take both answers from the plan.
+  carries the permissions-page mismatch that 14's 2b handed it. The first needs no waiting
+  at all. The second is available to wave 2 as an *extension* of the rule 19 states for its
+  own role endpoints — read behind `USERS_READ`, write behind `USERS_EDIT` — rather than as
+  an answer 19 has recorded, since 19 still lists `GET /users/{id}/permissions` as
+  unchanged. Taking it early is a decision wave 2 makes, not one it inherits.
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
 - **18 wants 10 to be real, and 10 wants 18 to exist.** 18's whole justification is a pod
@@ -374,14 +377,16 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   Assistant is the reason it will not. 13 is its prerequisite and is already in — the
   publish hangs off the same after-commit seam the label-printer webhook uses.
 
-  **18 answers [19](19-rbac.md)'s Q5 here rather than waiting for 19.** 19 asked 18 to
+  **18 takes [19](19-rbac.md)'s Q5 here rather than 19 waiting on 18.** 19 asked 18 to
   record whether published state carries prices, and gated itself on 18 to make sure — but
   18 is this wave and 19 is wave 3, so the gate was unachievable in the direction it was
   written. It is also unnecessary: 18's own security note already says publish nothing that
   would not be shown on a wall tablet, and a broker subscriber is not a logged-in user and
   cannot be made into one. The note now names prices explicitly, because 18's stock summary
-  takes its row attributes from `uihelper_stock_current_overview` and would otherwise ship
-  `value`, `last_price` and `average_price` by default. Carried as 18's question 8.
+  would otherwise ship `value`, `last_price` and `average_price` by default if its
+  attributes are assembled from `uihelper_stock_current_overview`. It is 18's question 8,
+  and like the rest of 18 it carries a lean rather than a response — so this is a question
+  reassigned to the plan that can answer it, not a question answered.
 
 ### Wave 2 — API correctness
 
@@ -402,12 +407,12 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   4, 5 and 9 are answered in 02, 18 and here respectively, and its API section already
   states the read/write split the permissions page needs.
 
-  **S6 is worse than the sweep recorded, and wave 2 should be written against the fact.**
-  `USERS` → `USERS_CREATE` → `USERS_EDIT` → `USERS_READ` is a chain, not a fan
-  (`migrations/0110.sql:29-43`), and the tree resolves downward — so `USERS_CREATE` alone
-  already resolves to `USERS_EDIT`, and an account that may create users may today rewrite
-  any admin's password without holding `USERS_EDIT` at all. The subset-of-caller check is
-  the fix either way; the chain is why "just require `USERS_EDIT`" would not have been.
+  **S6 is worse than the sweep first recorded**, and wave 2 should be written against the
+  fact rather than the finding: the `USERS` subtree is a chain and the tree resolves
+  downward, so `USERS_CREATE` alone already resolves to `USERS_EDIT` and an account that
+  may create users may today rewrite any admin's password without holding `USERS_EDIT` at
+  all. Written up under S6 in the sweep. The subset-of-caller check is the fix either way;
+  the chain is why "just require `USERS_EDIT`" would not have been.
   The remaining 15 one-liners (C3–C9) ride along with whatever wave has the file open;
   C10 stays deferred until after 13, then folds in here or later.
 - **S8, S9, S12** land here too, as they are 11's territory: `Origin` check on
@@ -482,8 +487,9 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   and the filter refusal it needs, and the double snapshot — every path called as Admin and
   as a user without `STOCK_PRICES_VIEW`, asserted equal minus exactly the `x-visibility`
   fields — is the proof the feature works. It must also precede the Swift transport
-  generation, per 17's Coupling 5: the client decodes `price` and `costs` as non-optional,
-  so a Child on a phone gets a decoding failure rather than a list without prices.
+  generation, per 17's Coupling 5: a field that may be absent per user is the additive
+  rule's blind spot, and whether it breaks the client outright depends on how the Swift
+  model declares those properties, which 17's verification 5 answers rather than assumes.
 - **02 MCP, read-only v1** — separate container per its Q6 response, bearer key
   behind the credential→user seam per the IdP note. Two sweep constraints: the seam
   does not accept a key from the query string (S11 — the server's own query path is
@@ -519,10 +525,13 @@ generated client is generated twice.
   permission findings parked against it come back to wave 2.** The parking said they were
   one finding wearing five hats — no permission *model* here, only thirty constants and a
   hierarchy view, so each fix would be a guess at what the model is about to say. Reading
-  19 against the code says otherwise, and 19 itself says otherwise: its Depends-on line
-  puts it *after* wave 2's S5/S6, "because role assignment is a grant". Parking S5 and S6
+  19 against the code says otherwise, and 19 itself said so from its first draft, before
+  this pass touched it: its Depends-on line puts it *after* wave 2's S5/S6, "because role
+  assignment is a grant". Parking S5 and S6
   on 19 inverts 19's own stated dependency, and would leave `DEFAULT_PERMISSIONS = ADMIN`
-  standing through two more waves — which is the residual S4 was knowingly left with.
+  standing through two more waves. That is precisely the residual the hotfix knowingly
+  accepted when S4 landed without S5: an auto-created reverse-proxy user is refused unless
+  it comes from a trusted proxy, and is still made an admin once it does.
 
   The distinction the parking missed is between the *rule* and the *model*. The
   subset-of-caller rule needs only a caller's resolved set, a target's resolved set, and
@@ -533,8 +542,10 @@ generated client is generated twice.
 
   - **S5** — wave 2. The config half (`DEFAULT_PERMISSIONS` stops being `['ADMIN']`) is
     not a model question; `[]` is what 19 is written on, since its `VICTUAL_DEFAULT_ROLES`
-    also defaults to empty. Note the third call site has no creator to compare against
-    (`ReverseProxyAuthMiddleware`), so there the config default *is* the whole answer.
+    also defaults to empty. Note that two of the three call sites have no creator to
+    compare against — `ReverseProxyAuthMiddleware.php:79` and `LdapAuthMiddleware.php:108`,
+    the latter of which 15-B1 deletes — so for those the config default *is* the whole
+    answer, and only `POST /api/users` gets the subset rule.
   - **S6** — wave 2, and more urgent than the sweep recorded: see the chain noted in that
     wave. A set comparison over an existing view, not a model.
   - **S27** — wave 2. One existence check against `permission_hierarchy`, whose rows are

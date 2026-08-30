@@ -211,13 +211,19 @@ The comparison is three-way and each leg catches something different:
 
 **Piece 2 runs per identity, not once.** [19](19-rbac.md) makes response *content* a
 function of the caller, so "a valid key" no longer describes the contract. Every operation
-is called twice against the same fixture — once as Admin, once as a fixture user holding
-`STOCK` without `STOCK_PRICES_VIEW` — and the restricted snapshot is asserted to equal the
+is called twice against the same fixture — once as Admin, once as a fixture user without
+`STOCK_PRICES_VIEW` — and the restricted snapshot is asserted to equal the
 Admin one with exactly the `x-visibility`-annotated keys removed. That is what stops a
 future endpoint leaking a price by omission: a new path returning `price` without the
 annotation fails the diff for the restricted user. Both legs are needed, because a field
 absent for *everyone* satisfies the restricted leg exactly as a correctly redacted one
 does, and only the Admin leg shows it was there to redact.
+
+That restricted user holds the `STOCK` **leaves** (`STOCK_CONSUME`, `STOCK_OPEN`, …) and
+not `STOCK` itself: `STOCK_PRICES_VIEW` hangs under `STOCK` and the tree resolves
+downward, so a user holding the parent inherits the leaf and would make the restricted leg
+identical to the Admin one. A fixture that silently proves nothing is worse than no
+fixture, so the seed states the grant as leaves and says why.
 
 The costs are a second key, a second user in the committed seeds, and a doubled set of
 golden files — question 6's churn twice over, accepted for the same reason it was accepted
@@ -295,8 +301,11 @@ Both want a recorded answer, in the manner of this roadmap's other open question
 > 2026-08-30 and carries it as its own question 9. It is not a missing endpoint but a
 > question about who may see the permission model, and answering it here would fix a number
 > in one view while the model it reflects is being redesigned. 19's API section states the
-> answer it wants — read behind `USERS_READ`, write behind `USERS_EDIT` — so this can be
-> taken from 19 in wave 2 rather than waited for. What this section still owes regardless:
+> rule it wants for its own new role endpoints — read behind `USERS_READ`, write behind
+> `USERS_EDIT` — and the obvious extension is to apply it to this endpoint too, which wave
+> 2 may do rather than wait. But 19 has not recorded that decision: its API block still
+> lists `GET /users/{id}/permissions` as "unchanged shape". So this is an extension
+> available to be taken, not an answer already given. What this section still owes regardless:
 > whatever that plan lands on has to be reachable through the API before piece 2 freezes
 > the contract, since the permissions page is one of the eight, and 19's piece 1 is
 > scheduled in wave 3 for exactly that reason.
