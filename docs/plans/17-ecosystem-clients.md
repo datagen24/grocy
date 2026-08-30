@@ -494,6 +494,18 @@ opening it. The mechanism, not the list, is the deliverable:
    stopped working.
 2. **Each plan carries a client-impact line.** One row, even when it reads "none". Absent
    is not the same as none.
+
+   > **Adopted 2026-08-30.** For the first eighteen months of this mechanism's life it had
+   > exactly zero adopters — this document defined it and no plan carried one, which the
+   > rigor review recorded as D2. All eighteen other plans now do, and writing them was
+   > more informative than the rule promised. Three were not "none" when the plan implied
+   > it was: **12**'s API section opens "No API change" and Q1 then chooses the strict
+   > spelling, which silently stops honouring `transactiontype`; **07**'s says no public
+   > response changes, and the change it does make is a one-level assumption quietly
+   > becoming false, which no manifest can catch; **16**'s did not exist and would have
+   > been the one line that stopped Coupling 0. The rule earns its place on cases where
+   > the shape does not move and the meaning does — which is the class of change item 1's
+   > fixtures are structurally unable to see.
 3. **This document is reviewed at [16](16-project-rename.md)** — the rename is the largest
    client-facing event on the roadmap and the one with the least code in it. *This did not
    happen*: 16 landed first, on the same day this was written. Item 2 above is what would

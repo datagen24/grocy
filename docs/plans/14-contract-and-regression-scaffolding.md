@@ -379,6 +379,20 @@ The plan's *purpose*, though, is API compatibility: after it exists, "existing e
 keep their response shape" — the second ground rule in this README — is a test that fails
 rather than a rule that gets remembered.
 
+`info.version` in the spec is the literal `"xxx"` and is fixed here too, with the path
+addition — a placeholder in a document a contract suite now reads is its own small
+absurdity. What version string it should carry is [17](17-ecosystem-clients.md)'s Q1 and
+is still open; if Q1 has not answered by the time piece 2 lands, the spec takes
+`version.json`'s value, which is at least a fact.
+
+**Client impact: none directly, and this plan is where every other plan's becomes
+visible.** Nothing here changes a response. Piece 2 is the mechanism
+[17](17-ecosystem-clients.md)'s item 1 asks for — client endpoint and field manifests
+asserted against the snapshot, so a plan that moves a route or a status code fails CI with
+the client named. 17's own post-mortem on 16 is the argument for widening that from paths
+to **request headers and response keys**: neither of 16's two breaks was a path change, so
+a path manifest would have passed while both clients 401'd.
+
 ## Verification
 
 A test suite whose own correctness is unverified is worse than no suite, because it

@@ -274,6 +274,14 @@ none, since the current behaviour is not documented anywhere and reads as a typo
 
    > **Response:** See the Q1 response below — only the documented spelling.
 
+**Client impact: one, and Q1 chose the answer that has it.** Accepting only the documented
+`transaction_type` means a client sending `transactiontype` — the current, undocumented,
+typo'd spelling — stops having its value honoured and silently gets the default. No status
+code changes and no field moves, so nothing fails loudly. Neither client
+[17](17-ecosystem-clients.md) tracks sends either spelling, which is what makes the
+stricter answer affordable; it is recorded because "no API change" was this section's
+first sentence and it is not quite true.
+
 The default error toast is a *user-visible* behaviour change with no wire-format
 component: operations that used to fail silently now say so. That is the point, but it
 will surface pre-existing failures nobody knew about. Because the handler deletions

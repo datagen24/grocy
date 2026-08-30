@@ -105,6 +105,13 @@ its path rather than the bare name.
 Additive. If products expose a `grocycode` field, locations should expose the same in the
 same shape. No existing response changes.
 
+**Client impact: additive, and one thing a parser can choke on.** `/objects/locations`
+gains a field, which is safe. The real item is Q1's answer: `grcy:l:{uuid}` puts a
+**non-numeric id** in a Grocycode for the first time, so any client that parses grocycodes
+with a numeric assumption breaks on locations. `docs/grocycode.md` has been corrected to
+say the id is opaque rather than `[0-9]+`; a client written against the old wording is the
+exposure, and this fork's own scanner input path is the first place to check.
+
 ### UI
 
 A print action on the locations list and form, mirroring products.

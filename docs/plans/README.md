@@ -188,6 +188,14 @@ Each plan carries a **Verification** section: booted-instance checks and result-
 against a real database, following the standard the defects pass set. Lint is not
 verification.
 
+Each plan also carries a **client-impact line**, as of 2026-08-30 — the mechanism
+[17](17-ecosystem-clients.md) defined and which nothing adopted until the rigor review
+noticed (its D2). One line per plan, even where it reads "none", because absent is not the
+same as none and [16](16-project-rename.md) is the proof: it broke both tracked clients on
+a recorded premise of "no client exists", and a line it could not have written as "none"
+is the cheapest thing that would have caught it. Writing the other eighteen turned up
+three more that were not "none" — see 17's note on item 2.
+
 ## Ground rules these plans assume
 
 **Compatibility.** The constraint is not to break someone pulling from this fork today.

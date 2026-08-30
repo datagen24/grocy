@@ -227,6 +227,16 @@ report queries must return byte-identical result sets. C3 changes the About *pag
 change. Additive if a `db_version`-style key is added alongside; breaking if
 `sqlite_version` is removed. Q6.
 
+**Client impact, per group.** The non-breaking items are invisible on the wire except
+C3, which is in this section for exactly that reason — a cleanup that reaches
+`/api/system/info` is not a cleanup, and Q6 decides whether `sqlite_version` gains a
+sibling or loses its meaning. The breaking table below *is* the client-impact line for the
+rest, and B3 is the largest single client break available anywhere on the roadmap: it
+changes response *fields* on `stock`, `stock_log` and `shopping_list`, not just a path,
+which is why both 05-Q4 and 15-Q5 declined it and why
+[the MCP spec](../mcp-interface-spec.md) now uses `shopping_location_id` rather than
+minting a second name for it.
+
 **The breaking items, explicitly:**
 
 | Change | Impact |

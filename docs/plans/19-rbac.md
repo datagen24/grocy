@@ -258,6 +258,25 @@ via one helper, so the instance-wide flag and the per-user leaf collapse to a si
 condition. The feature flag stays: it is still the right knob for "this household does not
 track prices at all".
 
+## Client impact
+
+**Piece 1: none. Piece 2: fields that were always present become optional, which is the
+kind of change a lenient decoder handles and a strict one does not.** Roles add an entity
+and a grant path and take nothing away. Piece 2 removes `price`, `costs` and their
+relatives from responses to users who lack `STOCK_PRICES_VIEW` — `stock.price`,
+`stock_log.price`, `products_average_price`, `product_price_history`,
+`products_last_purchased.price`, and `last_price`/`avg_price` on `/stock/products/{id}`.
+
+The Swift module [17](17-ecosystem-clients.md) commits to renders both unconditionally,
+which is why the roadmap sequences this before client work resumes: in Swift an absent key
+is a decode failure rather than a blank cell, so the first Child login from a phone would
+break the whole screen rather than hide a number. A redacted field and a refused call must
+also be distinguishable — that is why this plan waits on [11](11-api-error-handling.md)
+rather than inventing a second error shape.
+
+[18](18-mqtt-state-publication.md) is the other channel and has already answered: it
+publishes no price or cost field at all. See Q5.
+
 ## Verification
 
 1. Fresh database: `user_roles` empty, every existing permission test passes unchanged.

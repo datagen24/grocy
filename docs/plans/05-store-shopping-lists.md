@@ -112,6 +112,12 @@ runs. That is additive under the ground rules and both clients
 breaking change — but it is a response changing, and it is called out here rather than
 discovered.
 
+**Client impact: additive fields on `products`, `recipes` and `shopping_list`, plus one
+new entity.** Both clients 17 tracks decode leniently and ignore unknown keys, so nothing
+breaks today. It is written down because "additive" and "no client impact" are not the
+same statement, and this plan is the one where the difference is visible: a raw-row
+response gains a field the moment the migration runs, whether or not any plan says so.
+
 ### UI
 
 - Store selector on the shopping list form.

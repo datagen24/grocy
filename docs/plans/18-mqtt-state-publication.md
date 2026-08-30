@@ -159,6 +159,20 @@ replaced. If a freshness signal is wanted, it is a fact like any other — a `la
 timestamp sensor the household can look at or alert on — rather than a state that
 invalidates everything else.
 
+## Client impact
+
+**No HTTP client sees anything change; this plan adds a channel rather than altering one.**
+No route, status code, header or response field moves, so
+[14](14-contract-and-regression-scaffolding.md)'s snapshot is unaffected and neither is
+anything [17](17-ecosystem-clients.md) tracks over REST.
+
+The impact is that a *new* class of consumer appears with no authentication to Victual at
+all — anything holding broker credentials. That is the reason the security notes below
+draw the line where they do, and the reason this plan answers [19](19-rbac.md)'s Q5 itself
+rather than inheriting it: what goes on a retained topic is a visibility decision made at
+publish time, by this plan, for every subscriber at once, and there is no reader identity
+to gate it on afterwards.
+
 ## Verification
 
 A booted instance and a real broker, per the standard the rest of the roadmap is held to.

@@ -194,6 +194,13 @@ plainly because they are visible to clients:
   behaviour unless Q4 says otherwise. This is the one item in this plan that can break
   an existing deployment, and it should be in the changelog rather than discovered.
 
+**Client impact: no field changes, two behavioural ones, and both are above.** Neither
+tracked client in [17](17-ecosystem-clients.md) follows the cold-start redirect or relies
+on `GET /` to migrate — they authenticate to `/api/` and would have failed against an
+unmigrated database anyway. The exposure is deployment scripts rather than clients, which
+is the distinction 16 got wrong in the other direction: 16's premise was true of
+deployments and false of clients, and here it is the reverse.
+
 ## Verification
 
 Lint proves nothing here; every check below wants a booted instance.

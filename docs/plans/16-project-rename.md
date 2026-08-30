@@ -239,6 +239,23 @@ Counts from the tree as of this plan's writing.
    > the next implementation wave starts, with Tier 1 riding along per Q4 —
    > the whole rename lands while there is still nothing deployed to break.
 
+## Client impact
+
+**The largest on the roadmap, and it was recorded as "none".** This section exists because
+[17](17-ecosystem-clients.md)'s item 2 — every plan carries a client-impact line, even
+when it reads "none" — was written the same day this plan landed without one, and this is
+the plan that proves the mechanism is worth the row. Tier 1 renamed the `GROCY-API-KEY`
+request header and the `grocy_version` response field on the recorded justification that
+no client exists; that was true of *deployed instances of this fork* and false of
+*clients*, of which 17 tracks two, both sending the header on every request and one
+reading the version field. Every request from either now answers 401.
+
+Neither break is a path change, so a manifest of routes would have passed. That is 17's
+argument for widening item 1 from paths to **request headers and response keys**, and it
+is this plan that supplied the evidence. The decision that follows is 17's Q4 — answered
+*no shim*, since every client that will exist is first-party — and the whole exchange is
+written up as Coupling 0 there. See also the Correction block under Executed.
+
 ## Constraints
 
 - License continuity from upstream grocy is non-negotiable.

@@ -71,6 +71,10 @@ sensible quantity units, no barcodes.
 None. This is a CLI concern. Adding an import endpoint later is possible but is a new API
 surface with real authorisation questions, and is not needed for the goal.
 
+**Client impact: none.** Nothing on the wire changes. What a client *would* notice is
+seeded rows appearing in `/objects/products` and friends on an instance someone seeded —
+data, not contract, and only on instances that opt in by running the command.
+
 ## The barcode problem
 
 The issue asks for "common household staple barcodes", and that is the part to be careful

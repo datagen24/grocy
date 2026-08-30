@@ -261,6 +261,16 @@ codes, and that needs to be explicit rather than slipped in:
 | API key in a query parameter | accepted | 401 |
 | `POST`/`PUT`/`DELETE` `/api/objects/{userfields\|userentities}` as a non-admin | 200 | 403 |
 
+**Client impact: the largest on the roadmap after [16](16-project-rename.md), and unlike
+16's it is knowable in advance.** Every row above is a client-visible change, and the ones
+that bite are the ones where a client's *success* path moves: a client treating any
+non-2xx as "retry" now retries a 403 forever, and one that read a bodyless 401 by status
+alone now parses a JSON body it did not expect. The wildcard CORS removal is the one that
+breaks silently in a browser and not in a test. This is why the roadmap puts
+[14](14-contract-and-regression-scaffolding.md) before this plan — ~74 routes are better
+shown as a diff than asserted by hand — and why [17](17-ecosystem-clients.md)'s manifests
+want to cover status codes and response keys, not just paths.
+
 That last row is Q6's answer and is a deliberate behaviour change, not a code
 correction: populating `ExposedEntityEditRequiresAdmin` turns a gate that can never fire
 into one that does, and a non-admin who can edit master data today can create user fields

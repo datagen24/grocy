@@ -96,7 +96,7 @@ means the finding was verified gone, not that a commit claimed it.
 | B10 | **closed** | The Status table's "Depends on" column now carries 12 for 05 and 06, 12 and 14 for 08, and 11/13/14/15-C1 for 02. |
 | B11 | **open** | 04 still says its importer "goes through LessQL so triggers fire" without noting that `bin/victual-db-import` deliberately disables them, or why both are right. |
 | D1 | **closed as a pattern** | 13, 14 and 16 all carry Executed sections; the roadmap's preamble states the rule ("the Executed section, not the prose, is the record of the code"). |
-| D2 | **open, zero adopters** | Still only 17 (which defines the mechanism) and the README mention a client-impact line. Not one plan carries one. |
+| D2 | **closed 2026-08-30** | All eighteen other plans now carry one, and the roadmap states the rule alongside the Verification rule. Three turned out not to be "none" where the plan implied it was — 12's strict `transaction_type`, 07's one-level assumption going quietly false, and 16's, which is the case that motivated the mechanism. See 17's note on its item 2. |
 | D3 | **closed** | All three README tables have a Status column. |
 | D4 | no action | 09 remains the deliberate counter-example. |
 | D5 | **partly adopted** | The security sweep adopted it explicitly and says so in its own preamble. The plans did not: 12, 15 and others still cite bare line numbers, and 15-C2's `StockReportsController.php:71,90,107` is the kind that rots first. |
