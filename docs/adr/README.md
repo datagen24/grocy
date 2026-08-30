@@ -17,6 +17,7 @@ nesting outlives it and will be read by people who never open plan 13.
 # ADR-NNNN: Imperative title naming the decision
 
 - **Status:** Proposed | Accepted (date) | Superseded by ADR-NNNN | Rejected (date)
+- **Decider:** who accepts or rejects it
 - **Recorded:** when this file was written, and whether that is when the decision was made
 - **Referenced by:** the plans and documents that depend on it
 
@@ -24,6 +25,26 @@ nesting outlives it and will be read by people who never open plan 13.
 ## Decision     what was chosen, in the imperative
 ## Consequences what this costs, including what it forecloses
 ```
+
+## Lifecycle
+
+**Decider.** This fork serves one household and the maintainer decides. The field exists
+anyway, because "who decides" is the question a corpus of proposals is worst at answering
+implicitly, and because a Proposed record with no named decider is one nobody is obliged
+to resolve. Backfilled records name the maintainer retrospectively.
+
+**Accepting or rejecting is its own pull request**, touching the ADR's status line and
+nothing else. A record is not accepted by a plan that assumes it, by a PR that implements
+it, or by not being argued with. This keeps the moment of decision reviewable on its own
+terms and keeps a rejected proposal from being adopted by momentum.
+
+**A Proposed record may name acceptance prerequisites** — measurements to take, spikes to
+run, questions to answer — under a heading of that name. Where it does, those are gates
+rather than suggestions, and the accepting pull request says how each was met. A proposal
+whose prerequisites are unmet is not ready to accept even if everyone agrees with it.
+
+**Superseding.** A record is superseded, never edited into a different decision. The new
+record names the old, the old points forward, and both keep their files.
 
 **Options considered** and **Research** sections appear where the decision was contested
 enough to be worth showing the work. Backfilled records mostly skip them — the reasoning

@@ -1,6 +1,7 @@
 # ADR-0004: Engine-specific migrations are marked, and migration numbers are never compared across engines
 
 - **Status:** **Accepted**, following from [ADR-0002](0002-squashed-baseline.md).
+- **Decider:** datagen24 (maintainer), retrospectively — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30, retrospectively.
 - **Referenced by:** [10](../plans/10-cold-start-statelessness.md) Q6 and Q7,
   `DatabaseMigrationService::GetLatestMigrationNumber`, `DatabaseImporter`,

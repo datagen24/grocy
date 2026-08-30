@@ -1,6 +1,8 @@
 # ADR-0009: The database is the logic layer
 
 - **Status: Proposed.** Not accepted, not scheduled, not in the roadmap's wave order.
+- **Decider:** datagen24 (maintainer). Acceptance is its own pull request, and this record
+  carries **acceptance prerequisites** — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30.
 - **Depends on:** [ADR-0008](0008-postgresql-only-runtime-engine.md). **This decision is
   not seriously available while SQLite is a runtime engine** — see *Why this depends on
@@ -63,15 +65,39 @@ This is about where the next several years of *added* logic should live.
    means [18](../plans/18-mqtt-state-publication.md) does not need PHP awake, and
    [02](../plans/02-mcp-endpoint.md)'s read tools become "select from a view" rather than
    "wake the application."
-2. **It gives [19](../plans/19-rbac.md) somewhere to put a field-level rule.** 19's stated
-   problem is that there is no permission *model* — "thirty constants and a hierarchy view,
-   not one of which gates a *field*." Price redaction expressed once in a view, or in RLS,
-   is inherited by the API, MCP and MQTT alike instead of three channels each remembering
-   to redact. 19-Q5 and 18-Q8 are both circling this. It arrives free with (1).
-3. **Some write paths become atomic by construction.** A consume as one statement survives
-   a pod terminated mid-request in a way a PHP loop does not — and pods on this target get
-   terminated at idle boundaries by design. Ranked third because
-   [13](../plans/13-write-path-transactions.md) already bought most of it in PHP.
+2. **It gives [19](../plans/19-rbac.md) *a* place to express a field-level projection —
+   not an inherited policy.** An earlier draft of this record claimed price redaction
+   expressed once in a view or in RLS would be inherited by API, MCP and MQTT alike. That
+   is wrong three times over and the correction matters, because it was the second-strongest
+   argument here and is now a much weaker one:
+
+   - **RLS selects rows, not columns.** It cannot make `price` invisible while leaving the
+     row visible. PostgreSQL's column-level `GRANT` is the column-shaped primitive, and it
+     works per role and raises an error rather than eliding a field.
+   - **A view has a fixed column set.** The best it can do is
+     `CASE WHEN … THEN price ELSE NULL END`, which produces a `NULL` indistinguishable
+     from a legitimately absent price. For an API whose responses are rows serialised
+     as-is, "redacted" and "not recorded" collapsing into the same value is a contract
+     defect, not an implementation detail.
+   - **MQTT has no reader identity at all.** A retained topic is read by whoever subscribes.
+     No database-side mechanism can redact per reader here, which is exactly why
+     [18](../plans/18-mqtt-state-publication.md)'s Q8 leans to publishing no price field on
+     any topic — a policy decision, reached independently, that this record cannot improve on.
+
+   What survives: **one place to define the projection**, so the same shaped answer is not
+   re-derived per channel. That is worth something and is not the same claim. The mechanism
+   is unchosen — see open question 4, now a prerequisite rather than a detail.
+3. **Some write paths gain encapsulation and clearer concurrency behaviour — not
+   termination safety.** A second correction, and this one is checkable: the draft claimed
+   a consume expressed as one statement survives a pod terminated mid-request where a PHP
+   loop does not. It does not, because there is no such loop to survive.
+   `StockService::ConsumeProduct` already runs its mutation inside
+   `DatabaseService::InTransaction`, which rolls back on any throw — and a connection lost
+   before commit is rolled back by PostgreSQL regardless of what the client was doing.
+   [13](../plans/13-write-path-transactions.md) bought this outright, not "most of it."
+   A stored function may still be worth it for encapsulation, for holding invariants the
+   application cannot express, or for reducing a multi-statement critical section — but
+   crash safety is not among the reasons, and this record should not have claimed it.
 4. **It shrinks what the HTTP layer has to be.** If the read surface is views, the thing
    serving MCP or MQTT need not be PHP-FPM. A strategic option rather than a justification
    — but the kind of option that closes quietly if the logic stays in `StockService`.
@@ -166,10 +192,28 @@ Ordered so each stage is useful alone and the irreversible part comes last.
    does not commit to this record.
 3. **Reads into views.** Additive, reversible, and where the payoff is. Start with 18's
    payload and 02's shapes.
-4. **19's redaction into those views.** Once a view layer exists, put the rule in it.
+4. **19's projection into those views, by a mechanism chosen first.** Not "put the rule in
+   it" — question 4 has to be answered before this stage has a shape.
 5. **Writes into functions — selectively, or never.** No scale-to-zero argument exists for
-   moving the rest.
+   moving the rest, and no crash-safety one either.
 6. **Extensions — minimally**, and see open question 6.
+
+## Acceptance prerequisites
+
+Gates, not suggestions. The accepting pull request says how each was met.
+
+- **[ADR-0008](0008-postgresql-only-runtime-engine.md) is accepted.** This record is not
+  viable otherwise.
+- **The premise is measured** — question 1. Deploy [18](../plans/18-mqtt-state-publication.md)
+  and observe whether the pod actually sleeps. If it does not, this record's justification
+  collapses to 0008's tax argument and it should be rejected rather than accepted smaller.
+- **The redaction mechanism is chosen** — question 4 — with a written answer to how
+  identity reaches it and how a redacted field is distinguished from an absent one.
+  Without this, stage 4 has no design and [19](../plans/19-rbac.md) inherits an
+  unsubstantiated promise.
+- **The LessQL spike is done** — question 5. Whether a view layer is addressable through
+  the existing read layer changes what stage 3 costs and what
+  [14](../plans/14-contract-and-regression-scaffolding.md) is testing.
 
 ## Open questions
 
@@ -189,16 +233,33 @@ Ordered so each stage is useful alone and the irreversible part comes last.
    at this scale, and being the always-awake component is what makes it useful here.* This
    is the question that forecloses managed/serverless Postgres and should be answered out
    loud rather than by accident.
-4. **How does user identity reach the database if redaction lives in views?** `SET LOCAL`
-   plus `current_setting` inside the request's transaction, or per-user database roles. The
-   literature is unambiguous that plain `SET` on a pooled connection is the standard way
-   tenants leak into each other, and that an application connecting as the table owner
-   silently bypasses unforced RLS. *Lean: `SET LOCAL` inside the transaction, application
-   role non-owner and without `BYPASSRLS`, `FORCE ROW LEVEL SECURITY` on gated tables. But
-   this interacts with F1/F2 and with LessQL's connection handling, and it is the single
-   most likely place for this record to produce a security bug rather than a cleanup.*
-   Note that [ADR-0006](0006-authenticated-issues-in-scope.md) raises the stakes: a
-   redaction bug here is a finding under this fork's threat model, not a cosmetic issue.
+4. **By what mechanism is a field redacted, and how does identity reach it?** An
+   acceptance prerequisite, and the question benefit 2 above was wrong about. Three
+   candidates, none yet chosen:
+
+   - **Identity-scoped functions returning JSON.** `victual_stock_overview(user_id)`
+     returns a JSON document whose keys vary by caller, so a redacted field is genuinely
+     *absent* rather than `NULL`. Fits MCP naturally; fits an endpoint whose response is
+     a serialised row much less naturally, and it is a larger departure from how this
+     application reads data than anything else in this record.
+   - **Separate public and private projections.** `stock_overview_public` and
+     `stock_overview_priced` as distinct views, with the *choice between them* made at the
+     application boundary. Keeps views simple and honest — each has one fixed column set
+     that means what it says — at the cost of the routing living in PHP, which is to say
+     the policy is only half in the database.
+   - **Continued application-boundary redaction**, with views supplying shape only. The
+     null option, and the one that keeps [19](../plans/19-rbac.md) entirely in code where
+     its tests already are.
+
+   *Lean: the second, on the grounds that it is the only one that never makes a `NULL` do
+   two jobs.* Whichever is chosen, if identity is carried in session state then `SET LOCAL`
+   inside the request's transaction is the safe form — plain `SET` on a pooled connection
+   is the standard way tenants leak into each other, and an application connecting as the
+   table owner silently bypasses unforced RLS. This interacts with F1/F2 and with LessQL's
+   connection handling, and it is the single most likely place for this record to produce a
+   security bug rather than a cleanup.
+   [ADR-0006](0006-authenticated-issues-in-scope.md) raises the stakes: a redaction bug
+   here is a finding under this fork's threat model, not a cosmetic issue.
 5. **Views through LessQL, or raw SQL?** The read layer is `morris/lessql` (berrnd's fork),
    and hazard 17 is already about its identifier quoting. A view layer LessQL cannot
    address naturally is a view layer read by hand-written SQL, which changes what
@@ -214,15 +275,23 @@ Ordered so each stage is useful alone and the irreversible part comes last.
 
 ## The strongest arguments against, in order
 
-1. **It deletes the oracle at the moment the oracle is most needed** — 0008's problem, and
-   mitigable there, but this record is what makes it urgent.
-2. **The split-brain cost is unfixable by tooling.** Two languages, two mental models, one
-   behaviour.
-3. **Rollback stops being an image swap.** Mild on a single-replica household deployment;
+1. **The split-brain cost is unfixable by tooling.** Two languages, two mental models, one
+   behaviour. The strongest one, and it moved up because the two arguments that used to
+   outrank it were partly wrong — see 2 and 3.
+2. **The prize is smaller than it sounds if the pod does not sleep for other reasons** —
+   open question 1, now an acceptance prerequisite.
+3. **Two of this record's four stated benefits shrank under review**, which is itself an
+   argument for caution: the redaction benefit does not work the way the first draft
+   claimed, and the crash-safety benefit does not exist at all. A proposal whose case
+   erodes on first contact with the code deserves more skepticism than one that survives
+   intact, and the remaining case rests almost entirely on benefit 1.
+4. **Rollback stops being an image swap.** Mild on a single-replica household deployment;
    still a real property given up.
-4. **The prize is smaller than it sounds if the pod does not sleep for other reasons** —
-   open question 1.
-5. **It is a lot of work for one household.** The tax it removes is paid in small
+5. **It arrives with a contract-enforcement gap** — [ADR-0008](0008-postgresql-only-runtime-engine.md)
+   hands the wire contract to [14](../plans/14-contract-and-regression-scaffolding.md)
+   piece 2, which is outstanding, and this record starts changing what the views return.
+   Doing both before 14 lands would be changing the answers and the check at once.
+6. **It is a lot of work for one household.** The tax it removes is paid in small
    increments, and small increments feel worse in aggregate than they are per change.
 
 ## Research
@@ -246,6 +315,14 @@ Ordered so each stage is useful alone and the irreversible part comes last.
   a table drained with `SKIP LOCKED`.
   [PostgreSQL: NOTIFY](https://www.postgresql.org/docs/current/sql-notify.html),
   [Beyond LISTEN/NOTIFY](https://www.stacksync.com/blog/beyond-listen-notify-postgres-request-reply-real-time-sync).
+- **RLS controls rows; columns are a separate mechanism.** Grants decide whether a role may
+  run the operation on the table at all, policies decide which rows it applies to, and
+  column-level `GRANT` is the column-shaped primitive — which requires revoking table-wide
+  `SELECT` first, and denies rather than elides.
+  [Column-level security](https://supabase.com/docs/guides/database/postgres/column-level-security),
+  [How to implement column and row level security in PostgreSQL](https://www.enterprisedb.com/postgres-tutorials/how-implement-column-and-row-level-security-postgresql),
+  [PostgreSQL: Row security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html),
+  [View permissions and row-level security](https://www.cybertec-postgresql.com/en/view-permissions-and-row-level-security-in-postgresql/).
 - **RLS pooling footguns** — `SET` versus `SET LOCAL`, owner roles bypassing unforced RLS,
   the indexing cost.
   [Postgres RLS in practice](https://queryplane.com/blog/postgres-row-level-security-in-practice/),

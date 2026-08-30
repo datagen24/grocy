@@ -1,6 +1,7 @@
 # ADR-0006: Issues requiring an authenticated account are in scope
 
 - **Status:** **Accepted** 2026-08-29, with the security policy this fork adopted.
+- **Decider:** datagen24 (maintainer), retrospectively — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30, retrospectively. The decision itself is stated in
   [.github/SECURITY.md](../../.github/SECURITY.md) and is the reason the
   [security sweep](../security-sweep.md) exists in the shape it does.

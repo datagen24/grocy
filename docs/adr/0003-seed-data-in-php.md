@@ -1,6 +1,7 @@
 # ADR-0003: Seed data lives in PHP, not in the baseline DDL
 
 - **Status:** **Accepted**, with [ADR-0002](0002-squashed-baseline.md).
+- **Decider:** datagen24 (maintainer), retrospectively — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30, retrospectively.
 - **Referenced by:** [db/pgsql/README.md](../../db/pgsql/README.md), `InitialDataSeeder`.
 

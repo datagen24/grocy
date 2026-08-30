@@ -4,6 +4,7 @@
   PostgreSQL support work, which the roadmap lists as **landed**.
   **Under challenge by [ADR-0008](0008-postgresql-only-runtime-engine.md)**, which would
   supersede this record rather than amend it.
+- **Decider:** datagen24 (maintainer), retrospectively — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30, retrospectively. The decision was made when the work was done;
   this file only gives it a citable name.
 - **Referenced by:** every plan that touches schema; [10](../plans/10-cold-start-statelessness.md),

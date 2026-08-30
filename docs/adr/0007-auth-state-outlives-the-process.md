@@ -3,6 +3,7 @@
 - **Status:** **Accepted** 2026-08-29, recorded in the sweep's S12 and in
   [11](../plans/11-api-error-handling.md)'s sequencing. The throttle itself is not built
   yet; the constraint on how it may be built is decided.
+- **Decider:** datagen24 (maintainer), retrospectively — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30, retrospectively.
 - **Referenced by:** [security sweep](../security-sweep.md) S12,
   [11](../plans/11-api-error-handling.md), [10](../plans/10-cold-start-statelessness.md).

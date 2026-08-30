@@ -3,6 +3,8 @@
 - **Status: Proposed.** Not accepted, not scheduled, not in the roadmap's wave order.
   Written to be argued with. Would **supersede
   [ADR-0001](0001-postgresql-alongside-sqlite.md)** if accepted.
+- **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
+  lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30.
 - **Relationship:** [ADR-0009](0009-database-as-the-logic-layer.md) is not viable unless
   this is accepted. This one is defensible on its own and should be judged on its own.
@@ -37,29 +39,49 @@ target has been PostgreSQL-only since the fork began.
 
 ## Decision (proposed)
 
-`DB_DRIVER` stops accepting `sqlite`. The SQLite code that survives is
-`bin/victual-db-import`, reading a source file one time, in one direction, to move an
-existing installation across.
+`DB_DRIVER` stops accepting `sqlite`. **PostgreSQL becomes the sole runtime and the sole
+behavioural authority.** SQLite survives only as an external input format.
 
-**And — as part of the same decision, not a later idea — a frozen, migrated SQLite fixture
-is retained as a test oracle in `.devtools/`.** The engine leaves the runtime; the
-differential harness stays.
+What that requires is narrower than it first appears, and an earlier draft of this record
+got it wrong by conflating two different things:
+
+1. **A supported upstream range for the importer, stated as a migration number span.**
+   `bin/victual-db-import` accepts grocy/Victual SQLite within that range and refuses
+   anything outside it with a message naming both numbers.
+2. **Fixture-based importer tests.** Committed SQLite fixtures at the supported schema
+   versions, each with an assertion on the PostgreSQL result of importing it. This is what
+   keeps the importer honest once no engine in this repository produces its input.
+
+**What it does not require is continued behavioural equivalence with SQLite.** Once
+PostgreSQL is the only runtime, there is no second engine for it to agree with, and
+"behaves like grocy" stops being a property this project needs to hold — its contract is
+its own OpenAPI spec, frozen by
+[14](../plans/14-contract-and-regression-scaffolding.md) piece 2. The differential harness
+in `.devtools/pgsql/` may be kept **during the transition**, as a check that the retirement
+itself changed nothing, and retired afterwards. It is a migration aid, not a permanent
+architectural requirement.
 
 ## Options considered
 
 **A. Keep both engines.** Status quo. The tax is real but paid in small increments, and
-small increments feel worse in aggregate than they are per change. Keeps the oracle for
-free. Costs: everything below stays true, and every ceiling in *Consequences* stays in
-place.
+small increments feel worse in aggregate than they are per change. Costs: everything below
+stays true, and every ceiling in *Consequences* stays in place.
 
-**B. Retire SQLite entirely — runtime and harness.** Cleanest deletion, largest loss.
-Rejected in the proposal above, because it deletes the oracle at the moment the oracle is
-most needed. See the first consequence.
+**B. Retire the runtime engine and the differential harness together, immediately.**
+Cleanest deletion. Rejected only on sequencing: it discards, in the same change, the one
+tool that could show the retirement was behaviour-preserving. The end state is right; the
+ordering is not.
 
-**C. Retire SQLite as a runtime target, keep it as a test oracle.** The proposal. Gets
-the authoring-tax reduction without giving up the equivalence claim, at the cost of one
-checked-in fixture and the scripts that already exist. The oracle can be dropped later,
-deliberately, once the schema stops changing shape.
+**C. Retire the runtime engine; keep the harness through the transition; add fixture-based
+importer tests.** The proposal. Reaches B's end state with a check on the step itself, and
+leaves behind the narrower thing the importer actually needs.
+
+**D. Retire the runtime engine but keep the differential harness permanently.** Considered
+and rejected — it was this record's first draft. It sounds conservative and is not: it
+holds the project to conformance with an engine it no longer runs, which would make every
+future PostgreSQL-only improvement look like a regression against a standard nobody
+chose. [ADR-0005](0005-wire-contract-is-the-invariant.md) is enforced going forward by
+14's contract snapshot, not by SQLite.
 
 ## Consequences
 
@@ -96,13 +118,20 @@ available while this record is unaccepted.
 
 ### What it costs
 
-**It deletes the oracle, and this is the cost to weigh hardest.** SQLite is not merely a
-second engine here; it is the *reference implementation*. The claim that PostgreSQL still
-behaves like grocy is not an assertion — it is `difftest.php` putting both engines into an
-identical table state and comparing what the views return. Retire SQLite outright and
-[ADR-0005](0005-wire-contract-is-the-invariant.md) becomes something the project says
-rather than something it runs. This is the entire reason option C exists and the reason
-the fixture is part of the decision rather than a follow-up.
+**Enforcement of [ADR-0005](0005-wire-contract-is-the-invariant.md) has to transfer, and
+until it does there is a gap.** Today the differential suite is what makes the wire
+contract testable rather than aspirational — `difftest.php` puts both engines into an
+identical table state and compares what the views return. That mechanism disappears with
+the second engine. The replacement is
+[14](../plans/14-contract-and-regression-scaffolding.md) piece 2's response snapshot,
+which is the right mechanism and is **outstanding**. So the ordering constraint is real
+even though the permanent requirement is not: **do not retire the harness before 14 piece
+2 exists**, or the fork spends a window with neither check. Keeping the harness through
+the transition (option C) is what covers that window.
+
+This also reframes what the harness was ever for. It proved two engines agreed. It never
+proved the fork's own contract was stable over time — 14 does that, for a single engine,
+and would be needed even if SQLite stayed.
 
 **Upstream cherry-picks get harder.** Grocy's logic is PHP over SQLite views. The fork has
 already accepted drift, but this widens it from "our schema is grocy's, typed" to "our
@@ -119,25 +148,42 @@ newer.
 database is genuinely nicer than a container. Real loss, small — the compose file exists
 and CI already runs `postgres:16`.
 
+## Acceptance prerequisites
+
+Gates, not suggestions. The accepting pull request says how each was met.
+
+- **The supported upstream migration range is stated as a number span**, with the
+  fixtures that cover its ends committed.
+- **[14](../plans/14-contract-and-regression-scaffolding.md) piece 2 exists**, or the
+  accepting PR states explicitly that the differential harness stays until it does. This
+  is the enforcement-transfer gap above and is the one ordering constraint this record
+  has.
+
 ## Open questions
 
-1. **Is the oracle kept, and for how long?** *Lean: kept, with no expiry set at the time of
-   retirement — revisit once the schema stops changing shape. Setting an expiry now would
-   be guessing.*
-2. **What migration number does the importer pin to, and what does it do with a newer
-   source?** *Lean: refuse with a message naming both numbers, rather than attempting a
-   best-effort import. An importer that half-works on an unknown schema is worse than one
-   that declines.*
+1. **What is the supported upstream range, and what does the importer do outside it?**
+   *Lean: refuse with a message naming both numbers rather than attempting a best-effort
+   import — an importer that half-works on an unknown schema is worse than one that
+   declines. The lower bound is the harder half: grocy databases in the wild are older
+   than this fork, and "as far back as we have a fixture for" is an honest answer where
+   "all of them" is not.*
+2. **How many fixtures, and how are they generated?** A fixture per supported version is
+   the thorough answer and the expensive one. *Lean: two — the oldest supported and the
+   current — on the grounds that the importer's failure modes are schema-shaped rather
+   than version-shaped. Unverified; a spike on the actual schema deltas would settle it.*
 3. **What happens to `run-app` and the demo mode?** *Lean: they move to the compose
    Postgres, costing a slower first boot and nothing else. Worth confirming rather than
    assuming — a demo that needs a container is a different thing from a demo that needs a
    file.*
-4. **Does this change what `.devtools/pgsql/` is for, or just what it runs against?** The
-   suite's purpose shifts from "prove two engines agree" to "prove this engine still agrees
-   with the frozen oracle." *Lean: the scripts survive unchanged and only the fixture
-   provenance changes, but this has not been checked against
-   `migratedifftest.php`, which migrates both sides rather than copying one.* That phase
-   specifically may not survive, and it is the phase that caught the missing seed data.
+4. **Which parts of `.devtools/pgsql/` survive the transition, and for how long?**
+   `difftest.php` and `trigdifftest.php` populate PostgreSQL by copying an
+   already-migrated SQLite database, so they can run for as long as a fixture exists.
+   `migratedifftest.php` migrates *both* sides from nothing, so it needs a live SQLite
+   migration path and is the phase that does not survive retirement — and it is the phase
+   that caught the missing seed data. *Lean: accept losing it, because what it protects
+   (the baseline agreeing with the history it stands in for) stops being a live risk once
+   the history is no longer replayed anywhere.* Worth stating in the accepting PR rather
+   than discovering.
 
 ## Research
 

@@ -84,7 +84,8 @@ Seven decisions already standing in this codebase are recorded there, backfilled
 and neither is in the wave order below:
 
 - **[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)** — retire SQLite as a
-  runtime engine, keep it as an import format and a test oracle. Would supersede
+  runtime engine, keep it as an import format behind fixture-based importer tests. Would
+  supersede
   [ADR-0001](../adr/0001-postgresql-alongside-sqlite.md) and would materially shorten
   [10](10-cold-start-statelessness.md).
 - **[ADR-0009](../adr/0009-database-as-the-logic-layer.md)** — move report and read logic
