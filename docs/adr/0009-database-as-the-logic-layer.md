@@ -211,6 +211,25 @@ Gates, not suggestions. The accepting pull request says how each was met.
   identity reaches it and how a redacted field is distinguished from an absent one.
   Without this, stage 4 has no design and [19](../plans/19-rbac.md) inherits an
   unsubstantiated promise.
+
+  **Before this record may claim a database-enforced policy shared across channels, the
+  Anonymizer spike has to pass**, and it is seven things rather than one:
+
+  1. A Victual-role to database-role (or masking-policy) mapping.
+  2. Transaction- and pool-safe role selection, with no identity leaking between requests.
+  3. A user receiving masked reads still performing permitted writes — or a deliberate
+     read/write connection split, given masked roles are documented read-only.
+  4. Explicit masking coverage for every base table *and* derived view carrying price or
+     cost data.
+  5. Admin-versus-Child API JSON compared, including a legitimately null price against a
+     masked one, and whatever [19](../plans/19-rbac.md) decides the absent-key contract is.
+  6. Bypass resistance across filtering, ordering, direct table access, views, functions,
+     ownership and `SECURITY DEFINER` — and a pinned version ≥ 1.3, with a stated answer
+     for who may create security labels.
+  7. An explicit unprivileged publishing identity for MQTT.
+
+  A spike that fails on 3 or 5 does not sink this record; it sinks the Anonymizer
+  candidate and leaves the lean where it is.
 - **The LessQL spike is done** — question 5. Whether a view layer is addressable through
   the existing read layer changes what stage 3 costs and what
   [14](../plans/14-contract-and-regression-scaffolding.md) is testing.
@@ -250,9 +269,40 @@ Gates, not suggestions. The accepting pull request says how each was met.
    - **Continued application-boundary redaction**, with views supplying shape only. The
      null option, and the one that keeps [19](../plans/19-rbac.md) entirely in code where
      its tests already are.
+   - **[PostgreSQL Anonymizer](https://postgresql-anonymizer.readthedocs.io/en/stable/)
+     dynamic masking.** The only candidate here that is a real database-enforced column
+     policy rather than a hand-rolled one: masking rules are declared as security labels,
+     a role is declared `MASKED`, and sessions under it see masked output while unmasked
+     roles see cleartext, with no application changes. It makes the database-layer idea
+     substantially more credible than "views or RLS" did. It does **not** make the policy
+     automatically shared across channels, and the gaps are specific enough to be worth
+     listing — they are the spike below:
 
-   *Lean: the second, on the grounds that it is the only one that never makes a `NULL` do
-   two jobs.* Whichever is chosen, if identity is carried in session state then `SET LOCAL`
+     | Gap | Why it bites here |
+     |---|---|
+     | Victual roles are application rows; Anonymizer policies attach to PostgreSQL roles | Needs a mapping, and a safe per-request `SET ROLE` or separate pools — which is F1/F2 territory again |
+     | **Masked roles are documented as read-only** — a masked role should not insert, update or delete | Directly collides with [19](../plans/19-rbac.md): a Child who logs a chore execution needs masked reads *and* permitted writes. Either a deliberate read/write connection split, or this candidate does not fit |
+     | Masking substitutes a value; it cannot make a key absent | Same `NULL`-doing-two-jobs defect as the plain view. If masking can only return `NULL` or a placeholder, 19 either revises its wire contract or keeps a response-shaping step |
+     | Masking views are deliberately constructed interfaces, not an automatic extension over derived views | Every price-bearing view of ours — `products_average_price`, `uihelper_stock_current_overview`, `uihelper_product_details`, `recipes_resolved` — needs explicit coverage, and [ADR-0005](0005-wire-contract-is-the-invariant.md) already lists that exact set |
+     | MQTT has no reader identity | Needs an explicitly chosen unprivileged publishing role, never the interactive caller's |
+     | Whether one PostgreSQL role can carry more than one masking policy | Multiple policies can be *defined*; whether a role composes several is unconfirmed, and a Victual user holding several application roles needs an answer |
+
+     **One thing the review did not have, and it matters under
+     [ADR-0006](0006-authenticated-issues-in-scope.md):** Anonymizer 1.1.0 and 1.2.0 carried
+     a privilege-escalation vulnerability where a non-superuser able to create security
+     labels could inject SQL through masking expressions and escape the trusted-schema
+     restriction — via nested functions, via `MASKED WITH VALUE` (validated less strictly
+     than `masking_function`), and via altering a table into a view with a malicious rule.
+     Patched in 1.3. The lasting lesson is not the CVE but its shape: **who may declare a
+     masking rule is itself a privilege boundary**, and adopting this makes security-label
+     creation part of this fork's permission surface. Any adoption pins ≥ 1.3 and says who
+     may label.
+
+   *Lean: unchanged for now — separate public/private projections, on the grounds that it is
+   the only candidate that never makes a `NULL` do two jobs, and the only one with no
+   read-only problem.* Anonymizer is the strongest database-enforced option and should be
+   spiked before that lean is treated as settled; the read-only constraint is the item most
+   likely to decide it. Whichever is chosen, if identity is carried in session state then `SET LOCAL`
    inside the request's transaction is the safe form — plain `SET` on a pooled connection
    is the standard way tenants leak into each other, and an application connecting as the
    table owner silently bypasses unforced RLS. This interacts with F1/F2 and with LessQL's
@@ -315,6 +365,16 @@ Gates, not suggestions. The accepting pull request says how each was met.
   a table drained with `SKIP LOCKED`.
   [PostgreSQL: NOTIFY](https://www.postgresql.org/docs/current/sql-notify.html),
   [Beyond LISTEN/NOTIFY](https://www.stacksync.com/blog/beyond-listen-notify-postgres-request-reply-real-time-sync).
+- **PostgreSQL Anonymizer** — dynamic masking by security label on `MASKED` roles; masking
+  views as deliberately built interfaces rather than automatic coverage; masked roles
+  documented as not permitted to insert, update or delete.
+  [Dynamic masking](https://postgresql-anonymizer.readthedocs.io/en/latest/dynamic_masking/),
+  [Masking views](https://postgresql-anonymizer.readthedocs.io/en/stable/masking_views/),
+  [Declare masking rules](https://postgresql-anonymizer.readthedocs.io/en/stable/declare_masking_rules/),
+  [Postgres dynamic data masking](https://www.bytebase.com/blog/postgres-dynamic-data-masking/).
+  The 1.1.0/1.2.0 privilege escalation via masking-expression SQL injection and
+  trusted-schema bypass, patched in 1.3:
+  [GHSA-468r-mhwc-vxjc](https://github.com/google/security-research/security/advisories/GHSA-468r-mhwc-vxjc).
 - **RLS controls rows; columns are a separate mechanism.** Grants decide whether a role may
   run the operation on the table at all, policies decide which rows it applies to, and
   column-level `GRANT` is the column-shaped primitive — which requires revoking table-wide
