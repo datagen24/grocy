@@ -11,9 +11,14 @@ field and a refused call must be distinguishable and both must be spec'd); wave 
 that proves redaction. Feeds [04](04-seed-datasets.md) (the three roles are a seed) and
 constrains [02](02-mcp-endpoint.md) and [18](18-mqtt-state-publication.md) (both are
 channels that carry prices — see Q4 and Q5).
-**Status:** draft for review. Not in any wave yet; the sequencing section proposes
-wave 3, after 11 and before any client work in [17](17-ecosystem-clients.md) resumes,
-because the Swift client renders price fields and needs to know they may be absent.
+**Status:** draft for review, and **on the roadmap as of 2026-08-30** — the README's
+Status table and its wave 3 both carry it, as its own track alongside 06 and 03. It also
+now owns the five permission findings that were being parked against "an RBAC plan in
+draft on a branch": sweep **S5**, **S6** and **S27**, the `userpictures` "may edit some
+user" residual, and the permissions page's `ADMIN`-versus-`USERS_READ` mismatch from
+[14](14-contract-and-regression-scaffolding.md)'s section 2b. Wave 3 is after 11 and
+before any client work in [17](17-ecosystem-clients.md) resumes, because the Swift client
+renders price fields and needs to know they may be absent.
 
 ## Why this is two plans wearing one number
 
@@ -318,6 +323,24 @@ track prices at all".
    options are to publish without the `x-visibility` fields, to publish per-role topics,
    or to declare MQTT an admin channel. This plan proposes the first as the default and
    asks 18 to record which it chose.
+
+   > **Response: answered by 18, and it had to be.** The first option — 18 publishes no
+   > price or cost field on any topic. The question as written assumed 18 could wait for
+   > this plan to land and then record a choice, and the roadmap says otherwise: 18 is
+   > wave 1 track D and this plan is proposed for wave 3, so 18 merges two waves earlier.
+   > A retained topic makes that gap matter in a way an ordinary ordering slip would not —
+   > retained means the payload sits on the broker until something republishes, so an
+   > unsettled question there is not a decision deferred but pricing already published.
+   > 18's Sequencing section now carries the answer and its security notes list prices
+   > alongside the user records and notes fields it already refused, on the same reasoning:
+   > anything with broker access reads the payload without authenticating to Victual.
+   >
+   > What this plan keeps is the *reason* the option is right rather than merely early.
+   > Per-role topics are the only answer that survives piece 2's model, and they are
+   > unbuildable today for the reason this question opens with: there is no reader
+   > identity on a retained topic to gate against. If piece 2 ever gives the publisher a
+   > role to publish *as*, per-role topics are the revisit, and 18's paragraph is written
+   > to have to be edited before any priced entity is added.
 
 6. **Should `STOCK_PURCHASE` imply `STOCK_PRICES_VIEW`?** A user who records purchases
    without seeing prices is coherent (a child doing the shopping run with a list) but

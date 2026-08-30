@@ -208,6 +208,28 @@ assistant query is on-demand — it wakes the pod and asks, like any interactive
 the sidecar reads the API and has no use for retained state. Keeping them separate avoids
 inventing a general "always-on read tier" that only one consumer needs.
 
+**This plan answers [19](19-rbac.md)'s Q5 rather than waiting for it, and the reason is
+the ordering.** 19 asks whether published state carries prices, offering three answers:
+publish without the visibility-gated fields, publish per-role topics, or declare MQTT an
+admin channel. It asks 18 to record which it chose — but 19 is proposed for wave 3 and
+this is wave 1, so on the roadmap as written 18 merges two waves before the plan whose
+question it defers to. That is not a deferral anyone could honour: a retained topic is
+*retained*, so an unanswered question here is not a decision postponed, it is household
+pricing sitting on the broker until something re-publishes without it.
+
+**The answer is the first option: publish no price or cost field, on any topic, in any
+version of this plan.** It costs nothing to decide now because it is what this plan's own
+rules already say — the entity set is facts a wall tablet would show, and the security
+notes below already exclude user records, notes fields and API keys on exactly the
+"anything with broker access reads this without authenticating to Victual" reasoning that
+applies to prices with more force, not less. Per-role topics are the option to revisit if
+19's piece 2 ever gives the publisher a role to publish *as*; until then there is no reader
+identity here to gate on, which is 19's own framing of why this channel is the hard case.
+Concretely, the v1 entity set in Q1 carries none of `stock.price`, `stock_log.price`,
+`products_average_price`, `product_price_history`, `products_last_purchased.price`,
+`last_price`, `avg_price` or a recipe's `costs`, and adding an entity that would is a
+change this paragraph has to be edited to permit.
+
 ## Open questions
 
 1. **What is in v1's ambient entity set?** Everything else here is mechanism; this is the
@@ -332,7 +354,9 @@ connection the application makes that is not the label printer.
   That is a real widening of who can see this data, it is accepted here because the broker
   is on the same private cluster with its own credentials, and it is a reason not to
   publish anything that would not also be shown on a wall tablet — no user records, no
-  notes fields, no API keys.
+  notes fields, no API keys, **and no prices or costs**, which is
+  [19](19-rbac.md)'s Q5 answered in this plan rather than deferred to a wave-3 one. See
+  Sequencing for why 18 owes that answer instead of inheriting it.
 - **A publish must never carry a failure into a committed write.** Short connect and
   publish timeouts, exceptions caught and logged, and the write path unaffected. The
   transaction is already closed by then, per 13.

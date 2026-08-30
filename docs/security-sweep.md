@@ -351,10 +351,12 @@ a booted-instance verification (upload an SVG, confirm it downloads rather than 
 same PR because it is two lines and its verification (open the consume form with
 location tracking on) is the same booted instance.
 
-**The permission-model findings are waiting on an RBAC plan.** As of 2026-08-30 one is in
-draft on its own branch, and the items below are deliberately *not* being solved piecemeal
-ahead of it, because each of them is a symptom of the same thing: there is no model here,
-only thirty constants and a hierarchy view. What that plan decides, these inherit —
+**The permission-model findings belong to [plan 19](plans/19-rbac.md).** That plan landed
+on 2026-08-30 and is scheduled as its own wave 3 track; this paragraph previously said an
+RBAC plan was "in draft on its own branch", which is what it has stopped being. The items
+below are deliberately *not* being solved piecemeal ahead of it, because each of them is a
+symptom of the same thing: there is no model here, only thirty constants and a hierarchy
+view, and not one of them gates a *field*. What 19 decides, these inherit —
 
 - **S5** (`DEFAULT_PERMISSIONS = ['ADMIN']`) is a question about what a newly created user
   should be, which is a model question and not a config default.
@@ -368,6 +370,17 @@ only thirty constants and a hierarchy view. What that plan decides, these inheri
 - **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch**, recorded in
   [14](plans/14-contract-and-regression-scaffolding.md)'s section 2b, is a question about
   who may *see* the model rather than change it.
+
+19 adds one the sweep did not reach, and it is the reason the plan is two plans wearing one
+number: **`FEATURE_FLAG_STOCK_PRICE_TRACKING` is not a permission and never was.** It is
+declared in `config-dist.php` and read only in the presentation layer — 14 Blade views and
+6 `public/viewjs` scripts, where it adds `d-none` to price columns and hides price inputs.
+Nothing under `services/` or `controllers/` consults it, so no API path does. So every user holding `STOCK` can read
+`stock.price`, `products_average_price`, `product_price_history` and a recipe's `costs`
+straight from `/objects/…` and `/stock/products/{id}` with the flag off and the columns
+hidden. That is not a defect against any stated policy, because the fork has never stated
+one; it is recorded here so that "the price columns are hidden" is never mistaken for
+"prices are protected".
 
 S4 is not on that list: it was about trusting a header, not about permissions, and it
 landed in the hotfix. S5 remains the reason it mattered — an auto-created reverse-proxy user

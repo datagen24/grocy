@@ -14,15 +14,16 @@ tense it was written in — the Executed section, not the prose, is the record o
 |---|---|---|---|---|---|
 | — | [Database abstraction / PostgreSQL](../../db/pgsql/README.md) | — | — | — | **landed** |
 | 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small | draft |
-| 02 | [MCP endpoint](02-mcp-endpoint.md) ([interface spec](../mcp-interface-spec.md)) | — | — | medium | draft |
-| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft |
+| 02 | [MCP endpoint](02-mcp-endpoint.md) ([interface spec](../mcp-interface-spec.md)) | — | 11, 13, 14 piece 2, 15-C1 | medium | draft — body superseded by the spec |
+| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft — may grow a parent column, per 07-Q6 |
 | 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium | draft |
-| 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | — | medium | draft |
-| 06 | [Location barcodes](06-location-barcodes.md) | — | — | small | draft |
+| 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | 12 | medium | draft |
+| 06 | [Location barcodes](06-location-barcodes.md) | — | 12 | small | draft |
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
-| 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium | draft |
+| 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
 | 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2 |
+| 19 | [Roles and data-visibility permissions](19-rbac.md) | — | 11, 14 piece 2, wave 2's S5/S6 | medium | draft — **owns five parked permission findings** |
 
 ## Hardening
 
@@ -92,6 +93,22 @@ rename and the registry claims happen at announcement time, not in a commit.
   that actually sleeps, and 10's scale-to-zero is not achieved while an ambient client
   polls. Neither blocks the other's code — 18 is a publish path and 10 is a boot path — but
   the pair is what delivers the deployment, and 18 is the cheaper half.
+- **19 is the answer to five findings that were being deferred one at a time.** It landed
+  as a plan on 2026-08-30 and took the number the tail below had promised it. The claim it
+  makes is that `DEFAULT_PERMISSIONS`, `USERS_EDIT` escalation, the unvalidated
+  `permission_id`, the `userpictures` "may edit some user" residual and the permissions
+  page's `ADMIN`-versus-`USERS_READ` mismatch are one finding wearing five hats, because
+  there is no permission *model* here — thirty constants and a hierarchy view, not one of
+  which gates a *field*. Wave 2's auth work is read against it before it starts.
+- **19 before [02](02-mcp-endpoint.md)'s stock tools, and 19's Q5 is owed by
+  [18](18-mqtt-state-publication.md) *now* rather than when 19 lands.** Both are channels
+  that carry prices, and 19 exists because "who can see what things cost" has no answer
+  today. 02 is in wave 5 and 19 is proposed for wave 3, so that half is ordinary
+  sequencing. 18 is not: it is wave 1 track D, so it merges two waves *before* the plan
+  whose question it is supposed to answer, and a retained topic published without the
+  question settled is household pricing sitting on the broker until someone re-publishes.
+  18 therefore answers it in its own security notes rather than deferring to 19 — see
+  18's Sequencing — and 19-Q5 records the answer instead of asking for one.
 - **Anything that keeps state between requests is 10's problem too.** On a pod that scales
   to zero, in-process state is state until the next idle window. Sweep S12's login throttle
   is the live case and is recorded in [11](11-api-error-handling.md)'s sequencing: Redis or
@@ -340,7 +357,7 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   is going to be long, pull the ~20 toast sites forward on their own, since they need no
   factory and close most of the exposure. Land steps 1–2 as their own PR: the four latent
   bug fixes plus the `request()` core with `timeout`/`onerror`. Note what that PR does
-  *not* deliver — all 148 `console.error` handlers are passed explicitly, so the default
+  *not* deliver — all 157 `console.error` handlers are passed explicitly, so the default
   error toast cannot fire until they are deleted, and those deletions belong to the
   files step 3 rewrites wholesale. The handler deletions therefore ride with the factory
   conversions, per file, so each one is exercised as it lands.
@@ -365,7 +382,9 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   a permission the creator lacks), **S6** (`USERS_EDIT` cannot edit a user holding
   permissions the caller lacks; current password required for self password change)
   and **S19** (dummy-hash verify for unknown users, cookie cleared on logout, expired
-  sessions pruned) as one changelogged follow-on. 15-B2 already landed in the hotfix.
+  sessions pruned) as one changelogged follow-on. **S5 and S6 are read against
+  [19](19-rbac.md) before they are written** — 19's piece 1 reuses the subset-of-caller
+  rule they establish, and a rule shaped without the roles layer in view is one 19 rewrites. 15-B2 already landed in the hotfix.
   The remaining 15 one-liners (C3–C9) ride along with whatever wave has the file open;
   C10 stays deferred until after 13, then folds in here or later.
 - **S8, S9, S12** land here too, as they are 11's territory: `Origin` check on
@@ -384,7 +403,17 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   small), on the locations list/form pair 12 just converted. Codes, printing, UUID, QR;
   camera ingest stays unscoped.
 - **03 category minimums** — one column, one new view, group shortfalls kept out of
-  `stock_missing_products`.
+  `stock_missing_products`. If 07-Q6 lands on *taxonomy*, this row grows a
+  `parent_product_group_id` column and most of 07 with it; see wave 4.
+- **19 roles and data-visibility permissions**, as its own track. It touches `User.php`,
+  `0110`'s successor views, `BaseApiController`, `UsersApiController` and the users views —
+  none of which 06 or 03 open, so the three run in parallel. It is here rather than in
+  wave 2 because it needs 11's error helper (a redacted field and a refused call must be
+  distinguishable, and both must be spec'd) and wave 2's S5/S6 subset-of-caller rule, which
+  role assignment reuses. Its piece 1 (roles) can land alone if piece 2's questions stall.
+  **Piece 2 is the one with a client consequence**: `price` and `costs` become fields that
+  may be absent, and [17](17-ecosystem-clients.md)'s Swift module renders both
+  unconditionally today, so this precedes any client work resuming.
 
 ### Wave 4 — the hierarchy work
 
@@ -424,7 +453,10 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   (S15), and a test that `/system/config` returns at least `FEATURE_FLAG_STOCK` so R1
   cannot recur.
 - **02 MCP, read-only v1** — separate container per its Q6 response, bearer key
-  behind the credential→user seam per the IdP note. Two sweep constraints: the seam
+  behind the credential→user seam per the IdP note. [19](19-rbac.md)'s Q4 is a gate on
+  this rather than a note: if a tool call carries a user's API key, redaction is inherited
+  and there is nothing to build; if the sidecar has a service identity, that identity needs
+  a role, and *that* role decides whether an assistant a child talks to can quote prices. Two sweep constraints: the seam
   does not accept a key from the query string (S11 — the server's own query path is
   removed in wave 2 and the sidecar must not reintroduce it), and sidecar→server trust
   follows S4's trusted-proxy pattern rather than a shared header alone.
@@ -437,7 +469,9 @@ with per-platform UI targets — and neither lives in this repository. What this
 owes them is on it: 18 for the ambient read path, 11 for the error contract, 14 piece 2
 for the response snapshot the Swift module's transport is generated from. Sequence the
 Swift generation after 11, which moves status codes across ~74 routes; before that, any
-generated client is generated twice.
+generated client is generated twice. Sequence the Swift *UI* after [19](19-rbac.md)'s
+piece 2 for the same reason in a different layer: it renders `price` and `costs`
+unconditionally, and piece 2 is what makes them optional.
 
 ### Usage-driven tail — no scheduled slot
 
@@ -453,19 +487,18 @@ generated client is generated twice.
   to 15's non-breaking table so it has a home; it needs no wave.
 - **S27**, found while verifying the hotfix — the permissions API accepts an unvalidated
   `permission_id` and silently grants nothing when it is not a real one. Small, and in
-  the file 15-C1 opens, so it rides with wave 2 rather than getting a slot — but see the
-  RBAC note below, which it now waits on.
-- **An RBAC plan is in draft on its own branch** (2026-08-30), and several permission
-  findings are parked against it rather than being solved piecemeal: **S5**
-  (`DEFAULT_PERMISSIONS = ADMIN`), **S6** (`USERS_EDIT` can reset an admin's password),
-  **S27** above, the `userpictures` "may edit some user" residual from the hotfix, and the
-  permissions page's `ADMIN`-versus-`USERS_READ` mismatch that
-  [14](14-contract-and-regression-scaffolding.md)'s section 2b turned up. They are one
-  finding wearing five hats: there is no permission *model* here, only thirty constants and
-  a hierarchy view, so each fix would otherwise be a guess at what the model is about to
-  say. When that plan lands it takes a number and these move under it; wave 2's auth work
-  should be read against it before it starts, in the way 17 was supposed to be read before
-  11 and 16.
+  the file 15-C1 opens, so it rides with wave 2 rather than getting a slot — but it now
+  waits on [19](19-rbac.md), which owns what a permission *is*.
+- **The RBAC plan has landed as [19](19-rbac.md)** (2026-08-30) and the five parked
+  permission findings now live under it: **S5** (`DEFAULT_PERMISSIONS = ADMIN`), **S6**
+  (`USERS_EDIT` can reset an admin's password), **S27** above, the `userpictures` "may edit
+  some user" residual from the hotfix, and the permissions page's
+  `ADMIN`-versus-`USERS_READ` mismatch that
+  [14](14-contract-and-regression-scaffolding.md)'s section 2b turned up. This bullet used
+  to say "when that plan lands it takes a number and these move under it"; that is what
+  just happened, and 19 is on the Status table and in wave 3 rather than in this tail.
+  Wave 2's auth work is read against it before it starts, in the way 17 was supposed to be
+  read before 11 and 16.
 - **Not scheduled, recorded**: sweep S20–S22 and S24 (Host-header redirects, wildcard
   CORS, integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to
   tags). Each is a one-liner that rides with whichever wave opens the file; S21 waits on
