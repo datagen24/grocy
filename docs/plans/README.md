@@ -120,22 +120,28 @@ rename and the registry claims happen at announcement time, not in a commit.
   that actually sleeps, and 10's scale-to-zero is not achieved while an ambient client
   polls. Neither blocks the other's code — 18 is a publish path and 10 is a boot path — but
   the pair is what delivers the deployment, and 18 is the cheaper half.
-- **19 is the answer to five findings that were being deferred one at a time.** It landed
-  as a plan on 2026-08-30 and took the number the tail below had promised it. The claim it
-  makes is that `DEFAULT_PERMISSIONS`, `USERS_EDIT` escalation, the unvalidated
-  `permission_id`, the `userpictures` "may edit some user" residual and the permissions
-  page's `ADMIN`-versus-`USERS_READ` mismatch are one finding wearing five hats, because
-  there is no permission *model* here — thirty constants and a hierarchy view, not one of
-  which gates a *field*. Wave 2's auth work is read against it before it starts.
+- **19 landed as a plan on 2026-08-30 and took the number the tail below had promised it
+  — and reading it against the code sent four of the five findings parked on it back to
+  wave 2.** The parking's claim was that `DEFAULT_PERMISSIONS`, `USERS_EDIT` escalation,
+  the unvalidated `permission_id`, the `userpictures` residual and the permissions page's
+  `ADMIN`-versus-`USERS_READ` mismatch are one finding wearing five hats, because there is
+  no permission *model* here — thirty constants and a hierarchy view, not one of which
+  gates a *field*. Four of them turn out to need only the rule, which existing views
+  already support, rather than the model; see the tail for the reversal and its reasoning.
+  Wave 2's auth work is still read against 19 before it starts.
 - **19 before [02](02-mcp-endpoint.md)'s stock tools, and 19's Q5 is owed by
   [18](18-mqtt-state-publication.md) *now* rather than when 19 lands.** Both are channels
   that carry prices, and 19 exists because "who can see what things cost" has no answer
-  today. 02 is in wave 5 and 19 is proposed for wave 3, so that half is ordinary
-  sequencing. 18 is not: it is wave 1 track D, so it merges two waves *before* the plan
+  today. 02 is in wave 5 alongside 19's piece 2, and 02's own Q1/Q6 responses already
+  answer 19's Q4 — the sidecar's key resolves to a user, so redaction is inherited — so
+  that half is settled rather than sequenced. 18 is not: it is wave 1 track D, so it merges two waves *before* the plan
   whose question it is supposed to answer, and a retained topic published without the
   question settled is household pricing sitting on the broker until someone re-publishes.
-  18 therefore answers it in its own security notes rather than deferring to 19 — see
-  18's Sequencing — and 19-Q5 records the answer instead of asking for one.
+  18 therefore owns it, as its own question 8, rather than deferring to 19 — see 18's
+  Sequencing — and 19-Q5 records the reassignment instead of asking 18 for an answer it
+  would give too late. Moved, not answered: 18's question 8 carries a lean like the rest
+  of that plan and has no Response yet, so read it before 19's piece 2 rather than
+  assuming it.
 - **Anything that keeps state between requests is 10's problem too.** On a pod that scales
   to zero, in-process state is state until the next idle window. Sweep S12's login throttle
   is the live case and is recorded in [11](11-api-error-handling.md)'s sequencing: Redis or
@@ -540,10 +546,14 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   rule's blind spot, and whether it breaks the client outright depends on how the Swift
   model declares those properties, which 17's verification 5 answers rather than assumes.
 - **02 MCP, read-only v1** — separate container per its Q6 response, bearer key
-  behind the credential→user seam per the IdP note. [19](19-rbac.md)'s Q4 is a gate on
-  this rather than a note: if a tool call carries a user's API key, redaction is inherited
-  and there is nothing to build; if the sidecar has a service identity, that identity needs
-  a role, and *that* role decides whether an assistant a child talks to can quote prices. Two sweep constraints: the seam
+  behind the credential→user seam per the IdP note. [19](19-rbac.md)'s Q4 asked which of
+  those two this is, and 02's own Q1 and Q6 responses had already answered: the key
+  resolves to a Victual user and every REST call is permission-checked as that user, so
+  19's redaction is inherited and there is no MCP-specific mechanism to build. What is
+  left is 02's to decide rather than 19's — three of the six read tools carry prices, so
+  one shared key means one user's price visibility for every household member the
+  assistant talks to, and the key is per person or its user holds no
+  `STOCK_PRICES_VIEW`. Two sweep constraints: the seam
   does not accept a key from the query string (S11 — the server's own query path is
   removed in wave 2 and the sidecar must not reintroduce it), and sidecar→server trust
   follows S4's trusted-proxy pattern rather than a shared header alone.

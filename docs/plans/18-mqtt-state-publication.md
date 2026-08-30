@@ -168,10 +168,10 @@ anything [17](17-ecosystem-clients.md) tracks over REST.
 
 The impact is that a *new* class of consumer appears with no authentication to Victual at
 all — anything holding broker credentials. That is the reason the security notes below
-draw the line where they do, and the reason this plan answers [19](19-rbac.md)'s Q5 itself
-rather than inheriting it: what goes on a retained topic is a visibility decision made at
-publish time, by this plan, for every subscriber at once, and there is no reader identity
-to gate it on afterwards.
+draw the line where they do, and the reason [19](19-rbac.md)'s Q5 is carried here as
+question 8 rather than inherited from that plan: what goes on a retained topic is a
+visibility decision made at publish time, by this plan, for every subscriber at once, and
+there is no reader identity to gate it on afterwards.
 
 ## Verification
 
@@ -222,27 +222,25 @@ assistant query is on-demand — it wakes the pod and asks, like any interactive
 the sidecar reads the API and has no use for retained state. Keeping them separate avoids
 inventing a general "always-on read tier" that only one consumer needs.
 
-**This plan answers [19](19-rbac.md)'s Q5 rather than waiting for it, and the reason is
-the ordering.** 19 asks whether published state carries prices, offering three answers:
-publish without the visibility-gated fields, publish per-role topics, or declare MQTT an
-admin channel. It asks 18 to record which it chose — but 19 is proposed for wave 3 and
-this is wave 1, so on the roadmap as written 18 merges two waves before the plan whose
-question it defers to. That is not a deferral anyone could honour: a retained topic is
-*retained*, so an unanswered question here is not a decision postponed, it is household
-pricing sitting on the broker until something re-publishes without it.
+**This plan owns [19](19-rbac.md)'s Q5 rather than deferring to it, and the reason is the
+ordering.** 19 asks whether published state carries prices, offering three answers: publish
+without the visibility-gated fields, publish per-role topics, or declare MQTT an admin
+channel. It asks 18 to record which it chose — but 19's piece 2 is wave 5 and this is wave
+1, so on the roadmap as written 18 merges four waves before the plan whose question it
+defers to. That is not a deferral anyone could honour: a retained topic is *retained*, so
+an unanswered question here is not a decision postponed, it is household pricing sitting on
+the broker until something re-publishes without it.
 
-**The answer is the first option: publish no price or cost field, on any topic, in any
-version of this plan.** It costs nothing to decide now because it is what this plan's own
-rules already say — the entity set is facts a wall tablet would show, and the security
-notes below already exclude user records, notes fields and API keys on exactly the
-"anything with broker access reads this without authenticating to Victual" reasoning that
-applies to prices with more force, not less. Per-role topics are the option to revisit if
-19's piece 2 ever gives the publisher a role to publish *as*; until then there is no reader
-identity here to gate on, which is 19's own framing of why this channel is the hard case.
-Concretely, the v1 entity set in Q1 carries none of `stock.price`, `stock_log.price`,
-`products_average_price`, `product_price_history`, `products_last_purchased.price`,
-`last_price`, `avg_price` or a recipe's `costs`, and adding an entity that would is a
-change this paragraph has to be edited to permit.
+It is therefore **question 8 below**, answered here or not at all — and, like every other
+question in this plan, it carries a lean rather than a settled answer until it has a
+Response. The lean is the first option: publish no price or cost field, on any topic. It
+costs little to lean that way because it is what this plan's own rules already say — the
+entity set is facts a wall tablet would show, and the security notes below already exclude
+user records, notes fields and API keys on exactly the "anything with broker access reads
+this without authenticating to Victual" reasoning that applies to prices with more force,
+not less. Per-role topics are the option to revisit if 19's piece 2 ever gives the
+publisher a role to publish *as*; until then there is no reader identity here to gate on,
+which is 19's own framing of why this channel is the hard case.
 
 ## Open questions
 

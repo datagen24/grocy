@@ -528,7 +528,8 @@ opening it. The mechanism, not the list, is the deliverable:
 2. **Each plan carries a client-impact line.** One row, even when it reads "none". Absent
    is not the same as none.
 
-   > **Adopted 2026-08-30.** For the first eighteen months of this mechanism's life it had
+   > **Adopted 2026-08-30.** For the first day of this mechanism's life — this document was
+   > written 2026-08-29 — it had
    > exactly zero adopters — this document defined it and no plan carried one, which the
    > rigor review recorded as D2. All eighteen other plans now do, and writing them was
    > more informative than the rule promised. Three were not "none" when the plan implied

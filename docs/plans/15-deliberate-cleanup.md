@@ -9,14 +9,17 @@ ordering fix there, the refactor here);
 **Status:** draft for review. Deliberately a grab bag — see "Why one plan" below.
 15-B2 (session cookie) landed early, in the wave 0.5 hotfix; see its Executed note.
 
-> **Read the RBAC plan before starting C1.** One is in draft on its own branch as of
-> 2026-08-30, and the sweep's permission findings — S5, S6, S27 and the `userpictures`
-> residual — are parked against it rather than being fixed piecemeal here. C1's
-> authenticator extraction is the natural place to *carry* whatever that plan decides, and
-> the wrong place to pre-empt it: a refactor that hardens a permission model about to be
-> replaced is work done twice, which is the argument this roadmap already accepted for
-> deferring the auth findings once. The roadmap's own rule about reading 17 before 11 and
-> 16 exists because that was not done; this is the same rule, applied on time.
+> **Read [19](19-rbac.md) before starting C1** — as a consistency check, not as a blocker.
+> It landed as a plan on 2026-08-30, and the sweep's permission findings that were parked
+> against it — S5, S6, S27 and the `userpictures` residual — came back to wave 2 once it
+> was read against the code: each needs the subset-of-caller *rule*, which
+> `user_permissions_resolved` and `permission_tree` already support, rather than the
+> *model* 19 defines. So C1's authenticator extraction is the place those fixes land, and
+> what 19 is owed is that the rule C1 writes still holds when a grant can arrive through a
+> role — 19 widens that view with a union and changes nothing a comparison against it
+> would see. The roadmap's own rule about reading 17 before 11 and 16 exists because that
+> was not done; this is the same rule, applied on time, and applied in the direction 19's
+> own Depends-on line states rather than against it.
 
 ## Why one plan
 

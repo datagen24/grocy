@@ -317,7 +317,7 @@ become one before piece 2 freezes the contract, so it will be. And
 decision" — this plan is that decision, and the leaf is what makes exposing it safe.
 
 Redaction is applied where the entity is still known: **`FilteredApiResponse()`**
-(`controllers/Api/BaseApiController.php:63`), which receives a LessQL `Result` and can
+(`BaseApiController::FilteredApiResponse`), which receives a LessQL `Result` and can
 therefore tell a `stock` row from a `chores` row, plus the hand-built responses' own
 shaping — and in **`BaseController`'s view data** for the Blade side. It is *not*
 `ApiResponse()`: that takes bare `$data` and no entity name
@@ -388,8 +388,9 @@ break the whole screen rather than hide a number. A redacted field and a refused
 also be distinguishable — that is why this plan waits on [11](11-api-error-handling.md)
 rather than inventing a second error shape.
 
-[18](18-mqtt-state-publication.md) is the other channel and has already answered: it
-publishes no price or cost field at all. See Q5.
+[18](18-mqtt-state-publication.md) is the other channel, and it carries the question
+rather than this plan: its question 8 leans to publishing no price or cost field on any
+topic, and has no Response yet. See Q5.
 
 ## Verification
 
@@ -515,23 +516,26 @@ publishes no price or cost field at all. See Q5.
    `uihelper_stock_current_overview` and therefore carry `value`, `last_price` and
    `average_price`.
 
-   > **Response: answered by 18, and it had to be.** The first option — 18 publishes no
-   > price or cost field on any topic. The question as written assumed 18 could wait for
-   > this plan to land and then record a choice, and the roadmap says otherwise: 18 is
-   > wave 1 track D and this plan is proposed for wave 3, so 18 merges two waves earlier.
-   > A retained topic makes that gap matter in a way an ordinary ordering slip would not —
-   > retained means the payload sits on the broker until something republishes, so an
-   > unsettled question there is not a decision deferred but pricing already published.
-   > 18's Sequencing section now carries the answer and its security notes list prices
-   > alongside the user records and notes fields it already refused, on the same reasoning:
-   > anything with broker access reads the payload without authenticating to Victual.
+   > **Response: reassigned to 18, which is the only plan that can answer it in time.**
+   > The question as written assumed 18 could wait for this plan to land and then record a
+   > choice, and the roadmap says otherwise: 18 is wave 1 track D and this plan's piece 2
+   > is wave 5, so 18 merges four waves earlier. A retained topic makes that gap matter in
+   > a way an ordinary ordering slip would not — retained means the payload sits on the
+   > broker until something republishes, so an unsettled question there is not a decision
+   > deferred but pricing already published. 18 therefore carries it as its own question 8
+   > rather than inheriting an answer from here.
+   >
+   > That is a question moved, not a question answered. 18's question 8 records a lean to
+   > the first option — publish no price or cost field on any topic — and like every other
+   > question in that plan it has no Response yet. Read it before piece 2 rather than
+   > assuming it.
    >
    > What this plan keeps is the *reason* the option is right rather than merely early.
    > Per-role topics are the only answer that survives piece 2's model, and they are
    > unbuildable today for the reason this question opens with: there is no reader
    > identity on a retained topic to gate against. If piece 2 ever gives the publisher a
-   > role to publish *as*, per-role topics are the revisit, and 18's paragraph is written
-   > to have to be edited before any priced entity is added.
+   > role to publish *as*, per-role topics are the revisit, and 18's bullet is written to
+   > have to be edited before any priced entity is added.
 
 6. **Should `STOCK_PURCHASE` imply `STOCK_PRICES_VIEW`?** A user who records purchases
    without seeing prices is coherent (a child doing the shopping run with a list) but
