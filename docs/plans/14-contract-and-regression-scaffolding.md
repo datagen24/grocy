@@ -207,6 +207,25 @@ The comparison is three-way and each leg catches something different:
 | snapshot vs previous snapshot | a migration that changed a response |
 | snapshot vs OpenAPI schema | a response that never matched its documentation |
 | engine vs engine | a port that diverged on the wire |
+| Admin snapshot vs restricted-identity snapshot | a field that should be redacted and is not, or one redacted that should not be — asserted as *equal minus exactly the `x-visibility` keys*. The only leg that requires a difference rather than forbidding one. |
+
+**Piece 2 runs per identity, not once.** [19](19-rbac.md) makes response *content* a
+function of the caller, so "a valid key" no longer describes the contract. Every operation
+is called twice against the same fixture — once as Admin, once as a fixture user holding
+`STOCK` without `STOCK_PRICES_VIEW` — and the restricted snapshot is asserted to equal the
+Admin one with exactly the `x-visibility`-annotated keys removed. That is what stops a
+future endpoint leaking a price by omission: a new path returning `price` without the
+annotation fails the diff for the restricted user. Both legs are needed, because a field
+absent for *everyone* satisfies the restricted leg exactly as a correctly redacted one
+does, and only the Admin leg shows it was there to redact.
+
+The costs are a second key, a second user in the committed seeds, and a doubled set of
+golden files — question 6's churn twice over, accepted for the same reason it was accepted
+there. 19's own upgrade verification additionally needs a *pre-migration* fixture holding
+`STOCK` directly, which is a third seed rather than a fourth snapshot leg. Build this
+harness here rather than in 19: it is an extension of the snapshot mechanism, not a
+consumer of it, which is why 19's piece 2 is scheduled alongside this piece rather than
+after it.
 
 The one real route/spec mismatch gets fixed here — `/api/openapi/specification` added to
 the spec — along with a route-table-vs-spec parity assertion written as a two-way set
@@ -272,13 +291,21 @@ may be intentional — loosening a resolved-permission read from `ADMIN` to `USE
 has consequences the server-rendered page's stricter phrasing might have been protecting.
 Both want a recorded answer, in the manner of this roadmap's other open questions.
 
-> **The permissions one is deferred to an RBAC plan**, in draft on its own branch as of
-> 2026-08-30. It is not a missing endpoint but a question about who may see the permission
-> model, and answering it here would fix a number in one view while the model it reflects
-> is being redesigned. The sweep lists the other findings waiting on the same plan. What
-> this section still owes regardless: whatever that plan lands on has to be reachable
-> through the API before piece 2 freezes the contract, since the permissions page is one of
-> the eight.
+> **The permissions one is deferred to [19](19-rbac.md)**, which landed as a plan on
+> 2026-08-30 and carries it as its own question 9. It is not a missing endpoint but a
+> question about who may see the permission model, and answering it here would fix a number
+> in one view while the model it reflects is being redesigned. 19's API section states the
+> answer it wants — read behind `USERS_READ`, write behind `USERS_EDIT` — so this can be
+> taken from 19 in wave 2 rather than waited for. What this section still owes regardless:
+> whatever that plan lands on has to be reachable through the API before piece 2 freezes
+> the contract, since the permissions page is one of the eight, and 19's piece 1 is
+> scheduled in wave 3 for exactly that reason.
+>
+> **`products_price_history` is answered by the same plan**, which this section could not
+> know when it recorded the widening as open. 19's `STOCK_PRICES_VIEW` leaf is what makes
+> exposing it safe: the endpoint is refused outright for a caller without the leaf rather
+> than returned empty. The widening is still a decision, but it is no longer an unbounded
+> one.
 
 **Caveat on the measurement.** The view definitions were read from the SQLite migration
 files, taking the highest-numbered migration touching each view as authoritative. The

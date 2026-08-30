@@ -290,6 +290,20 @@ inventing a general "always-on read tier" that only one consumer needs.
 
    > **Response:**
 
+
+8. **Does the ambient payload carry prices?** [19](19-rbac.md)'s Q5 asks this plan to
+   record the choice and offers three: publish without the fields it annotates
+   `x-visibility`, publish per-role topics, or declare MQTT an admin channel. The first is
+   the only one consistent with what is already here — per-role topics multiply the single
+   discovery payload question 2 argues for, and "admin channel" is a claim about
+   subscribers this design cannot check. I lean to **publish no prices**, with the
+   assembler dropping every `x-visibility` field rather than maintaining a second list, so
+   that MQTT never becomes the channel that answers a question the API refuses. The cost
+   is that a household wanting a spending sensor has to add one deliberately, which is the
+   right default for a payload anything on the broker can read.
+
+   > **Response:**
+
 ## Effort
 
 Small, and mostly not the MQTT part.
@@ -332,7 +346,13 @@ connection the application makes that is not the label printer.
   That is a real widening of who can see this data, it is accepted here because the broker
   is on the same private cluster with its own credentials, and it is a reason not to
   publish anything that would not also be shown on a wall tablet — no user records, no
-  notes fields, no API keys.
+  notes fields, no API keys, **and no prices**. The prices are the addition
+  [19](19-rbac.md) forces and the one this plan would otherwise have missed: the stock
+  summary's row attributes come from `uihelper_stock_current_overview`, which selects
+  `value`, `last_price` and `average_price` (`migrations/0219.sql:74-75`), so they ship
+  by default. The wall-tablet test excludes them on its own reasoning — a broker
+  subscriber is not a logged-in user and cannot be made into one — which is why 19's Q5
+  is answered here rather than gating that plan. See question 8.
 - **A publish must never carry a failure into a committed write.** Short connect and
   publish timeouts, exceptions caught and logged, and the write path unaffected. The
   transaction is already closed by then, per 13.

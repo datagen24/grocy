@@ -289,6 +289,30 @@ The Home Assistant integration does not model groups or locations and is unaffec
 The same shape recurs for [06](06-location-barcodes.md)'s `l` Grocycode type: the iOS
 app's scanner resolves `grcy:p:42` and will not recognise `grcy:l:{uuid}`.
 
+## Coupling 5 — fields that may be absent per user
+
+[19](19-rbac.md) makes `price`, `average_price`, `last_price`, `costs` and the
+price-history endpoint conditional on a `STOCK_PRICES_VIEW` leaf, enforced server-side and
+**removed** from the response rather than nulled — because a null price is a legitimate
+value in `stock_log` and has to stay distinguishable from "you may not see this". Every
+one of those fields stops being `required` on its schema.
+
+This is the additive rule's blind spot in its purest form. No route moves, no status code
+moves, no key is renamed, the change is invisible to a diff of the route table — and both
+clients break anyway, for one user and not another. Grocy-SwiftUI decodes `price` and
+`costs` into non-optional Swift properties, so a Child logging in from a phone gets a
+decoding failure on the stock list rather than a list without prices: the app does not
+degrade, it stops. The Home Assistant path is unaffected only because
+[18](18-mqtt-state-publication.md) publishes no prices at all, which is 19's Q5 answered
+in that plan rather than a property this one can rely on.
+
+The mechanism half of this document is what makes it cheap. The Swift module's transport
+is generated from `victual.openapi.json` after [11](11-api-error-handling.md), so if 19
+lands first the optionality is generated rather than retrofitted, and the manifests item 1
+asks for cover response *keys* — exactly the widening item 3 recommended after Coupling 0.
+So the rule is **19 before the Swift generation**, which is stronger than "before the
+client work resumes": after it, every generated model is generated twice.
+
 ## Lower-exposure plans
 
 | Plan | Client exposure |

@@ -23,6 +23,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | — | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
 | 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2 |
+| 19 | [Roles and data-visibility permissions](19-rbac.md) | — | 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
 ## Hardening
 
@@ -48,7 +49,7 @@ the gate's wording at the same time, or the wording quietly becomes a claim nobo
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
-| — | [Security sweep hotfix](../security-sweep.md) (S1, S2, S3, S7, S23, R1) | [docs/security-sweep.md](../security-sweep.md) | — | small | **landed** — see the sweep's [What the hotfix changed](../security-sweep.md#what-the-hotfix-changed) |
+| — | [Security sweep hotfix](../security-sweep.md) (S1, S2, S3, **S4**, S7, S23, S28, R1) | [docs/security-sweep.md](../security-sweep.md) | — | small | **landed** — see the sweep's [What the hotfix changed](../security-sweep.md#what-the-hotfix-changed) |
 
 ## Meta
 
@@ -68,8 +69,11 @@ rename and the registry claims happen at announcement time, not in a commit.
 **Blocking and de-risking, in one place:**
 
 - **12 before [05](05-store-shopping-lists.md), [06](06-location-barcodes.md),
-  [08](08-nested-locations.md)** — each adds a list/form pair, and 12 is what stops them
-  being copies of the old pattern.
+  [08](08-nested-locations.md) and [19](19-rbac.md)** — each adds a list/form pair, and 12
+  is what stops them being copies of the old pattern. 19 is the partial case: its `/roles`
+  list is a factory call, but `/role/{id}` and the modified `/user/{id}/permissions` are
+  mixin adopters alongside `userpermissions.js`, which 12's Q5 response has already
+  bucketed.
 - **14 before [07](07-nested-products.md) and [08](08-nested-locations.md)** — both plan
   their fixtures against tooling this makes runnable, and neither has ever exercised a
   recursive CTE through it.
@@ -86,6 +90,15 @@ rename and the registry claims happen at announcement time, not in a commit.
   snapshot change. Two of the gaps are decisions rather than code: exposing
   `products_price_history` widens who can see the household's purchase history, and the
   permissions page's `ADMIN`-versus-`USERS_READ` mismatch may be deliberate.
+
+  **[19](19-rbac.md) is now a contributor to this rule and the answer to both decisions.**
+  Its piece 1 adds `/roles`, `/roles/{id}/permissions`, `/users/{id}/roles`, a `roles`
+  exposed entity and a `via_role` field on an existing response — all read surface, and all
+  of it has to exist before the freeze, which is why piece 1 is in wave 3 rather than
+  later. And the two parked decisions are 19's: `STOCK_PRICES_VIEW` is what makes exposing
+  `products_price_history` a bounded widening rather than an open one, and 19's question 9
+  carries the permissions-page mismatch that 14's 2b handed it. Neither needs 19 to *land*
+  first — wave 2 can take both answers from the plan.
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
 - **18 wants 10 to be real, and 10 wants 18 to exist.** 18's whole justification is a pod
@@ -223,10 +236,12 @@ three jobs above and should be adopted when one of them lands, not as architectu
 
 The single sequence to work from, features and hardening interleaved. Constraints it
 encodes: 14's suite unblocks every other plan's verification; 12 must precede the plans
-that add list/form pairs (05/06/08); 11, 13, 15-C1 and 14's snapshot precede 02; 08
+that add list/form pairs (05/06/08/19); 11, 13, 15-C1 and 14's snapshot precede 02; 08
 proves the recursive pattern before 07 spends it; 10 then 01 produce the volume-less
-pod. Waves are strictly ordered; tracks inside a wave touch disjoint files and can run
-as parallel sessions.
+pod; 19 splits across two waves because its roles half grows the read surface 14 has yet
+to freeze while its visibility half changes response shapes and cannot precede the
+snapshot that proves it. Waves are strictly ordered; tracks inside a wave touch disjoint
+files and can run as parallel sessions.
 
 Wave 0 is complete and wave 1's track C is done; the rest is unstarted. Wave 4's shape
 is no longer settled — see 07-Q6 there. Two things sat between wave 0 and wave 1:
@@ -235,6 +250,11 @@ Neither is a wave; both are a single sitting, and wave 1 does not start until bo
 done. **Both are now done** — the hotfix landed and 17-Q2 and 17-Q4 carry responses, so
 wave 1 is open. Q2's answer added [18](18-mqtt-state-publication.md) to the roadmap and
 took the Home Assistant conflict out of 10's path; see wave 0.5 below.
+
+A third thing has since been added without a wave of its own: [19](19-rbac.md), written
+2026-08-30. It is placed rather than pending — piece 1 in wave 3, piece 2 in wave 5 — and
+its arrival unparks four permission findings back into wave 2, which is the one change it
+makes to work already scheduled. See the tail for that reversal and its reasoning.
 
 ### Wave 0 — decisions and scaffolding (one sitting) — **complete**
 
@@ -354,6 +374,15 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   Assistant is the reason it will not. 13 is its prerequisite and is already in — the
   publish hangs off the same after-commit seam the label-printer webhook uses.
 
+  **18 answers [19](19-rbac.md)'s Q5 here rather than waiting for 19.** 19 asked 18 to
+  record whether published state carries prices, and gated itself on 18 to make sure — but
+  18 is this wave and 19 is wave 3, so the gate was unachievable in the direction it was
+  written. It is also unnecessary: 18's own security note already says publish nothing that
+  would not be shown on a wall tablet, and a broker subscriber is not a logged-in user and
+  cannot be made into one. The note now names prices explicitly, because 18's stock summary
+  takes its row attributes from `uihelper_stock_current_overview` and would otherwise ship
+  `value`, `last_price` and `average_price` by default. Carried as 18's question 8.
+
 ### Wave 2 — API correctness
 
 - **11 API error handling**, presented as a before/after diff from 14's sweep. Then,
@@ -366,6 +395,19 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   permissions the caller lacks; current password required for self password change)
   and **S19** (dummy-hash verify for unknown users, cookie cleared on logout, expired
   sessions pruned) as one changelogged follow-on. 15-B2 already landed in the hotfix.
+  **S27** and the **`userpictures` residual** join them here rather than waiting on
+  [19](19-rbac.md) — see the tail below for why that parking was wrong. Wave 2 should be
+  read against 19 before it starts, in the way 17 was supposed to be read before 11 and 16,
+  but as a consistency check on the rule it writes rather than as a blocker: 19's questions
+  4, 5 and 9 are answered in 02, 18 and here respectively, and its API section already
+  states the read/write split the permissions page needs.
+
+  **S6 is worse than the sweep recorded, and wave 2 should be written against the fact.**
+  `USERS` → `USERS_CREATE` → `USERS_EDIT` → `USERS_READ` is a chain, not a fan
+  (`migrations/0110.sql:29-43`), and the tree resolves downward — so `USERS_CREATE` alone
+  already resolves to `USERS_EDIT`, and an account that may create users may today rewrite
+  any admin's password without holding `USERS_EDIT` at all. The subset-of-caller check is
+  the fix either way; the chain is why "just require `USERS_EDIT`" would not have been.
   The remaining 15 one-liners (C3–C9) ride along with whatever wave has the file open;
   C10 stays deferred until after 13, then folds in here or later.
 - **S8, S9, S12** land here too, as they are 11's territory: `Origin` check on
@@ -385,6 +427,15 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   camera ingest stays unscoped.
 - **03 category minimums** — one column, one new view, group shortfalls kept out of
   `stock_missing_products`.
+- **[19](19-rbac.md) piece 1 — roles**, as its own track, and **only if its Q8 answers
+  (b) or (c)**. It is here rather than later because it grows the API read surface, which
+  the rule above requires to happen before 14 piece 2 freezes the contract. It touches
+  `User.php`, `0110`-successor views, `UsersApiController` and the users views, none of
+  which 03, 06 or 09 open; the two files the tracks share are `routes.php` and
+  `victual.openapi.json`, additively in every case, which is worth naming because the wave
+  rule says disjoint rather than mostly disjoint. If Q8 answers (a) — gate reads in piece 1
+  — this is not a wave 3 track at all but a model change with real upgrade risk, and the
+  wave is re-planned around it.
 
 ### Wave 4 — the hierarchy work
 
@@ -422,7 +473,17 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   writable through the generic endpoints), a length/complexity bound on the `§` regex
   operator written into the filter contract `filterdifftest.php` already measures
   (S15), and a test that `/system/config` returns at least `FEATURE_FLAG_STOCK` so R1
-  cannot recur.
+  cannot recur. It also grows a fourth comparison leg and a second fixture identity, for
+  19 piece 2 below — built here rather than there, because a per-identity snapshot is an
+  extension of the snapshot mechanism and not a consumer of it.
+- **[19](19-rbac.md) piece 2 — price visibility**, co-scheduled with 14 piece 2 and
+  landing before the freeze is signed off, since removing fields from `required` changes
+  existing response shapes. It waits this long for two reasons: 11 owns the error helper
+  and the filter refusal it needs, and the double snapshot — every path called as Admin and
+  as a user without `STOCK_PRICES_VIEW`, asserted equal minus exactly the `x-visibility`
+  fields — is the proof the feature works. It must also precede the Swift transport
+  generation, per 17's Coupling 5: the client decodes `price` and `costs` as non-optional,
+  so a Child on a phone gets a decoding failure rather than a list without prices.
 - **02 MCP, read-only v1** — separate container per its Q6 response, bearer key
   behind the credential→user seam per the IdP note. Two sweep constraints: the seam
   does not accept a key from the query string (S11 — the server's own query path is
@@ -453,19 +514,44 @@ generated client is generated twice.
   to 15's non-breaking table so it has a home; it needs no wave.
 - **S27**, found while verifying the hotfix — the permissions API accepts an unvalidated
   `permission_id` and silently grants nothing when it is not a real one. Small, and in
-  the file 15-C1 opens, so it rides with wave 2 rather than getting a slot — but see the
-  RBAC note below, which it now waits on.
-- **An RBAC plan is in draft on its own branch** (2026-08-30), and several permission
-  findings are parked against it rather than being solved piecemeal: **S5**
-  (`DEFAULT_PERMISSIONS = ADMIN`), **S6** (`USERS_EDIT` can reset an admin's password),
-  **S27** above, the `userpictures` "may edit some user" residual from the hotfix, and the
-  permissions page's `ADMIN`-versus-`USERS_READ` mismatch that
-  [14](14-contract-and-regression-scaffolding.md)'s section 2b turned up. They are one
-  finding wearing five hats: there is no permission *model* here, only thirty constants and
-  a hierarchy view, so each fix would otherwise be a guess at what the model is about to
-  say. When that plan lands it takes a number and these move under it; wave 2's auth work
-  should be read against it before it starts, in the way 17 was supposed to be read before
-  11 and 16.
+  the file 15-C1 opens, so it rides with wave 2 rather than getting a slot.
+- **The RBAC plan has landed as [19](19-rbac.md)** (2026-08-30), and **four of the five
+  permission findings parked against it come back to wave 2.** The parking said they were
+  one finding wearing five hats — no permission *model* here, only thirty constants and a
+  hierarchy view, so each fix would be a guess at what the model is about to say. Reading
+  19 against the code says otherwise, and 19 itself says otherwise: its Depends-on line
+  puts it *after* wave 2's S5/S6, "because role assignment is a grant". Parking S5 and S6
+  on 19 inverts 19's own stated dependency, and would leave `DEFAULT_PERMISSIONS = ADMIN`
+  standing through two more waves — which is the residual S4 was knowingly left with.
+
+  The distinction the parking missed is between the *rule* and the *model*. The
+  subset-of-caller rule needs only a caller's resolved set, a target's resolved set, and
+  the closure of a proposed grant — `user_permissions_resolved` and `permission_tree`, both
+  of which exist today and neither of which 19 changes the shape of. 19 widens the view's
+  `IN (…)` subquery with a union over `role_permissions`; a comparison written against that
+  view in wave 2 keeps working verbatim once roles land. So:
+
+  - **S5** — wave 2. The config half (`DEFAULT_PERMISSIONS` stops being `['ADMIN']`) is
+    not a model question; `[]` is what 19 is written on, since its `VICTUAL_DEFAULT_ROLES`
+    also defaults to empty. Note the third call site has no creator to compare against
+    (`ReverseProxyAuthMiddleware`), so there the config default *is* the whole answer.
+  - **S6** — wave 2, and more urgent than the sweep recorded: see the chain noted in that
+    wave. A set comparison over an existing view, not a model.
+  - **S27** — wave 2. One existence check against `permission_hierarchy`, whose rows are
+    fixed. 19 adds rows to that table; it does not change what validating one means. 19's
+    verification now asserts the same check on the two id-taking endpoints it adds.
+  - **The `userpictures` residual** — wave 2, with S6, and it is a *route* gap rather than
+    a model gap: the route carries no user id, but `users.picture_file_name` recovers the
+    owner, so the check is owner-is-caller → `USERS_EDIT_SELF`, else `USERS_EDIT`.
+  - **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch** is the one that is
+    genuinely 19's, and 19 carries it as its question 9 — but wave 2 can take the answer
+    from the plan rather than wait for it, since 19's API section already states it.
+
+  Wave 2 should still be read against 19 before it starts, in the way 17 was supposed to be
+  read before 11 and 16. The lesson is the mirror of S4's: **a finding is only safely
+  parked on a plan that does not depend on it.** Where the plan and the parking each name
+  the other as prerequisite, one of them is wrong, and it is worth checking which before
+  the wave that would have fixed it goes past.
 - **Not scheduled, recorded**: sweep S20–S22 and S24 (Host-header redirects, wildcard
   CORS, integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to
   tags). Each is a one-liner that rides with whichever wave opens the file; S21 waits on
