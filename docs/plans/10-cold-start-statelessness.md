@@ -252,13 +252,26 @@ any of them — with the two seams noted below.
 because [14](14-contract-and-regression-scaffolding.md) piece 1 cannot run without it
 (see *Move migrations out of the request path*).
 
-The second seam is with [13](13-write-path-transactions.md). `DatabaseMigrationService`
-opens raw transactions of its own at lines 163 and 239, and this plan wraps the whole
-migration run in a lock. 13 converts seven service entrypoints to an `InTransaction`
-helper but deliberately leaves these two alone. That is fine as long as the helper
-counts depth rather than assuming it opens the outermost transaction — if a PHP
-migration ever calls a service through it, a depth-blind helper mis-nests. Neither plan
-owns that constraint today, so it is recorded in both.
+The second seam is with [13](13-write-path-transactions.md), and **13 has landed, so this
+is now a resolved worry rather than a live constraint.** `DatabaseMigrationService` opens
+raw transactions of its own, and this plan wraps the whole migration run in a lock; 13
+converted seven service entrypoints to an `InTransaction` helper and deliberately left
+those alone. This paragraph used to say that was fine "as long as the helper counts depth
+rather than assuming it opens the outermost transaction", and that a depth-blind helper
+would mis-nest if a PHP migration ever called a service through it.
+
+The helper that shipped does something better than counting: it asks
+`PDO::inTransaction()`. A counter would only know about transactions opened through the
+helper, so `DatabaseMigrationService`'s own would be invisible to it and the mis-nesting
+this paragraph feared would happen *because of* the counter. Asking the connection cannot
+have that blind spot. 13-Q2's recorded response chose depth counting and the
+implementation overrode it with a reason written into the docblock — the deviation is
+noted in 13's Executed section. Nothing is owed here; the constraint is discharged.
+
+What this plan still owes 13 is the other half of that docblock: it points at
+`DatabaseDialect` for "the per-engine locking used around migrations", and no such method
+exists yet because it is *this* plan's lock. Either the lock lands here and the pointer
+resolves, or the docblock is reworded first — 15-C12 carries it as the cheaper of the two.
 
 ## Open questions
 

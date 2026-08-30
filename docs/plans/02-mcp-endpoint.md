@@ -34,11 +34,35 @@ anything that exists.
 
 ## Proposed change
 
-### Mount point
+> **Everything from here to the Open questions is the superseded half of this file, and
+> the sections that specify *where the code lives* are the ones that were reversed.** This
+> plan proposed an MCP server integrated into the application: a route under `/api/mcp`, a
+> controller beside the REST ones, a tool registry under `services/`. Q6's response chose a
+> **separate sidecar container** instead, and the
+> [MCP interface specification](../mcp-interface-spec.md) is built on that choice — no
+> state, no credentials at rest, two replicas indistinguishable, none of which an in-process
+> mount can offer on a pod that scales to zero. What survives here is the *reasoning*: the
+> auth seam, the permission model, the tool shortlist and the transport constraints are all
+> still the argument the spec rests on, and Q1–Q6 are still the decision record. What does
+> not survive is the mount point, the file layout and the "purely additive routes" framing.
+> They are kept rather than deleted because the spec's design reads as over-engineered
+> without the integrated version to compare against — but nothing should be *built* from
+> the three sections below.
 
-Mounting at **`/api/mcp`** rather than `/mcp` means the existing auth middleware already
+### Mount point — *superseded, see the note above*
+
+~~Mounting at **`/api/mcp`** rather than `/mcp` means the existing auth middleware already
 covers it — `IsApiRoute` is a `/api/` prefix test, so API key authentication works with no
-middleware change at all. MCP does not care what the path is.
+middleware change at all. MCP does not care what the path is.~~
+
+The sidecar has no mount point in this application at all. It is a separate service that
+speaks HTTP to the same API any other client uses, which is what makes "two replicas
+indistinguishable" achievable — there is no per-connection state in the server to make
+them differ. The cost the superseded version avoided, and the sidecar pays, is that the
+sidecar authenticates *as* a user over the network rather than inheriting a session; that
+is the credential→user seam Q1 settles, and sweep **S11** constrains it — the seam does
+not accept a key from the query string, and sidecar→server trust follows S4's
+trusted-proxy pattern rather than a shared header alone.
 
 ### Authentication
 
@@ -105,16 +129,27 @@ Then a small, deliberately boring set of writes:
 Each tool checks the acting user's permissions exactly as the equivalent REST route does.
 A read-only user gets read-only tools.
 
-### Where the code goes
+### Where the code goes — *superseded, see the note above*
 
-`controllers/Api/McpController.php` for the protocol, `services/Mcp/` for the tool
+~~`controllers/Api/McpController.php` for the protocol, `services/Mcp/` for the tool
 registry, so tools are declared in one place with their schema, permission and handler
-rather than scattered through a switch.
+rather than scattered through a switch.~~
+
+Not in this repository. The sidecar is its own deployable; see the spec's Appendix A for
+what the `mcp-grocy` prior art contributes to it (verdict: rebuild the protocol layer,
+salvage packaging and selected logic). The one idea worth carrying across is the second
+half of the struck sentence — tools declared in one place with schema, permission and
+handler together, rather than a switch — which the spec adopts.
 
 ### API
 
-Purely additive. New routes under `/api/mcp`, one new API key type, no change to any
-existing endpoint.
+Additive, and additive in a smaller way than this plan first claimed: **no new routes in
+this server at all**. The sidecar consumes the existing REST surface, so what 02 needs
+from this repository is the surface being complete and frozen — [14](14-contract-and-regression-scaffolding.md)
+piece 2 — rather than new endpoints. One new API key type is the whole server-side change.
+
+**Client impact: none.** No existing endpoint changes. A new `key_type` value is additive
+to `/objects/api_keys` consumers, of which there are none outside this fork.
 
 ## Open questions
 

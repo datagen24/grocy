@@ -48,6 +48,18 @@ installs and merges into an existing one. The importer resolves names to ids as 
 Writing directly through the service layer rather than over HTTP avoids needing an API key
 and keeps it usable during first setup.
 
+**It mirrors `bin/victual-db-import` in shape and takes the opposite trigger stance, which
+is deliberate.** That tool disables triggers for the duration of its copy; this one needs
+them to fire. Both are right, because they are importing different things. `db-import`
+replays rows that are *already shaped* — they came out of a migrated database with every
+derived table already consistent — so letting triggers run would recompute the same values
+from data that already reflects them, and on the change-tracking tables it would be worse
+than redundant. A seed dataset is the opposite case: it is raw master data with no derived
+rows behind it, so the triggers are exactly what produces the state a hand-written fixture
+would otherwise have to fake. Recorded because the two tools sit next to each other in
+`bin/` and read as an inconsistency, and the next person to notice should not "fix" either
+one to match the other. `db/pgsql/README.md` documents the importer's side.
+
 ### Datasets shipped
 
 Start with one small, obviously useful set rather than an ambitious library:
