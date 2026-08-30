@@ -104,6 +104,32 @@ JavaScript while deepening its reliance on Blade-injected globals.
 There is no tier-separation project on this roadmap and there does not need to be. It is
 what falls out once the API stops treating the browser as special.
 
+## What this plan now owes security
+
+[Sweep finding S29](../security-sweep.md), raised while fixing S1: `bootbox` renders its
+message with `.html()` and `toastr` ships `escapeHtml: false`, so every "are you sure you
+want to delete X" and every success toast is an HTML sink — and roughly 45 of them
+interpolate a name straight from a text column that can contain markup. It is demonstrated,
+not theoretical: a product named with an entity-encoded `<img onerror>` executes on view.
+
+This lands in the middle of what this plan already does. Step 2 builds one `request()` core;
+step 3 replaces ~29 clone scripts with two factories. The delete-confirm dialog alone appears
+31 times and is on this plan's own list of things to collapse — so the factory that replaces
+it is the natural place for the escaping to become structural rather than per-site.
+
+Two consequences for the plan as written:
+
+- **The factories escape by default.** `VictualEntityList`'s delete confirmation takes a
+  name and escapes it; nothing that goes through them can reintroduce this. That is worth
+  more than 31 correct call sites, because it is the version that stays correct.
+- **A global `toastr.options.escapeHtml = true` is not the shortcut it looks like.** Ten
+  messages carry deliberate markup, including the Undo button in the consume toast, which
+  the flag would render as visible tag text. The toasts need escaping at the interpolation,
+  not at the sink.
+
+Until this plan lands, the sites stay open and recorded. The one file the security hotfix
+already opened, `mealplan.js`, is fixed there.
+
 ## Proposed change
 
 The order matters: **fix the bugs first, then refactor.** A refactor that also changes

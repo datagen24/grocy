@@ -107,11 +107,32 @@ already live — and it is not fixed here, because fixing it means escaping at t
 hotfix is required not to touch. Making the *storage* safe instead is not available either:
 that is precisely the change that stores `M&amp;M's` for every name.
 
-So the accurate claim is narrower: **S1 is closed for the Blade renders and the
-`.html($x->description)` sinks, and remains open through `mealplan.js` until
-[12](plans/12-frontend-shared-core.md) escapes there.** `equipment.js` and
-`components/userfieldsform.js` build markup the same way and want the same pass when 12
-opens them.
+**Then the review overruled the deferral, and a survey found the class is much larger than
+the one file.** "File ownership by plan 12 is not a security boundary" is right, so the
+`mealplan.js` sinks are fixed here: `products.name` and `meal_plan.note` are escaped before
+they are concatenated into markup, `recipes.name` is escaped again where it is read back out
+of a `data-` attribute (`.attr()` returns the decoded string, so the escaping applied when
+the attribute was written is not in effect), and the consume toast escapes the product name
+it interpolates.
+
+Proved rather than asserted, in a browser against a stored payload: without the fix a
+meal-plan note of `&lt;img src=x onerror=window.__xss=2&gt;` sets `window.__xss` on page
+load; with it, `window.__xss` is unset and the payload renders as text. The product-name
+path is the same one-line change at the top of the same function and is verified by reading
+it, not in the browser — a meal-plan product entry will not render without a quantity-unit
+conversion for the product, which this fixture had no way to produce.
+
+The survey that went with it turned up **S29**: this is a systemic pattern, not three lines.
+Roughly 45 sites across ~25 files feed unescaped names into `bootbox` and `toastr`, both of
+which render their message as HTML by construction. That is recorded as its own finding
+rather than fixed here, because it is ~45 individual judgements about whether a variable is
+display-only, in exactly the files [12](plans/12-frontend-shared-core.md) rewrites — and
+because a security change that large deserves its own review rather than riding in at the
+end of this one.
+
+So the accurate claim, finally: **S1's storage-side behaviour is closed, the Blade renders
+and the `.html($x->description)` sinks are safe, `mealplan.js` is fixed, and S29 is the
+same class in another ~45 places, open and scheduled.**
 
 Two things follow from that split, and both are part of this change:
 
@@ -283,6 +304,7 @@ form shows its location field again.
 
 | # | Sev | Finding | Where | Fix |
 |---|---|---|---|---|
+| S29 | **High** | **Every "are you sure" dialog and success toast is an HTML sink fed an unescaped name.** Two libraries render their message as HTML by construction: `bootbox` does `body.find('.bootbox-body').html(options.message)`, and `toastr` ships `escapeHtml: false` as its default and this fork never sets it. The frontend then builds those messages by interpolating a name straight from a text column — `__t('Are you sure you want to delete location "%s"?', objectName)` where `objectName` came from a `data-*-name` attribute, and `toastr.success(__t('…%s…', result.product.name))`. Around 45 sites across ~25 files: roughly 24 delete/action confirmations and 20 success toasts, over `products.name`, `recipes.name`, `locations.name`, `chores.name`, `batteries.name`, `tasks.name`, `quantity_units.name`, `product_groups.name`, `shopping_lists.name`, `users.username`, `api_keys.description` and more. `components/productamountpicker.js` builds `<option>` markup from `quantity_units.name` the same way. **Demonstrated, not inferred**: a product named `&lt;img src=x onerror=…&gt;` is stored as a live tag by the S1 path and executes on view. The existing `.escapeHTML()` convention is one call site in the whole tree (`mealplan.js:169`), and even that is defeated when the value is written into a `data-*` attribute and read back with `.attr()`, which returns the decoded string. | `public/viewjs/*.js`, `public/js/victual.js` (toastr options) | Escape at each interpolation. A global `toastr.options.escapeHtml` is **not** available as a shortcut: ten messages carry deliberate markup, including the Undo button in the consume toast, which that flag would turn into visible tag text. Each site also needs checking that the variable is not reused for a URL or an API parameter. |
 | S28 | **Med** — *fixed* | **`javascript:` URIs in userfield links.** `components/userfields_tbody.blade.php` renders `<a href="{{ $userfieldObject->value }}">` for `USERFIELD_TYPE_LINK` and the decoded `$link` for `LINK_WITH_TITLE`. Blade's `{{ }}` escapes the *attribute* and does nothing about the *scheme*, and a userfield value is a text column — no markup for HTMLPurifier to act on, and `URI.AllowedSchemes` only governs hrefs inside purified HTML, never a bare column value a view drops into an `href`. So any `MASTER_DATA_EDIT` account can store `javascript:…` and it runs in this origin on click. Missed by the original sweep because its output-escaping pass looked for unescaped rendering, and this value is escaped; the category it lacked is URL-scheme sinks. Raised in review of the hotfix. | `views/components/userfields_tbody.blade.php`, `helpers/extensions.php` | Fixed in the hotfix: `SafeExternalUrl()` allows relative URLs plus `http`, `https` and `mailto`, and answers `#` otherwise. The probe strips whitespace and control characters before reading the scheme, because browsers ignore those inside one. The value is still shown as the link text, so nothing is hidden — it just does not navigate. |
 | S27 | **Low** | **The permissions API stores `permission_id` unvalidated, and a wrong value fails silently.** `SetPermissions` (`PUT`) and `AddPermission` (`POST`) write the body's `permission_id` into `user_permissions` verbatim — no check that it exists in `permission_hierarchy`, and the column takes a string. `PUT …/permissions` with `{"permissions":["STOCK"]}` answers 204 and writes a row that grants nothing, because `uihelper_user_permissions` joins on the numeric id. The failure is closed rather than open — the user ends up with *fewer* permissions, not more — but an administrator is told the grant succeeded when it did not, which is the same class of silent authorization failure as R1. Found while building a low-privilege account to verify S2's permission gate. | `controllers/Api/UsersApiController.php::SetPermissions`, `::AddPermission` | Validate each id against `permission_hierarchy` and answer 400 otherwise. Body-schema validation is 14 piece 2's (S16); this one is small enough to ride with 15-C1's user-permission work in wave 2. |
 
