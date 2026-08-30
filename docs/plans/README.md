@@ -44,7 +44,7 @@ the gate's wording at the same time, or the wording quietly becomes a claim nobo
 |---|---|---|---|---|---|
 | 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0) |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
-| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list | — | medium | draft |
+| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | draft — **carries a High finding** since 2026-08-30 |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
@@ -142,6 +142,14 @@ rename and the registry claims happen at announcement time, not in a commit.
   code, and a config change is all it takes to falsify. The guard is a few lines and moves
   with the class when 15-C1 rewrites it. S5 remains the reason S4 mattered — an
   auto-created reverse-proxy user still gets ADMIN — and stays in this wave.
+- **S29 is 12's, and changes what deferring 12 costs.** `bootbox` renders its message with
+  `.html()` and `toastr` defaults to `escapeHtml: false`, so every delete confirmation and
+  every success toast is an HTML sink — and ~45 of them interpolate a name from a text
+  column that can contain markup. It is 12's because the factories that plan builds absorb
+  the confirmations structurally rather than 31 times over. The ordering does not change;
+  the reasoning does. "12 before 05/06/08" was about duplication and is now also about
+  exposure, since every list/form pair added first is another copy of the vulnerable
+  dialog.
 - **Three sweep items are constraints on plans, not work of their own.** S11 (the
   query-string API key path) must not be inherited by [02](02-mcp-endpoint.md)'s bearer
   seam, and S4's trusted-proxy pattern is the model for it; S14 (barcode filename and
@@ -327,7 +335,10 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   (`.dockerignore`, non-root `USER`) is 10's, and 01 inherits S2's per-group
   extension allow-list and S10's upload cap when it moves storage into the database —
   a blob column with no size limit is the same DoS with a different disk.
-- **Track B: 12 frontend shared core.** Land steps 1–2 as their own PR: the four latent
+- **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
+  3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
+  is going to be long, pull the ~20 toast sites forward on their own, since they need no
+  factory and close most of the exposure. Land steps 1–2 as their own PR: the four latent
   bug fixes plus the `request()` core with `timeout`/`onerror`. Note what that PR does
   *not* deliver — all 148 `console.error` handlers are passed explicitly, so the default
   error toast cannot fire until they are deleted, and those deletions belong to the
@@ -442,7 +453,19 @@ generated client is generated twice.
   to 15's non-breaking table so it has a home; it needs no wave.
 - **S27**, found while verifying the hotfix — the permissions API accepts an unvalidated
   `permission_id` and silently grants nothing when it is not a real one. Small, and in
-  the file 15-C1 opens, so it rides with wave 2 rather than getting a slot.
+  the file 15-C1 opens, so it rides with wave 2 rather than getting a slot — but see the
+  RBAC note below, which it now waits on.
+- **An RBAC plan is in draft on its own branch** (2026-08-30), and several permission
+  findings are parked against it rather than being solved piecemeal: **S5**
+  (`DEFAULT_PERMISSIONS = ADMIN`), **S6** (`USERS_EDIT` can reset an admin's password),
+  **S27** above, the `userpictures` "may edit some user" residual from the hotfix, and the
+  permissions page's `ADMIN`-versus-`USERS_READ` mismatch that
+  [14](14-contract-and-regression-scaffolding.md)'s section 2b turned up. They are one
+  finding wearing five hats: there is no permission *model* here, only thirty constants and
+  a hierarchy view, so each fix would otherwise be a guess at what the model is about to
+  say. When that plan lands it takes a number and these move under it; wave 2's auth work
+  should be read against it before it starts, in the way 17 was supposed to be read before
+  11 and 16.
 - **Not scheduled, recorded**: sweep S20–S22 and S24 (Host-header redirects, wildcard
   CORS, integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to
   tags). Each is a one-liner that rides with whichever wave opens the file; S21 waits on

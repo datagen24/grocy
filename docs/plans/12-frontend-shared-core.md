@@ -6,7 +6,9 @@ those copies have already accumulated.
 **Depends on:** nothing. Must land before [05](05-store-shopping-lists.md),
 [06](06-location-barcodes.md) and [08](08-nested-locations.md) add more list/form pairs to
 copy from.
-**Status:** draft for review.
+**Status:** draft for review — **and now carries sweep finding S29**, a High stored-XSS
+class across ~45 sites, assigned here on 2026-08-30. That makes this the only hardening
+plan with live security content and is the strongest argument for its position in wave 1.
 
 ## Today
 
@@ -104,31 +106,20 @@ JavaScript while deepening its reliance on Blade-injected globals.
 There is no tier-separation project on this roadmap and there does not need to be. It is
 what falls out once the API stops treating the browser as special.
 
-## What this plan now owes security
+## This plan now carries a live security finding
 
-[Sweep finding S29](../security-sweep.md), raised while fixing S1: `bootbox` renders its
-message with `.html()` and `toastr` ships `escapeHtml: false`, so every "are you sure you
-want to delete X" and every success toast is an HTML sink — and roughly 45 of them
-interpolate a name straight from a text column that can contain markup. It is demonstrated,
-not theoretical: a product named with an entity-encoded `<img onerror>` executes on view.
+[Sweep S29](../security-sweep.md), raised while fixing S1 on the wave 0.5 hotfix branch and
+assigned here: `bootbox` renders its message with `.html()` and `toastr` ships
+`escapeHtml: false`, so every "are you sure you want to delete X" and every success toast is
+an HTML sink — and roughly 45 of them interpolate a name straight from a text column that can
+contain markup. Demonstrated rather than theoretical: a product named with an entity-encoded
+`<img onerror>` executes on view.
 
-This lands in the middle of what this plan already does. Step 2 builds one `request()` core;
-step 3 replaces ~29 clone scripts with two factories. The delete-confirm dialog alone appears
-31 times and is on this plan's own list of things to collapse — so the factory that replaces
-it is the natural place for the escaping to become structural rather than per-site.
-
-Two consequences for the plan as written:
-
-- **The factories escape by default.** `VictualEntityList`'s delete confirmation takes a
-  name and escapes it; nothing that goes through them can reintroduce this. That is worth
-  more than 31 correct call sites, because it is the version that stays correct.
-- **A global `toastr.options.escapeHtml = true` is not the shortcut it looks like.** Ten
-  messages carry deliberate markup, including the Undo button in the consume toast, which
-  the flag would render as visible tag text. The toasts need escaping at the interpolation,
-  not at the sink.
-
-Until this plan lands, the sites stay open and recorded. The one file the security hotfix
-already opened, `mealplan.js`, is fixed there.
+That changes this plan's status. It was drift cleanup with no security content and no plan
+blocked on it; it is now the fix for a **High** finding, and the "12 before 05/06/08"
+ordering carries a second reason — every list/form pair added before this lands is another
+copy of the vulnerable dialog. Step 3a below is the work; it is why this plan should be
+scheduled sooner rather than when it is convenient.
 
 ## Proposed change
 
@@ -200,6 +191,46 @@ but their 9 handlers are on the same list and are deleted in a pass of their own
 Convert **one** pair first (`locations` is the smallest and is also what
 [06](06-location-barcodes.md) and [08](08-nested-locations.md) will extend), verify it,
 then do the rest mechanically.
+
+### Step 3a — the factories escape by default, and the stragglers are swept
+
+Same step, stated separately because it is the security half and has its own acceptance
+test.
+
+**Structural, not per-site.** `Victual.EntityList`'s delete confirmation takes the entity
+name as *data* and escapes it on the way into the message; no caller can pass markup
+through it. That is worth more than 31 correct call sites, because it is the version that
+stays correct when someone adds the thirty-second. The same applies to whatever the factory
+does with success toasts.
+
+**What the factories do not cover** has to be swept by hand in the same step, because
+leaving half a class fixed is how S1's claim went wrong once already:
+
+- the ~20 `toastr.success/info` calls that interpolate a name — these are in page scripts
+  (`consume.js`, `purchase.js`, `transfer.js`, `inventory.js`, `stockoverview.js`,
+  `stockentries.js`, `choresoverview.js`, `batteriesoverview.js`, `tasks.js`, `recipes.js`,
+  `choretracking.js`, `batterytracking.js`, `shoppinglistitemform.js`), not in clone
+  scripts, so no factory reaches them;
+- `components/productamountpicker.js`, which builds `<option>` markup from
+  `quantity_units.name`/`name_plural` by concatenation;
+- `manageapikeys.js` and `shoppinglist.js`, whose confirmations read from a `data-`
+  attribute or an `<option>`'s text rather than through a factory.
+
+**Two traps worth writing down before someone finds them the hard way:**
+
+- **`toastr.options.escapeHtml = true` is not the one-line fix it appears to be.** Ten
+  messages carry deliberate markup — including the Undo button in the consume toast, which
+  the flag turns into visible tag text. The toasts need escaping at the interpolation, not
+  at the sink.
+- **Escaping a value into a `data-` attribute does not keep it escaped.** `.attr()` returns
+  the decoded string, so a value escaped when the attribute was written arrives raw at the
+  click handler that reads it back. This is exactly how `mealplan.js`'s single existing
+  `.escapeHTML()` call was defeated. Escape at the point of use, every time, or hold the
+  value as data and never round-trip it through the DOM.
+
+The one file already fixed is `mealplan.js`, done on the hotfix branch because the review
+there declined to let a live XSS wait for a plan boundary. Its fix is the pattern for the
+rest.
 
 ### Step 4 — one embedded-dialog reload convention
 
@@ -277,10 +308,24 @@ Everything here is browser behaviour, so verification is a booted instance and a
    top-level files and the 5 under `components/`, for the handlers that are pure
    logging, with the survivors being deliberate and documented (Q2). This is step 3's
    exit criterion, not step 2's — after step 2 the count is unchanged by design.
-5. **Two datetimepickers on one page.** The meal plan and stock entry forms are the
+5. **S29 is closed, proved with a payload rather than by reading the diff.** Give one
+   record of each affected kind — a product, a location, a chore, a quantity unit, a
+   shopping list, an API key — a name of `&lt;img src=x onerror=window.__xss=1&gt;`, which
+   the sanitiser stores as a live tag because those are text columns. Then, on every page
+   that lists or acts on them: open the delete confirmation, trigger the success toast, and
+   confirm `window.__xss` is still undefined and the name renders as visible text. Do it
+   once on the unfixed head first, so the check is known to be capable of failing — on
+   `mealplan.js` that check reported `window.__xss === 2` before its fix and unset after,
+   and anything weaker than that is not evidence.
+
+   The `grep` half is worth having too, and is not sufficient on its own: no `.html(`,
+   `.append(`, `bootbox.` or `toastr.` call in `public/viewjs` may interpolate a bare
+   `.name`, `.username` or `.description` that is not one of the five HTML columns. A
+   reviewer can check that; only the payload check proves it.
+6. **Two datetimepickers on one page.** The meal plan and stock entry forms are the
    places two pickers coexist; after step 5 both must set, clear and validate
    independently, including the "clear" and "now" shortcuts.
-6. **Both engines, for step 1 only.** The consume fix is server-side and writes
+7. **Both engines, for step 1 only.** The consume fix is server-side and writes
    `stock_log`; run `trigdifftest.php`'s `01_purchase_consume_undo.sql` before and after
    to confirm nothing about the write path changed on either engine. Steps 2–6 are
    engine-independent and do not need this.
@@ -305,6 +350,13 @@ can be done in parallel with 10, 11, 13 or 14.
 those plans would otherwise have to keep consistent, and it de-risks
 [04 seed datasets](04-seed-datasets.md) indirectly: a seeded test instance is much more
 useful when a failed import says so instead of logging to a console nobody has open.
+
+**S29 sharpens the ordering rather than changing it.** "12 before 05/06/08" was an argument
+about duplication; it is now also an argument about exposure, since each list/form pair
+those plans add before this lands is another copy of a vulnerable delete dialog. The
+finding does not make 12 block anything it did not block before — it makes the cost of
+deferring 12 a security cost rather than a tidiness one, and it means the plan should not
+be the one that slips when wave 1 gets busy.
 
 ## Open questions
 
@@ -428,3 +480,15 @@ files. Step 3 is the bulk: one pair converted carefully, then ~35 mechanical con
 with the baseline from verification check 1 as the acceptance list. Steps 4–6 are tidy-up
 that can ride along. Worth splitting: 1 and 2 are worth landing on their own even if the
 factories wait.
+
+**S29 adds to step 3 rather than to the total.** The factories absorb the ~24 confirmation
+dialogs at no extra cost, since those are being rewritten anyway. What it does add is the
+~20 toast sites in page scripts that no factory touches, plus `productamountpicker.js` and
+two irregular confirmations — each an individual judgement about whether that variable is
+display-only or also feeds a URL or an API parameter, so an afternoon of care rather than
+a `sed`. The payload verification is its own sitting.
+
+**One consequence for the split:** if steps 1 and 2 land alone and the factories wait,
+S29 waits with them. If that gap is going to be long, the ~20 straggler sites are worth
+pulling forward on their own — they need no factory and would close most of the exposure
+while step 3 is still being scheduled.

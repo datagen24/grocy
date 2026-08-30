@@ -7,6 +7,16 @@ plans one item at a time.
 ordering fix there, the refactor here);
 [14](14-contract-and-regression-scaffolding.md) for anything verified by result-set diff.
 **Status:** draft for review. Deliberately a grab bag — see "Why one plan" below.
+15-B2 (session cookie) landed early, in the wave 0.5 hotfix; see its Executed note.
+
+> **Read the RBAC plan before starting C1.** One is in draft on its own branch as of
+> 2026-08-30, and the sweep's permission findings — S5, S6, S27 and the `userpictures`
+> residual — are parked against it rather than being fixed piecemeal here. C1's
+> authenticator extraction is the natural place to *carry* whatever that plan decides, and
+> the wrong place to pre-empt it: a refactor that hardens a permission model about to be
+> replaced is work done twice, which is the argument this roadmap already accepted for
+> deferring the auth findings once. The roadmap's own rule about reading 17 before 11 and
+> 16 exists because that was not done; this is the same rule, applied on time.
 
 ## Why one plan
 

@@ -272,6 +272,14 @@ may be intentional — loosening a resolved-permission read from `ADMIN` to `USE
 has consequences the server-rendered page's stricter phrasing might have been protecting.
 Both want a recorded answer, in the manner of this roadmap's other open questions.
 
+> **The permissions one is deferred to an RBAC plan**, in draft on its own branch as of
+> 2026-08-30. It is not a missing endpoint but a question about who may see the permission
+> model, and answering it here would fix a number in one view while the model it reflects
+> is being redesigned. The sweep lists the other findings waiting on the same plan. What
+> this section still owes regardless: whatever that plan lands on has to be reachable
+> through the API before piece 2 freezes the contract, since the permissions page is one of
+> the eight.
+
 **Caveat on the measurement.** The view definitions were read from the SQLite migration
 files, taking the highest-numbered migration touching each view as authoritative. The
 PostgreSQL definitions in `db/pgsql/` were not cross-checked, and this fork has real

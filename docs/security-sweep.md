@@ -130,6 +130,14 @@ display-only, in exactly the files [12](plans/12-frontend-shared-core.md) rewrit
 because a security change that large deserves its own review rather than riding in at the
 end of this one.
 
+**S29 is folded into [12](plans/12-frontend-shared-core.md) as its step 3a**, decided
+2026-08-30, rather than left as an unowned finding. The factories that plan already builds
+absorb the ~24 confirmation dialogs structurally — the delete-confirm dialog it exists to
+collapse appears 31 times — and the ~20 toast sites, `productamountpicker.js` and two
+irregular confirmations are swept by hand in the same step, since no factory reaches them.
+12's status changes with it: it was drift cleanup with no security content, and is now the
+fix for a High finding, which is the strongest argument for its place in wave 1.
+
 So the accurate claim, finally: **S1's storage-side behaviour is closed, the Blade renders
 and the `.html($x->description)` sinks are safe, `mealplan.js` is fixed, and S29 is the
 same class in another ~45 places, open and scheduled.**
@@ -304,7 +312,7 @@ form shows its location field again.
 
 | # | Sev | Finding | Where | Fix |
 |---|---|---|---|---|
-| S29 | **High** | **Every "are you sure" dialog and success toast is an HTML sink fed an unescaped name.** Two libraries render their message as HTML by construction: `bootbox` does `body.find('.bootbox-body').html(options.message)`, and `toastr` ships `escapeHtml: false` as its default and this fork never sets it. The frontend then builds those messages by interpolating a name straight from a text column — `__t('Are you sure you want to delete location "%s"?', objectName)` where `objectName` came from a `data-*-name` attribute, and `toastr.success(__t('…%s…', result.product.name))`. Around 45 sites across ~25 files: roughly 24 delete/action confirmations and 20 success toasts, over `products.name`, `recipes.name`, `locations.name`, `chores.name`, `batteries.name`, `tasks.name`, `quantity_units.name`, `product_groups.name`, `shopping_lists.name`, `users.username`, `api_keys.description` and more. `components/productamountpicker.js` builds `<option>` markup from `quantity_units.name` the same way. **Demonstrated, not inferred**: a product named `&lt;img src=x onerror=…&gt;` is stored as a live tag by the S1 path and executes on view. The existing `.escapeHTML()` convention is one call site in the whole tree (`mealplan.js:169`), and even that is defeated when the value is written into a `data-*` attribute and read back with `.attr()`, which returns the decoded string. | `public/viewjs/*.js`, `public/js/victual.js` (toastr options) | Escape at each interpolation. A global `toastr.options.escapeHtml` is **not** available as a shortcut: ten messages carry deliberate markup, including the Undo button in the consume toast, which that flag would turn into visible tag text. Each site also needs checking that the variable is not reused for a URL or an API parameter. |
+| S29 | **High** — *assigned to [12](plans/12-frontend-shared-core.md)* | **Every "are you sure" dialog and success toast is an HTML sink fed an unescaped name.** Two libraries render their message as HTML by construction: `bootbox` does `body.find('.bootbox-body').html(options.message)`, and `toastr` ships `escapeHtml: false` as its default and this fork never sets it. The frontend then builds those messages by interpolating a name straight from a text column — `__t('Are you sure you want to delete location "%s"?', objectName)` where `objectName` came from a `data-*-name` attribute, and `toastr.success(__t('…%s…', result.product.name))`. Around 45 sites across ~25 files: roughly 24 delete/action confirmations and 20 success toasts, over `products.name`, `recipes.name`, `locations.name`, `chores.name`, `batteries.name`, `tasks.name`, `quantity_units.name`, `product_groups.name`, `shopping_lists.name`, `users.username`, `api_keys.description` and more. `components/productamountpicker.js` builds `<option>` markup from `quantity_units.name` the same way. **Demonstrated, not inferred**: a product named `&lt;img src=x onerror=…&gt;` is stored as a live tag by the S1 path and executes on view. The existing `.escapeHTML()` convention is one call site in the whole tree (`mealplan.js:169`), and even that is defeated when the value is written into a `data-*` attribute and read back with `.attr()`, which returns the decoded string. | `public/viewjs/*.js`, `public/js/victual.js` (toastr options) | Escape at each interpolation. A global `toastr.options.escapeHtml` is **not** available as a shortcut: ten messages carry deliberate markup, including the Undo button in the consume toast, which that flag would turn into visible tag text. Each site also needs checking that the variable is not reused for a URL or an API parameter. |
 | S28 | **Med** — *fixed* | **`javascript:` URIs in userfield links.** `components/userfields_tbody.blade.php` renders `<a href="{{ $userfieldObject->value }}">` for `USERFIELD_TYPE_LINK` and the decoded `$link` for `LINK_WITH_TITLE`. Blade's `{{ }}` escapes the *attribute* and does nothing about the *scheme*, and a userfield value is a text column — no markup for HTMLPurifier to act on, and `URI.AllowedSchemes` only governs hrefs inside purified HTML, never a bare column value a view drops into an `href`. So any `MASTER_DATA_EDIT` account can store `javascript:…` and it runs in this origin on click. Missed by the original sweep because its output-escaping pass looked for unescaped rendering, and this value is escaped; the category it lacked is URL-scheme sinks. Raised in review of the hotfix. | `views/components/userfields_tbody.blade.php`, `helpers/extensions.php` | Fixed in the hotfix: `SafeExternalUrl()` allows relative URLs plus `http`, `https` and `mailto`, and answers `#` otherwise. The probe strips whitespace and control characters before reading the scheme, because browsers ignore those inside one. The value is still shown as the link text, so nothing is hidden — it just does not navigate. |
 | S27 | **Low** | **The permissions API stores `permission_id` unvalidated, and a wrong value fails silently.** `SetPermissions` (`PUT`) and `AddPermission` (`POST`) write the body's `permission_id` into `user_permissions` verbatim — no check that it exists in `permission_hierarchy`, and the column takes a string. `PUT …/permissions` with `{"permissions":["STOCK"]}` answers 204 and writes a row that grants nothing, because `uihelper_user_permissions` joins on the numeric id. The failure is closed rather than open — the user ends up with *fewer* permissions, not more — but an administrator is told the grant succeeded when it did not, which is the same class of silent authorization failure as R1. Found while building a low-privilege account to verify S2's permission gate. | `controllers/Api/UsersApiController.php::SetPermissions`, `::AddPermission` | Validate each id against `permission_hierarchy` and answer 400 otherwise. Body-schema validation is 14 piece 2's (S16); this one is small enough to ride with 15-C1's user-permission work in wave 2. |
 
@@ -342,6 +350,28 @@ a booted-instance verification (upload an SVG, confirm it downloads rather than 
 `Set-Cookie` inspected; a stored `&lt;script&gt;` round-trips as text). R1 rides in the
 same PR because it is two lines and its verification (open the consume form with
 location tracking on) is the same booted instance.
+
+**The permission-model findings are waiting on an RBAC plan.** As of 2026-08-30 one is in
+draft on its own branch, and the items below are deliberately *not* being solved piecemeal
+ahead of it, because each of them is a symptom of the same thing: there is no model here,
+only thirty constants and a hierarchy view. What that plan decides, these inherit —
+
+- **S5** (`DEFAULT_PERMISSIONS = ['ADMIN']`) is a question about what a newly created user
+  should be, which is a model question and not a config default.
+- **S6** (`USERS_EDIT` can reset an admin's password) needs "may A administer B", which
+  does not exist today in any form.
+- **S27** (unvalidated `permission_id`, silently granting nothing) is a validation bug whose
+  fix depends on what a permission *is* once the model says so.
+- **The `userpictures` residual** below — "may edit some user" standing in for "may edit
+  this user" — is the same gap in miniature, and its current fix is a filename comparison
+  precisely because there is nothing better to ask.
+- **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch**, recorded in
+  [14](plans/14-contract-and-regression-scaffolding.md)'s section 2b, is a question about
+  who may *see* the model rather than change it.
+
+S4 is not on that list: it was about trusting a header, not about permissions, and it
+landed in the hotfix. S5 remains the reason it mattered — an auto-created reverse-proxy user
+still gets ADMIN — which is a good illustration of why the rest are worth doing together.
 
 S4–S6 (reverse proxy, default permissions, user edit) belong with 11/15-C1 in wave 2,
 where the auth files are open anyway — but 15-B2 (S3) should not wait for them.
