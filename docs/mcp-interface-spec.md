@@ -249,7 +249,7 @@ candidate later if substring proves insufficient in use — recorded, not built)
 
 `shopping_list_id` is already plural-ready for
 [plan 05](plans/05-store-shopping-lists.md); when 05 lands, a `list` descriptor
-(`id, name, store`) section is added to the output (additive).
+(`id, name, shopping_location_id`) section is added to the output (additive).
 
 ### 5.6 `recipes_i_can_cook`
 
@@ -273,7 +273,19 @@ write wave is an implementation task, not a design task:
 |---|---|---|
 | `add_to_shopping_list` | `product_id` (req) · `amount?` (default 1) · `shopping_list_id?` · `note?` | `POST /api/stock/shoppinglist/add-product` |
 | `consume_product` | `product_id` (req) · `amount` (req) · `spoiled?: boolean` | `POST /api/stock/products/{id}/consume` |
-| `purchase_product` | `product_id` (req) · `amount` (req) · `price?` · `due_date?` · `store_id?` | `POST /api/stock/products/{id}/add` |
+| `purchase_product` | `product_id` (req) · `amount` (req) · `price?` · `due_date?` · `shopping_location_id?` | `POST /api/stock/products/{id}/add` |
+
+**On `shopping_location_id`, which reads worse than `store_id` and is the right name
+anyway.** Earlier drafts of this table said `store_id`, and the household vocabulary is
+"store". But [05](plans/05-store-shopping-lists.md)'s Q4 and
+[15](plans/15-deliberate-cleanup.md)'s Q5 both considered renaming
+`shopping_locations` → `stores` and both declined: it is an `ExposedEntity` name, a table,
+a column on `stock`, `stock_log` and `shopping_list`, several views, and ~250 references
+across 63 files — the largest compatibility break available in the fork, for a nicer noun.
+A sidecar parameter named `store_id` mapping to a REST field named `shopping_location_id`
+is precisely the two-names-forever cost that decision refused, paid in a second place
+where nobody would look for it. The tool takes the field's real name. If 15-B3 is ever
+batched, this row moves with everything else.
 
 Write-tool rules, fixed now:
 

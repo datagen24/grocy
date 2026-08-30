@@ -101,6 +101,12 @@ with a clear message rather than a failure at first upload.
 No change. Same three routes, same headers, same 404 behaviour. `files` is deliberately
 **not** added to `ExposedEntity`.
 
+**Client impact: none, and the one risk to watch is not an API change.** Neither tracked
+client in [17](17-ecosystem-clients.md) uploads or fetches files. The thing that could
+reach a client is the `Content-Type` shift under Risks below — `mime_content_type($path)`
+and `finfo_buffer($bytes)` must agree, or an existing endpoint starts labelling the same
+bytes differently, which is a response change wearing no field name.
+
 ## Risks
 
 - **`mime_content_type($path)` vs `finfo_buffer($bytes)` must agree**, or `Content-Type`

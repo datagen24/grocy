@@ -28,7 +28,7 @@ Both methods fire this request upon printing:
 ```
 POST /your/printing/api/endpoint HTTP/1.1
 
-product=<productname>&grocycode=grocy:x:xxx&due_date=DD:%2021-06-09&...
+product=<productname>&grocycode=grcy:x:xxx&due_date=DD:%2021-06-09&...
 
 ```
 

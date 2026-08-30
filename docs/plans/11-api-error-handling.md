@@ -260,9 +260,33 @@ codes, and that needs to be explicit rather than slipped in:
 | Cross-origin `GET` | `Allow-Origin: *` | no CORS header unless configured |
 | API key in a query parameter | accepted | 401 |
 | `POST`/`PUT`/`DELETE` `/api/objects/{userfields\|userentities}` as a non-admin | 200 | 403 |
+| `?query[]=` or `?order=` naming a field the caller may not see | 200, filtered | 400 |
 
-That last row is Q6's answer and is a deliberate behaviour change, not a code
-correction: populating `ExposedEntityEditRequiresAdmin` turns a gate that can never fire
+The **final** row is added by [19](19-rbac.md) rather than by this plan, and is recorded
+here because this is where the status-code contract lives. It is the only shape in the
+list that goes from 200 to 400; the other rows that used to succeed now deny, with 401 or
+403. Mechanically it is one call site:
+`AssertFieldExists()` already refuses a field the entity does not have, from both the
+`query[]` and the `order` path, and it gains the caller's field policy alongside the column
+list. Note that a filter on a redacted field and a filter on a nonexistent one deliberately
+share the 400 and differ only in message — a distinct code would confirm the field exists,
+which is the hole the redaction closes. Nothing else in 19 needs a slot in the taxonomy
+above: a redacted field is a 200 with a shorter body, and a refused call is this plan's
+403, so the two are distinguishable without a new error kind.
+
+**Client impact: the largest on the roadmap after [16](16-project-rename.md), and unlike
+16's it is knowable in advance.** Every row above is a client-visible change, and the ones
+that bite are the ones where a client's *success* path moves: a client treating any
+non-2xx as "retry" now retries a 403 forever, and one that read a bodyless 401 by status
+alone now parses a JSON body it did not expect. The wildcard CORS removal is the one that
+breaks silently in a browser and not in a test. This is why the roadmap puts
+[14](14-contract-and-regression-scaffolding.md) before this plan — ~74 routes are better
+shown as a diff than asserted by hand — and why [17](17-ecosystem-clients.md)'s manifests
+want to cover status codes and response keys, not just paths.
+
+The `userfields`/`userentities` row, second from the end, is Q6's answer and is a
+deliberate behaviour change, not a code correction: populating
+`ExposedEntityEditRequiresAdmin` turns a gate that can never fire
 into one that does, and a non-admin who can edit master data today can create user fields
 today. Accepted — definition-level entities reshape the data model — but it is the one
 row here that denies something that currently succeeds, so it belongs on the

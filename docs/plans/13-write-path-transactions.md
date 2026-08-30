@@ -156,6 +156,13 @@ One second-order note: if Q1 lands on (a), the webhook fires after commit rather
 during the loop, so a label prints marginally later and — on a failed transfer — not at
 all. Nothing on the wire changes.
 
+**Client impact: none, and it is the good kind of none.** A client that retried a failed
+consume used to retry against a half-changed database and could double-count; now it
+retries against the state it started from. Behaviour a client relied on cannot have been
+relied on correctly, so there is nothing to warn about — but the *label printer* is a
+client of a sort, and it is the one thing that changes: a failed transfer no longer prints
+a label for a move that did not happen.
+
 ## Verification
 
 Row counts are not enough here, and neither is "it still works". The check has to be that

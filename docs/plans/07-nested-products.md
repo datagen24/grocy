@@ -90,6 +90,14 @@ Additive: `products_resolved` gains a `depth` column. It is not in `ExposedEntit
 public response changes. `products.parent_product_id` semantics widen but its shape does
 not change.
 
+**Client impact: no field changes, and a semantic change that is worse than one.** Every
+client holding a one-level assumption about `parent_product_id` — that a parent has no
+parent, that summing children is summing a leaf set — keeps compiling and starts being
+wrong, with no shape difference to notice. Absent is not the same as none, and this is the
+plan where the distinction has teeth: a manifest of paths and response keys, which is what
+[17](17-ecosystem-clients.md)'s item 1 builds, cannot catch it either. It is caught by
+reading each client's aggregation code, or not at all.
+
 ### UI
 The product form's parent picker currently lists candidate parents; it must exclude the
 product's own descendants, not just itself. Product lists that show a parent/child

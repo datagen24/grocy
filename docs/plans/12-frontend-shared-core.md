@@ -274,6 +274,14 @@ none, since the current behaviour is not documented anywhere and reads as a typo
 
    > **Response:** See the Q1 response below — only the documented spelling.
 
+**Client impact: one, and Q1 chose the answer that has it.** Accepting only the documented
+`transaction_type` means a client sending `transactiontype` — the current, undocumented,
+typo'd spelling — stops having its value honoured and silently gets the default. No status
+code changes and no field moves, so nothing fails loudly. Neither client
+[17](17-ecosystem-clients.md) tracks sends either spelling, which is what makes the
+stricter answer affordable; it is recorded because "no API change" was this section's
+first sentence and it is not quite true.
+
 The default error toast is a *user-visible* behaviour change with no wire-format
 component: operations that used to fail silently now say so. That is the point, but it
 will surface pre-existing failures nobody knew about. Because the handler deletions
@@ -455,6 +463,13 @@ be the one that slips when wave 1 gets busy.
    > Second, the files the question left unbucketed: `equipment.js` (192 lines),
    > `tasks.js` (278) and `stockjournal.js` are mixin adopters — list-shaped with
    > enough page-specific behaviour that the full factory would fight them.
+   >
+   > Third, added 2026-08-30: [19](19-rbac.md)'s `/role/{id}` joins the partial-clone
+   > bucket by construction — it is `userpermissions.js`'s checkbox tree bound to
+   > `role_permissions` — and 19 also edits `userpermissions.js` itself. So that list
+   > grows by one rather than the factory list growing by two, and 19's `/roles` list is
+   > the only clean factory call it brings.
+   >
    > `shoppinglist.js` (708 lines) joins `mealplan.js` and `recipes.js` in the
    > leave-alone bucket; at that size it is its own application, not a list script
    > with extras.

@@ -289,6 +289,39 @@ The Home Assistant integration does not model groups or locations and is unaffec
 The same shape recurs for [06](06-location-barcodes.md)'s `l` Grocycode type: the iOS
 app's scanner resolves `grcy:p:42` and will not recognise `grcy:l:{uuid}`.
 
+## Coupling 5 — fields that may be absent per user
+
+[19](19-rbac.md) makes `price`, `average_price`, `last_price`, `costs` and the
+price-history endpoint conditional on a `STOCK_PRICES_VIEW` leaf, enforced server-side and
+**removed** from the response rather than nulled — because a null price is a legitimate
+value in `stock_log` and has to stay distinguishable from "you may not see this". Every
+one of those fields stops being `required` on its schema.
+
+This is the additive rule's blind spot in its purest form. No route moves, no status code
+moves, no key is renamed, and the change is invisible to a diff of the route table — yet
+it can break a client for one user and not another, which no coupling here has done
+before.
+
+Whether it *does* break Grocy-SwiftUI depends on how the Swift model declares those
+properties, and this plan should not guess: if they are non-optional, a Child logging in
+from a phone gets a decoding failure on the stock list rather than a list without prices,
+and the app stops rather than degrading. Verification 5 is the check that answers it, and
+it should be run for `price` and `costs` specifically before 19's piece 2 lands.
+
+The Home Assistant exposure is **unassessed, not absent.** The custom component is a REST
+consumer — stock, volatile stock, chores, tasks, batteries, meal plan, shopping list — so
+[18](18-mqtt-state-publication.md) publishing no prices protects the MQTT path and says
+nothing about whether `pygrocy2` survives `price` disappearing from `/api/stock`. That is
+a second instance of the same check.
+
+The mechanism half of this document is what makes it cheap. The Swift module's transport
+is generated from `victual.openapi.json` after [11](11-api-error-handling.md), so if 19
+lands first the optionality is generated rather than retrofitted, and the manifests item 1
+asks for should cover response *keys* — the widening item 3 recommends after Coupling 0,
+and this is the coupling that makes it load-bearing rather than tidy.
+So the rule is **19 before the Swift generation**, which is stronger than "before the
+client work resumes": after it, every generated model is generated twice.
+
 ## Lower-exposure plans
 
 | Plan | Client exposure |
@@ -494,6 +527,19 @@ opening it. The mechanism, not the list, is the deliverable:
    stopped working.
 2. **Each plan carries a client-impact line.** One row, even when it reads "none". Absent
    is not the same as none.
+
+   > **Adopted 2026-08-30.** For the first day of this mechanism's life — this document was
+   > written 2026-08-29 — it had
+   > exactly zero adopters — this document defined it and no plan carried one, which the
+   > rigor review recorded as D2. All eighteen other plans now do, and writing them was
+   > more informative than the rule promised. Three were not "none" when the plan implied
+   > it was: **12**'s API section opens "No API change" and Q1 then chooses the strict
+   > spelling, which silently stops honouring `transactiontype`; **07**'s says no public
+   > response changes, and the change it does make is a one-level assumption quietly
+   > becoming false, which no manifest can catch; **16**'s did not exist and would have
+   > been the one line that stopped Coupling 0. The rule earns its place on cases where
+   > the shape does not move and the meaning does — which is the class of change item 1's
+   > fixtures are structurally unable to see.
 3. **This document is reviewed at [16](16-project-rename.md)** — the rename is the largest
    client-facing event on the roadmap and the one with the least code in it. *This did not
    happen*: 16 landed first, on the same day this was written. Item 2 above is what would

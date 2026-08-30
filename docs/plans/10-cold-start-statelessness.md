@@ -139,6 +139,25 @@ That removes a per-request in-memory connection and lets the image drop the exte
 `ApplicationService::GetSystemInfo()` opens the same throwaway connection for the About
 dialog; that one is cosmetic and is handled in [15](15-deliberate-cleanup.md).
 
+### Harden the image this plan is the first to publish — sweep S25
+
+The `Dockerfile` runs as root and does `COPY . /app` with no `.dockerignore`, so `.git`
+and `data/` go into the layer; compose and CI use `victual`/`victual` for PostgreSQL. All
+of that is correct for what it is today — a dev and CI image, tmpfs database, no published
+ports — and the sweep rates it Info for exactly that reason. It stops being correct at the
+moment this plan bakes a production image from the same file, which is the step "Bake the
+cache at image build time" above describes. So: a `.dockerignore`, a non-root `USER`, and
+credentials that are not the compose defaults, landing in the same change that publishes
+the image rather than after it.
+
+**This item had two claimed owners and therefore none.** The roadmap assigned it here ("10
+is the first plan to publish an image from the Dockerfile, so sweep S25 ... is 10's") while
+the sweep's own roadmap section assigned it to [15](15-deliberate-cleanup.md)'s
+non-breaking table, and neither plan carried a row for it. It is settled here, on the
+roadmap's reasoning: 15's table is for cleanup that can land whenever a PR opens the file,
+and this cannot — it is meaningless before the production image exists and mandatory in
+the same commit as it. The rigor review's H3 records the general shape of the mistake.
+
 ### Explicitly not in scope
 
 The request-scoped `define()` constants (`VICTUAL_USER_ID`, `VICTUAL_LOCALE`, …) stay. They
@@ -174,6 +193,13 @@ plainly because they are visible to clients:
   that has no init step, and relying on "hit the page once after an update", loses that
   behaviour unless Q4 says otherwise. This is the one item in this plan that can break
   an existing deployment, and it should be in the changelog rather than discovered.
+
+**Client impact: no field changes, two behavioural ones, and both are above.** Neither
+tracked client in [17](17-ecosystem-clients.md) follows the cold-start redirect or relies
+on `GET /` to migrate — they authenticate to `/api/` and would have failed against an
+unmigrated database anyway. The exposure is deployment scripts rather than clients, which
+is the distinction 16 got wrong in the other direction: 16's premise was true of
+deployments and false of clients, and here it is the reverse.
 
 ## Verification
 
@@ -233,13 +259,26 @@ any of them — with the two seams noted below.
 because [14](14-contract-and-regression-scaffolding.md) piece 1 cannot run without it
 (see *Move migrations out of the request path*).
 
-The second seam is with [13](13-write-path-transactions.md). `DatabaseMigrationService`
-opens raw transactions of its own at lines 163 and 239, and this plan wraps the whole
-migration run in a lock. 13 converts seven service entrypoints to an `InTransaction`
-helper but deliberately leaves these two alone. That is fine as long as the helper
-counts depth rather than assuming it opens the outermost transaction — if a PHP
-migration ever calls a service through it, a depth-blind helper mis-nests. Neither plan
-owns that constraint today, so it is recorded in both.
+The second seam is with [13](13-write-path-transactions.md), and **13 has landed, so this
+is now a resolved worry rather than a live constraint.** `DatabaseMigrationService` opens
+raw transactions of its own, and this plan wraps the whole migration run in a lock; 13
+converted seven service entrypoints to an `InTransaction` helper and deliberately left
+those alone. This paragraph used to say that was fine "as long as the helper counts depth
+rather than assuming it opens the outermost transaction", and that a depth-blind helper
+would mis-nest if a PHP migration ever called a service through it.
+
+The helper that shipped does something better than counting: it asks
+`PDO::inTransaction()`. A counter would only know about transactions opened through the
+helper, so `DatabaseMigrationService`'s own would be invisible to it and the mis-nesting
+this paragraph feared would happen *because of* the counter. Asking the connection cannot
+have that blind spot. 13-Q2's recorded response chose depth counting and the
+implementation overrode it with a reason written into the docblock — the deviation is
+noted in 13's Executed section. Nothing is owed here; the constraint is discharged.
+
+What this plan still owes 13 is the other half of that docblock: it points at
+`DatabaseDialect` for "the per-engine locking used around migrations", and no such method
+exists yet because it is *this* plan's lock. Either the lock lands here and the pointer
+resolves, or the docblock is reworded first — 15-C12 carries it as the cheaper of the two.
 
 ## Open questions
 

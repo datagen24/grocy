@@ -56,6 +56,13 @@ parent needs a decision — Q2.
 - `locations_resolved` added to `ExposedEntity` so clients can fetch the tree in one call
   rather than walking parents.
 
+**Client impact: one additive field and one new entity, plus the same semantic widening
+[07](07-nested-products.md) has.** A client that renders a location name now renders a
+node in a tree; nothing forces it to notice. Milder than 07's, because a location is
+displayed far more often than it is aggregated over — but a client that builds a location
+picker from a flat list will show a flat list of names that are no longer unique in
+meaning.
+
 ### UI
 
 Location dropdowns are the visible work: they appear on purchase, consume, transfer,

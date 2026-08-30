@@ -159,6 +159,20 @@ replaced. If a freshness signal is wanted, it is a fact like any other — a `la
 timestamp sensor the household can look at or alert on — rather than a state that
 invalidates everything else.
 
+## Client impact
+
+**No HTTP client sees anything change; this plan adds a channel rather than altering one.**
+No route, status code, header or response field moves, so
+[14](14-contract-and-regression-scaffolding.md)'s snapshot is unaffected and neither is
+anything [17](17-ecosystem-clients.md) tracks over REST.
+
+The impact is that a *new* class of consumer appears with no authentication to Victual at
+all — anything holding broker credentials. That is the reason the security notes below
+draw the line where they do, and the reason [19](19-rbac.md)'s Q5 is carried here as
+question 8 rather than inherited from that plan: what goes on a retained topic is a
+visibility decision made at publish time, by this plan, for every subscriber at once, and
+there is no reader identity to gate it on afterwards.
+
 ## Verification
 
 A booted instance and a real broker, per the standard the rest of the roadmap is held to.
@@ -207,6 +221,26 @@ Not a dependency of [02](02-mcp-endpoint.md), and deliberately not shared with i
 assistant query is on-demand — it wakes the pod and asks, like any interactive client — so
 the sidecar reads the API and has no use for retained state. Keeping them separate avoids
 inventing a general "always-on read tier" that only one consumer needs.
+
+**This plan owns [19](19-rbac.md)'s Q5 rather than deferring to it, and the reason is the
+ordering.** 19 asks whether published state carries prices, offering three answers: publish
+without the visibility-gated fields, publish per-role topics, or declare MQTT an admin
+channel. It asks 18 to record which it chose — but 19's piece 2 is wave 5 and this is wave
+1, so on the roadmap as written 18 merges four waves before the plan whose question it
+defers to. That is not a deferral anyone could honour: a retained topic is *retained*, so
+an unanswered question here is not a decision postponed, it is household pricing sitting on
+the broker until something re-publishes without it.
+
+It is therefore **question 8 below**, answered here or not at all — and, like every other
+question in this plan, it carries a lean rather than a settled answer until it has a
+Response. The lean is the first option: publish no price or cost field, on any topic. It
+costs little to lean that way because it is what this plan's own rules already say — the
+entity set is facts a wall tablet would show, and the security notes below already exclude
+user records, notes fields and API keys on exactly the "anything with broker access reads
+this without authenticating to Victual" reasoning that applies to prices with more force,
+not less. Per-role topics are the option to revisit if 19's piece 2 ever gives the
+publisher a role to publish *as*; until then there is no reader identity here to gate on,
+which is 19's own framing of why this channel is the hard case.
 
 ## Open questions
 
@@ -290,6 +324,22 @@ inventing a general "always-on read tier" that only one consumer needs.
 
    > **Response:**
 
+
+8. **Does the ambient payload carry prices?** [19](19-rbac.md)'s Q5 asks this plan to
+   record the choice and offers three: publish without the fields it annotates
+   `x-visibility`, publish per-role topics, or declare MQTT an admin channel. The first is
+   the only one consistent with what is already here — per-role topics multiply the single
+   discovery payload question 2 argues for, and "admin channel" is a claim about
+   subscribers this design cannot check. I lean to **publish no prices**, with the
+   assembler dropping every `x-visibility` field rather than maintaining a second list, so
+   that MQTT never becomes the channel that answers a question the API refuses. The cost
+   is that a household wanting a spending sensor has to add one deliberately, which is the
+   right default for a payload anything on the broker can read. Note this is a constraint
+   on the assembler rather than on the entity set: question 1 can keep the stock summary
+   and still drop three columns from it.
+
+   > **Response:**
+
 ## Effort
 
 Small, and mostly not the MQTT part.
@@ -332,7 +382,20 @@ connection the application makes that is not the label printer.
   That is a real widening of who can see this data, it is accepted here because the broker
   is on the same private cluster with its own credentials, and it is a reason not to
   publish anything that would not also be shown on a wall tablet — no user records, no
-  notes fields, no API keys.
+
+  notes fields, no API keys, and — **pending question 8** — no prices. Prices are the
+  addition [19](19-rbac.md) forces and the one this plan would otherwise have missed. The
+  wall-tablet test excludes them on its own reasoning, since a broker subscriber is not a
+  logged-in user and cannot be made into one, which is why 19's Q5 is carried here rather
+  than gating that plan; but the lean is recorded as a lean until question 8 has a
+  response, like everything else in that section. The exposure is real either way: if the
+  stock summary's attributes are assembled from `uihelper_stock_current_overview`, which
+  the UI reads and which selects `value`, `last_price` and `average_price`
+  (`migrations/0252.sql:38-39`), they ship by default unless something removes them.
+  Concretely, the v1 entity set in question 1 carries none of `stock.price`,
+  `stock_log.price`, `products_average_price`, `product_price_history`,
+  `products_last_purchased.price`, `last_price`, `avg_price` or a recipe's `costs`, and
+  adding an entity that would is a change this bullet has to be edited to permit.
 - **A publish must never carry a failure into a committed write.** Short connect and
   publish timeouts, exceptions caught and logged, and the write path unaffected. The
   transaction is already closed by then, per 13.

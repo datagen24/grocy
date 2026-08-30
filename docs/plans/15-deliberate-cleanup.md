@@ -9,14 +9,17 @@ ordering fix there, the refactor here);
 **Status:** draft for review. Deliberately a grab bag — see "Why one plan" below.
 15-B2 (session cookie) landed early, in the wave 0.5 hotfix; see its Executed note.
 
-> **Read the RBAC plan before starting C1.** One is in draft on its own branch as of
-> 2026-08-30, and the sweep's permission findings — S5, S6, S27 and the `userpictures`
-> residual — are parked against it rather than being fixed piecemeal here. C1's
-> authenticator extraction is the natural place to *carry* whatever that plan decides, and
-> the wrong place to pre-empt it: a refactor that hardens a permission model about to be
-> replaced is work done twice, which is the argument this roadmap already accepted for
-> deferring the auth findings once. The roadmap's own rule about reading 17 before 11 and
-> 16 exists because that was not done; this is the same rule, applied on time.
+> **Read [19](19-rbac.md) before starting C1** — as a consistency check, not as a blocker.
+> It landed as a plan on 2026-08-30, and the sweep's permission findings that were parked
+> against it — S5, S6, S27 and the `userpictures` residual — came back to wave 2 once it
+> was read against the code: each needs the subset-of-caller *rule*, which
+> `user_permissions_resolved` and `permission_tree` already support, rather than the
+> *model* 19 defines. So C1's authenticator extraction is the place those fixes land, and
+> what 19 is owed is that the rule C1 writes still holds when a grant can arrive through a
+> role — 19 widens that view with a union and changes nothing a comparison against it
+> would see. The roadmap's own rule about reading 17 before 11 and 16 exists because that
+> was not done; this is the same rule, applied on time, and applied in the direction 19's
+> own Depends-on line states rather than against it.
 
 ## Why one plan
 
@@ -47,6 +50,16 @@ Grouped by whether they change behaviour anyone can observe.
 | C8 | Request data read three ways: PSR-7 `getQueryParams()` (most controllers), slim/http `getQueryParam()` (`GrocycodeTrait`, `ApiKeyAuthMiddleware`), raw superglobals (`BaseController:84` `$_GET['embedded']`, `ReverseProxyAuthMiddleware:47,53` `$_SERVER`, `ApplicationService:94`, `UrlManager:58-63`) | across |
 | C9 | Five `new Service()` sites against the otherwise universal `GetInstance()` convention (~320 sites): three in `DemoDataGeneratorService` (`StockService`, `ChoresService`, `BatteriesService`), one in `SqliteDialect` (`UsersService`), and `middleware/Auth/ApiKeyAuthMiddleware.php:46` (`ApiKeyService`) | services |
 | C10 | `UndoBooking`'s switch repeats the same undo-bookkeeping block seven times; `StockService` returns LessQL rows from most methods and plain `stdClass` from the raw-SQL ones, so callers must know which they got | `services/StockService.php` |
+| C11 | Delete `update.sh` — it runs `rm -rf !(data|update.sh)` and then unpacks an unsigned `releases.grocy.info/latest` zip over the result, which is upstream Grocy and would destroy this fork's schema. `.devtools/create_release_package.bat` goes with it: this fork cuts no releases. Sweep S13, rigor review H3 | `update.sh`, `.devtools/create_release_package.bat` |
+| C12 | `DatabaseService::InTransaction`'s docblock points at "`DatabaseDialect` for the per-engine locking used around migrations"; no such method exists there and none is planned before [10](10-cold-start-statelessness.md) builds one. Reword to name 10, or make the `@see` resolve. Rigor review A4 | `services/DatabaseService.php` |
+| C13 | `.gitignore`'s `/.phpdoc` is anchored to the repository root, so a phpDocumentor run in a subdirectory leaves untracked output — `branding/.phpdoc/` is the live case. Unanchor it to `.phpdoc/`. Rigor review H1 | `.gitignore` |
+| C14 | CI lints PHP with `php -l` and never runs the `node --check` sweep over `public/**/*.js` that [14](14-contract-and-regression-scaffolding.md) piece 3 specifies. Add it, or amend 14 — but not neither, which is where it has sat. Rigor review A9 | `.github/workflows/tests.yml` |
+
+C11 through C14 arrived from the two 2026-08-29 reviews rather than from the original
+architecture review, and C11 is here for a reason worth recording: both the roadmap and
+the security sweep already stated it *was* here. Neither had checked. Adding the row is
+the fix; the reason it went missing is that a sentence saying where an item lives is
+itself an unverified claim, which is the rigor review's H3 in one line.
 
 C4's status clamping is worth a sentence: `ExceptionController` sets
 `$status = $exception->getCode()` for any `HttpException`. Slim's own exceptions carry
@@ -216,6 +229,16 @@ report queries must return byte-identical result sets. C3 changes the About *pag
 `/api/system/info` — so the `sqlite_version` key changing meaning or name **is** an API
 change. Additive if a `db_version`-style key is added alongside; breaking if
 `sqlite_version` is removed. Q6.
+
+**Client impact, per group.** The non-breaking items are invisible on the wire except
+C3, which is in this section for exactly that reason — a cleanup that reaches
+`/api/system/info` is not a cleanup, and Q6 decides whether `sqlite_version` gains a
+sibling or loses its meaning. The breaking table below *is* the client-impact line for the
+rest, and B3 is the largest single client break available anywhere on the roadmap: it
+changes response *fields* on `stock`, `stock_log` and `shopping_list`, not just a path,
+which is why both 05-Q4 and 15-Q5 declined it and why
+[the MCP spec](../mcp-interface-spec.md) now uses `shopping_location_id` rather than
+minting a second name for it.
 
 **The breaking items, explicitly:**
 
