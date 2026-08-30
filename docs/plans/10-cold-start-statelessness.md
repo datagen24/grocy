@@ -139,6 +139,25 @@ That removes a per-request in-memory connection and lets the image drop the exte
 `ApplicationService::GetSystemInfo()` opens the same throwaway connection for the About
 dialog; that one is cosmetic and is handled in [15](15-deliberate-cleanup.md).
 
+### Harden the image this plan is the first to publish — sweep S25
+
+The `Dockerfile` runs as root and does `COPY . /app` with no `.dockerignore`, so `.git`
+and `data/` go into the layer; compose and CI use `victual`/`victual` for PostgreSQL. All
+of that is correct for what it is today — a dev and CI image, tmpfs database, no published
+ports — and the sweep rates it Info for exactly that reason. It stops being correct at the
+moment this plan bakes a production image from the same file, which is the step "Bake the
+cache at image build time" above describes. So: a `.dockerignore`, a non-root `USER`, and
+credentials that are not the compose defaults, landing in the same change that publishes
+the image rather than after it.
+
+**This item had two claimed owners and therefore none.** The roadmap assigned it here ("10
+is the first plan to publish an image from the Dockerfile, so sweep S25 ... is 10's") while
+the sweep's own roadmap section assigned it to [15](15-deliberate-cleanup.md)'s
+non-breaking table, and neither plan carried a row for it. It is settled here, on the
+roadmap's reasoning: 15's table is for cleanup that can land whenever a PR opens the file,
+and this cannot — it is meaningless before the production image exists and mandatory in
+the same commit as it. The rigor review's H3 records the general shape of the mistake.
+
 ### Explicitly not in scope
 
 The request-scoped `define()` constants (`VICTUAL_USER_ID`, `VICTUAL_LOCALE`, …) stay. They

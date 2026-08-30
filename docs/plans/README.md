@@ -41,6 +41,17 @@ inconsistency. S4 is now in the hotfix too, so the sentence is true again — se
 The lesson is cheaper than the fix: a deferral that contradicts a stated gate has to change
 the gate's wording at the same time, or the wording quietly becomes a claim nobody checks.
 
+There is a third input and it is about the plans rather than the code: the 2026-08-29
+[architectural rigor review](../architecture-rigor-review.md), which read the corpus
+against the tree and found twenty-nine places where the two had drifted. It gets less
+attention here than the sweep does because it produces no code, and that turned out to be
+the problem — the sweep's S-numbers are tracked item by item in this file and the rigor
+review's were tracked nowhere, so ten of its findings were quietly fixed and eleven
+quietly were not, with no way to tell which was which. It now carries [its own status
+table](../architecture-rigor-review.md#status-as-of-2026-08-30), re-verified against the
+tree, and the open rows are routed to owning plans the same way sweep findings are. Two of
+them are routing sentences in *this file* that were never true.
+
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
 | 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0) |
@@ -349,7 +360,9 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 - **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
   easier to reason about once cold start no longer rewrites requests. Together they end
   the PVC. 10 is the first plan to publish an image from the Dockerfile, so sweep S25
-  (`.dockerignore`, non-root `USER`) is 10's, and 01 inherits S2's per-group
+  (`.dockerignore`, non-root `USER`) is 10's — settled there, and in the sweep, after
+  spending a day assigned to 10 by this file and to 15 by the sweep and carried by
+  neither — and 01 inherits S2's per-group
   extension allow-list and S10's upload cap when it moves storage into the database —
   a blob column with no size limit is the same DoS with a different disk.
 - **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
@@ -483,8 +496,10 @@ unconditionally, and piece 2 is what makes them optional.
 - **Declined**: the `shopping_locations` rename (15-Q5) — revisit only if a breaking
   batch happens for other reasons.
 - **Deleted, whenever a PR next touches the root**: `update.sh` (sweep S13, rigor
-  review H3) — it wipes the install and unpacks an unsigned upstream Grocy zip. Added
-  to 15's non-breaking table so it has a home; it needs no wave.
+  review H3) — it wipes the install and unpacks an unsigned upstream Grocy zip. This
+  bullet said it was "added to 15's non-breaking table so it has a home" for a day and a
+  half while 15 had no such row; it is now **15-C11**, with
+  `.devtools/create_release_package.bat` alongside it. It needs no wave.
 - **S27**, found while verifying the hotfix — the permissions API accepts an unvalidated
   `permission_id` and silently grants nothing when it is not a real one. Small, and in
   the file 15-C1 opens, so it rides with wave 2 rather than getting a slot — but it now

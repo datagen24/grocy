@@ -394,7 +394,11 @@ Two plans should absorb items rather than a hotfix: **14 piece 2** takes the
 filter-contract line for S15; **02** must not inherit the query-string key path (S11)
 and should treat S4's trusted-proxy pattern as the model for its own bearer seam. **09**
 inherits S14 before adding lookup sources. **15**'s non-breaking table gains `update.sh`
-(S13) and `.dockerignore`/non-root (S25, before 10 publishes an image).
+(S13), as row C11. **S25 is [10](plans/10-cold-start-statelessness.md)'s, not 15's** —
+this paragraph used to send it here, the roadmap sent it to 10, and for a while neither
+plan carried it. It belongs where the production image is first published, because that is
+the commit in which it stops being an Info finding about a dev container; 10 now has the
+section.
 
 ## What the original sweep did not do
 

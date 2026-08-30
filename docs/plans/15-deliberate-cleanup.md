@@ -47,6 +47,16 @@ Grouped by whether they change behaviour anyone can observe.
 | C8 | Request data read three ways: PSR-7 `getQueryParams()` (most controllers), slim/http `getQueryParam()` (`GrocycodeTrait`, `ApiKeyAuthMiddleware`), raw superglobals (`BaseController:84` `$_GET['embedded']`, `ReverseProxyAuthMiddleware:47,53` `$_SERVER`, `ApplicationService:94`, `UrlManager:58-63`) | across |
 | C9 | Five `new Service()` sites against the otherwise universal `GetInstance()` convention (~320 sites): three in `DemoDataGeneratorService` (`StockService`, `ChoresService`, `BatteriesService`), one in `SqliteDialect` (`UsersService`), and `middleware/Auth/ApiKeyAuthMiddleware.php:46` (`ApiKeyService`) | services |
 | C10 | `UndoBooking`'s switch repeats the same undo-bookkeeping block seven times; `StockService` returns LessQL rows from most methods and plain `stdClass` from the raw-SQL ones, so callers must know which they got | `services/StockService.php` |
+| C11 | Delete `update.sh` — it runs `rm -rf !(data|update.sh)` and then unpacks an unsigned `releases.grocy.info/latest` zip over the result, which is upstream Grocy and would destroy this fork's schema. `.devtools/create_release_package.bat` goes with it: this fork cuts no releases. Sweep S13, rigor review H3 | `update.sh`, `.devtools/create_release_package.bat` |
+| C12 | `DatabaseService::InTransaction`'s docblock points at "`DatabaseDialect` for the per-engine locking used around migrations"; no such method exists there and none is planned before [10](10-cold-start-statelessness.md) builds one. Reword to name 10, or make the `@see` resolve. Rigor review A4 | `services/DatabaseService.php` |
+| C13 | `.gitignore`'s `/.phpdoc` is anchored to the repository root, so a phpDocumentor run in a subdirectory leaves untracked output — `branding/.phpdoc/` is the live case. Unanchor it to `.phpdoc/`. Rigor review H1 | `.gitignore` |
+| C14 | CI lints PHP with `php -l` and never runs the `node --check` sweep over `public/**/*.js` that [14](14-contract-and-regression-scaffolding.md) piece 3 specifies. Add it, or amend 14 — but not neither, which is where it has sat. Rigor review A9 | `.github/workflows/tests.yml` |
+
+C11 through C14 arrived from the two 2026-08-29 reviews rather than from the original
+architecture review, and C11 is here for a reason worth recording: both the roadmap and
+the security sweep already stated it *was* here. Neither had checked. Adding the row is
+the fix; the reason it went missing is that a sentence saying where an item lives is
+itself an unverified claim, which is the rigor review's H3 in one line.
 
 C4's status clamping is worth a sentence: `ExceptionController` sets
 `$status = $exception->getCode()` for any `HttpException`. Slim's own exceptions carry
