@@ -33,28 +33,36 @@ public/packages` and re-run. Without the packages the app boots unstyled.
 ## 3. PHP version gate (only if `php -v` < 8.5)
 
 `helpers/PrerequisiteChecker.php` hard-fails below `REQUIRED_PHP_VERSION`
-('8.5.0'). On a container with PHP 8.4, temporarily lower it:
+('8.5.0'). On a container with PHP 8.4, temporarily lower it — saving the
+file's exact prior state first, so the restore cannot discard uncommitted
+local edits the way a `git checkout` would:
 
 ```bash
+cp helpers/PrerequisiteChecker.php /tmp/PrerequisiteChecker.php.orig
 sed -i "s/const REQUIRED_PHP_VERSION = '8.5.0';/const REQUIRED_PHP_VERSION = '8.4.0';/" helpers/PrerequisiteChecker.php
 ```
 
-**Revert before committing anything** — this is a local run hack, never
-repo state:
+**Restore before committing anything** — this is a local run hack, never
+repo state, and the restore puts back whatever was there before, local
+edits included:
 
 ```bash
-git checkout helpers/PrerequisiteChecker.php
+mv /tmp/PrerequisiteChecker.php.orig helpers/PrerequisiteChecker.php
 ```
 
 ## 4. Data directory and boot
 
+Use a throwaway data directory — never `./data`, which may hold a real
+local `config.php` and database that an unconditional copy would destroy:
+
 ```bash
-mkdir -p data && cp config-dist.php data/config.php
-VICTUAL_MODE=demo VICTUAL_DATAPATH=$PWD/data php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
+export VDATA=$(mktemp -d)
+cp config-dist.php "$VDATA/config.php"
+VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
 sleep 2 && curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8085/
 ```
 
-Demo mode seeds a SQLite database (`data/victual_en.db`) with sample data and
+Demo mode seeds a SQLite database (`$VDATA/victual_en.db`) with sample data and
 auto-logs-in as "Demo User" — no credentials needed. First `GET /` runs
 migrations and demo generation, then 302s to the entry page.
 
@@ -62,7 +70,7 @@ migrations and demo generation, then 302s to the entry page.
 very first boot), run migrations directly and retry:
 
 ```bash
-VICTUAL_MODE=demo VICTUAL_DATAPATH=$PWD/data php bin/victual-migrate
+VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php bin/victual-migrate
 ```
 
 Smoke check — expect 200 with a large HTML body:
@@ -73,18 +81,24 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}\n" http://127.0.0.1:8085/
 
 ## 5. Screenshots (Playwright)
 
-Chromium is pre-installed at `/opt/pw-browsers/chromium`; do NOT run
-`playwright install`. `playwright-core` is not in this repo's
-`package.json` — install it in the scratchpad, not here:
+`playwright-core` is not in this repo's `package.json` — install it in a
+throwaway directory, not here, and point it at whatever Chromium the
+machine actually has (`playwright-core` bundles no browser):
 
 ```bash
-cd "$SCRATCHPAD" && npm init -y >/dev/null && npm i playwright-core >/dev/null
+WORK=$(mktemp -d) && cd "$WORK" && npm init -y >/dev/null && npm i playwright-core >/dev/null
+export CHROME_BIN=$(command -v chromium || command -v chromium-browser || echo /opt/pw-browsers/chromium)
 ```
+
+The `/opt/pw-browsers/chromium` fallback is where Anthropic agent
+containers pre-install it (there, do NOT run `playwright install`). On any
+other machine, set `CHROME_BIN` to a real Chrome/Chromium binary or this
+section does not apply.
 
 ```js
 const { chromium } = require('playwright-core');
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_BIN, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   await page.goto('http://127.0.0.1:8085/stockoverview', { waitUntil: 'networkidle' });
   await page.screenshot({ path: 'fullpage.png' });
@@ -104,10 +118,10 @@ icons on `/mealplan`. For presentable screenshots, clear the references
 first:
 
 ```bash
-php -r '$d = new PDO("sqlite:data/victual_en.db");
+php -r '$d = new PDO("sqlite:" . getenv("VDATA") . "/victual_en.db");
   $d->exec("UPDATE recipes SET picture_file_name = NULL");
   $d->exec("UPDATE products SET picture_file_name = NULL");'
-find data/storage -type f -size 0 -delete
+find "$VDATA/storage" -type f -size 0 -delete
 ```
 
 Check for the problem rather than assuming: after loading a page,

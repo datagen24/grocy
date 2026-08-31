@@ -42,7 +42,8 @@ discipline holds in full.
 One tool, one job, done well. Many small components are welcome; unmanaged components are
 not. Every fork-owned workload is:
 
-- **Stateless.** Its state lives in PostgreSQL or the broker. Killing it loses nothing.
+- **Stateless.** Its state lives in PostgreSQL, Redis, or the broker — the same
+  stores the standing invariant and ADR-0007 permit. Killing it loses nothing.
 - **Idempotent.** Every consumer is an at-least-once consumer; every side effect is
   idempotent or deduplicated. Queues are drained, not fired-and-forgotten.
 - **Unprivileged.** Non-root, read-only filesystem, no capabilities it did not ask for,
