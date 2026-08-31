@@ -55,7 +55,7 @@ them are routing sentences in *this file* that were never true.
 
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
-| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0) |
+| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0); **shortened by ADR-0008's acceptance — re-read before track A starts** |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
 | 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | draft — **carries a High finding** since 2026-08-30 |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
@@ -80,24 +80,28 @@ block where only a reader of one plan will find it.
 
 Seven decisions already standing in this codebase are recorded there, backfilled from
 [db/pgsql/README.md](../../db/pgsql/README.md) and the
-[security sweep](../security-sweep.md). Two more are **proposed and under consideration**,
-and neither is in the wave order below:
+[security sweep](../security-sweep.md). Two more were written together on 2026-08-30;
+one is now decided:
 
 - **[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)** — retire SQLite as a
-  runtime engine, keep it as an import format behind fixture-based importer tests. Would
-  supersede
-  [ADR-0001](../adr/0001-postgresql-alongside-sqlite.md) and would materially shorten
-  [10](10-cold-start-statelessness.md).
+  runtime engine, keep it as an import format behind fixture-based importer tests.
+  **Accepted 2026-08-31**, superseding
+  [ADR-0001](../adr/0001-postgresql-alongside-sqlite.md). The retirement *work* is not
+  yet scheduled in a wave, but the decision stands now, and it materially shortens
+  [10](10-cold-start-statelessness.md) — whoever opens track A reads 10 against it
+  first, since 10's SQLite-conditional sections plan around paths 0008 has marked for
+  deletion. The supported import span is 0255 through the SQLite dialect's latest
+  migration number at retirement; end fixtures land with the retirement PR.
 - **[ADR-0009](../adr/0009-database-as-the-logic-layer.md)** — move report and read logic
-  into views, so the always-awake component can answer without waking the pod. Depends on
-  0008. Claims on [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and
-  [19](19-rbac.md).
+  into views, so the always-awake component can answer without waking the pod. Still
+  **proposed**; its dependency on 0008 is now satisfied. Claims on
+  [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and [19](19-rbac.md).
 
 Two findings recorded in 0009 apply to [10](10-cold-start-statelessness.md) and
-[18](18-mqtt-state-publication.md) **whether or not either proposal is accepted**: 10's
+[18](18-mqtt-state-publication.md) **whether or not 0009 is accepted**: 10's
 `pg_advisory_lock` is session-scoped and unsafe under transaction-mode connection pooling,
-and `LISTEN` does not survive that pooling mode either. If both proposals are rejected,
-those two are lifted into their owning plans rather than discarded with them.
+and `LISTEN` does not survive that pooling mode either. If 0009 is rejected,
+those two are lifted into their owning plans rather than discarded with it.
 
 The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
 so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
@@ -260,6 +264,10 @@ response is called out explicitly in the plan rather than slipped in.
 
 **Migrations from 0256 on work on every supported engine** — a portable `NNNN.sql`, a
 per engine pair, or a documented engine-exclusive migration. See `db/pgsql/README.md`.
+With [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) accepted (2026-08-31)
+this rule is living on borrowed time: it holds as written until the retirement PR lands,
+after which the SQLite migration line freezes at its final number and new migrations are
+PostgreSQL-only without needing the exemption recorded.
 
 The third case is new. `0256.sqlite.sql` is the first to use it — a SQLite-only cast fix
 that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping
