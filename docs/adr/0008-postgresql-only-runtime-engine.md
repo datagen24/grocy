@@ -1,8 +1,12 @@
 # ADR-0008: PostgreSQL becomes the only runtime engine; SQLite becomes an import format
 
-- **Status: Proposed.** Not accepted, not scheduled, not in the roadmap's wave order.
-  Written to be argued with. Would **supersede
-  [ADR-0001](0001-postgresql-alongside-sqlite.md)** if accepted.
+- **Status: Accepted, 2026-08-31.** **Supersedes
+  [ADR-0001](0001-postgresql-alongside-sqlite.md).** How each acceptance gate was met:
+  the supported import span is stated in this record (open question 1, answered at
+  acceptance; end fixtures land with the retirement PR per the amended gate), and the
+  differential harness in `.devtools/pgsql/` stays until
+  [14](../plans/14-contract-and-regression-scaffolding.md) piece 2 exists. The
+  retirement work itself is not yet scheduled in the roadmap's wave order.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
   lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30.
@@ -37,7 +41,7 @@ someone forgets. That machinery is good — it was built because the hazards are
 it is a tax on exactly the kind of change this fork keeps making, and the deployment
 target has been PostgreSQL-only since the fork began.
 
-## Decision (proposed)
+## Decision
 
 `DB_DRIVER` stops accepting `sqlite`. **PostgreSQL becomes the sole runtime and the sole
 behavioural authority.** SQLite survives only as an external input format.

@@ -1,9 +1,8 @@
 # ADR-0001: PostgreSQL is supported alongside SQLite
 
-- **Status:** **Accepted.** The original date is not recorded; the decision landed with the
-  PostgreSQL support work, which the roadmap lists as **landed**.
-  **Under challenge by [ADR-0008](0008-postgresql-only-runtime-engine.md)**, which would
-  supersede this record rather than amend it.
+- **Status:** **Superseded by [ADR-0008](0008-postgresql-only-runtime-engine.md)**,
+  2026-08-31. Originally Accepted; the original date is not recorded — the decision
+  landed with the PostgreSQL support work, which the roadmap lists as **landed**.
 - **Decider:** datagen24 (maintainer), retrospectively — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30, retrospectively. The decision was made when the work was done;
   this file only gives it a citable name.
