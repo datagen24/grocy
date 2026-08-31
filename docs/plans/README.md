@@ -22,7 +22,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
-| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2 |
+| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2; **Q1–Q8 answered 2026-08-31** |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
@@ -168,9 +168,9 @@ rename and the registry claims happen at announcement time, not in a commit.
   question settled is household pricing sitting on the broker until someone re-publishes.
   18 therefore owns it, as its own question 8, rather than deferring to 19 — see 18's
   Sequencing — and 19-Q5 records the reassignment instead of asking 18 for an answer it
-  would give too late. Moved, not answered: 18's question 8 carries a lean like the rest
-  of that plan and has no Response yet, so read it before 19's piece 2 rather than
-  assuming it.
+  would give too late. Moved, and answered 2026-08-31: no price or cost field on any
+  topic, with pricing history going to InfluxDB as commit-time events instead (18's Q7) —
+  19's piece 2 can read 18's question 8 as settled.
 - **Anything that keeps state between requests is 10's problem too.** On a pod that scales
   to zero, in-process state is state until the next idle window. Sweep S12's login throttle
   is the live case and is recorded in [11](11-api-error-handling.md)'s sequencing: Redis or
@@ -303,6 +303,12 @@ so the division is by capability rather than by taste:
   the pod but is not the household's data. `INCR`, `SETNX`, TTLs. Sweep S12's login
   throttle is the first real case and is not optional: on this deployment an in-process
   counter is reset for free by an attacker who waits out an idle window.
+- **InfluxDB** — *record how a number changed over time*, written as events at the
+  moment they commit, never as state sampled on a schedule — a mostly-asleep pod cannot
+  sample honestly, but an event written at commit is true forever. Home Assistant's own
+  integration records entity history; the server writes price and valuation events
+  directly ([18](18-mqtt-state-publication.md)'s Q7). Queried with credentials, not
+  subscribed to — which is why it may carry the prices MQTT must not (18's Q8).
 - **PostgreSQL** — anything that must still be true after everything restarts, which is
   the household's actual data and, today, its sessions.
 
@@ -466,8 +472,9 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   cannot be made into one. The note now names prices explicitly, because 18's stock summary
   would otherwise ship `value`, `last_price` and `average_price` by default if its
   attributes are assembled from `uihelper_stock_current_overview`. It is 18's question 8,
-  and like the rest of 18 it carries a lean rather than a response — so this is a question
-  reassigned to the plan that can answer it, not a question answered.
+  reassigned to the plan that could answer it — and answered there on 2026-08-31, with
+  the rest of 18's questions: no prices, on any topic; pricing history is InfluxDB's
+  (18's Q7), not the broker's.
 
 ### Wave 2 — API correctness
 
