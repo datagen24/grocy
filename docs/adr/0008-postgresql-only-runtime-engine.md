@@ -152,8 +152,14 @@ and CI already runs `postgres:16`.
 
 Gates, not suggestions. The accepting pull request says how each was met.
 
-- **The supported upstream migration range is stated as a number span**, with the
-  fixtures that cover its ends committed.
+- **The supported upstream migration range is stated as a number span** in this
+  record at acceptance. The fixtures that cover its ends land with the retirement PR
+  itself, before any dual-engine machinery is removed — *amended 2026-08-31; the
+  original gate required the fixtures committed before acceptance.* The reasoning for
+  the amendment, made in the open rather than dropped on the way through: the fixtures
+  guard the importer, and the importer does not change until the retirement PR, so
+  their absence gates that PR rather than this decision. Stating the span is the
+  decision-shaped half and remains an acceptance gate.
 - **[14](../plans/14-contract-and-regression-scaffolding.md) piece 2 exists**, or the
   accepting PR states explicitly that the differential harness stays until it does. This
   is the enforcement-transfer gap above and is the one ordering constraint this record
@@ -167,6 +173,14 @@ Gates, not suggestions. The accepting pull request says how each was met.
    declines. The lower bound is the harder half: grocy databases in the wild are older
    than this fork, and "as far back as we have a fixture for" is an honest answer where
    "all of them" is not.*
+
+   **Answered 2026-08-31, at acceptance.** The span is **0255 — the fork's squashed
+   baseline — through the SQLite dialect's latest migration number at retirement time**,
+   frozen thereafter. Refusal outside the span names both numbers, per the lean. The
+   lower bound is honest rather than generous by design: any wild grocy 4.x install
+   reaches 0255 by booting upstream grocy once, so the narrow span costs an adopter one
+   boot of the software they are leaving rather than costing this fork an import surface
+   across every historical schema delta.
 2. **How many fixtures, and how are they generated?** A fixture per supported version is
    the thorough answer and the expensive one. *Lean: two — the oldest supported and the
    current — on the grounds that the importer's failure modes are schema-shaped rather
