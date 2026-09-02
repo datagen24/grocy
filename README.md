@@ -113,6 +113,12 @@ Optionally, `INFLUXDB_ENABLED` and the `INFLUXDB_*` settings write price and sto
 spending history lives: anything holding broker credentials reads the MQTT topics without
 authenticating to Victual, so no price, cost or value field is published there.
 
+Both publishes happen after the request is finished, bounded by
+`MQTT_CONNECT_TIMEOUT_SECONDS` and `INFLUXDB_TIMEOUT_SECONDS`, and a failure of either is
+logged and never reaches the write that triggered it. The delay is off the response under
+php-fpm and on it under mod_php — so on mod_php an unreachable broker and an unreachable
+InfluxDB cost the caller the sum of those two timeouts.
+
 ### Platform support
 
 - PHP 8.5 — the declared floor; the real language floor is 8.4 and reconciling the two is
