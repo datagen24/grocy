@@ -686,7 +686,8 @@ with `event_type`, a JSON `payload`, `delivered_at`, `attempts` and `last_error`
 `BookingEventPublisher::RecordTransaction()` now writes a row **inside the booking's own
 transaction** — the calls moved into the `InTransaction` closures, one line each — so a
 rollback takes the event with it and the queue can never describe a booking that did not
-happen. `Drain()` reads the undelivered rows, builds one batch, POSTs it, and marks them
+happen. (**Round 3 moved them again**, from the closures to the outermost commit, because
+one call per entrypoint is several per transaction once the entrypoints nest.) `Drain()` reads the undelivered rows, builds one batch, POSTs it, and marks them
 delivered **only on success**; a failure increments `attempts`, stores `last_error` and
 leaves the rows. Both the request-end seam and `bin/victual-publish-state --drain` drain,
 and the acknowledgement is a bookkeeping write through the restore-changed-time idiom so
@@ -857,6 +858,89 @@ listed four phases and now lists six.
   phase's output visible: client id, price guard, `SERIALISED - the second caller waited for
   the first`, outbox, idempotency, and `MQTT PAYLOAD IDENTICAL ON BOTH ENGINES`.
   `check-migrations.php` reports four numbers above the baseline, and `php -l` is clean.
+
+### Review fixes, round 3
+
+Three more findings and two coverage asks, fixed 2026-09-02. All three findings are about
+the same thing from different angles: the outbox was durable, and "one event" was not yet a
+well-defined idea.
+
+**1. Distinct events shared one InfluxDB identity.** A point is identified by measurement,
+tag set and timestamp, and `stock_value` carried only `product_id`, `transaction_id` and a
+second. Two things collide under that. **A transaction id is reused** - undoing a
+transaction writes rows under the one it names - so an undo landing in the same second as
+its purchase overwrote it, and landing in a different second left both standing as if they
+were separate truths. And **the call graph nests**: `OpenProduct` delegates to
+`TransferProduct`, `ConsumeRecipe` wraps `ConsumeProduct`, `UndoTransaction` loops over
+`UndoBooking`, and `InTransaction()` deliberately lets an inner call join the outer one - so
+capturing at each entrypoint produced several events per transaction, each recording a state
+that was real only part way through the work.
+
+Both halves fixed. Every captured event now carries a UUID `event_id`, tagged on
+`price_paid` and `stock_value` alike, so identity is per event and no two can collide
+however they are timed. And capture moved to the outermost commit:
+`DatabaseService::RegisterBeforeOutermostCommit()` runs keyed work inside the outermost
+transaction just before it commits, `RecordTransaction()` registers under the transaction id
+rather than capturing, and the listeners are cleared on rollback so nothing leaks into the
+next transaction. That hook is the general shape of "once per transaction, describing its
+final state", which the tree had no seam for; putting the logic in `StockService` instead
+would have meant every future entrypoint rediscovering the same trap.
+
+**2. Unreadable events were silently discarded.** `BuildLines()` skipped a payload it could
+not read, and `Drain()` then marked every row in the batch delivered - so a committed event
+vanished with no `attempts`, no `last_error` and no trace. Retrying it forever is no better,
+because it blocks every valid row behind it.
+
+So the outbox has a third state. Every payload carries a `payload_version` (version 1 was
+the transaction-id-only shape, before the event became self-contained; it is not upgraded
+in place, because the ledger it would have re-read has moved on). `DescribeUnreadable()`
+decides before anything is built, `Drain()` dead-letters those rows individually with the
+reason, `GetUndelivered()` excludes them, and the CLI reports the count so a queue that is
+empty only because rows stopped counting does not read as a queue that drained. The
+`dead_lettered_at` column went into migration 0259 in place rather than a 0260, because 0259
+has not reached master and no database anywhere ran the earlier shape.
+
+**3. A database error looked like an empty queue.** `HasBookings()` caught everything and
+returned false, which is right for its caller - a shutdown handler must not throw - and
+wrong for the CLI, which exits 0 on the answer. They are now two methods:
+`CountUndelivered()` throws and is what `--drain` uses, so it cannot report success on a
+queue nobody managed to look at; `HasBookings()` still swallows, and its docblock says why
+and points at the other one.
+
+**Coverage.** The 450-event CLI scenario is now `backlog-check.php`, running the real
+`bin/victual-publish-state --drain` as a subprocess - the exit code is half of what is being
+asserted, and a reimplemented loop would pass while the real one was broken. It queues 450
+against a rejecting stand-in, flips the stand-in to accepting through a control file rather
+than restarting it (a restart would lose the request log the failure case counts), and
+asserts three batches and exit 0; then repeats with the stand-in failing after two writes
+and asserts exit 1 with exactly 50 left, and that a later run finishes the job.
+
+And four probes - `outbox-check`, `idempotency-check`, `event-identity-check`,
+`backlog-check` - now run **twice, once per engine**, from one SQLite database imported into
+PostgreSQL through `bin/victual-db-import` so both sides start from identical data. The
+outbox is where this feature turns on transaction semantics, and asserting it only on the
+engine [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) makes a development one
+would have left the deployment engine untested for exactly the properties the mechanism
+exists to provide.
+
+**Verification**, all inside the suite:
+
+- **One event per transaction, with the final state** - `event-identity-check.php`: two
+  entrypoints inside one transaction produce **one** event covering **both** bookings, whose
+  snapshot equals the committed ledger amount rather than the state between them.
+- **An undo cannot overwrite its purchase** - the same probe books and then undoes a
+  transaction: two events, one transaction id, distinct `event_id`s, **identical
+  second-truncated timestamps** (the collision case, reproduced), and **3 points, 3 distinct
+  identities**.
+- **Unreadable rows are set aside** - `outbox-check.php` queues a version 1 payload ahead of
+  a valid one: the legacy row is dead-lettered with `payload has no payload_version`,
+  `attempts` advanced, **not** marked delivered, no longer counted as waiting, and the valid
+  row behind it is still deliverable.
+- **The backlog scenario** - 450 events, `in 3 batch(es) of up to 200`, exit 0, 0 waiting;
+  then with the stand-in failing after two writes, `failed after 2 batch(es)`, exit **1**,
+  **50 of 450** left, and a later run clearing them.
+- **The suite** - `SUITE PASSED` on all six phases, with every outbox probe reported twice:
+  `(engine: sqlite)` and `(engine: pgsql)`.
 
 ### What this changes in the record above
 
