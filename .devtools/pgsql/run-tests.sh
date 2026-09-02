@@ -3,9 +3,9 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|mqtt]
 #
-# Five kinds of check, for five reasons. Views are compared by what they return, because
+# Six kinds of check, for six reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -23,6 +23,13 @@
 # stopped being transactional. The rollback tests go through StockService, fail an
 # operation halfway, and check the ledger is where it started — on each engine in turn
 # rather than against the other.
+#
+# The sixth is not a differential check at all, and it is here because the alternative was
+# worse. Plan 18's published-state and outbox probes guard four defects that produce no
+# error of any kind - a stale retained topic, an event lost after a commit, a redelivered
+# point that duplicates instead of overwriting, an MQTT client id that lost its randomness.
+# Probes that nothing runs are documentation, so they run here, where the fixes are
+# protected by the same green light everything else is held to.
 #
 # The fifth closes the gap the other four leave between them: application code that
 # builds SQL differently per engine. The rollback phase enters the application but asks
@@ -47,6 +54,8 @@
 #   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default victual_migrate)
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
 #   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
+#   SUITE_PGSQL_MQTT_DB                  database for the mqtt tests    (default victual_mqtt)
+#   SUITE_MQTT_STANDIN_PORT              port for the stand-in InfluxDB (default 8390)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
 #   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
@@ -75,6 +84,8 @@ TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-victual_trig}"
 MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
+MQTT_DB="${SUITE_PGSQL_MQTT_DB:-victual_mqtt}"
+MQTT_STANDIN_PORT="${SUITE_MQTT_STANDIN_PORT:-8390}"
 
 WHICH="${1:-all}"
 
@@ -391,6 +402,139 @@ run_trigger_tests() {
 	fi
 }
 
+# --- MQTT and outbox probes -------------------------------------------------------
+#
+# The one phase that is not a comparison between engines. Everything it runs guards a
+# defect that fails silently, which is exactly the kind a suite has to hold rather than a
+# reviewer:
+#
+#   client-id-check   a client id that lost its random suffix as the configured prefix
+#                     grew, so two overlapping requests knock each other off the broker
+#   price-guard       a price, cost or value field reaching a retained topic anything on
+#                     the broker can read without authenticating to Victual
+#   lock-check        two requests interleaving a read of the published state with a write
+#                     of it, leaving the older snapshot retained until the next write
+#   outbox-check      an event lost after its booking committed, or surviving a booking
+#                     that rolled back
+#   idempotency-check a redelivered event writing a second point instead of overwriting the
+#                     first, or a drained backlog giving every queued transaction the same
+#                     latest stock snapshot
+#   engine-diff       the assembled payload differing between SQLite and PostgreSQL, which
+#                     is the one differential question this feature raises
+#
+# No broker and no node: the state probes need neither, the lock needs only PostgreSQL, and
+# InfluxDB is stood in for by PHP's own built-in server (influx-standin.php). A probe that
+# only runs where somebody installed extra software is a probe CI skips.
+
+run_mqtt_tests() {
+	local mqtt_scratch="$SUITE_SCRATCH/mqtt"
+	rm -rf "$mqtt_scratch"
+	mkdir -p "$mqtt_scratch"
+
+	local standin_log="$mqtt_scratch/standin.log"
+	local standin_pid=""
+
+	# Rejecting rather than unreachable: the failure path has to be exercised, and an
+	# address that times out would spend the configured timeout doing it on every run.
+	VICTUAL_STANDIN_LOG="$standin_log" VICTUAL_STANDIN_REJECT=1 \
+		php -S "127.0.0.1:$MQTT_STANDIN_PORT" "$VICTUAL_ROOT/.devtools/mqtt/influx-standin.php" \
+		> "$mqtt_scratch/standin-server.log" 2>&1 &
+	standin_pid=$!
+
+	# Killed however this function ends, including a probe exiting non-zero
+	trap '[ -n "$standin_pid" ] && kill "$standin_pid" 2>/dev/null || true' RETURN
+
+	# The built-in server takes a moment to bind, and a probe that raced it would report a
+	# connection failure as an outbox defect
+	local waited=0
+	while [ "$waited" -lt 50 ] && ! php -r 'exit(@fsockopen("127.0.0.1", (int)$argv[1], $e, $m, 0.2) ? 0 : 1);' "$MQTT_STANDIN_PORT"; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+
+	say ""
+	say "MQTT and outbox probes"
+	say ""
+
+	# --- No database at all -------------------------------------------------------
+	if ! php "$VICTUAL_ROOT/.devtools/mqtt/client-id-check.php"; then
+		failures=$((failures + 1))
+	fi
+
+	if ! php "$VICTUAL_ROOT/.devtools/mqtt/price-guard.php"; then
+		failures=$((failures + 1))
+	fi
+
+	# --- PostgreSQL: the publication lock -----------------------------------------
+	build_pgsql "$MQTT_DB"
+
+	local lock_data="$mqtt_scratch/lock"
+	mkdir -p "$lock_data"
+	cat > "$lock_data/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+
+	say ""
+	if ! VICTUAL_DATAPATH="$lock_data" DIFFTEST_DB_NAME="$MQTT_DB" \
+		php "$VICTUAL_ROOT/.devtools/mqtt/lock-check.php"; then
+		failures=$((failures + 1))
+	fi
+
+	# --- SQLite: the outbox -------------------------------------------------------
+	#
+	# A copy of the pristine database each, because both probes book stock and one of them
+	# renames the outbox table out from under a booking. They get their own copies rather
+	# than sharing one so that a failure in the first cannot be blamed on the second.
+
+	local outbox_data="$mqtt_scratch/outbox"
+	mkdir -p "$outbox_data"
+	cp "$PRISTINE" "$outbox_data/victual.db" || fail 'could not copy the pristine database for the outbox probe'
+	write_influx_config "$outbox_data"
+
+	say ""
+	if ! VICTUAL_DATAPATH="$outbox_data" php "$VICTUAL_ROOT/.devtools/mqtt/outbox-check.php"; then
+		failures=$((failures + 1))
+	fi
+
+	local idem_data="$mqtt_scratch/idempotency"
+	mkdir -p "$idem_data"
+	cp "$PRISTINE" "$idem_data/victual.db" || fail 'could not copy the pristine database for the idempotency probe'
+	write_influx_config "$idem_data"
+
+	say ""
+	if ! VICTUAL_DATAPATH="$idem_data" php "$VICTUAL_ROOT/.devtools/mqtt/idempotency-check.php"; then
+		failures=$((failures + 1))
+	fi
+
+	# --- Both engines: the assembled payload --------------------------------------
+	say ""
+	if ! SUITE_SCRATCH="$mqtt_scratch" MQTTDIFF_PGSQL_DB="${MQTT_DB}_diff" \
+		bash "$VICTUAL_ROOT/.devtools/mqtt/engine-diff.sh"; then
+		failures=$((failures + 1))
+	fi
+}
+
+# The probes need InfluxDB switched on to do anything at all - RecordTransaction() writes
+# nothing when it is off, which is deliberate (an outbox nobody drains is a leak). The
+# endpoint is the stand-in, which rejects, so the failure path is what gets exercised.
+write_influx_config() {
+	cat > "$1/config.php" <<-PHPCONFIG
+		<?php
+		Setting('INFLUXDB_ENABLED', true);
+		Setting('INFLUXDB_URL', 'http://127.0.0.1:$MQTT_STANDIN_PORT');
+		Setting('INFLUXDB_TOKEN', 'suite');
+		Setting('INFLUXDB_ORG', 'suite');
+		Setting('INFLUXDB_BUCKET', 'suite');
+		Setting('INFLUXDB_TIMEOUT_SECONDS', 2);
+	PHPCONFIG
+}
+
 # Before anything is built: a migration numbering mistake means the two engines are not
 # running the same set of changes, which would make every comparison below meaningless
 # rather than merely wrong.
@@ -407,8 +551,9 @@ case "$WHICH" in
 	triggers) run_trigger_tests ;;
 	rollback) run_rollback_tests ;;
 	filter) run_filter_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter or all)" ;;
+	mqtt) run_mqtt_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_mqtt_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, mqtt or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then
