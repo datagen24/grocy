@@ -23,6 +23,18 @@ use Victual\Services\DatabaseService;
  * every point carries a unique identity so a redelivered batch overwrites rather than
  * duplicates).
  *
+ * **A row is in exactly one of three states**, and the third is the one that is easy to
+ * leave out. Undelivered rows are retried. Delivered rows are done. Dead-lettered rows are
+ * the ones no version of the consumer will ever be able to read - a payload written by an
+ * older shape, or a malformed one - and they need a state of their own because the
+ * alternatives are both wrong: acknowledging them discards a committed event silently, and
+ * retrying them forever blocks every valid row queued behind them. So they are set aside
+ * with last_error saying why, excluded from GetUndelivered(), and left for a person.
+ *
+ * **Every payload carries a payload_version.** Consumers refuse what they cannot read
+ * rather than guessing at it, which is what makes the dead-letter state reachable instead
+ * of theoretical.
+ *
  * One table, discriminated by event_type, because that record's rule is that consumers may
  * multiply and contracts may not. A second consumer attaches by reading its own event type,
  * not by minting a table of its own.
@@ -41,6 +53,18 @@ class OutboxService extends BaseService
 	 * would be a second copy of the ledger that could disagree with the first.
 	 */
 	const EVENT_STOCK_TRANSACTION_BOOKED = 'stock.transaction_booked';
+
+	/**
+	 * The payload shape consumers in this version understand.
+	 *
+	 * Version 1 was the transaction id alone, with every fact re-read from the ledger at
+	 * delivery time - which made redelivery non-idempotent and is why it was replaced.
+	 * Version 2 is the self-contained record BookingEventPublisher::CaptureEvent() writes.
+	 * A version 1 row is not upgraded in place and not guessed at: it is dead-lettered,
+	 * because the facts it needed no longer exist in a form that would reproduce what the
+	 * first delivery attempt would have sent.
+	 */
+	const PAYLOAD_VERSION = 2;
 
 	/**
 	 * How many undelivered rows one drain takes. Bounded so that a long outage does not turn
@@ -77,7 +101,7 @@ class OutboxService extends BaseService
 	{
 		$rows = [];
 
-		foreach ($this->DB->outbox()->where('event_type = :1 AND delivered_at IS NULL', $eventType)->orderBy('id')->limit($limit) as $row)
+		foreach ($this->DB->outbox()->where('event_type = :1 AND delivered_at IS NULL AND dead_lettered_at IS NULL', $eventType)->orderBy('id')->limit($limit) as $row)
 		{
 			$rows[] = [
 				'id' => (int)$row['id'],
@@ -86,6 +110,32 @@ class OutboxService extends BaseService
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * How many events of a type are still waiting, excluding dead-lettered ones.
+	 *
+	 * Deliberately allowed to throw. A caller that has to *prove* the queue is empty - the
+	 * CLI drain, which exits 0 on the answer - must not be handed a zero that actually means
+	 * "the database did not answer". BookingEventPublisher::HasBookings() is the swallowing
+	 * counterpart, for the shutdown handler, which must not throw.
+	 *
+	 * @throws \Throwable Whatever the database raises
+	 */
+	public function CountUndelivered(string $eventType): int
+	{
+		return (int)$this->DB->outbox()->where('event_type = :1 AND delivered_at IS NULL AND dead_lettered_at IS NULL', $eventType)->count();
+	}
+
+	/**
+	 * How many events of a type have been set aside as undeliverable.
+	 *
+	 * Reported by the CLI, because a drain that leaves rows behind should say so rather than
+	 * exiting 0 on a queue that is empty only because the unreadable rows stopped counting.
+	 */
+	public function CountDeadLettered(string $eventType): int
+	{
+		return (int)$this->DB->outbox()->where('event_type = :1 AND dead_lettered_at IS NOT NULL', $eventType)->count();
 	}
 
 	/**
@@ -144,6 +194,43 @@ class OutboxService extends BaseService
 						// Bounded: a driver can return a very long message and this column is
 						// for a human glancing at why a queue stopped moving
 						'last_error' => substr($error, 0, 1000)
+					]);
+				}
+			}
+		});
+	}
+
+	/**
+	 * Sets rows aside as undeliverable, recording why.
+	 *
+	 * Not a deletion and not an acknowledgement. The event still happened and the row is
+	 * still the evidence of it; what has changed is that nothing will try to deliver it
+	 * again, so it stops blocking the queue behind it. attempts is advanced too, so the row
+	 * reads as something that was tried rather than something that was skipped.
+	 *
+	 * @param int[] $ids
+	 */
+	public function DeadLetter(array $ids, string $reason): void
+	{
+		if (count($ids) === 0)
+		{
+			return;
+		}
+
+		$this->AsBookkeeping(function () use ($ids, $reason)
+		{
+			$now = date('Y-m-d H:i:s');
+
+			foreach ($ids as $id)
+			{
+				$row = $this->DB->outbox()->where('id = :1', (int)$id)->fetch();
+
+				if ($row !== null)
+				{
+					$row->update([
+						'dead_lettered_at' => $now,
+						'attempts' => (int)$row['attempts'] + 1,
+						'last_error' => substr($reason, 0, 1000)
 					]);
 				}
 			}
