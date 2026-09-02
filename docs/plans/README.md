@@ -22,7 +22,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
-| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2 |
+| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2; **Q1–Q8 answered 2026-08-31** |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
@@ -55,7 +55,7 @@ them are routing sentences in *this file* that were never true.
 
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
-| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0) |
+| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0); **shortened by ADR-0008's acceptance — re-read before track A starts** |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
 | 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | draft — **carries a High finding** since 2026-08-30 |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
@@ -80,24 +80,28 @@ block where only a reader of one plan will find it.
 
 Seven decisions already standing in this codebase are recorded there, backfilled from
 [db/pgsql/README.md](../../db/pgsql/README.md) and the
-[security sweep](../security-sweep.md). Two more are **proposed and under consideration**,
-and neither is in the wave order below:
+[security sweep](../security-sweep.md). Two more were written together on 2026-08-30;
+one is now decided:
 
 - **[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)** — retire SQLite as a
-  runtime engine, keep it as an import format behind fixture-based importer tests. Would
-  supersede
-  [ADR-0001](../adr/0001-postgresql-alongside-sqlite.md) and would materially shorten
-  [10](10-cold-start-statelessness.md).
+  runtime engine, keep it as an import format behind fixture-based importer tests.
+  **Accepted 2026-08-31**, superseding
+  [ADR-0001](../adr/0001-postgresql-alongside-sqlite.md). The retirement *work* is not
+  yet scheduled in a wave, but the decision stands now, and it materially shortens
+  [10](10-cold-start-statelessness.md) — whoever opens track A reads 10 against it
+  first, since 10's SQLite-conditional sections plan around paths 0008 has marked for
+  deletion. The supported import span is 0255 through the SQLite dialect's latest
+  migration number at retirement; end fixtures land with the retirement PR.
 - **[ADR-0009](../adr/0009-database-as-the-logic-layer.md)** — move report and read logic
-  into views, so the always-awake component can answer without waking the pod. Depends on
-  0008. Claims on [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and
-  [19](19-rbac.md).
+  into views, so the always-awake component can answer without waking the pod. Still
+  **proposed**; its dependency on 0008 is now satisfied. Claims on
+  [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and [19](19-rbac.md).
 
 Two findings recorded in 0009 apply to [10](10-cold-start-statelessness.md) and
-[18](18-mqtt-state-publication.md) **whether or not either proposal is accepted**: 10's
+[18](18-mqtt-state-publication.md) **whether or not 0009 is accepted**: 10's
 `pg_advisory_lock` is session-scoped and unsafe under transaction-mode connection pooling,
-and `LISTEN` does not survive that pooling mode either. If both proposals are rejected,
-those two are lifted into their owning plans rather than discarded with them.
+and `LISTEN` does not survive that pooling mode either. If 0009 is rejected,
+those two are lifted into their owning plans rather than discarded with it.
 
 The fork is **Victual**. Tiers 1–3 of 16 all landed while nothing was deployed,
 so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
@@ -168,9 +172,9 @@ rename and the registry claims happen at announcement time, not in a commit.
   question settled is household pricing sitting on the broker until someone re-publishes.
   18 therefore owns it, as its own question 8, rather than deferring to 19 — see 18's
   Sequencing — and 19-Q5 records the reassignment instead of asking 18 for an answer it
-  would give too late. Moved, not answered: 18's question 8 carries a lean like the rest
-  of that plan and has no Response yet, so read it before 19's piece 2 rather than
-  assuming it.
+  would give too late. Moved, and answered 2026-08-31: no price or cost field on any
+  topic, with pricing history going to InfluxDB as commit-time events instead (18's Q7) —
+  19's piece 2 can read 18's question 8 as settled.
 - **Anything that keeps state between requests is 10's problem too.** On a pod that scales
   to zero, in-process state is state until the next idle window. Sweep S12's login throttle
   is the live case and is recorded in [11](11-api-error-handling.md)'s sequencing: Redis or
@@ -260,6 +264,10 @@ response is called out explicitly in the plan rather than slipped in.
 
 **Migrations from 0256 on work on every supported engine** — a portable `NNNN.sql`, a
 per engine pair, or a documented engine-exclusive migration. See `db/pgsql/README.md`.
+With [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) accepted (2026-08-31)
+this rule is living on borrowed time: it holds as written until the retirement PR lands,
+after which the SQLite migration line freezes at its final number and new migrations are
+PostgreSQL-only without needing the exemption recorded.
 
 The third case is new. `0256.sqlite.sql` is the first to use it — a SQLite-only cast fix
 that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping
@@ -303,6 +311,12 @@ so the division is by capability rather than by taste:
   the pod but is not the household's data. `INCR`, `SETNX`, TTLs. Sweep S12's login
   throttle is the first real case and is not optional: on this deployment an in-process
   counter is reset for free by an attacker who waits out an idle window.
+- **InfluxDB** — *record how a number changed over time*, written as events at the
+  moment they commit, never as state sampled on a schedule — a mostly-asleep pod cannot
+  sample honestly, but an event written at commit is true forever. Home Assistant's own
+  integration records entity history; the server writes price and valuation events
+  directly ([18](18-mqtt-state-publication.md)'s Q7). Queried with credentials, not
+  subscribed to — which is why it may carry the prices MQTT must not (18's Q8).
 - **PostgreSQL** — anything that must still be true after everything restarts, which is
   the household's actual data and, today, its sessions.
 
@@ -466,8 +480,9 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   cannot be made into one. The note now names prices explicitly, because 18's stock summary
   would otherwise ship `value`, `last_price` and `average_price` by default if its
   attributes are assembled from `uihelper_stock_current_overview`. It is 18's question 8,
-  and like the rest of 18 it carries a lean rather than a response — so this is a question
-  reassigned to the plan that can answer it, not a question answered.
+  reassigned to the plan that could answer it — and answered there on 2026-08-31, with
+  the rest of 18's questions: no prices, on any topic; pricing history is InfluxDB's
+  (18's Q7), not the broker's.
 
 ### Wave 2 — API correctness
 

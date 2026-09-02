@@ -1,8 +1,12 @@
 # ADR-0008: PostgreSQL becomes the only runtime engine; SQLite becomes an import format
 
-- **Status: Proposed.** Not accepted, not scheduled, not in the roadmap's wave order.
-  Written to be argued with. Would **supersede
-  [ADR-0001](0001-postgresql-alongside-sqlite.md)** if accepted.
+- **Status: Accepted, 2026-08-31.** **Supersedes
+  [ADR-0001](0001-postgresql-alongside-sqlite.md).** How each acceptance gate was met:
+  the supported import span is stated in this record (open question 1, answered at
+  acceptance; end fixtures land with the retirement PR per the amended gate), and the
+  differential harness in `.devtools/pgsql/` stays until
+  [14](../plans/14-contract-and-regression-scaffolding.md) piece 2 exists. The
+  retirement work itself is not yet scheduled in the roadmap's wave order.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
   lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30.
@@ -37,7 +41,7 @@ someone forgets. That machinery is good — it was built because the hazards are
 it is a tax on exactly the kind of change this fork keeps making, and the deployment
 target has been PostgreSQL-only since the fork began.
 
-## Decision (proposed)
+## Decision
 
 `DB_DRIVER` stops accepting `sqlite`. **PostgreSQL becomes the sole runtime and the sole
 behavioural authority.** SQLite survives only as an external input format.
@@ -152,8 +156,14 @@ and CI already runs `postgres:16`.
 
 Gates, not suggestions. The accepting pull request says how each was met.
 
-- **The supported upstream migration range is stated as a number span**, with the
-  fixtures that cover its ends committed.
+- **The supported upstream migration range is stated as a number span** in this
+  record at acceptance. The fixtures that cover its ends land with the retirement PR
+  itself, before any dual-engine machinery is removed — *amended 2026-08-31; the
+  original gate required the fixtures committed before acceptance.* The reasoning for
+  the amendment, made in the open rather than dropped on the way through: the fixtures
+  guard the importer, and the importer does not change until the retirement PR, so
+  their absence gates that PR rather than this decision. Stating the span is the
+  decision-shaped half and remains an acceptance gate.
 - **[14](../plans/14-contract-and-regression-scaffolding.md) piece 2 exists**, or the
   accepting PR states explicitly that the differential harness stays until it does. This
   is the enforcement-transfer gap above and is the one ordering constraint this record
@@ -167,6 +177,14 @@ Gates, not suggestions. The accepting pull request says how each was met.
    declines. The lower bound is the harder half: grocy databases in the wild are older
    than this fork, and "as far back as we have a fixture for" is an honest answer where
    "all of them" is not.*
+
+   **Answered 2026-08-31, at acceptance.** The span is **0255 — the fork's squashed
+   baseline — through the SQLite dialect's latest migration number at retirement time**,
+   frozen thereafter. Refusal outside the span names both numbers, per the lean. The
+   lower bound is honest rather than generous by design: any wild grocy 4.x install
+   reaches 0255 by booting upstream grocy once, so the narrow span costs an adopter one
+   boot of the software they are leaving rather than costing this fork an import surface
+   across every historical schema delta.
 2. **How many fixtures, and how are they generated?** A fixture per supported version is
    the thorough answer and the expensive one. *Lean: two — the oldest supported and the
    current — on the grounds that the importer's failure modes are schema-shaped rather

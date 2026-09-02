@@ -1,6 +1,9 @@
 # ADR-0009: The database is the logic layer
 
 - **Status: Proposed.** Not accepted, not scheduled, not in the roadmap's wave order.
+  [ADR-0008](0008-postgresql-only-runtime-engine.md), which this depends on, was
+  accepted 2026-08-31 — the dependency no longer stands in the way of judging this
+  record on its merits.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request, and this record
   carries **acceptance prerequisites** — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30.
