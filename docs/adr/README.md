@@ -68,7 +68,7 @@ readers most often need and least often have.
 
 | # | Decision | Status | Source |
 |---|---|---|---|
-| [0001](0001-postgresql-alongside-sqlite.md) | PostgreSQL is supported alongside SQLite | **Accepted** 2026 | [db/pgsql](../../db/pgsql/README.md) |
+| [0001](0001-postgresql-alongside-sqlite.md) | PostgreSQL is supported alongside SQLite | **Superseded by 0008** 2026-08-31 | [db/pgsql](../../db/pgsql/README.md) |
 | [0002](0002-squashed-baseline.md) | PostgreSQL loads a squashed baseline, not a replayed migration history | **Accepted** 2026 | [db/pgsql](../../db/pgsql/README.md) |
 | [0003](0003-seed-data-in-php.md) | Seed data lives in PHP, not in the baseline DDL | **Accepted** 2026 | [db/pgsql](../../db/pgsql/README.md) |
 | [0004](0004-engine-specific-migrations.md) | Engine-specific migrations are marked, and migration numbers are never compared across engines | **Accepted** 2026 | [db/pgsql](../../db/pgsql/README.md) |
@@ -81,9 +81,10 @@ readers most often need and least often have.
 | [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Proposed** | [06](../plans/06-location-barcodes.md) |
 | [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Proposed** | — |
 
-**0008 would supersede [0001](0001-postgresql-alongside-sqlite.md) if accepted**, and 0009
-is not viable unless 0008 is. Both are proposals under active consideration and neither is
-in the roadmap's wave order. They were written together as one concept and split into two
+**0008 was accepted 2026-08-31 and supersedes
+[0001](0001-postgresql-alongside-sqlite.md).** 0009 remains a proposal under active
+consideration — its dependency on 0008 is now satisfied, and it is still not in the
+roadmap's wave order. They were written together as one concept and split into two
 records precisely because the first is defensible without the second.
 
 ## Known unfiled decisions
