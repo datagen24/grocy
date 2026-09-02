@@ -24,11 +24,14 @@ FROM php:8.5-cli-bookworm AS dev
 # libpq-dev for building pdo_pgsql, the image libraries for gd, ICU for intl, and libzip
 # for zip. postgresql-client is separate and not optional: libpq-dev ships headers and the
 # shared library, while run-tests.sh calls dropdb and createdb, which live in the client
-# package. sqlite3 is the CLI, useful for poking at a failing seed by hand.
+# package. sqlite3 is the CLI, useful for poking at a failing seed by hand, and libsqlite3-dev
+# is what docker-php-ext-install needs to build pdo_sqlite: the base image ships the headers
+# for neither stage, and the first CI build of this file failed on exactly that.
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		git \
 		unzip \
 		sqlite3 \
+		libsqlite3-dev \
 		libpq-dev \
 		postgresql-client \
 		libicu-dev \
@@ -103,7 +106,13 @@ FROM php:8.5-apache-bookworm AS production
 # pdo_sqlite is installed even though ADR-0008 makes PostgreSQL the only runtime engine:
 # bin/victual-db-import reads SQLite as an import format, which is the one thing that
 # record keeps SQLite for. DB_DRIVER still refuses to be anything but pgsql here.
+# git is a build-time dependency of composer rather than of the application: two packages
+# in composer.json come from forks on GitHub, and when their dist archives cannot be
+# fetched composer falls back to cloning them, which needs git. It is purged again below,
+# together with composer itself.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+		git \
+		libsqlite3-dev \
 		libpq-dev \
 		libicu-dev \
 		libzip-dev \
@@ -168,7 +177,9 @@ RUN composer install \
 		--no-scripts \
 		--no-dev \
 		--ignore-platform-req=php \
-	&& rm -f /usr/bin/composer
+	&& rm -f /usr/bin/composer \
+	&& apt-get purge -y --auto-remove git \
+	&& rm -rf /var/lib/apt/lists/*
 
 COPY . /app
 COPY --from=assets /app/public/packages /app/public/packages
