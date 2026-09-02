@@ -2,6 +2,8 @@
 
 namespace Victual\Helpers;
 
+use Victual\Services\Storage\FileSizeLimit;
+
 /**
  * Thrown when a VICTUAL_* configuration constant has an invalid value.
  */
@@ -10,7 +12,7 @@ class EInvalidConfig extends \Exception
 }
 
 /**
- * Validates the VICTUAL_* configuration constants (mode, database driver,
+ * Validates the VICTUAL_* configuration constants (mode, database driver, file storage,
  * locale, currency, entry page, week start days, auto night mode range)
  * on application startup.
  */
@@ -74,7 +76,7 @@ class ConfigurationValidator
 	}
 
 	/**
-	 * FILE_STORAGE, and the two combinations it may not be in.
+	 * FILE_STORAGE, the two combinations it may not be in, and the upload size limit.
 	 *
 	 * Both are refused here rather than at the first upload, which is the point: a
 	 * household that flips the setting finds out at startup, when it can still change its
@@ -110,6 +112,18 @@ class ConfigurationValidator
 				throw new EInvalidConfig('FILE_STORAGE "database" is not supported in "' . VICTUAL_MODE . '" mode, because demo instances share a storage location by file name suffix and the files table has no column for it - use FILE_STORAGE "filesystem" here');
 			}
 		}
+
+		if (!is_numeric(VICTUAL_FILE_STORAGE_MAX_SIZE_MB) || VICTUAL_FILE_STORAGE_MAX_SIZE_MB <= 0)
+		{
+			throw new EInvalidConfig('FILE_STORAGE_MAX_SIZE_MB must be a positive number of megabytes, "' . VICTUAL_FILE_STORAGE_MAX_SIZE_MB . '" given');
+		}
+
+		// Resolving the limit here rather than at the first upload is what makes it a
+		// startup fact: a FILE_STORAGE_MAX_SIZE_MB larger than what PHP will accept logs
+		// its clamp while someone is still looking at the boot output, instead of the
+		// first time a household member is refused a picture. Startup keeps running
+		// either way - a clamp is information, not a failure (plan 01 Q2).
+		FileSizeLimit::EffectiveMaxBytes();
 	}
 
 	private function checkDefaultLocale()

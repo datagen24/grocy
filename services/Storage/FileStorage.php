@@ -113,19 +113,33 @@ abstract class FileStorage
 	abstract public function GetMimeType(string $group, string $name): ?string;
 
 	/**
-	 * Copies a source into an open sink in COPY_CHUNK_SIZE chunks.
+	 * Copies a source into an open sink in COPY_CHUNK_SIZE chunks, refusing to write more
+	 * than the effective upload limit.
+	 *
+	 * The limit is checked while streaming rather than afterwards, which is the whole
+	 * point of sweep S10: a raw PUT body is not subject to post_max_size, so a check that
+	 * runs once the body is stored bounds what can be served rather than what can be
+	 * written. Whatever has already been written when the limit is passed is the caller's
+	 * to discard, and both backends do.
 	 *
 	 * @param string|resource $source Bytes, or a readable stream
 	 * @param resource $sink An open, writable stream
 	 * @return int The number of bytes written
+	 * @throws FileTooLargeException When the source is larger than the effective limit
 	 * @throws \Exception When a write fails
 	 */
 	protected function CopySource($source, $sink): int
 	{
+		$maximum = FileSizeLimit::EffectiveMaxBytes();
 		$written = 0;
 
 		if (is_string($source))
 		{
+			if (strlen($source) > $maximum)
+			{
+				throw new FileTooLargeException(self::TooLargeMessage($maximum));
+			}
+
 			$length = strlen($source);
 			for ($offset = 0; $offset < $length; $offset += self::COPY_CHUNK_SIZE)
 			{
@@ -143,14 +157,31 @@ abstract class FileStorage
 
 		while (($chunk = fread($source, self::COPY_CHUNK_SIZE)) !== false && $chunk !== '')
 		{
+			$written += strlen($chunk);
+
+			if ($written > $maximum)
+			{
+				// Stop reading here: the rest of the body is never pulled off the wire and
+				// what was written so far is thrown away by the caller.
+				throw new FileTooLargeException(self::TooLargeMessage($maximum));
+			}
+
 			if (fwrite($sink, $chunk) === false)
 			{
 				throw new \Exception('Error while writing file');
 			}
-
-			$written += strlen($chunk);
 		}
 
 		return $written;
+	}
+
+	/**
+	 * The refusal message, which names the limit so that a caller can tell a file that is
+	 * too large from a file that was rejected for some other reason.
+	 */
+	private static function TooLargeMessage(int $maximum): string
+	{
+		return 'File is larger than the ' . FileSizeLimit::FormatMegabytes($maximum)
+			. ' MB upload limit (FILE_STORAGE_MAX_SIZE_MB)';
 	}
 }
