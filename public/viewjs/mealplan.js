@@ -734,10 +734,6 @@ $('#save-copy-day-button').on('click', function(e)
 			});
 
 			//window.location.reload();
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -841,13 +837,9 @@ $(document).on('click', '.recipe-order-missing-button', function(e)
 							function(xhr)
 							{
 								Victual.FrontendHelpers.EndUiBusy();
-								console.error(xhr);
+								Victual.Api.DefaultErrorHandler(xhr);
 							}
 						);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -891,14 +883,14 @@ $(document).on('click', '.product-consume-button', function(e)
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -984,10 +976,6 @@ $(document).on("click", ".display-recipe-button", function(e)
 					}
 				}
 			});
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -1069,10 +1057,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 				$('#display_amount').select();
 				$(".input-group-productamountpicker").trigger("change");
 				Victual.FrontendHelpers.ValidateForm('add-product-form');
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -1084,10 +1068,6 @@ function UndoStockTransaction(transactionId)
 		function(result)
 		{
 			toastr.success(__t("Transaction successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
@@ -1104,10 +1084,6 @@ Victual.Components.RecipePicker.GetPicker().on('change', function(e)
 				$("#recipe_servings").val(recipe.base_servings);
 				$("#recipe_servings").focus();
 				$("#recipe_servings").select();
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
