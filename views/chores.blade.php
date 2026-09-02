@@ -9,20 +9,7 @@
 	<div class="col">
 		<div class="title-related-links">
 			<h2 class="title">@yield('title')</h2>
-			<div class="float-right @if($embedded) pr-5 @endif">
-				<button class="btn btn-outline-dark d-md-none mt-2 order-1 order-md-3"
-					type="button"
-					data-toggle="collapse"
-					data-target="#table-filter-row">
-					<i class="fa-solid fa-filter"></i>
-				</button>
-				<button class="btn btn-outline-dark d-md-none mt-2 order-1 order-md-3"
-					type="button"
-					data-toggle="collapse"
-					data-target="#related-links">
-					<i class="fa-solid fa-ellipsis-v"></i>
-				</button>
-			</div>
+			@include('components.list_collapse_toggles')
 			<div class="related-links collapse d-md-flex order-2 width-xs-sm-100"
 				id="related-links">
 				<a class="btn btn-primary responsive-button m-1 mt-md-0 mb-md-0 float-right"
@@ -40,41 +27,7 @@
 
 <hr class="my-2">
 
-<div class="row collapse d-md-flex"
-	id="table-filter-row">
-	<div class="col-12 col-md-6 col-xl-3">
-		<div class="input-group">
-			<div class="input-group-prepend">
-				<span class="input-group-text"><i class="fa-solid fa-search"></i></span>
-			</div>
-			<input type="text"
-				id="search"
-				class="form-control"
-				placeholder="{{ $__t('Search') }}">
-		</div>
-	</div>
-	<div class="col-12 col-md-6 col-xl-3">
-		<div class="form-check custom-control custom-checkbox">
-			<input class="form-check-input custom-control-input"
-				type="checkbox"
-				id="show-disabled">
-			<label class="form-check-label custom-control-label"
-				for="show-disabled">
-				{{ $__t('Show disabled') }}
-			</label>
-		</div>
-	</div>
-	<div class="col">
-		<div class="float-right">
-			<button id="clear-filter-button"
-				class="btn btn-sm btn-outline-info"
-				data-toggle="tooltip"
-				title="{{ $__t('Clear filter') }}">
-				<i class="fa-solid fa-filter-circle-xmark"></i>
-			</button>
-		</div>
-	</div>
-</div>
+@include('components.list_filter_row')
 
 <div class="row">
 	<div class="col">
