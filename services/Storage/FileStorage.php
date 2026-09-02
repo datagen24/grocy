@@ -24,21 +24,29 @@ abstract class FileStorage
 	 */
 	const COPY_CHUNK_SIZE = 1048576;
 
+	/** Values of the FILE_STORAGE setting. */
+	const STORAGE_FILESYSTEM = 'filesystem';
+	const STORAGE_DATABASE = 'database';
+
 	/** @var FileStorage|null The per request backend instance */
 	private static $Instance = null;
 
 	/**
-	 * The configured backend.
+	 * The backend named by the FILE_STORAGE setting.
 	 *
 	 * One instance per request, like the services: a backend holds no state that must
 	 * outlive the process (ADR-0007), only the resolved storage path or the database
-	 * connection it borrows.
+	 * connection it borrows. The setting's value is validated at startup
+	 * (ConfigurationValidator::checkFileStorage), so anything but the two known names has
+	 * already been refused by the time this runs.
 	 */
 	public static function GetInstance(): FileStorage
 	{
 		if (self::$Instance === null)
 		{
-			self::$Instance = new FilesystemStorage();
+			self::$Instance = VICTUAL_FILE_STORAGE === self::STORAGE_DATABASE
+				? new DatabaseStorage()
+				: new FilesystemStorage();
 		}
 
 		return self::$Instance;
