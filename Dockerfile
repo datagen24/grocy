@@ -152,8 +152,8 @@ RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 # an operator can read in phpinfo() is worth more than one they have to infer.
 #
 # The two size directives are here because php.ini-production sets upload_max_filesize to
-# 2M, and Victual takes the smallest of that, post_max_size and FILE_STORAGE_MAX_SIZE_MB
-# as its effective upload limit (services/Storage/FileSizeLimit.php, plan 01 Q2). Left
+# 2M, and the application takes the smallest of upload_max_filesize and post_max_size as
+# its effective upload limit; plan 01 adds its own configured cap on top of those. Left
 # alone, this image would quietly cap every upload at 2 MiB no matter what the household
 # configured. 8M matches php.ini-production's own post_max_size, which is the number it
 # would have had if the two directives agreed.
@@ -171,8 +171,8 @@ RUN { \
 # **The complete list of paths this image needs writable, and what writes to each:**
 #
 #   /data              the application's own data directory - config.php is read, but
-#                      FILE_STORAGE=filesystem writes uploads under it, and a SQLite
-#                      database (dev, or bin/victual-db-import) lives there
+#                      uploaded files are written under it when they are stored on disk,
+#                      and a SQLite database (dev, or bin/victual-db-import) lives there
 #   /var/run/apache2   Apache's pid file, which apache2-foreground removes and apache2
 #                      then writes
 #   /tmp               PHP's temporary directory - see the ini above for the three things
@@ -245,7 +245,7 @@ COPY . /app
 COPY --from=assets /app/public/packages /app/public/packages
 
 # The data directory is a mount, not part of the image: it holds config.php (a ConfigMap
-# or a bind mount) and, when FILE_STORAGE is "filesystem", uploaded files. Nothing is baked
+# or a bind mount) and uploaded files, when they are stored on disk. Nothing is baked
 # into it, and in particular no credentials are - the database connection arrives as
 # VICTUAL_DB_* environment variables or as settingoverrides files, per S25.
 #
