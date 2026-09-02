@@ -431,12 +431,19 @@ run_mqtt_tests() {
 	rm -rf "$mqtt_scratch"
 	mkdir -p "$mqtt_scratch"
 
-	local standin_log="$mqtt_scratch/standin.log"
+	MQTT_STANDIN_LOG="$mqtt_scratch/standin.log"
+	MQTT_STANDIN_CONTROL="$mqtt_scratch/standin-control.txt"
+	export MQTT_STANDIN_LOG MQTT_STANDIN_CONTROL
+
+	# Rejecting to start with: most of the probes exercise the failure path, and an address
+	# that times out would spend the configured timeout doing it on every run. The control
+	# file lets backlog-check.php flip a running server to accepting without restarting it,
+	# which it has to do because restarting would lose the request log it counts.
+	echo reject > "$MQTT_STANDIN_CONTROL"
+
 	local standin_pid=""
 
-	# Rejecting rather than unreachable: the failure path has to be exercised, and an
-	# address that times out would spend the configured timeout doing it on every run.
-	VICTUAL_STANDIN_LOG="$standin_log" VICTUAL_STANDIN_REJECT=1 \
+	VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
 		php -S "127.0.0.1:$MQTT_STANDIN_PORT" "$VICTUAL_ROOT/.devtools/mqtt/influx-standin.php" \
 		> "$mqtt_scratch/standin-server.log" 2>&1 &
 	standin_pid=$!
@@ -469,16 +476,7 @@ run_mqtt_tests() {
 	build_pgsql "$MQTT_DB"
 
 	local lock_data="$mqtt_scratch/lock"
-	mkdir -p "$lock_data"
-	cat > "$lock_data/config.php" <<-'PHPCONFIG'
-		<?php
-		Setting('DB_DRIVER', 'pgsql');
-		Setting('DB_HOST', getenv('PGHOST'));
-		Setting('DB_PORT', intval(getenv('PGPORT')));
-		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
-		Setting('DB_USER', getenv('PGUSER'));
-		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
-	PHPCONFIG
+	write_pgsql_config "$lock_data"
 
 	say ""
 	if ! VICTUAL_DATAPATH="$lock_data" DIFFTEST_DB_NAME="$MQTT_DB" \
@@ -486,31 +484,22 @@ run_mqtt_tests() {
 		failures=$((failures + 1))
 	fi
 
-	# --- SQLite: the outbox -------------------------------------------------------
+	# --- The outbox, on both engines ----------------------------------------------
 	#
-	# A copy of the pristine database each, because both probes book stock and one of them
-	# renames the outbox table out from under a booking. They get their own copies rather
-	# than sharing one so that a failure in the first cannot be blamed on the second.
-
-	local outbox_data="$mqtt_scratch/outbox"
-	mkdir -p "$outbox_data"
-	cp "$PRISTINE" "$outbox_data/victual.db" || fail 'could not copy the pristine database for the outbox probe'
-	write_influx_config "$outbox_data"
-
-	say ""
-	if ! VICTUAL_DATAPATH="$outbox_data" php "$VICTUAL_ROOT/.devtools/mqtt/outbox-check.php"; then
-		failures=$((failures + 1))
-	fi
-
-	local idem_data="$mqtt_scratch/idempotency"
-	mkdir -p "$idem_data"
-	cp "$PRISTINE" "$idem_data/victual.db" || fail 'could not copy the pristine database for the idempotency probe'
-	write_influx_config "$idem_data"
-
-	say ""
-	if ! VICTUAL_DATAPATH="$idem_data" php "$VICTUAL_ROOT/.devtools/mqtt/idempotency-check.php"; then
-		failures=$((failures + 1))
-	fi
+	# Run twice rather than once, because the outbox is the one part of this feature whose
+	# behaviour could plausibly differ between engines: it turns on transaction semantics,
+	# on what a rolled back INSERT leaves behind, and on how each driver reports a failure
+	# mid-transaction. Asserting it only on SQLite - which ADR-0008 makes a development
+	# engine - would leave the deployment engine untested for exactly the properties this
+	# whole mechanism exists to provide.
+	#
+	# Each probe gets its own database on each engine. They book stock, rename tables out
+	# from under bookings and queue hundreds of rows, so sharing one would make a failure in
+	# the first indistinguishable from contamination of the second.
+	run_mqtt_probe_on_both_engines outbox-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines idempotency-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines event-identity-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines backlog-check "$mqtt_scratch"
 
 	# --- Both engines: the assembled payload --------------------------------------
 	say ""
@@ -520,10 +509,91 @@ run_mqtt_tests() {
 	fi
 }
 
+# Runs one probe against a fresh SQLite database and a fresh PostgreSQL one.
+#
+# The SQLite side is a copy of the pristine database, which already has the fixture rows the
+# probes book against. The PostgreSQL side is built from that same copy through
+# bin/victual-db-import - the real migration command - so both engines start from identical
+# data rather than from two independently seeded databases that might not be.
+run_mqtt_probe_on_both_engines() {
+	local probe="$1"
+	local scratch="$2/$1"
+
+	rm -rf "$scratch"
+	mkdir -p "$scratch/sqlite"
+
+	cp "$PRISTINE" "$scratch/sqlite/victual.db" || fail "could not copy the pristine database for $probe"
+	write_influx_config "$scratch/sqlite"
+
+	say ""
+	if ! VICTUAL_DATAPATH="$scratch/sqlite" \
+		VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
+		php "$VICTUAL_ROOT/.devtools/mqtt/$probe.php"; then
+		failures=$((failures + 1))
+	fi
+
+	local dbname="${MQTT_DB}_$(printf '%s' "$probe" | tr -c 'a-z0-9' '_')"
+
+	dropdb --if-exists "$dbname" || fail "could not drop $dbname"
+	createdb "$dbname" || fail "could not create $dbname"
+
+	write_pgsql_config "$scratch/pgsql"
+
+	VICTUAL_DATAPATH="$scratch/pgsql" DIFFTEST_DB_NAME="$dbname" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
+		|| fail "could not migrate $dbname"
+	VICTUAL_DATAPATH="$scratch/pgsql" DIFFTEST_DB_NAME="$dbname" \
+		php "$VICTUAL_ROOT/bin/victual-db-import" "$scratch/sqlite/victual.db" --force > /dev/null \
+		|| fail "could not import into $dbname"
+
+	# The InfluxDB settings on top of the connection ones, appended so the file keeps both
+	write_influx_config "$scratch/pgsql" append
+
+	say ""
+	if ! VICTUAL_DATAPATH="$scratch/pgsql" DIFFTEST_DB_NAME="$dbname" \
+		VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
+		php "$VICTUAL_ROOT/.devtools/mqtt/$probe.php"; then
+		failures=$((failures + 1))
+	fi
+}
+
+# The PostgreSQL connection settings, read from the environment rather than interpolated for
+# the reason build_pgsql() gives: a password with a quote in it would otherwise produce a
+# config.php that is either broken or executing something it should not be.
+write_pgsql_config() {
+	mkdir -p "$1"
+
+	cat > "$1/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+}
+
 # The probes need InfluxDB switched on to do anything at all - RecordTransaction() writes
 # nothing when it is off, which is deliberate (an outbox nobody drains is a leak). The
 # endpoint is the stand-in, which rejects, so the failure path is what gets exercised.
 write_influx_config() {
+	mkdir -p "$1"
+
+	# Appended when asked, so a PostgreSQL data directory keeps its connection settings and
+	# gains these; the opening tag comes from the file it is appended to.
+	if [ "${2:-}" = "append" ]; then
+		cat >> "$1/config.php" <<-PHPCONFIG
+			Setting('INFLUXDB_ENABLED', true);
+			Setting('INFLUXDB_URL', 'http://127.0.0.1:$MQTT_STANDIN_PORT');
+			Setting('INFLUXDB_TOKEN', 'suite');
+			Setting('INFLUXDB_ORG', 'suite');
+			Setting('INFLUXDB_BUCKET', 'suite');
+			Setting('INFLUXDB_TIMEOUT_SECONDS', 2);
+		PHPCONFIG
+
+		return 0
+	fi
+
 	cat > "$1/config.php" <<-PHPCONFIG
 		<?php
 		Setting('INFLUXDB_ENABLED', true);

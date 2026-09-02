@@ -126,12 +126,21 @@ the ledger is where it started, one engine at a time. `filter` asks each dialect
 SQL it emits for the API's substring operators and compares the rows, which is the hole
 hazard 16 lived in.
 
-`mqtt` is the odd one and is not a differential check at all: it runs plan 18's probes -
-the MQTT client id, the price deny-list, the publication lock, the outbox's durability and
-its redelivery idempotency - plus the one differential question that feature does raise,
-which is whether the assembled payload is identical on both engines. They live here because
-every defect they guard fails silently, and a probe nothing runs is documentation. It needs
-no broker and no node: InfluxDB is stood in for by PHP's own built-in server.
+`mqtt` is the odd one and is only partly a differential check: it runs plan 18's probes -
+the MQTT client id, the price deny-list, the publication lock, the outbox's durability,
+its event identity, its redelivery idempotency and the CLI's backlog drain - plus the one
+differential question that feature does raise, which is whether the assembled payload is
+identical on both engines. They live here because every defect they guard fails silently,
+and a probe nothing runs is documentation.
+
+Four of those probes run **twice, once per engine**, from one SQLite database imported into
+PostgreSQL through `bin/victual-db-import` so both sides start from identical data. The
+outbox is where this feature turns on transaction semantics - what a rolled back INSERT
+leaves behind, how a driver reports a failure mid-transaction - so asserting it only on the
+development engine would leave the deployment engine untested for the properties the
+mechanism exists to provide. The phase needs no broker and no node: InfluxDB is stood in for
+by PHP's own built-in server, which a control file flips between accepting and rejecting so
+the backlog probe can drain 450 events without restarting it.
 
 `.devtools/pgsql/difftest.php` puts both engines into an identical table state and
 compares what their views actually return:

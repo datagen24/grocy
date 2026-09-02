@@ -112,7 +112,10 @@ if ($productId === 0)
 	exit(1);
 }
 
+$engine = DatabaseService::GetInstance()->GetDialect()->GetName();
+
 // ---------------------------------------------------------------------------------------
+echo 'engine=' . $engine . PHP_EOL . PHP_EOL;
 echo 'A. Rebuilding an event across a second boundary' . PHP_EOL;
 
 $stock->AddProduct($productId, 2, date('Y-m-d', strtotime('+1 year')), StockService::TRANSACTION_TYPE_PURCHASE, date('Y-m-d'), 1.50);
@@ -210,5 +213,5 @@ if (count($failures) > 0)
 	exit(1);
 }
 
-echo "All idempotency checks passed.\n";
+echo "All idempotency checks passed (engine: $engine).\n";
 exit(0);

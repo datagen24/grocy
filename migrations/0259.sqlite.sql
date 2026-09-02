@@ -28,6 +28,17 @@
 -- attempts and last_error exist so a permanently failing event is visible rather than
 -- merely slow. Nothing prunes delivered rows yet; they are the delivery log until a
 -- retention decision is made deliberately.
+--
+-- dead_lettered_at is the third state, and it exists because the other two cannot express
+-- "this row will never be deliverable". An event whose payload this version cannot read -
+-- a shape written by an older version, or one that is simply malformed - must not be
+-- acknowledged as delivered, because that discards a committed event silently; and it must
+-- not be retried forever either, because it would block every valid row queued behind it.
+-- So it is set aside, with last_error saying why, where a person can find it. Nothing
+-- deletes these rows: the whole point is that the event still exists.
+--
+-- Edited in place rather than superseded by a 0260: 0259 has not reached master, so there
+-- is no database anywhere that ran the earlier shape and would need the column added.
 
 CREATE TABLE outbox (
 	id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
@@ -35,8 +46,9 @@ CREATE TABLE outbox (
 	payload TEXT NOT NULL,
 	row_created_timestamp DATETIME DEFAULT (datetime('now', 'localtime')),
 	delivered_at DATETIME,
+	dead_lettered_at DATETIME,
 	attempts INTEGER NOT NULL DEFAULT 0,
 	last_error TEXT
 );
 
-CREATE INDEX outbox_undelivered ON outbox (delivered_at, id);
+CREATE INDEX outbox_undelivered ON outbox (delivered_at, dead_lettered_at, id);
