@@ -206,7 +206,13 @@ while this was in flight. Nothing else about the schema moved.
   by `file_get_contents` and `unlink`. So a downscale on the database backend still
   touches `sys_get_temp_dir()`, which is `emptyDir`-shaped rather than PVC-shaped and
   does not affect this plan's goal — but the sentence in *What was measured* was
-  optimistic and is corrected here rather than left standing.
+  optimistic and is corrected here rather than left standing. **Where that temporary
+  directory is now says so out loud:** review of [10](10-cold-start-statelessness.md)
+  found that the production image named `/data` and `/var/run/apache2` as its writable
+  paths and left PHP's temporary directory implicit, which a read-only root filesystem
+  turns into a failure on the first thumbnail. The image sets `TMPDIR`, `sys_temp_dir`
+  and `upload_tmp_dir` to `/tmp` and lists it among the paths a deployment has to make
+  writable; `php://temp`'s spill past 2 MiB in `DatabaseStorage` lands in the same place.
 - **`7eff287` — the setting and the two combinations it may not be in.**
   `FILE_STORAGE` = `filesystem` (default) | `database`, validated in
   `ConfigurationValidator` before anything else can act on it: `database` with a
