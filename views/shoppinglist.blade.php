@@ -13,14 +13,6 @@
 </style>
 @endpush
 
-@push('pageScripts')
-{{-- purchase.js is pushed as a shared library here for the same reason as on
-     stockoverview (plan 12 step 5); this page's script references no purchase.js
-     symbol - the purchase form itself is loaded in an iframe - so this push is a
-     candidate for removal once the extraction lands. --}}
-<script src="{{ $U('/viewjs/purchase.js?v=', true) }}{{ $version }}"></script>
-@endpush
-
 @section('content')
 <div class="row d-print-none hide-on-fullscreen-card">
 	<div class="col">

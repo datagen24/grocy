@@ -741,52 +741,6 @@ function RefreshPriceHint()
 	}
 };
 
-/**
- * Undoes a single stock booking (stock/bookings/{id}/undo) and notifies the parent window/other
- * views that the affected product changed. Invoked from inline onclick handlers built server-side
- * (not used directly in this file, e.g. see stock journal "Undo" buttons).
- * @param {number|string} bookingId The stock booking id to undo
- */
-function UndoStockBooking(bookingId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Booking successfully undone"));
-
-			Victual.Api.Get('stock/bookings/' + bookingId.toString(),
-				function (result)
-				{
-					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result.product_id)), Victual.BaseUrl);
-				}
-			);
-		}
-	);
-};
-
-/**
- * Undoes a whole stock transaction (stock/transactions/{id}/undo, e.g. a purchase composed of
- * multiple bookings) and notifies the parent window/other views that the affected product
- * changed. Called from the "Undo" link embedded in the purchase success toast.
- * @param {number|string} transactionId The stock transaction id to undo
- */
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-
-			Victual.Api.Get('stock/transactions/' + transactionId.toString(),
-				function (result)
-				{
-					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result[0].product_id)), Victual.BaseUrl);
-				}
-			);
-		}
-	);
-};
-
 // Requesting the notification-sound permission the first time scan mode gets enabled
 $("#scan-mode").on("change", function (e)
 {

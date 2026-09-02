@@ -495,39 +495,6 @@ $("#use_specific_stock_entry").on("change", function ()
 	Victual.FrontendHelpers.ValidateForm("transfer-form");
 });
 
-/**
- * Undoes a single stock booking via stock/bookings/{id}/undo. Not currently invoked from
- * this view (transfer's own "Undo" link uses UndoStockTransaction below, which undoes all
- * bookings belonging to a transaction); kept here for parity with the sibling
- * purchase/consume/inventory views that do use it.
- * @param {number} bookingId
- */
-function UndoStockBooking(bookingId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Booking successfully undone"));
-		}
-	);
-};
-
-/**
- * Undoes an entire stock transaction (a transfer books two linked stock movements sharing
- * one transaction id) via stock/transactions/{id}/undo. Invoked from the inline "Undo"
- * link injected into the transfer success toast.
- * @param {number} transactionId
- */
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-		}
-	);
-};
-
 // Embedded-mode init: when opened with a preset location (e.g. from a location's stock
 // entries page), pre-select it and jump straight to specific-stock-entry mode; otherwise
 // just trigger the product picker's change handler to initialize dependent fields
