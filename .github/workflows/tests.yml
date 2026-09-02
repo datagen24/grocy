@@ -4,11 +4,15 @@
 # that the application behaves identically on SQLite and PostgreSQL. A view that quietly
 # returns different rows on one engine is invisible in review and obvious here.
 #
-# Deliberately not built on the repository's Dockerfile. That image exists so a
+# The suite is deliberately not run on the repository's Dockerfile. That image exists so a
 # contributor can run the suite locally without installing PHP and PostgreSQL by hand;
 # CI already has both, and building an image on every pull request would add minutes to
 # the feedback loop for no extra coverage. Both paths run the same runner script, so
 # there is one definition of what "the suite" means.
+#
+# The images themselves are built in their own job, because the file now produces a
+# production image as well and an image nobody builds is an image that quietly stops
+# building.
 
 name: tests
 
@@ -112,3 +116,42 @@ jobs:
           name: coverage-clover
           path: clover.xml
           if-no-files-found: warn
+
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both targets, because they diverge: the dev image is what the suite runs in and
+      # the production image is what a deployment runs. Building only one of them means
+      # discovering the other is broken at the worst moment.
+      - name: Build the development image
+        run: docker build --target dev -t victual:dev .
+
+      - name: Build the production image
+        run: docker build --target production -t victual:production .
+
+      # The three claims the production image makes, asserted rather than described.
+      # Sweep S25 is the reason the first one is a test and not a comment.
+      - name: The production image does not run as root
+        run: |
+          user=$(docker run --rm victual:production id -un)
+          echo "runs as: $user"
+          test "$user" = www-data
+
+      - name: The view cache is baked, and the serving user cannot write to it
+        run: |
+          compiled=$(docker run --rm victual:production sh -c 'ls /app/viewcache/*.php | wc -l')
+          echo "compiled files in the baked cache: $compiled"
+          test "$compiled" -ge 97
+          if docker run --rm victual:production sh -c 'touch /app/viewcache/canary' 2>/dev/null; then
+            echo "the serving user can write to the baked cache directory"
+            exit 1
+          fi
+
+      - name: The image carries no data directory and no repository history
+        run: |
+          if docker run --rm victual:production sh -c 'test -e /app/.git -o -e /app/data'; then
+            echo ".git or data/ ended up in the image"
+            exit 1
+          fi

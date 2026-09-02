@@ -5,7 +5,12 @@ outside the database, so scale-to-zero pods are a deployment choice rather than 
 gamble.
 **Depends on:** nothing. Pairs with [01 file storage](01-file-storage.md), which removes
 the other half of the writable data directory.
-**Status:** draft for review.
+**Status:** **landed in the codebase** (2026-09-02), except Q7's `dialect` column, which
+[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)'s acceptance made unnecessary
+before it was built. See [Executed](#executed) for what landed, for the two defects the
+verification found that the plan did not predict, and for the one check this environment
+could not run. Everything from here down is the plan as written and reviewed, kept
+because the reasoning is what the code has to keep being judged against.
 
 ## Today
 
@@ -409,6 +414,209 @@ resolves, or the docblock is reworded first — 15-C12 carries it as the cheaper
    > what a human reads when those checks disagree and the reason is not obvious.
    > It earns its place by making a confusing failure diagnosable, not by adding a
    > new way to fail.
+
+## Executed
+
+Landed 2026-09-02 in six commits, in the order this plan argues for: the cache path and
+its warmer, the lock, the redirect and the boot check, the prerequisite split, and the
+image. Measured against the working copy at `1036a52` (this plan's branch, off
+`5be7a58`), on PHP 8.4.19 and PostgreSQL 16.
+
+**[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) was accepted while this was
+in flight, and it shortened the plan rather than changing it.** The plan text above is
+left as written; each item it shrank or dropped is named below with 0008 as the reason.
+The retirement *work* is not scheduled, so SQLite still runs here — the differential
+suite, `run-app`, demo mode — and nothing below breaks it.
+
+- **`cced9e8` — the cache path and the warmer.** `VICTUAL_VIEWCACHE_PATH`
+  (`config-dist.php`), defaulting to `VICTUAL_DATAPATH . '/viewcache'` so an existing
+  installation is untouched. `SlimBladeView`, the Slim route collector and the
+  HTMLPurifier serializer path all read it. `bin/victual-warm-cache` compiles all 96
+  templates under `views/`, writes the route cache and generates the HTMLPurifier
+  definition cache, exiting non-zero unless every one compiled (Q2). Separate from
+  `bin/victual-migrate`, per Q5. The purifier configuration moved to
+  `BaseApiController::CreateHtmlPurifier()` so the warmer and the API cannot drift into
+  building two different definition caches.
+
+  **One addition the plan does not describe:** the route cache file is named after a hash
+  of `routes.php` and `VICTUAL_BASE_PATH` (`helpers/CachePaths.php`). FastRoute never
+  invalidates its cache, and Slim prefixes the base path onto every pattern *before*
+  FastRoute compiles them — so a route cache is only valid for one routing table and one
+  base path. The deleted version hash covered that from a distance and only for released
+  version changes; naming the one file that depends on those inputs after them covers it
+  precisely and locally.
+- **`6b46fdf` — the migration lock.** `DatabaseDialect::WithMigrationLock(callable)`,
+  wrapping the whole of `MigrateDatabase()` including the baseline and the always-run
+  8888. PostgreSQL takes `pg_advisory_lock(1986947956)` on `GetDbConnectionRaw()` and
+  releases it in a `finally`. `migrations/8888.php` inserts its location conditionally in
+  SQL as well as in PHP.
+
+  **One implementation, not two (0008: "`DatabaseDialect::WithMigrationLock` — two
+  implementations to one").** `SqliteDialect::WithMigrationLock()` runs the callable and
+  takes no lock, with a docblock saying why: SQLite is not a runtime engine, nothing
+  migrates it concurrently, and its own file locking makes a hypothetical loser fail
+  rather than corrupt. **Q3 — where the SQLite lock file lives — is therefore moot**, and
+  is recorded as moot rather than answered.
+
+  **The lock requires a direct connection or a session-mode pool entry**, which
+  [ADR-0009](../adr/0009-database-as-the-logic-layer.md)'s finding F1 asked this plan to
+  say. A session-scoped advisory lock lives on a backend, so a transaction-mode pooler can
+  hand the unlock to a different one and leak the lock permanently. It is stated in
+  `PostgresDialect::WithMigrationLock()`'s docblock and in `bin/victual-migrate`'s header
+  comment, which is where an operator reads it. `pg_advisory_xact_lock()` is not the
+  answer here because the run opens and commits transactions of its own.
+
+  **A second race had to be closed for the first one to be reachable.**
+  `PostgresDialect::OnConnected()` creates the changed-time table with `CREATE TABLE IF
+  NOT EXISTS`, which PostgreSQL documents as not race-free, and it runs while the
+  connection the lock would be taken on is being opened. Two pods starting together failed
+  there, before the lock existed. Losing that race is now treated as the outcome it is.
+- **`258aadf` — the redirect, the root route and the boot check.** `app.php:52-77` is
+  gone entirely: no marker file, no `EmptyFolder`, no `opcache_reset`, no 302.
+  `SystemController::Root` migrates only when `MIGRATE_ON_ROOT_REQUEST` is true, default
+  false (Q4). `middleware/SchemaVersionMiddleware.php` compares one memoized
+  `SELECT MAX(migration)` against `GetLatestMigrationNumber($dialect)` on every request
+  and answers 503 in plain text, naming both numbers, the setting and the command, in
+  either direction (Q6).
+
+  **Where it lives, and the ordering problem it has to avoid.** It is app-level
+  middleware added after `addRoutingMiddleware()` and before `addErrorMiddleware()`, so it
+  runs inside error handling and *outside* routing and authentication — an unmigrated
+  database should not be asked to resolve a route or identify a user first. That places it
+  before `RouteContext` exists, so the one route it must not run in front of — `/`, when
+  `MIGRATE_ON_ROOT_REQUEST` is on and the migrations table legitimately does not exist yet
+  — is matched on the request path with the base path stripped. Every other route is
+  checked even then, which is what keeps the fallback from being a hole: the API still
+  refuses to answer from an unmigrated database. An empty database reads as migration 0 and
+  gets the same 503 with "(nothing migrated yet)".
+
+  `update.sh` runs `bin/victual-warm-cache` after updating, and `.agents/skills/run-app`
+  migrates before booting — both replacing something the redirect used to do implicitly.
+- **`841c4f6` — the prerequisite split.** `checkRequirements()` keeps what
+  `public/index.php` can know before anything is loaded; `checkDatabaseRequirements($driver)`
+  runs from `app.php` with the configuration in hand and checks `pdo_pgsql` for pgsql,
+  `pdo_sqlite` plus the SQLite version for sqlite. **Kept driver-conditional rather than
+  deleted** (0008: "Delete the branch"), because the sqlite branch is three lines, the
+  suite and `run-app` still need it, and the retirement PR is what removes it — the
+  constant says so in place.
+- **`5ec3e72` — a defect the verification found.** Blade names a compiled file after a
+  hash of the absolute path of its source, so the warmer's `bin/../views/...` spelling and
+  the application's `views/...` are two different cache entries. Everything the warmer
+  compiled was being ignored and recompiled on demand — invisible on a writable directory,
+  every page a 500 on a read-only one. `realpath()` in the warmer. Found by running check 4,
+  not by reading the diff, which is the entire argument for check 4.
+- **`5a3ab76` — the image (sweep S25).** `.dockerignore` (`.git`, `data/`, the composer
+  and yarn output, coverage), a named `dev` target for the existing image, and a
+  `production` target: Apache with mod_php on 8080, `USER www-data`, the view cache baked
+  by the warmer into `/app/viewcache` owned by root so the serving user cannot write it,
+  front end packages from a node stage, composer removed after use. Nothing under `/app` is
+  written at runtime; a read-only root filesystem needs `/var/run/apache2` and the data
+  directory writable, which the Dockerfile says. CI builds both targets and asserts
+  non-root, cache baked and unwritable, and no `.git` or `data/` inside.
+
+  **`pdo_sqlite` stays in the production image** (0008: "Gone"), because
+  `bin/victual-db-import` still reads SQLite as an import format — the one thing 0008 keeps
+  SQLite for. The Dockerfile says that where the extension is installed.
+
+  **The compose credentials stay `victual`/`victual`, and now say why in place.** That
+  database lives for the length of a suite run, on a tmpfs, with no published ports, and
+  every documented invocation of the suite depends on the values. Changing them would move
+  the secret rather than remove it. What S25 actually asked for is that the *published*
+  image bake none, and it bakes none: the connection arrives as `VICTUAL_DB_*` or as
+  `settingoverrides` files.
+
+**Q7's `dialect` column was not built.** ADR-0008's consequences table rates it
+"Unnecessary" — the column exists to tell two engines' identically numbered rows apart,
+and after retirement there is only one engine. The migration number `0257` is released
+rather than consumed. The gap the column would have closed is recorded in
+[ADR-0004](../adr/0004-engine-specific-migrations.md) and stays open until retirement
+closes it by removing the ambiguity itself.
+
+### What was verified, and how
+
+Every check ran against a booted instance or real concurrent processes. The scripts were
+throwaway rather than committed fixtures, so each is described in the form that
+reproduces it.
+
+1. **Q1 — are `BASE_URL` / `BASE_PATH` load-bearing in the compiled templates? No.**
+   Warmed one cache under `VICTUAL_BASE_PATH=/elsewhere` and
+   `VICTUAL_BASE_URL=https://elsewhere.example/app`, another under the serving
+   configuration, served 17 pages against each and diffed the HTML: **identical, byte for
+   byte, on every page**. The `$U`-closure reasoning in *Today* holds, and the fallback the
+   response describes (warming per deployment instead of per image) is not needed.
+
+   Two things the check turned up on the way. Compiled Blade output is **not**
+   byte-reproducible — two warmings of the same tree under the same configuration differ in
+   47 of 96 files, because `@once` embeds a fresh UUID per compilation — so a byte
+   comparison of caches proves nothing and the rendered-HTML comparison is the only honest
+   form of this check. And the *route* cache genuinely does depend on the base path, which
+   is why it is named after it; served with a base path the baked cache was not warmed for,
+   a read-only image fails at boot with `RuntimeException: Route collector cache file
+   directory ... is not writable` rather than 404ing every route. Verified by doing it.
+2. **Check 1 — first request is an API call.** Fresh data directory, empty database,
+   migrated by `php bin/victual-migrate`, then `curl -H 'VICTUAL-API-KEY: ...' /api/stock`
+   as the very first request: **200 with a JSON body, no `Location` header**, on both
+   engines. Before the migration the same request is **503** with the plain text body.
+   `GET /` is a 302 to `/stockoverview` — the entry page, not to itself. The
+   `MIGRATE_ON_ROOT_REQUEST=true` path was checked in the same shape: `/api/stock` 503 on
+   an empty database, `GET /` migrates and 302s, `/api/stock` then reaches authentication.
+3. **Check 2 — concurrent cold start, ten times, `FEATURE_FLAG_STOCK_LOCATION_TRACKING=false`.**
+   Two `bin/victual-migrate` processes started together against an empty PostgreSQL
+   database, each iteration asserting both exits, `migrations` holding each number exactly
+   once, and the id-1 location existing. **On the unmodified tree (`2312ac2`, exported to a
+   scratch checkout): 10 of 10 iterations failed**, the loser dying on
+   `duplicate key value violates unique constraint "pg_type_typname_nsp_index"`. **With the
+   change: 0 of 10.** The baseline is what makes the result mean anything, and it is also
+   what found the `OnConnected()` race, which was still failing 9 of 10 after the lock
+   alone. On SQLite, per ADR-0008, this is not a runtime concern; a single
+   `bin/victual-migrate` run and a repeat run were confirmed to work and to leave 256 rows
+   and the id-1 location.
+4. **Check 3 — five concurrent runs against a migrated database.** Five processes, five
+   iterations, no-op each time: **0 failures, no deadlock**, which is the always-run 8888
+   path.
+5. **Check 4 — read-only cache directory.** The cache warmed and then `chmod -R a-w`,
+   owned by root, with the server run as `ubuntu` (root ignores file permissions, so this
+   check is meaningless as root). 41 top-level pages browsed and one create, one edit and
+   one delete through `/api/objects/locations` with an HTML-bearing description, which is
+   what exercises the HTMLPurifier serializer. **Nothing was written into the cache
+   directory** (`find -newer` a marker: empty) and the server log holds no permission or
+   write errors. This is the check that found `5ec3e72`.
+
+   Three pages 500 on PostgreSQL, and **all three fail identically on the unmodified
+   tree** — they are pre-existing PostgreSQL defects, not cold-start ones. See *What this
+   turned up* below.
+
+   **The container-level read-only root filesystem could not be tested: Docker is not
+   available in this environment.** Neither could the image be built. The production
+   target, its Apache configuration and the CI job that builds it are therefore unproven
+   as written — reviewed, not run.
+6. **Check 5 — the differential suite.** `.devtools/pgsql/run-tests.sh`, all five phases,
+   against this working copy: **SUITE PASSED**, including `check-migrations.php`
+   ("MIGRATION NUMBERING OK"), `MIGRATED STATE IDENTICAL`, all view phases, both rollback
+   phases and the filter phase. Nothing here touches schema and nothing in the suite moved.
+7. **Check 6 — prerequisite skip is real.** A PHP configuration directory without
+   `20-pdo_sqlite.ini` or `20-sqlite3.ini`, selected with `PHP_INI_SCAN_DIR`: with
+   `DB_DRIVER=pgsql`, `bin/victual-migrate` runs and the application serves `/api/stock`
+   (200) and its pages with **no SQLite extension loaded at all**. With `DB_DRIVER=sqlite`
+   the same runtime refuses to start: *"PHP module 'pdo_sqlite' not installed, but required
+   for the 'sqlite' database driver."*
+
+### What this turned up
+
+Three pages return 500 on PostgreSQL, on the unmodified tree as much as on this one, so
+they belong to nobody's plan yet and are recorded here because this is the first time
+anything browsed every page on PostgreSQL:
+
+- `/shoppinglist` — `column "uihelper_shopping_list.product_name" must appear in the GROUP BY clause`
+- `/mealplan` — the same, on `meal_plan_sections.sort_number`
+- `/locationcontentsheet` — `function ifnull(integer, integer) does not exist`
+
+The first two are the GROUP BY strictness difference between the engines reaching
+PHP-built queries the differential suite never asks for; the third is a SQLite function
+name written into PHP. All three are invisible to `difftest.php`, which compares views
+rather than pages, and all three become "the application is broken" rather than "one
+engine is broken" once [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)'s
+retirement lands.
 
 ## Effort
 

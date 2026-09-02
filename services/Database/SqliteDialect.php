@@ -117,6 +117,27 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
+	 * Runs the migration without taking a lock of its own.
+	 *
+	 * Not an oversight. Concurrent migration runs are a deployment problem - several pods
+	 * starting at once - and under ADR-0008 SQLite is not a runtime engine: it is what
+	 * bin/victual-db-import reads and what the differential suite and a local dev boot
+	 * migrate one process at a time. Nothing races here.
+	 *
+	 * What protects the case anyway is SQLite's own file locking: a second writer gets
+	 * SQLITE_BUSY and the run fails, which is loud rather than silent and cannot corrupt
+	 * the database. That is a worse experience than waiting and a perfectly acceptable one
+	 * for a path with no concurrent callers.
+	 *
+	 * This makes plan 10's question 3 - where a SQLite lock file should live - moot. It
+	 * was a real question while SQLite was a deployment target.
+	 */
+	public function WithMigrationLock(callable $work)
+	{
+		return $work();
+	}
+
+	/**
 	 * Standard SQL double-quote quoting, which SQLite supports alongside backticks.
 	 */
 	public function QuoteIdentifier(string $name): string

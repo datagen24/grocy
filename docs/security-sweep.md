@@ -62,7 +62,7 @@ and came from plan 16: every feature flag is dropped from the UI and the API (R1
 | S22 | **Low** | **Integer ids concatenated into SQL, guarded upstream.** `StockService::MergeProducts` and `ChoresService::MergeChores` build `UPDATE … WHERE product_id = ' . $id` strings; safe only because the controllers `FILTER_VALIDATE_INT` first. `stock_id` strings are interpolated in quotes and are `uniqid()`-generated today. | `services/StockService.php::MergeProducts`, `services/ChoresService.php::MergeChores` | Pass as `?` params — `ExecuteDbStatement` already takes them. |
 | S23 | **Low** — *fixed* | **Content-Disposition filename unquoted.** `ServeFile` concatenates the decoded name into `filename="…"`; `IsValidFileName` does not reject `"`. slim/psr7 rejects CR/LF so this is not header injection. | `controllers/Api/FilesApiController.php::ServeFile` | `filename*=UTF-8''` + `rawurlencode`. |
 | S24 | **Low** | **GitHub Actions pinned to tags, not SHAs.** No secrets in the workflow and no `pull_request_target`, so supply-chain only. | `.github/workflows/tests.yml` | Pin to full SHAs. |
-| S25 | **Info** | **Dev container runs as root and `COPY . /app` with no `.dockerignore`** (copies `.git` and `data/`); compose and CI use `victual`/`victual` Postgres credentials. All documented as non-production, tmpfs DB, no published ports. Matters only when 10 bakes a production image from this Dockerfile. | `Dockerfile`, `docker-compose.yml` | `.dockerignore`, non-root `USER`, before 10 publishes an image. |
+| S25 | **Info** — *fixed* | **Dev container runs as root and `COPY . /app` with no `.dockerignore`** (copies `.git` and `data/`); compose and CI use `victual`/`victual` Postgres credentials. All documented as non-production, tmpfs DB, no published ports. Matters only when 10 bakes a production image from this Dockerfile. | `Dockerfile`, `docker-compose.yml` | `.dockerignore`, non-root `USER`, before 10 publishes an image. **Done 2026-09-02 with [10](plans/10-cold-start-statelessness.md)** (`5a3ab76`): a `.dockerignore` keeping `.git`, `data/` and the build outputs out of the context, and a `production` target that runs as `www-data` with a baked, unwritable view cache and no baked credentials. The compose defaults stay and now say why in place — a tmpfs database with no published ports, created from nothing by every run, where changing the values moves the secret rather than removing it. CI builds both targets and asserts the non-root and no-`.git`/`data/` claims rather than describing them. |
 | S26 | **Info** | **`DISABLE_AUTH`/non-production modes.** `MODE` is settable via env or `settingoverrides/MODE.txt`; `dev` disables auth entirely and enables API error details. `DISABLE_AUTH` defines `VICTUAL_USER_ID = 1` while the middleware picks the lowest-id user — they diverge if user 1 is deleted. | `app.php`, `middleware/Auth/BaseAuthMiddleware.php`, `services/SessionService.php` | Note only. |
 
 ## What the hotfix changed
@@ -436,7 +436,8 @@ inherits S14 before adding lookup sources. **15**'s non-breaking table gains `up
 this paragraph used to send it here, the roadmap sent it to 10, and for a while neither
 plan carried it. It belongs where the production image is first published, because that is
 the commit in which it stops being an Info finding about a dev container; 10 now has the
-section.
+section, and it landed there on 2026-09-02 in the same commit as the production
+image, which is what the argument above said it would take.
 
 ## What the original sweep did not do
 
