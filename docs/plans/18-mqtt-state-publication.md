@@ -251,7 +251,12 @@ which is 19's own framing of why this channel is the hard case.
    tablet or a phone glance is for, and anything else is a template away rather than a
    server change.
 
-   > **Response:**
+   > **Response:** The lean's five, plus two promoted counts — products due soon and
+   > products expired — for seven ambient entities. The two counts are the classic
+   > glanceable numbers a wall tablet exists to show, they are already computed by the
+   > views the stock summary reads, and promoting them now costs two discovery payloads
+   > rather than the household rediscovering question 2's promote-on-demand path on day
+   > one. Everything else stays a template away, as the lean says. (2026-08-31.)
 
 2. **Few sensors with rich attributes, or one entity per tracked thing?** I lean strongly
    to the former, as above. Per-product entities mean hundreds of entities, a discovery
@@ -262,7 +267,18 @@ which is 19's own framing of why this channel is the hard case.
    promoting specific values to their own sensors as they prove wanted, not for starting
    there.
 
-   > **Response:**
+   > **Response:** The summary set stands as the ambient default, and the answer to
+   > few-versus-many is *both, deliberately*: per-product entities exist, but only for
+   > products the household opts in — a per-product flag, so the Home Assistant entity
+   > count is chosen rather than inherited from the catalogue. The lean's retraction
+   > problem is handled rather than avoided: deleting a product, deactivating it, or
+   > clearing its flag publishes an empty retained payload to its discovery and state
+   > topics, on the same after-commit seam as every other publish. This is the lean's own
+   > escape hatch — "promoting specific values to their own sensors as they prove
+   > wanted" — with the promotion made a flag the household sets rather than a server
+   > change per product. What stays rejected is the maximal reading: an entity per
+   > product for the whole catalogue, which is hundreds of discovery payloads and the
+   > retraction problem at scale for entities mostly nothing looks at. (2026-08-31.)
 
 3. **Does a bulk write publish once or many times?** An import or a shopping trip is many
    commits in quick succession, and publishing a full snapshot per commit is wasteful even
@@ -270,7 +286,13 @@ which is 19's own framing of why this channel is the hard case.
    which also makes the publish trivially skippable for reads. The cost is that a
    long-running CLI operation publishes only at the end.
 
-   > **Response:**
+   > **Response:** As leaned — mark the request dirty on the first committed write,
+   > publish once as the request ends. The tree already has the pattern this hangs off:
+   > `DatabaseService::InTransaction` is reentrancy-aware (only the outermost call
+   > commits), and `StockService` already collects label-webhook payloads during a
+   > transaction and fires them after commit — the dirty flag is that pattern carrying
+   > one bit. Reads never publish. A CLI operation publishing only at the end is correct
+   > rather than a cost: the importer and `bin/victual-migrate` both end. (2026-08-31.)
 
 4. **Does the topic prefix carry a schema version?** `victual/…` versus `victual/v1/…`. I
    lean to no version. A version in the topic makes every consumer's configuration a
@@ -278,7 +300,12 @@ which is 19's own framing of why this channel is the hard case.
    hand in five minutes; and retained topics need explicit retraction on rename either way,
    so the version does not save the cleanup it appears to.
 
-   > **Response:**
+   > **Response:** No version in the prefix, as leaned. One consequence of question 2's
+   > opt-in entities is noted rather than feared: per-product topics raise the
+   > payload-evolution surface, but a payload gaining an attribute is not a topic rename,
+   > and the retraction mechanism question 2 commits to is the same one a rename would
+   > need anyway. Revisit only if a change ever requires incompatible payloads on the
+   > same topic. (2026-08-31.)
 
 5. **QoS, protocol version, and whether the connection is per-request.** I lean to **QoS 0**
    with retain, a fresh connect-publish-disconnect per publish, and MQTT 3.1.1.
@@ -304,7 +331,11 @@ which is 19's own framing of why this channel is the hard case.
    stale entities for a day. Question 3's per-request publish and the boot publish are what
    bound that, and verification 8 is where it would show up.
 
-   > **Response:**
+   > **Response:** As leaned, entirely: QoS 0 with retain, connect-publish-disconnect
+   > per publish, MQTT 3.1.1, `php-mqtt/client`. The library argument and the design
+   > argument agree, and the design one is load-bearing: every publish supersedes the
+   > last, so delivery guarantees on a message about to be replaced buy nothing the boot
+   > publish does not already bound. (2026-08-31.)
 
 6. **Is the publish path allowed to be optional?** `MQTT_ENABLED` defaulting to false means
    the fork ships a feature the fork itself is the only user of, and every other
@@ -314,7 +345,10 @@ which is 19's own framing of why this channel is the hard case.
    publish, on the grounds that this is a household-specific integration and should look
    like one.
 
-   > **Response:**
+   > **Response:** As leaned: `MQTT_ENABLED` defaults false, an unreachable broker logs
+   > once per process rather than once per publish, and a failed publish never surfaces
+   > into the write that triggered it — the security notes' last bullet already requires
+   > that. A household-specific integration should look like one. (2026-08-31.)
 
 7. **Does anything publish to InfluxDB?** I lean to no, and to recording why: Home
    Assistant's own InfluxDB integration already writes entity history, and Home Assistant
@@ -322,7 +356,20 @@ which is 19's own framing of why this channel is the hard case.
    series full of holes that mean "nobody was shopping", not "nothing was true". The
    history belongs to the consumer that is always there to observe it.
 
-   > **Response:**
+   > **Response:** Yes — scoped, and not for the reason the lean feared. The
+   > sparse-series objection is right about *sampled state* and does not apply to
+   > *events*: a point written when a purchase or a price change commits produces a
+   > series whose gaps mean "no purchases", which is true rather than an artifact of the
+   > pod sleeping. So the server writes price and valuation events directly to InfluxDB
+   > on the same after-commit seam — per product: price paid, stock value — and that
+   > channel, not MQTT, is where "how has spending shifted over time" is answered.
+   > InfluxDB has its own credentials and is queried rather than broadcast, so the
+   > wall-tablet test never applies to it; this is exactly the deliberate add question 8
+   > says a household wanting pricing history should have to make. Home Assistant's own
+   > InfluxDB integration still records entity history for the entities that exist, and
+   > nothing pricing-shaped ever becomes a Home Assistant entity. What stays rejected is
+   > the lean's actual target: sampling stock state into InfluxDB from a pod that is
+   > mostly asleep. (2026-08-31.)
 
 
 8. **Does the ambient payload carry prices?** [19](19-rbac.md)'s Q5 asks this plan to
@@ -338,7 +385,15 @@ which is 19's own framing of why this channel is the hard case.
    on the assembler rather than on the entity set: question 1 can keep the stock summary
    and still drop three columns from it.
 
-   > **Response:**
+   > **Response:** As leaned — no price or cost field, on any topic, with the assembler
+   > dropping every `x-visibility` field rather than maintaining a second list, so MQTT
+   > never becomes the channel that answers a question the API refuses. Taken as written
+   > and knowingly: the `x-visibility` annotations arrive with [19](19-rbac.md)'s piece 2
+   > in wave 5, so until then the price fields the security note below names are what the
+   > rule denotes, and the assembler adopts the spec-driven form the day the annotations
+   > exist. The cost the lean names — a spending sensor requires a deliberate add — is
+   > now paid deliberately: question 7's InfluxDB event stream is that add, on a channel
+   > with its own credentials rather than a broadcast one. (2026-08-31.)
 
 ## Effort
 
@@ -383,12 +438,11 @@ connection the application makes that is not the label printer.
   is on the same private cluster with its own credentials, and it is a reason not to
   publish anything that would not also be shown on a wall tablet — no user records, no
 
-  notes fields, no API keys, and — **pending question 8** — no prices. Prices are the
+  notes fields, no API keys, and — per **question 8**, answered — no prices. Prices are the
   addition [19](19-rbac.md) forces and the one this plan would otherwise have missed. The
   wall-tablet test excludes them on its own reasoning, since a broker subscriber is not a
   logged-in user and cannot be made into one, which is why 19's Q5 is carried here rather
-  than gating that plan; but the lean is recorded as a lean until question 8 has a
-  response, like everything else in that section. The exposure is real either way: if the
+  than gating that plan; question 8's Response adopts the lean (2026-08-31). The exposure is real either way: if the
   stock summary's attributes are assembled from `uihelper_stock_current_overview`, which
   the UI reads and which selects `value`, `last_price` and `average_price`
   (`migrations/0252.sql:38-39`), they ship by default unless something removes them.
@@ -396,6 +450,11 @@ connection the application makes that is not the label printer.
   `stock_log.price`, `products_average_price`, `product_price_history`,
   `products_last_purchased.price`, `last_price`, `avg_price` or a recipe's `costs`, and
   adding an entity that would is a change this bullet has to be edited to permit.
+- **Question 7 adds a second outbound connection: InfluxDB.** Same treatment as the
+  broker — the endpoint is a configured constant nothing in a request can influence, the
+  token is a setting that never joins `EXPOSED_SETTINGS`, and a failed write to it never
+  surfaces into the committed write that triggered it. Unlike the broker there is no
+  retained-payload exposure: InfluxDB is queried with credentials, not subscribed to.
 - **A publish must never carry a failure into a committed write.** Short connect and
   publish timeouts, exceptions caught and logged, and the write path unaffected. The
   transaction is already closed by then, per 13.
