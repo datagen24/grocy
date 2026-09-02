@@ -656,3 +656,227 @@ harness README.
 Steps 3 to 6 in full, and with them the plan's checks 4 and 5. The baseline is the
 acceptance list for step 3; the dialog-dismiss probe is the acceptance test for step 4; the
 `purchase.js` push comments in the three Blade views are step 5's starting marker.
+
+## Executed — steps 3, 3a and 4
+
+Landed 2026-09-02 on `worktree-agent-a1fe9ca2e1f995a55`, against the working copy at
+`59456dd` (the merge of steps 1 and 2). **Steps 5 and 6 remain outstanding** — `purchase.js`
+is still a shared library by `@push` side effect, `datetimepicker2` is still a 373-line copy,
+and the Blade tidy-up is untouched.
+
+**The factories** (`22f8634`), in one new file, `public/js/victual_entity.js`, loaded from the
+layout straight after `victual.js`. No bundler, per Q6; the second `<script>` tag is the whole
+cost. `Victual.EntityList` and `Victual.EntityForm` own the DataTable wiring, the search box,
+the "show disabled" toggle, the delete-confirm dialog, live validation, Enter-to-submit, the
+save/disable/re-enable cycle, the userfields round trip and the embedded-dialog `Reload`
+message. The four list pieces are also exported individually — `Victual.EntityList.Table`,
+`.SearchFilter`, `.ShowDisabledToggle`, `.ConfirmDelete` — which is what Q5's mixin adopters
+take. `locations` + `locationform` were converted and verified first, then the rest
+mechanically.
+
+**The bucketing that came out of it.** Q5's shape held; what it did not settle was where each
+of the 22 form scripts fell, and the honest answer is that fewer of them are pure clones than
+the plan's "22 `*form.js` scripts are byte-identical modulo the entity name" implies.
+
+| Bucket | Files |
+|---|---|
+| `Victual.EntityList` (12) | `locations`, `shoppinglocations`, `quantityunits`, `productgroups`, `batteries`, `chores`, `taskcategories`, `mealplansections`, `userfields`, `userentities`, `users`, `userobjects` |
+| `Victual.EntityForm` (10) | `locationform`, `shoppinglocationform`, `taskcategoryform`, `mealplansectionform`, `productgroupform`, `batteryform`, `userentityform`, `userobjectform`, `userfieldform`, `taskform` |
+| Mixin adopters (7) | `stockjournal`, `userpermissions`, `manageapikeys`, `products`, `equipment`, `tasks`, and `quantityunitconversionsresolved` |
+| Leave alone (3) | `mealplan`, `recipes`, `shoppinglist` |
+| Neither, and why | `quantityunitform`, `choreform`, `equipmentform`, `productform`, `recipeform`, `recipeposform`, `shoppinglistform`, `shoppinglistitemform`, `stockentryform`, `productbarcodeform`, `quantityunitconversionform`, `userform` |
+
+That last row is the divergence worth arguing with. Each of those twelve forms differs from
+the clone shape in the part the factory owns, not around it: `equipmentform` uploads a file
+*inside* the save callback and deletes the old one first; `productbarcodeform` and
+`shoppinglistform` post `CloseLastModal` plus a page-specific message and, in
+`shoppinglistform`'s edit branch, save userfields *before* the PUT rather than after;
+`userform` saves a picture between the two; `quantityunitform`, `choreform`, `productform`,
+`recipeform` and `recipeposform` are 170–600 lines of page behaviour with a save in the
+middle. Forcing them through `EntityForm` would have meant adding a hook per file, which is
+the config-object-that-owns-everything failure mode Q5 was avoiding. They keep their own save
+handlers; they lost their `console.error` handlers like everything else.
+
+`quantityunitconversionsresolved` is added to the mixin bucket rather than left alone: it is
+read-only, has no delete and no search box, and takes `Victual.EntityList.Table` and nothing
+else. It was one of the review's two named drift markers; the other, `productgroups`, is
+step 4 below.
+
+**One Blade edit** (`e60bd17`): `manageapikeys.blade.php` gains a `data-apikey-name`
+attribute. The delete confirmation names a key by its description when it has one and by the
+key itself otherwise, which the view script used to decide in JavaScript; resolving it in the
+template lets the shared confirmation read one attribute like every other list. That is the
+only template change outside the layout's `<script>` tag — step 6's Blade tidy-up is not
+included here.
+
+**Bugs closed by construction, not by being noticed.** Enter-to-submit in the factory calls
+the same function the save button calls, instead of clicking a save-button selector. Three
+forms had drifted to clicking an id that does not exist — `mealplansectionform` clicked
+`#save-mealplansections-button` (plural), and the previous agent had already found
+`quantityunitform:147`/`:217` and `recipeform:148` clicking `#save-quantityunit-button` and
+`#save-recipe-button`. The two on the factory list are fixed by the factory;
+`quantityunitform` and `recipeform` are not on it, so their selectors were corrected in place
+to the class-named buttons that actually exist. `userobjectform` gains the handler it never
+had, which also forced the factory to *delegate* keyup/keydown from the form element rather
+than binding to the inputs it has at load — a userobject's only inputs are its userfields, so
+an entity with none has no inputs to bind to at all. That is the mechanical reason that one
+form never had an Enter handler, and delegation is the shape that cannot reproduce it. The
+baseline harness's probe was taught about delegated handlers to match (`ba4910a`);
+`quantityunits`'s delete dialog also regained the `__t()` on its Yes/No labels, which it was
+alone in having lost.
+
+**Step 4** (`4fa1e25`), the one pair Q3 allows converting. `productgroupform` posts `Reload`
+after a successful save instead of `CloseLastModal`, and `productgroups` drops its full-page
+reload listener. `CloseLastModal` is untouched, and so is every other form that posts it.
+This also fixes `/productgroup/{id}` as a standalone page: it had no non-embedded branch at
+all, so a save outside a dialog succeeded and then sat there with every input still disabled
+by `BeginUiBusy`.
+
+**The 157 `console.error` handlers** are gone, in four passes: with the list conversions
+(`2633b28`), across the 21 remaining page scripts (`1c73cfd`), across the five component
+scripts (`9986d85`) and, last and separately, across `mealplan`, `recipes` and `shoppinglist`
+(`a33ffdb`). Two shapes: a callback whose whole body was `console.error(xhr)` is deleted
+where it stands so `Victual.Api.DefaultErrorHandler` fires; one that also did something —
+`EndUiBusy`, mostly — keeps its callback and calls the default handler explicitly, so the
+form still re-enables. `consume.js`'s booking POST already called `ShowGenericError` *and*
+`console.error`, so it would have toasted twice; that one lost the added call instead.
+
+**Q2's survivors, six of them**, each carrying a comment saying why:
+
+| Where | Why |
+|---|---|
+| `victual.js` `__t()` / `__n()` — the two `system/log-missing-localization` posts | Already silent from step 2: called from inside a translation helper, and the error toast's own text goes back through `__t()`, so a failure could recurse |
+| `tasks.js` `RefreshStatistics` | Background statistics refresh — runs on load and after every completed task |
+| `choresoverview.js` `RefreshStatistics` | Same, after every tracked execution |
+| `batteriesoverview.js` `RefreshStatistics` | Same, after every tracked charge cycle |
+| `components/productcard.js` price-history fetch | A decoration on a card opened for something else; having no price data is the ordinary case and the branch above it draws the "no price data" hint |
+| `components/productpicker.js` — the barcode and name resolution lookups (two calls, one site) | Run on every blur of the picker to resolve what was typed or scanned; "not a known product or barcode" is the ordinary outcome and already has its own UI in the create/assign dialog and the "not in stock" message |
+
+Q2's guess named `victual_dbchangedhandling.js`, the test pages
+(`barcodescannertesting`, `quantityunitpluraltesting`) and `SaveUserSetting` as likely
+survivors. The grep says none of them needed a decision: `victual_dbchangedhandling.js` and
+`SaveUserSetting` live in `public/js`, not `public/viewjs`, and were already carrying
+explicit handlers step 2 left alone; the two test pages make no `Victual.Api` call with an
+error argument at all.
+
+**Step 3a — S29** (`64867e8`, plus the factories' own escaping in `22f8634`). Structurally,
+`Victual.EntityList.ConfirmDelete` takes the entity name as data and escapes it on the way
+into the message, so no caller can pass markup through it; `Victual.FrontendHelpers.EscapeHtml`
+is the new function form of the tree's existing `String.prototype.escapeHTML`, which throws on
+the `null` that `.attr()` returns for a missing attribute. By hand: the ~20 toast sites in
+`consume`, `purchase`, `transfer`, `inventory`, `stockoverview`, `stockentries`,
+`choresoverview`, `choretracking`, `batteriesoverview`, `batterytracking`, `tasks`, `recipes`,
+`mealplan` and `shoppinglistitemform`; `components/productamountpicker.js`'s `<option>`
+builder; and the irregular confirmations in `manageapikeys`, `shoppinglist`,
+`components/productpicker`, `recipeform` and `calendar`. Both traps the plan named were
+avoided: `toastr.options.escapeHtml` is not set, because ten of these messages carry
+deliberate markup including the consume Undo button, and every value is escaped at the point
+of use rather than where it was written into a `data-` attribute.
+
+Two decisions inside that sweep worth recording. `productamountpicker`'s two
+`data-destination-qu-*` attributes are deliberately left *unescaped* at the write, because
+`.attr()` escapes for the attribute by itself and returns the decoded string — so escaping
+there would be escaping into a value that is decoded again, and the fix has to live at the
+three places `shoppinglistitemform` reads them back. And `shoppinglistitemform`'s three
+identical message-building expressions were extracted into one named function rather than
+escaped three times, because three copies of an escaping decision is how the next one gets
+forgotten.
+
+**`mealplan`, `recipes` and `shoppinglist` are Q5 leave-alone files and stayed that way for
+the refactor** — no factory, no mixin, no function moved. Their toast and confirmation lines
+were edited for S29, which the plan asks for explicitly, and their `console.error` handlers
+were deleted in a commit of their own (`a33ffdb`) so that check 4's count could reach zero.
+That last one is the divergence a reviewer might not want: it is 23 one-line deletions in
+files the plan says to leave alone. It is kept as a separate commit so it can be dropped
+without disturbing anything else, and the argument for it is that leaving the shopping list,
+the meal plan and the recipe pages failing silently would leave the plan's headline outcome
+unreached in exactly the pages that do the most work.
+
+### Verification
+
+Against two demo-mode SQLite instances booted from the same working copy on 2026-09-02 —
+`59456dd` unmodified on one port and this branch on the other, each on a freshly migrated
+demo database so the absolute row counts are comparable too. Reproduce with
+`.agents/skills/run-app/SKILL.md` plus `.devtools/frontend/README.md`.
+
+- **Check 1, the baseline, before and after.**
+  `node .devtools/frontend/baseline.js --url http://127.0.0.1:850X`. Across 13 round-tripped
+  lists, 10 load-probed pages and 22 form pages, the two runs differ in **exactly three
+  cells**, all three of which the plan says should change:
+
+  | Page | Column | Before | After |
+  |---|---|---|---|
+  | `productgroups` | Parent reloads on dialog dismiss | `true` | `false` |
+  | `productgroups` | Form left disabled on edit save | `true` | `false` |
+  | `userobjectform` | Enter-to-submit bound | `false` | `true` |
+
+  Every other field — row counts, create/edit/delete deltas, the reload conventions, the
+  delete styles including `tasks`'s delta-0 fade-out, and the console column — is byte
+  identical, `userobjects`'s pre-existing `aDataSort` error included.
+
+- **Check 3, error surfacing, forced.** `node .devtools/frontend/forced-failure.js`, 9/9. A
+  500 on `DELETE /api/objects/locations/{id}` toasts and its click-through opens the details
+  dialog carrying the forced `error_message`; a 500 on `POST /api/objects/product_groups`
+  toasts and re-enables the form; a 500 on `POST /api/tasks/{id}/complete` toasts; a 500 on
+  `GET /api/objects/equipment/{id}` toasts on load. `route.abort('connectionreset')` on a
+  save re-enables the form and toasts, which is the `onerror` path step 2 built and step 3
+  made reachable. The negative case passes too: a 500 on `GET /api/tasks`, which is the tasks
+  page's background statistics refresh, produces no toast.
+
+- **Check 4.** `grep -rc console.error public/viewjs/` is **0** in all 86 files, top level
+  and `components/` alike, down from 157. The six survivors listed above are `function () { }`
+  with a comment, so they do not appear in that count at all.
+
+- **Check 5, S29, with a payload.** `node .devtools/frontend/s29-payload.js`. It seeds a
+  location, chore, quantity unit, shopping list, product, task, battery, equipment item, task
+  category, product group, shopping location and API key with a name of
+  `&lt;img src=x onerror=window.__xss=1&gt;`, reads each value back from the API to confirm
+  the sanitiser stored a **live tag** rather than the entity-encoded text that was sent, then
+  opens the delete confirmation or triggers the success toast on each page that acts on them.
+
+  | Probe | `window.__xss` before | after | name renders as text |
+  |---|---|---|---|
+  | `locations` | `1` | unset | yes |
+  | `chores` | `1` | unset | yes |
+  | `quantityunits` | `1` | unset | yes |
+  | `products` | `1` | unset | yes |
+  | `shoppinglist` | `1` | unset | yes |
+  | `manageapikeys` (delete) | `1` | unset | yes |
+  | `manageapikeys` (QR dialog) | `1` | unset | yes |
+  | `tasks` (delete) | `1` | unset | yes |
+  | `tasks` (completed toast) | `1` | unset | yes |
+  | `batteries` | `1` | unset | yes |
+  | `equipment` | `1` | unset | yes |
+  | `taskcategories` | `1` | unset | yes |
+  | `productgroups` | `1` | unset | yes |
+  | `shoppinglocations` | `1` | unset | yes |
+  | `batteriesoverview` (tracked toast) | `1` | unset | yes |
+  | `choresoverview` (tracked toast) | `1` | unset | yes |
+
+  16 of 16 executed on the unfixed head, so the check is known to be capable of failing;
+  16 of 16 are clean after, with the payload visible as text and no injected `<img>` in the
+  dialog or the toast.
+
+  The grep half passes too. `grep -rnE "(\.html\(|\.append\(|bootbox\.|toastr\.)"
+  public/viewjs/**/*.js | grep -E "\.(name|name_plural|username|description)\b"` returns
+  three lines, all of them `.html()` of a `description` on `equipment`, `chores` or
+  `products` — three of the five columns in `BaseApiController::HTML_RENDERED_COLUMNS`, which
+  are HTML by design.
+
+- **Every view route, before and after.** `node .devtools/frontend/routes-smoke.js`: 80
+  loadable routes, **0 non-200** and the **same two** console problems on both trees —
+  `/productbarcodes/new` opened without its `product` parameter, and `/api`, the Swagger UI
+  page. Zero new console errors.
+
+- **Syntax.** `node --check` on all 86 files under `public/viewjs` and on
+  `public/js/victual_entity.js`, clean. No `.php` file was changed, so there was nothing to
+  `php -l`; the one template edit renders (it is on the `/manageapikeys` route above).
+
+### Outstanding after this
+
+Steps 5 and 6. `purchase.js`'s extraction is still marked by the `@push` comments the step-1
+commit left in the three Blade views, and the previous agent's finding still holds: only
+`stockoverview.js` actually references a `purchase.js` symbol (`UndoStockTransaction`), so
+two of the three pushes look removable outright. `datetimepicker2` is untouched;
+`stockentryform.js` and `mealplan.js` are the pages where two pickers coexist. The Blade
+repetition step 6 names is still there in the ~14 list templates.
