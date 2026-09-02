@@ -2,7 +2,11 @@
 
 **Goal:** Store uploaded files as `BYTEA` so the container needs no persistent volume.
 **Depends on:** PostgreSQL support (done).
-**Status:** draft for review — design agreed in discussion, not yet built.
+**Status:** **landed 2026-09-02.** See [Executed](#executed) for what shipped, for the
+migration number that moved, for the one measurement in this plan that turned out to be
+optimistic, and for the three checks this environment could not run. Everything from here
+down is the plan as written and reviewed, kept because the reasoning is what the code has
+to keep being judged against.
 
 ## Why
 
@@ -172,6 +176,202 @@ bytes differently, which is a response change wearing no field name.
 - Thumbnails written on first request are a runtime DB write from a GET path. Harmless
   here, but worth a one-line comment in the code, since "GETs don't write" is otherwise
   a nice invariant.
+
+## Executed
+
+Landed 2026-09-02 in seven commits, in the order this plan argues for: the abstraction
+and the filesystem backend as a pure refactor, the setting and its validation, the
+migration and the database backend, the S10 bounds, the importer, the suite exemption,
+and this record. Measured against the working copy at `68d1162` (this plan's branch, off
+`4d9e03b`), on PHP 8.4.19 and PostgreSQL 16.
+
+**The migration is `0258.pgsql.sql`, not `0257`.** 0257 was consumed by another track
+while this was in flight. Nothing else about the schema moved.
+
+- **`4174129` — the abstraction and the filesystem backend, as a pure refactor.**
+  `Victual\Services\Storage\FileStorage` with the seven methods this plan lists, and
+  `FilesystemStorage` holding today's behaviour unchanged, including the per instance
+  storage suffix demo and prerelease mode append. The call sites moved with it:
+  `FilesApiController` serves, uploads and deletes through the storage,
+  `FilesService::DownscaleImage` and `DeleteFile` work in names rather than paths, and
+  `StockService`'s barcode-lookup picture write is a `Write()` rather than a
+  `file_put_contents`. `FilesService::GetFilePath` is gone — a path is the one thing a
+  database backend cannot supply, so leaving it would have left a way around the seam.
+
+  Downscaling moved onto bytes as the plan describes
+  (`ImageResize::createFromString()` / `getImageAsString()`), and produces
+  byte-identical output. **One correction to the measurement this plan was designed on:
+  "no temp files anywhere" is true of this repository's code and not of the library.**
+  `ImageResize::getImageAsString()` is implemented as `save()` to a `tempnam()` followed
+  by `file_get_contents` and `unlink`. So a downscale on the database backend still
+  touches `sys_get_temp_dir()`, which is `emptyDir`-shaped rather than PVC-shaped and
+  does not affect this plan's goal — but the sentence in *What was measured* was
+  optimistic and is corrected here rather than left standing.
+- **`7eff287` — the setting and the two combinations it may not be in.**
+  `FILE_STORAGE` = `filesystem` (default) | `database`, validated in
+  `ConfigurationValidator` before anything else can act on it: `database` with a
+  non-`pgsql` driver, and `database` in demo or prerelease mode (Q4), each refused at
+  startup with a message naming the value found and the way out.
+- **`5592ded` — the migration and the database backend.** `migrations/0258.pgsql.sql`
+  creates `files` exactly as specified above, carrying `@engine-exclusive` and the reason
+  SQLite needs no counterpart: the configuration that would read the table cannot exist on
+  SQLite, because the validator refuses it. `files` is not an `ExposedEntity`.
+
+  **The plan's three risks, all three confirmed by measurement rather than assumed.**
+  *LessQL cannot bind LOBs* — it quotes values into the statement text and `PDO::quote()`
+  returns `false` for a string that is not valid UTF-8, so a JPEG arrives as an *empty*
+  value and the insert dies as `syntax error at or near ")"`. It fails loudly rather than
+  truncating, which is the better of the two ways to be wrong, but it fails. Everything in
+  `DatabaseStorage` is therefore raw PDO with `PDO::PARAM_LOB`. *`mime_content_type($path)`
+  and `finfo_buffer($bytes)` agree* — checked on the real JPEG, PNG, PDF and text file used
+  throughout the verification below, and on HTML wearing a `.png` name: `image/jpeg`,
+  `image/png`, `application/pdf`, `text/plain`, `text/html` from both. *PDO's `BYTEA`
+  stream is tied to its statement* — on this build it actually survived its statement going
+  out of scope, but `Read()` copies into `php://temp` anyway, because "it happened to work
+  in one PHP version" is not the property the response body needs.
+
+  `Write` is `INSERT ... ON CONFLICT (file_group, name) DO UPDATE`; `Create` is a plain
+  insert letting the unique constraint be what says "exists", mapped back to the same
+  message `fopen($path, 'xb')` used to produce. Derivatives are ordinary rows under
+  today's `__downscaledto` names with `is_derivative = 1`, so the prefix delete is a
+  `LIKE` — with the prefix's `%`, `_` and `\` escaped, since the prefix is a user supplied
+  file name and `a_b` would otherwise also match `axb`. The GET that writes a thumbnail
+  says so in a comment, per the review note.
+- **`520919d` — sweep S10, both bounds.** `FILE_STORAGE_MAX_SIZE_MB`, default 64,
+  enforced *while* the body is streamed rather than after it is stored, so it bounds what
+  can be written rather than what can be served; both backends discard what they had
+  written and the API answers **413** with a message naming the limit. The effective
+  limit is the smallest of the setting, `upload_max_filesize` and `post_max_size` (Q2),
+  resolved by `ConfigurationValidator` at startup so the clamp is logged where someone is
+  still looking, and reported by `GET /api/system/config`.
+
+  **That last one is this change's only wire addition** — one additive key,
+  `FILE_STORAGE_MAX_SIZE_MB`, on an endpoint whose response schema is an untyped
+  key/value map, so `victual.openapi.json` needed no edit. It carries the *effective*
+  value rather than the configured one, which is the whole point: an installation that
+  reports 64 and refuses everything over 2 has told its clients a number they cannot act
+  on.
+
+  `best_fit_height`/`best_fit_width` snap to the nearest of **32, 64, 250, 400, 800**.
+  The first four are every size the front end actually asks for — 32 and 64 for the list
+  thumbnails, 250 for a userfield picture, 400 for the detail views (`grep best_fit` in
+  `public/` and `views/`) — and 800 is a sane larger default so a client wanting better
+  than a detail view need not invent one. Snapping rather than refusing keeps existing
+  clients working: a request for 401 still gets a picture, it just shares 400's cache
+  entry.
+- **`49eba3f` — `bin/victual-files-import`,** Q1 answered (a). Walks
+  `<data path>/storage/<group>/<name>` into the table, refuses to run unless
+  `FILE_STORAGE` is `database` and `DB_DRIVER` is `pgsql`, reports every file, exits 0/1.
+  Idempotent by size, as the response asks, and one step further: a row present at a
+  *different* size is re-imported, because a half written row from a killed Job is the one
+  case where "already there" is not "already done". No `--delete-after`.
+
+  `DatabaseStorage` gained `GetSizeBytes()` for it. **That is one method more than this
+  plan's interface lists, and deliberately not on `FileStorage`:** nothing in the request
+  path asks how big a stored file is, so it is a backend method the importer uses, not a
+  widening of the seam. It is what the `size_bytes` column is for.
+- **`68d1162` — the suite exemption.** `files` is the first engine-exclusive *table*
+  (`0256.sqlite.sql` was a view change), so `migratedifftest.php` — the phase that
+  compares table sets — failed on it. It is now excluded by a named
+  `ENGINE_EXCLUSIVE_TABLES` list with the reason beside it, and the phase prints what it
+  excluded. Deliberately *not* folded into `DatabaseImporter::TARGET_ONLY_TABLES`, which
+  is a different claim and would also have silenced `bin/victual-db-import`'s note about
+  the table — a household importing a SQLite installation wants to be told its pictures
+  have not come across with it. `db/pgsql/README.md` records the rule next to the
+  `@engine-exclusive` rule it extends.
+
+### What was verified, and how
+
+Two instances of this working copy against one PostgreSQL 16 database (`tracka2_app`),
+one on `FILE_STORAGE=filesystem` and one on `database`, plus a scratch checkout of
+`4d9e03b` as the unmodified reference. Every check below ran against a booted instance.
+The scripts were throwaway rather than committed fixtures, so each is described in the
+form that reproduces it.
+
+1. **The header matrix, three ways, and it is the load-bearing check.** A script drives
+   upload, serve, downscale and delete of a 217 KB JPEG, a 78 KB PNG, a real PDF and a
+   text file across four groups, plus the refusal cases (re-upload of an existing name,
+   HTML under a `.png` name, a disallowed extension, a missing file, an invalid group, a
+   download-name pair, `force_serve_as=picture` on a PDF), and prints the status line and
+   the `Content-Type`, `Content-Disposition`, `Cache-Control` and `X-Content-Type-Options`
+   headers for each.
+
+   Run against the unmodified `4d9e03b`, against this branch's filesystem backend, and
+   against its database backend, the three outputs are **identical apart from the label
+   line** — same statuses, same four headers everywhere, same served bytes (`cmp` against
+   the source file), same downscaled byte counts. The downscaled JPEG and PNG produced by
+   `getImageAsString()` are byte-identical to those `save($path)` produced at `4d9e03b`.
+
+   | | `4d9e03b` filesystem | this branch, filesystem | this branch, database |
+   |---|---|---|---|
+   | JPEG | 200, `image/jpeg`, `inline`, `max-age=2592000`, `nosniff` | identical | identical |
+   | PNG | 200, `image/png`, `inline`, `max-age=2592000`, `nosniff` | identical | identical |
+   | PDF | 200, `application/pdf`, `inline`, `max-age=2592000`, `nosniff` | identical | identical |
+   | `.txt` | 200, `application/octet-stream`, `attachment`, `max-age=2592000`, `nosniff` | identical | identical |
+   | missing / bad group | 404, `application/json` | identical | identical |
+   | HTML under `.png` | 400 `File is not a valid image`, then 404 | identical | identical |
+   | existing name | 400 `Error while creating file …` | identical | identical |
+
+2. **The database backend's own claims.** `pg_column_size(content)` is **217141** for the
+   217141 byte JPEG — the plan's "JPEGs do not TOAST-compress" measurement, reproduced;
+   the small compressible files carry the expected four byte varlena header. The first
+   `force_serve_as=picture` GET creates a row named `photo__downscaledtoautox400.jpg` with
+   `is_derivative = 1`, and the second GET leaves its id and `row_created_timestamp`
+   untouched. Deleting the original leaves zero rows in the group. A `Create` on a name
+   that exists fails with the same message and leaves the existing row intact. Uploading
+   `a_b.jpg` and `axb.jpg`, downscaling both, then deleting `a_b.jpg` leaves `axb.jpg`
+   *and its derivative* — the `LIKE` escaping, written as a test.
+3. **S10, on both backends.** With `upload_max_filesize = 2M` in this environment, the
+   configured 64 MB clamps to 2, the clamp is logged once per process at startup, and
+   `GET /api/system/config` reports `FILE_STORAGE_MAX_SIZE_MB: 2`. A body of exactly
+   2097152 bytes is stored; **2097153 bytes answers 413** with
+   *"File is larger than the 2 MB upload limit (FILE_STORAGE_MAX_SIZE_MB)"*, leaves no file
+   and no row, and 404s afterwards — the same on both backends. Requests for widths
+   32/64/99/250/400/401/800/99999 return five distinct images and create exactly five
+   cached variants: 99 snaps to 64, 401 to 400, 99999 to 800.
+4. **The importer.** A storage directory of seven files across all five groups, including
+   two cached downscales and a stray file at the storage root: the first run imports seven
+   and reports the stray as not a group directory, the second run skips seven, the row
+   count and every `size_bytes` match the files on disk, every stored content `md5` matches
+   its file, the downscales carry `is_derivative = 1`, and a deliberately corrupted row is
+   *replaced* rather than skipped. Both refusals (filesystem backend, sqlite driver) exit 1.
+5. **The configuration rejections.** `FILE_STORAGE=database` with `DB_DRIVER=sqlite`, and
+   with `MODE=demo`, are both refused at startup by `bin/victual-migrate` (exit 1) and by
+   the web application (which serves the message instead of a page), as is a
+   `FILE_STORAGE` that is neither name and a `FILE_STORAGE_MAX_SIZE_MB` of 0.
+6. **The differential suite.** `.devtools/pgsql/run-tests.sh`, all five phases against
+   this working copy: **SUITE PASSED**, including `MIGRATION NUMBERING OK` and
+   `MIGRATED STATE IDENTICAL`. The exemption was checked for being load-bearing rather
+   than decorative: emptying `ENGINE_EXCLUSIVE_TABLES` makes the migration phase fail with
+   `DIFF table files exists on PostgreSQL only`.
+7. **`bin/victual-db-import` into a target carrying the `files` table.** A migrated SQLite
+   source into a fresh PostgreSQL database: 37 rows across 36 tables imported, `files`
+   reported as *"target table … does not exist in the source and stays empty"*, and a row
+   placed in the target's `files` table beforehand survived the import untouched.
+8. **The barcode-lookup picture write**, which the header matrix does not reach. A scratch
+   lookup plugin returning a `data:image/jpeg;base64,…` URL (no network, which the agent
+   proxy would deny anyway) drove `POST /api/stock/barcodes/external-lookup/{barcode}?add=true`
+   on both backends: the picture lands as a 217141 byte file on one and a 217141 byte row
+   with `mime_type = image/jpeg` on the other, the product row points at it, and the exact
+   thumbnail URL the products page emits (`?force_serve_as=picture&best_fit_width=64&best_fit_height=64`)
+   returns 200 `image/jpeg`, 2478 bytes, on both.
+9. **`php -l` on all thirteen changed PHP files**, clean.
+
+### What could not be run
+
+- **Nothing was exercised on a container.** Docker is not available in this environment,
+  so the volume-less deployment this plan exists to enable — the pod with no PVC, the
+  import Job against the old one — is reasoned about rather than demonstrated. What was
+  demonstrated is the property it rests on: with `FILE_STORAGE=database`, a full
+  upload/serve/downscale/delete cycle writes nothing under the data directory.
+- **No test in the repository covers any of this.** Every check above is a throwaway
+  script. The files API has no home in the differential suite — it is an application
+  endpoint, not a view — and 14 piece 2's response snapshot is where these headers should
+  eventually be frozen, since the header table in check 1 is exactly the kind of thing
+  that snapshot exists to hold.
+- **The `upload_max_filesize` clamp was only exercised downward.** This environment's PHP
+  accepts 2 MB, so the 64 MB default is never the binding constraint here and a genuine
+  64 MB upload was never made.
 
 ## Effort
 
