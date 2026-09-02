@@ -5,6 +5,7 @@ namespace Victual\Controllers\Api;
 use Victual\Controllers\Users\PermissionMissingException;
 use Victual\Controllers\Users\User;
 use Victual\Services\FilesService;
+use Victual\Services\Storage\FileStorage;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Exception\HttpNotFoundException;
@@ -188,18 +189,21 @@ class FilesApiController extends BaseApiController
 				$fileInfo = explode('_', $args['fileName']);
 				$fileName = $this->CheckFileName($fileInfo[0]);
 				$fileNameOutput = $this->CheckFileName($fileInfo[1]);
-				$filePath = $this->GetFilePath($args['group'], $fileName, $request->getQueryParams());
+				$storedName = $this->GetStoredName($args['group'], $fileName, $request->getQueryParams());
 			}
 			else
 			{
 				$fileName = $this->CheckFileName($args['fileName']);
 				$fileNameOutput = $fileName;
-				$filePath = $this->GetFilePath($args['group'], $fileName, $request->getQueryParams());
+				$storedName = $this->GetStoredName($args['group'], $fileName, $request->getQueryParams());
 			}
 
-			if (file_exists($filePath))
+			$storage = FileStorage::GetInstance();
+			$stream = $storage->Read($args['group'], $storedName);
+
+			if ($stream !== null)
 			{
-				$mimeType = mime_content_type($filePath);
+				$mimeType = $storage->GetMimeType($args['group'], $storedName);
 
 				if (in_array($mimeType, self::INLINE_SERVED_TYPES))
 				{
@@ -222,7 +226,7 @@ class FilesApiController extends BaseApiController
 				$response = $response->withHeader('X-Content-Type-Options', 'nosniff');
 				// RFC 5987 encoded, so a quote in the name cannot end the parameter
 				$response = $response->withHeader('Content-Disposition', $disposition . '; filename*=UTF-8\'\'' . rawurlencode($fileNameOutput));
-				return $response->withBody(new Stream(fopen($filePath, 'rb')));
+				return $response->withBody(new Stream($stream));
 			}
 			else
 			{
@@ -237,9 +241,9 @@ class FilesApiController extends BaseApiController
 
 	/**
 	 * PUT /api/files/{group}/{fileName} - stores the raw request body as a new file,
-	 * written to disk in 1 MB chunks. Fails when the file already exists (exclusive
-	 * "xb" mode), when the extension is not one the group accepts, or when a file
-	 * stored under an image extension is not an image. Returns 204 on success or a
+	 * streamed into the configured storage in 1 MB chunks. Fails when the file already
+	 * exists (exclusive create), when the extension is not one the group accepts, or when
+	 * a file stored under an image extension is not an image. Returns 204 on success or a
 	 * 400 error response.
 	 */
 	public function UploadFile(Request $request, Response $response, array $args)
@@ -256,40 +260,23 @@ class FilesApiController extends BaseApiController
 			$fileName = $this->CheckFileName($args['fileName']);
 			$this->CheckFileExtension($args['group'], $fileName);
 
-			$filePath = FilesService::GetInstance()->GetFilePath($args['group'], $fileName);
-			$fileHandle = fopen($filePath, 'xb');
-			if ($fileHandle === false)
-			{
-				throw new \Exception("Error while creating file $fileName");
-			}
-
-			// Save the file to disk in chunks of 1 MB
-			$requestBody = $request->getBody();
-			while ($data = $requestBody->read(1048576))
-			{
-				if (fwrite($fileHandle, $data) === false)
-				{
-					throw new \Exception("Error while writing file $fileName");
-				}
-			}
-
-			if (fclose($fileHandle) === false)
-			{
-				throw new \Exception("Error while closing file $fileName");
-			}
+			$storage = FileStorage::GetInstance();
+			$storage->Create($args['group'], $fileName, $this->GetRequestBodyStream($request));
 
 			// A name ending in .png that holds a script is the whole of the problem, so
 			// what was stored has to be what the extension said it was.
 			//
-			// Two limits worth knowing. This runs *after* the body is on disk, so it bounds
-			// what can be served, not what can be written - an upload size cap is sweep S10
-			// and belongs to plan 01's track. And it only fires for IMAGE_EXTENSIONS, so the
-			// bmp/tif/tiff/heic that GROUP_ALLOWED_EXTENSIONS admits into userfiles are
-			// stored unvalidated; they are safe because they sniff to a type outside
-			// INLINE_SERVED_TYPES and are therefore downloaded rather than rendered.
-			if (in_array(strtolower(pathinfo($fileName, PATHINFO_EXTENSION)), self::IMAGE_EXTENSIONS) && getimagesize($filePath) === false)
+			// Two limits worth knowing. This runs *after* the body is stored, so it bounds
+			// what can be served, not what can be written - what bounds the write is the
+			// FILE_STORAGE_MAX_SIZE_MB cap the storage enforces while streaming (sweep
+			// S10). And it only fires for IMAGE_EXTENSIONS, so the bmp/tif/tiff/heic that
+			// GROUP_ALLOWED_EXTENSIONS admits into userfiles are stored unvalidated; they
+			// are safe because they sniff to a type outside INLINE_SERVED_TYPES and are
+			// therefore downloaded rather than rendered.
+			if (in_array(strtolower(pathinfo($fileName, PATHINFO_EXTENSION)), self::IMAGE_EXTENSIONS)
+				&& !$this->IsStoredFileAnImage($storage, $args['group'], $fileName))
 			{
-				unlink($filePath);
+				$storage->Delete($args['group'], $fileName);
 				throw new \Exception('File is not a valid image');
 			}
 
@@ -323,11 +310,50 @@ class FilesApiController extends BaseApiController
 	}
 
 	/**
-	 * Resolves the on-disk path for the given file; when the query parameters request
-	 * force_serve_as=picture, a downscaled variant honoring best_fit_height/best_fit_width
-	 * is created and its path returned instead.
+	 * The request body as a readable stream, for the storage to consume.
+	 *
+	 * detach() hands over the underlying resource, which is php://input for a raw PUT.
+	 * Nothing downstream reads the request body again. When it has already been consumed
+	 * (the body parsing middleware does that for a form encoded or JSON content type) the
+	 * detached resource is at EOF and the stored file is empty, which is what happened
+	 * before this method existed too.
+	 *
+	 * @return resource|string
 	 */
-	protected function GetFilePath(string $group, string $fileName, array $queryParams = [])
+	protected function GetRequestBodyStream(Request $request)
+	{
+		$stream = $request->getBody()->detach();
+
+		return $stream === null ? (string)$request->getBody() : $stream;
+	}
+
+	/**
+	 * Whether what was just stored under $fileName really is an image.
+	 *
+	 * getimagesizefromstring() rather than getimagesize(), which needs a path the database
+	 * backend cannot supply. Same detection code over the same bytes; the difference is
+	 * that this holds the file in memory, bounded by the upload cap.
+	 */
+	protected function IsStoredFileAnImage(FileStorage $storage, string $group, string $fileName): bool
+	{
+		$stream = $storage->Read($group, $fileName);
+		if ($stream === null)
+		{
+			return false;
+		}
+
+		$content = stream_get_contents($stream);
+		fclose($stream);
+
+		return $content !== false && getimagesizefromstring($content) !== false;
+	}
+
+	/**
+	 * Resolves which stored file answers this request; when the query parameters ask for
+	 * force_serve_as=picture, a downscaled variant honoring best_fit_height/best_fit_width
+	 * is created and its name returned instead.
+	 */
+	protected function GetStoredName(string $group, string $fileName, array $queryParams = [])
 	{
 		$forceServeAs = null;
 		if (isset($queryParams['force_serve_as']) && !empty($queryParams['force_serve_as']))
@@ -349,13 +375,9 @@ class FilesApiController extends BaseApiController
 				$bestFitWidth = $queryParams['best_fit_width'];
 			}
 
-			$filePath = FilesService::GetInstance()->DownscaleImage($group, $fileName, $bestFitHeight, $bestFitWidth);
-		}
-		else
-		{
-			$filePath = FilesService::GetInstance()->GetFilePath($group, $fileName);
+			return FilesService::GetInstance()->DownscaleImage($group, $fileName, $bestFitHeight, $bestFitWidth);
 		}
 
-		return $filePath;
+		return $fileName;
 	}
 }
