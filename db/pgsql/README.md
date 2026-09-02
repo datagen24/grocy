@@ -93,13 +93,26 @@ reason; use it rather than assuming the highest file in `migrations/` applies ev
 
 Loading cleanly proves very little. The suite is one command:
 
-    .devtools/pgsql/run-tests.sh [migrate|views|triggers]
+    .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|mqtt]
 
-Four phases. `migratedifftest.php` migrates a database on each engine, touches neither
-afterwards, and compares every table - that is the equivalence claim above, written as a
-test, and it is the phase the missing seed data would have failed. The other three all
-populate PostgreSQL by copying an already-migrated SQLite database, which is why none of
-them could ever have caught it.
+Six phases; this list was stale at four for a while, which plan 14's Executed section
+noted, so it is worth reading against `run-tests.sh` itself if it looks wrong again.
+
+`migratedifftest.php` migrates a database on each engine, touches neither afterwards, and
+compares every table - that is the equivalence claim above, written as a test, and it is
+the phase the missing seed data would have failed. `views` and `triggers` both populate
+PostgreSQL by copying an already-migrated SQLite database, which is why neither could ever
+have caught it. `rollback` goes through StockService, fails an operation halfway and checks
+the ledger is where it started, one engine at a time. `filter` asks each dialect for the
+SQL it emits for the API's substring operators and compares the rows, which is the hole
+hazard 16 lived in.
+
+`mqtt` is the odd one and is not a differential check at all: it runs plan 18's probes -
+the MQTT client id, the price deny-list, the publication lock, the outbox's durability and
+its redelivery idempotency - plus the one differential question that feature does raise,
+which is whether the assembled payload is identical on both engines. They live here because
+every defect they guard fails silently, and a probe nothing runs is documentation. It needs
+no broker and no node: InfluxDB is stood in for by PHP's own built-in server.
 
 `.devtools/pgsql/difftest.php` puts both engines into an identical table state and
 compares what their views actually return:
