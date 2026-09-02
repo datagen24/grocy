@@ -105,7 +105,10 @@ $(document).on('click', '.track-charge-cycle-button', function(e)
 					}
 
 					Victual.FrontendHelpers.EndUiBusy();
-					toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', batteryName, trackedTime));
+						// batteryName came from a data- attribute read back with .attr(), which
+						// returns the decoded string, and this toastr message is rendered as HTML -
+						// so it is escaped here, at the point of use (sweep finding S29).
+						toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', Victual.FrontendHelpers.EscapeHtml(batteryName), trackedTime));
 					RefreshContextualTimeago("#battery-" + batteryId + "-row");
 					RefreshStatistics();
 				},

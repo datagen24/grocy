@@ -31,7 +31,10 @@ $('#save-batterytracking-button').on('click', function (e)
 					Victual.Components.UserfieldsForm.Save(function ()
 					{
 						Victual.FrontendHelpers.EndUiBusy("batterytracking-form");
-						toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', batteryDetails.battery.name, $('#tracked_time').find('input').val()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoChargeCycle(' + result.id + ')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
+					// The battery name is a text column and this toastr message is rendered as
+					// HTML - escaped at the point of use. The Undo anchor after it is
+					// deliberate markup (sweep finding S29).
+					toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', Victual.FrontendHelpers.EscapeHtml(batteryDetails.battery.name), $('#tracked_time').find('input').val()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoChargeCycle(' + result.id + ')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
 						Victual.Components.BatteryCard.Refresh($('#battery_id').val());
 
 						$('#battery_id').val('');

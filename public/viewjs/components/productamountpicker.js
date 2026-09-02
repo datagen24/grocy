@@ -28,6 +28,8 @@ Victual.Components.ProductAmountPicker.Reload = function (productId, destination
 			$("#qu_id").append('<option></option>');
 		}
 
+		// Written with .attr(), which escapes for the attribute by itself - so these two are
+		// stored raw and escaped again wherever they are read back out and put into markup.
 		$("#qu_id").attr("data-destination-qu-name", FindObjectInArrayByPropertyValue(Victual.QuantityUnits, 'id', destinationQuId).name);
 		$("#qu_id").attr("data-destination-qu-name-plural", FindObjectInArrayByPropertyValue(Victual.QuantityUnits, 'id', destinationQuId).name_plural);
 
@@ -42,7 +44,12 @@ Victual.Components.ProductAmountPicker.Reload = function (productId, destination
 			// + only add one conversion per to_qu_id (multiple ones can be a result of contradictory definitions = user input bullshit)
 			if ((conversion.from_qu_id == destinationQuId || conversion.to_qu_id == destinationQuId) && !$('#qu_id option[value="' + conversion.to_qu_id + '"]').length)
 			{
-				$("#qu_id").append('<option value="' + conversion.to_qu_id + '" data-qu-factor="' + conversion.factor + '" data-qu-name-plural="' + conversion.to_qu_name_plural + '">' + conversion.to_qu_name + '</option>');
+				// The quantity unit names are text columns that can contain markup, and this
+				// is a string concatenated into an HTML sink - so they are escaped here, at
+				// the point of use (sweep finding S29). The plural name goes into an
+				// attribute, so it is escaped for the attribute *and* re-escaped wherever it
+				// is read back with .attr(), which returns the decoded string.
+				$("#qu_id").append('<option value="' + conversion.to_qu_id + '" data-qu-factor="' + conversion.factor + '" data-qu-name-plural="' + Victual.FrontendHelpers.EscapeHtml(conversion.to_qu_name_plural) + '">' + Victual.FrontendHelpers.EscapeHtml(conversion.to_qu_name) + '</option>');
 			}
 		});
 	}
@@ -103,7 +110,8 @@ Victual.Components.ProductAmountPicker.AllowAnyQu = function (keepInitialQu = fa
 
 	Victual.QuantityUnits.forEach(qu =>
 	{
-		$("#qu_id").append('<option value="' + qu.id + '" data-qu-factor="1" data-qu-name-plural="' + qu.name_plural + '">' + qu.name + '</option>');
+		// Escaped for the same reason as in Reload() above - sweep finding S29.
+		$("#qu_id").append('<option value="' + qu.id + '" data-qu-factor="1" data-qu-name-plural="' + Victual.FrontendHelpers.EscapeHtml(qu.name_plural) + '">' + Victual.FrontendHelpers.EscapeHtml(qu.name) + '</option>');
 	});
 
 	if (keepInitialQu)

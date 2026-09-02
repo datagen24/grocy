@@ -149,7 +149,9 @@ $(".recipe-delete").on('click', function(e)
 	var objectId = $(e.currentTarget).attr('data-recipe-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to delete recipe "%s"?', objectName),
+		// objectName came from a data- attribute read back with .attr(), which returns the
+		// decoded string, and bootbox renders its message with .html() (sweep finding S29)
+		message: __t('Are you sure you want to delete recipe "%s"?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -204,7 +206,9 @@ $(document).on('click', '.recipe-shopping-list', function(e)
 	var objectId = $(e.currentTarget).attr('data-recipe-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to put all missing ingredients for recipe "%s" on the shopping list?', objectName) + "<br><br>" + __t("Uncheck ingredients to not put them on the shopping list") + ":" + $("#missing-recipe-pos-list")[0].outerHTML.replace("d-none", ""),
+		// The recipe name is escaped; the outerHTML appended after it is markup this page
+		// rendered itself and is deliberate (sweep finding S29)
+		message: __t('Are you sure you want to put all missing ingredients for recipe "%s" on the shopping list?', Victual.FrontendHelpers.EscapeHtml(objectName)) + "<br><br>" + __t("Uncheck ingredients to not put them on the shopping list") + ":" + $("#missing-recipe-pos-list")[0].outerHTML.replace("d-none", ""),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -251,7 +255,7 @@ $(".recipe-consume").on('click', function(e)
 	var objectId = $(e.currentTarget).attr('data-recipe-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to consume all ingredients needed by recipe "%s" (ingredients marked with "only check if any amount is in stock" will be ignored)?', objectName) +
+		message: __t('Are you sure you want to consume all ingredients needed by recipe "%s" (ingredients marked with "only check if any amount is in stock" will be ignored)?', Victual.FrontendHelpers.EscapeHtml(objectName)) +
 			"<br><br>(" + __t("For ingredients that are only partially in stock, the in stock amount will be consumed.") + ")",
 		closeButton: false,
 		buttons: {
@@ -274,7 +278,7 @@ $(".recipe-consume").on('click', function(e)
 					function(result)
 					{
 						Victual.FrontendHelpers.EndUiBusy();
-						toastr.success(__t('Removed all in stock ingredients needed by recipe \"%s\" from stock', objectName));
+						toastr.success(__t('Removed all in stock ingredients needed by recipe \"%s\" from stock', Victual.FrontendHelpers.EscapeHtml(objectName)));
 					},
 					function(xhr)
 					{

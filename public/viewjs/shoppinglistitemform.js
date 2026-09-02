@@ -7,6 +7,26 @@
 // Victual.EditMode ('create'/'edit') and Victual.EditObjectId select POST vs PUT.
 Victual.ShoppingListItemFormInitialLoadDone = false;
 
+/**
+ * Builds the "Added X of Y to the shopping list Z" message posted to the parent window,
+ * which renders it through toastr - an HTML sink. The product name, both quantity unit
+ * names and the shopping list name are all text columns that can contain markup, so each
+ * is escaped here, at the point of use (sweep finding S29). Two of them are read back out
+ * of the DOM with .text()/.attr(), which return the *decoded* string, so escaping applied
+ * when they were written into the option is not in effect by the time they arrive here.
+ * @param {number} displayAmount Amount in the picked quantity unit
+ * @param {Object} productDetails GET /stock/products/{id} response
+ * @returns {string} Ready to render message
+ */
+function ShoppingListItemAddedMessage(displayAmount, productDetails)
+{
+	var escape = Victual.FrontendHelpers.EscapeHtml;
+	var amountWithQu = displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts })
+		+ " " + __n(displayAmount, escape($("#qu_id option:selected").text()), escape($("#qu_id option:selected").attr("data-qu-name-plural")), true);
+
+	return __t("Added %1$s of %2$s to the shopping list \"%3$s\"", amountWithQu, escape(productDetails.product.name), escape($("#shopping_list_id option:selected").text()));
+}
+
 // Main submit handler: validates, normalizes amount fields, then dispatches to the
 // correct API call/mode; on success either postMessages the parent (embedded mode)
 // to refresh the shopping list and close the modal, or navigates back to the list
@@ -79,7 +99,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 						{
 							if (GetUriParam("product") !== undefined)
 							{
-								window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Victual.BaseUrl);
+								window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", ShoppingListItemAddedMessage(displayAmount, productDetails)), Victual.BaseUrl);
 							}
 
 							window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
@@ -117,7 +137,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 							{
 								if (GetUriParam("product") !== undefined)
 								{
-									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Victual.BaseUrl);
+									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", ShoppingListItemAddedMessage(displayAmount, productDetails)), Victual.BaseUrl);
 								}
 
 								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
@@ -160,7 +180,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 							{
 								if (GetUriParam("product") !== undefined)
 								{
-									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", __t("Added %1$s of %2$s to the shopping list \"%3$s\"", displayAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(displayAmount, $("#qu_id option:selected").text(), $("#qu_id option:selected").attr("data-qu-name-plural"), true), productDetails.product.name, $("#shopping_list_id option:selected").text())), Victual.BaseUrl);
+									window.parent.postMessage(WindowMessageBag("ShowSuccessMessage", ShoppingListItemAddedMessage(displayAmount, productDetails)), Victual.BaseUrl);
 								}
 
 								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);

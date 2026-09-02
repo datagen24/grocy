@@ -369,7 +369,9 @@ $('#product_id_text_input').on('blur', function (e)
 							{
 								Victual.Components.ProductPicker.PopupOpen = true;
 								bootbox.dialog({
-									message: __t('"%s" could not be resolved to a product, how do you want to proceed?', input),
+								// `input` is whatever the user typed or scanned, and bootbox renders
+								// its message with .html() (sweep finding S29)
+								message: __t('"%s" could not be resolved to a product, how do you want to proceed?', Victual.FrontendHelpers.EscapeHtml(input)),
 									title: __t('Create or assign product'),
 									onEscape: function ()
 									{
