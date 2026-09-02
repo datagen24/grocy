@@ -740,74 +740,86 @@ class StockService extends BaseService
 
 		$correlationId = uniqid();
 		$transactionId = uniqid();
-		$logOldRowForStockUpdate = $this->DB->stock_log()->createRow([
-			'product_id' => $stockRow->product_id,
-			'amount' => $stockRow->amount,
-			'best_before_date' => $stockRow->best_before_date,
-			'purchased_date' => $stockRow->purchased_date,
-			'stock_id' => $stockRow->stock_id,
-			'transaction_type' => self::TRANSACTION_TYPE_STOCK_EDIT_OLD,
-			'price' => $stockRow->price,
-			'opened_date' => $stockRow->opened_date,
-			'location_id' => $stockRow->location_id,
-			'shopping_location_id' => $stockRow->shopping_location_id,
-			'correlation_id' => $correlationId,
-			'transaction_id' => $transactionId,
-			'stock_row_id' => $stockRow->id,
-			'user_id' => VICTUAL_USER_ID,
-			'note' => $stockRow->note
-		]);
-		$logOldRowForStockUpdate->save();
 
-		$openedDate = $stockRow->opened_date;
-		if (boolval($open) && $openedDate == null)
+		// An eighth transactional entrypoint, added by plan 18's review rather than by
+		// plan 13, which wrapped the seven stock *booking* paths and left this one out.
+		// The reason it belongs here is the same one 13 gives for those: this method writes
+		// a correlated pair of stock_log rows and mutates the stock row between them, so a
+		// failure part way leaves a booking pair whose halves disagree. Plan 18 forced the
+		// question by adding a ninth write - the outbox event - that has to commit with the
+		// rest or not at all.
+		DatabaseService::GetInstance()->InTransaction(function () use (
+			$stockRow, $correlationId, $transactionId, $amount, $bestBeforeDate, $locationId,
+			$shoppingLocationId, $price, $open, $purchasedDate, $note
+		)
 		{
-			$openedDate = date('Y-m-d');
-		}
-		elseif (!boolval($open))
-		{
-			$openedDate = null;
-		}
+			$logOldRowForStockUpdate = $this->DB->stock_log()->createRow([
+				'product_id' => $stockRow->product_id,
+				'amount' => $stockRow->amount,
+				'best_before_date' => $stockRow->best_before_date,
+				'purchased_date' => $stockRow->purchased_date,
+				'stock_id' => $stockRow->stock_id,
+				'transaction_type' => self::TRANSACTION_TYPE_STOCK_EDIT_OLD,
+				'price' => $stockRow->price,
+				'opened_date' => $stockRow->opened_date,
+				'location_id' => $stockRow->location_id,
+				'shopping_location_id' => $stockRow->shopping_location_id,
+				'correlation_id' => $correlationId,
+				'transaction_id' => $transactionId,
+				'stock_row_id' => $stockRow->id,
+				'user_id' => VICTUAL_USER_ID,
+				'note' => $stockRow->note
+			]);
+			$logOldRowForStockUpdate->save();
 
-		$stockRow->update([
-			'amount' => $amount,
-			'price' => $price,
-			'best_before_date' => $bestBeforeDate,
-			'location_id' => $locationId,
-			'shopping_location_id' => $shoppingLocationId,
-			'opened_date' => $openedDate,
-			'open' => BoolToInt($open),
-			'purchased_date' => $purchasedDate,
-			'note' => $note
-		]);
+			$openedDate = $stockRow->opened_date;
+			if (boolval($open) && $openedDate == null)
+			{
+				$openedDate = date('Y-m-d');
+			}
+			elseif (!boolval($open))
+			{
+				$openedDate = null;
+			}
 
-		$logNewRowForStockUpdate = $this->DB->stock_log()->createRow([
-			'product_id' => $stockRow->product_id,
-			'amount' => $amount,
-			'best_before_date' => $bestBeforeDate,
-			'purchased_date' => $stockRow->purchased_date,
-			'stock_id' => $stockRow->stock_id,
-			'transaction_type' => self::TRANSACTION_TYPE_STOCK_EDIT_NEW,
-			'price' => $price,
-			'opened_date' => $stockRow->opened_date,
-			'location_id' => $locationId,
-			'shopping_location_id' => $shoppingLocationId,
-			'correlation_id' => $correlationId,
-			'transaction_id' => $transactionId,
-			'stock_row_id' => $stockRow->id,
-			'user_id' => VICTUAL_USER_ID,
-			'note' => $stockRow->note
-		]);
-		$logNewRowForStockUpdate->save();
+			$stockRow->update([
+				'amount' => $amount,
+				'price' => $price,
+				'best_before_date' => $bestBeforeDate,
+				'location_id' => $locationId,
+				'shopping_location_id' => $shoppingLocationId,
+				'opened_date' => $openedDate,
+				'open' => BoolToInt($open),
+				'purchased_date' => $purchasedDate,
+				'note' => $note
+			]);
 
-		$this->CompactStockEntries($stockRow->product_id);
+			$logNewRowForStockUpdate = $this->DB->stock_log()->createRow([
+				'product_id' => $stockRow->product_id,
+				'amount' => $amount,
+				'best_before_date' => $bestBeforeDate,
+				'purchased_date' => $stockRow->purchased_date,
+				'stock_id' => $stockRow->stock_id,
+				'transaction_type' => self::TRANSACTION_TYPE_STOCK_EDIT_NEW,
+				'price' => $price,
+				'opened_date' => $stockRow->opened_date,
+				'location_id' => $locationId,
+				'shopping_location_id' => $shoppingLocationId,
+				'correlation_id' => $correlationId,
+				'transaction_id' => $transactionId,
+				'stock_row_id' => $stockRow->id,
+				'user_id' => VICTUAL_USER_ID,
+				'note' => $stockRow->note
+			]);
+			$logNewRowForStockUpdate->save();
 
-		// The one call not inside a transaction, because this method has none: EditStockEntry
-		// is not among the seven entrypoints plan 13 made transactional. The outbox row
-		// therefore has exactly the durability of the ledger rows it describes - no better
-		// and no worse - which is the honest property here. Wrapping this method is plan 13's
-		// to decide, not this one's.
-		BookingEventPublisher::RecordTransaction($transactionId);
+			$this->CompactStockEntries($stockRow->product_id);
+
+			// Inside the transaction on purpose: the outbox row and the ledger rows commit
+			// together or not at all, so a rolled back edit leaves no event behind and a
+			// crash after the commit still delivers one.
+			BookingEventPublisher::RecordTransaction($transactionId);
+		});
 
 		return $transactionId;
 	}
@@ -2021,12 +2033,17 @@ class StockService extends BaseService
 
 			// The correlated bookings (a stock edit's old/new pair, a transfer's from/to pair)
 			// are only meaningful undone as a set.
-			DatabaseService::GetInstance()->InTransaction(function () use ($correlatedBookings)
+			DatabaseService::GetInstance()->InTransaction(function () use ($correlatedBookings, $logRow)
 			{
 				foreach ($correlatedBookings as $correlatedBooking)
 				{
 					$this->UndoBooking($correlatedBooking->id, true);
 				}
+
+				// Inside the transaction on purpose: the outbox row and the ledger rows
+				// commit together or not at all, so a rolled back undo leaves no event
+				// behind and a crash after the commit still delivers one.
+				BookingEventPublisher::RecordTransaction($logRow->transaction_id);
 			});
 
 			return;
@@ -2043,7 +2060,7 @@ class StockService extends BaseService
 		// Every branch below reverses the booking's effect on `stock` and only then marks the
 		// booking undone - a failure between those two writes would leave a booking whose
 		// undone flag disagrees with the stock it was supposed to restore.
-		DatabaseService::GetInstance()->InTransaction(function () use ($logRow)
+		DatabaseService::GetInstance()->InTransaction(function () use ($logRow, $skipCorrelatedBookings)
 		{
 			if ($logRow->transaction_type === self::TRANSACTION_TYPE_PURCHASE || ($logRow->transaction_type === self::TRANSACTION_TYPE_INVENTORY_CORRECTION && $logRow->amount > 0))
 			{
@@ -2206,7 +2223,15 @@ class StockService extends BaseService
 			// Inside the transaction on purpose: the outbox row and the ledger rows commit
 			// together or not at all, so a rolled back booking leaves no event behind and a
 			// crash after the commit still delivers one.
-			BookingEventPublisher::RecordTransaction($logRow->transaction_id);
+			//
+			// Only the outermost call records. UndoTransaction and the correlated loop above
+			// both drive this method with $skipCorrelatedBookings set and record the whole
+			// set themselves, so recording here as well would enqueue a second event for the
+			// same transaction describing a half-undone state.
+			if (!$skipCorrelatedBookings)
+			{
+				BookingEventPublisher::RecordTransaction($logRow->transaction_id);
+			}
 		});
 	}
 

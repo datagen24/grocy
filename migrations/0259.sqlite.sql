@@ -17,10 +17,13 @@
 -- happen. Delivery is a separate step that acknowledges by setting delivered_at, and until
 -- it does the row stays and is retried.
 --
--- payload is JSON held as text and kept small on purpose: it carries the transaction id and
--- nothing else, because the facts are derived from stock_log at delivery time. A payload
--- that duplicated the booking would be a second copy of the ledger that could disagree with
--- the first.
+-- payload is JSON held as text: the transaction id, the moment it committed, the booking
+-- rows as they stood then, and the resulting stock_current snapshot for the products
+-- touched. Self-contained on purpose - a consumer that re-read the ledger at delivery time
+-- would compute a different timestamp on every retry and give a drained backlog the latest
+-- stock snapshot rather than each transaction's own, which is the difference between
+-- at-least-once delivery being safe and being lossy in a new way. Bounded by what one
+-- transaction touches, which is a handful of products.
 --
 -- attempts and last_error exist so a permanently failing event is visible rather than
 -- merely slow. Nothing prunes delivered rows yet; they are the delivery log until a

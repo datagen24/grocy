@@ -18,6 +18,11 @@
 //   3. IDENTITY. Two purchases of one product in the same second produce two price_paid
 //      points with distinct booking_id tags. Without that they share a measurement, tag set
 //      and second-truncated timestamp, which in InfluxDB is one point, not two.
+//   4. THE ENQUEUE IS PART OF THE BOOKING. With the outbox table renamed away, a purchase
+//      fails and writes no stock_log row. That is the point of not catching the enqueue
+//      failure: a booking whose event cannot be recorded has not fully happened.
+//   5. THE EDIT PATH IS TRANSACTIONAL TOO. A failure injected after EditStockEntry's ledger
+//      writes leaves neither the stock_log pair nor an outbox row.
 //
 // The endpoint is never really contacted for (1)'s first half: an unroutable address is
 // what makes the failure a timeout rather than a refusal, which is the case that matters.
@@ -99,7 +104,12 @@ Check('the booking enqueued an event', count($rows) === $before + 1, '(' . $befo
 $queued = end($rows);
 Check('it is undelivered before any drain', $queued['delivered_at'] === null);
 Check('its type is the shared contract\'s', $queued['event_type'] === OutboxService::EVENT_STOCK_TRANSACTION_BOOKED, $queued['event_type']);
-Check('its payload is just the identifier', array_keys(json_decode((string)$queued['payload'], true)) === ['transaction_id']);
+// Self-contained rather than a pointer at the ledger: everything BuildLines() needs was
+// captured inside the booking's transaction, which is what makes a rebuild identical
+$payload = json_decode((string)$queued['payload'], true);
+Check('its payload is a self-contained record', array_keys($payload) === ['transaction_id', 'occurred_at', 'bookings', 'stock']);
+Check('carrying the bookings and the post-commit stock', count($payload['bookings']) > 0 && count($payload['stock']) > 0,
+	count($payload['bookings']) . ' booking(s), ' . count($payload['stock']) . ' product(s)');
 
 $delivered = BookingEventPublisher::Drain();
 Check('the drain reports failure against an unreachable endpoint', $delivered === false);
@@ -143,10 +153,18 @@ echo "3. Identity: two purchases in one second are two points" . PHP_EOL;
 
 $firstTransaction = null;
 $secondTransaction = null;
+$before = count(OutboxRows());
 $stock->AddProduct($productId, 1, date('Y-m-d', strtotime('+1 year')), StockService::TRANSACTION_TYPE_PURCHASE, date('Y-m-d'), 2.00, null, null, $firstTransaction);
 $stock->AddProduct($productId, 1, date('Y-m-d', strtotime('+1 year')), StockService::TRANSACTION_TYPE_PURCHASE, date('Y-m-d'), 3.00, null, null, $secondTransaction);
 
-$lines = (new BookingEventPublisher())->BuildLines([$firstTransaction, $secondTransaction]);
+// The two events just enqueued, built the way a drain would build them
+$payloads = [];
+foreach (array_slice(OutboxRows(), $before) as $row)
+{
+	$payloads[] = json_decode((string)$row['payload'], true);
+}
+
+$lines = BookingEventPublisher::BuildLines($payloads);
 $pricePaid = array_values(array_filter($lines, fn($line) => str_starts_with($line, 'price_paid,')));
 
 foreach ($pricePaid as $line)
@@ -177,6 +195,77 @@ Check('every stock_value carries a transaction_id tag',
 // The point of the fix: same second, so without booking_id these would be one point
 $sameSecond = count(array_unique($timestamps)) === 1;
 echo '        (timestamps ' . ($sameSecond ? 'identical - the collision case' : 'differ - the collision was not reproduced this run') . ')' . PHP_EOL;
+
+echo PHP_EOL;
+
+// ---------------------------------------------------------------------------------------
+echo "4. The enqueue is part of the booking, not a best effort beside it" . PHP_EOL;
+
+$ledgerBefore = (int)DatabaseService::GetInstance()->ExecuteDbQuery('SELECT COUNT(*) FROM stock_log')->fetchColumn();
+
+// The outbox taken away underneath the booking. Renaming rather than dropping, so the
+// probe can put it back and the rest of the run continues against a real database.
+DatabaseService::GetInstance()->ExecuteDbStatement('ALTER TABLE outbox RENAME TO outbox_hidden');
+
+$bookingThrew = false;
+
+try
+{
+	$stock->AddProduct($productId, 1, date('Y-m-d', strtotime('+1 year')), StockService::TRANSACTION_TYPE_PURCHASE, date('Y-m-d'), 7.77);
+}
+catch (\Throwable $ex)
+{
+	$bookingThrew = true;
+}
+
+DatabaseService::GetInstance()->ExecuteDbStatement('ALTER TABLE outbox_hidden RENAME TO outbox');
+
+$ledgerAfter = (int)DatabaseService::GetInstance()->ExecuteDbQuery('SELECT COUNT(*) FROM stock_log')->fetchColumn();
+
+Check('the booking failed when its event could not be enqueued', $bookingThrew);
+Check('and left no ledger row behind', $ledgerAfter === $ledgerBefore, $ledgerBefore . ' rows before and after');
+
+echo PHP_EOL;
+
+// ---------------------------------------------------------------------------------------
+echo "5. EditStockEntry is transactional too" . PHP_EOL;
+
+// Something to edit
+$editTransaction = null;
+$stock->AddProduct($productId, 4, date('Y-m-d', strtotime('+1 year')), StockService::TRANSACTION_TYPE_PURCHASE, date('Y-m-d'), 1.11, null, null, $editTransaction);
+
+$stockRowId = (int)DatabaseService::GetInstance()
+	->ExecuteDbQuery('SELECT id FROM stock ORDER BY id DESC LIMIT 1')
+	->fetchColumn();
+
+$ledgerBefore = (int)DatabaseService::GetInstance()->ExecuteDbQuery('SELECT COUNT(*) FROM stock_log')->fetchColumn();
+$outboxBefore = count(OutboxRows());
+
+$editThrew = false;
+
+try
+{
+	// The failure is injected the way plan 13's rollback probe injects one: an outer
+	// transaction the inner work joins, failed after that work has run. EditStockEntry's own
+	// InTransaction() call sees an open transaction and joins it, so the rollback here is
+	// exactly the rollback its own boundary would perform.
+	DatabaseService::GetInstance()->InTransaction(function () use ($stock, $stockRowId)
+	{
+		$stock->EditStockEntry($stockRowId, 9, date('Y-m-d', strtotime('+2 years')), 1, null, 2.22, false, date('Y-m-d'), null);
+
+		throw new \Exception('injected failure, after the edit');
+	});
+}
+catch (\Throwable $ex)
+{
+	$editThrew = true;
+}
+
+Check('the injected failure propagated', $editThrew);
+Check('no stock_log rows survived the rolled back edit',
+	(int)DatabaseService::GetInstance()->ExecuteDbQuery('SELECT COUNT(*) FROM stock_log')->fetchColumn() === $ledgerBefore,
+	$ledgerBefore . ' rows before and after');
+Check('and no outbox row either', count(OutboxRows()) === $outboxBefore, $outboxBefore . ' rows before and after');
 
 echo PHP_EOL;
 

@@ -23,6 +23,7 @@ use Victual\Services\DatabaseService;
 use Victual\Services\Influx\BookingEventPublisher;
 use Victual\Services\Influx\InfluxEventWriter;
 use Victual\Services\Mqtt\MqttStatePublicationService;
+use Victual\Services\Outbox\OutboxService;
 
 if (PHP_SAPI !== 'cli')
 {
@@ -46,11 +47,13 @@ if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
 	echo "             discovery config topic is how Home Assistant is told to remove the\n";
 	echo "             entity. Both discovery modes' topics are cleared, not just the\n";
 	echo "             configured one.\n";
-	echo "  --drain    Deliver the undelivered InfluxDB events sitting in the outbox and\n";
-	echo "             exit, without publishing anything to MQTT. A request that books\n";
-	echo "             something drains the queue on its way out anyway, so this is for a\n";
-	echo "             household that stopped shopping while InfluxDB was down - run it\n";
-	echo "             from a CronJob, or by hand after fixing the endpoint.\n";
+	echo "  --drain    Deliver every undelivered InfluxDB event sitting in the outbox and\n";
+	echo "             exit, without publishing anything to MQTT. Drains the whole backlog,\n";
+	echo "             in batches, stopping at the first failure with a non-zero exit.\n";
+	echo "             A request that books something drains one batch on its way out\n";
+	echo "             anyway, so this is for a household that stopped shopping while\n";
+	echo "             InfluxDB was down - run it from a CronJob, or by hand after fixing\n";
+	echo "             the endpoint.\n";
 	echo "  --quiet    Only print errors.\n";
 	exit(0);
 }
@@ -107,9 +110,7 @@ if ($drain)
 	BookingEventPublisher::SuppressRequestEndDrain();
 	DatabaseService::GetInstance()->SetCurrentUserId(VICTUAL_USER_ID);
 
-	$hadEvents = BookingEventPublisher::HasBookings();
-
-	if (!$hadEvents)
+	if (!BookingEventPublisher::HasBookings())
 	{
 		if (!$quiet)
 		{
@@ -119,15 +120,31 @@ if ($drain)
 		exit(0);
 	}
 
-	if (!BookingEventPublisher::Drain())
+	// The whole backlog, not one batch of it. A drain takes a bounded batch so that one
+	// request never turns into an unbounded write, but this command is the thing an
+	// operator runs *because* a backlog exists - stopping after the first 200 events and
+	// reporting success would be the least useful possible behaviour.
+	//
+	// The loop stops on the first failed delivery rather than continuing: whatever made one
+	// batch fail will make the next one fail too, and the point of stopping is that the
+	// exit code says the queue is not empty.
+	$batches = 0;
+
+	while (BookingEventPublisher::HasBookings())
 	{
-		fwrite(STDERR, 'Draining the outbox failed, the events are still queued - see the log and the outbox table\'s last_error column for why.' . PHP_EOL);
-		exit(1);
+		if (!BookingEventPublisher::Drain())
+		{
+			fwrite(STDERR, 'Draining the outbox failed after ' . $batches . ' batch(es); the rest is still queued - see the log and the outbox table\'s last_error column for why.' . PHP_EOL);
+			exit(1);
+		}
+
+		$batches++;
 	}
 
 	if (!$quiet)
 	{
-		echo 'Delivered the queued events to ' . VICTUAL_INFLUXDB_URL . '.' . PHP_EOL;
+		echo 'Delivered the queued events to ' . VICTUAL_INFLUXDB_URL . ' in ' . $batches . ' batch(es) of up to '
+			. OutboxService::DRAIN_BATCH_SIZE . '.' . PHP_EOL;
 	}
 
 	exit(0);
