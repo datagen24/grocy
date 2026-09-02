@@ -332,7 +332,8 @@
 				<form id="copy-day-form"
 					novalidate>
 
-					@include('components.datetimepicker2', array(
+					@include('components.datetimepicker', array(
+					'instance' => 'secondary',
 					'id' => 'copy_to_date',
 					'label' => 'Day',
 					'format' => 'YYYY-MM-DD',
@@ -340,7 +341,7 @@
 					'limitEndToNow' => false,
 					'limitStartToNow' => false,
 					'isRequired' => true,
-					'additionalCssClasses' => 'date-only-datetimepicker2',
+					'additionalCssClasses' => 'date-only-datetimepicker-secondary',
 					'invalidFeedback' => $__t('A date is required')
 					))
 

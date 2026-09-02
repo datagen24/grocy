@@ -497,14 +497,14 @@ $(document).on("click", ".edit-meal-plan-entry-button", function(e)
 });
 
 // "Copy this day" (day header menu): open the copy-day modal (source day preset,
-// target day picked via DateTimePicker2)
+// target day picked via SecondaryDateTimePicker)
 $(document).on("click", ".copy-day-button", function(e)
 {
 	var day = $(this).parent().parent().parent().data("date");
 
 	$("#copy-day-modal-title").text(__t("Copy all meal plan entries of %s", day.toString()));
 	Victual.Components.DateTimePicker.SetValue(day);
-	Victual.Components.DateTimePicker2.Clear();
+	Victual.Components.SecondaryDateTimePicker.Clear();
 	$("#copy-day-modal").modal("show");
 	Victual.FrontendHelpers.ValidateForm("copy-day-form");
 	Victual.IsMealPlanEntryEditAction = false;
@@ -538,7 +538,7 @@ $("#add-product-modal").on("shown.bs.modal", function(e)
 
 $("#copy-day-modal").on("shown.bs.modal", function(e)
 {
-	Victual.Components.DateTimePicker2.GetInputElement().focus();
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().focus();
 });
 
 // Delete an entry of any type (DELETE /api/objects/meal_plan/{id}) and reload
@@ -702,7 +702,7 @@ $('#save-copy-day-button').on('click', function(e)
 	}
 
 	var dayFrom = Victual.Components.DateTimePicker.GetValue();
-	var dayTo = Victual.Components.DateTimePicker2.GetValue();
+	var dayTo = Victual.Components.SecondaryDateTimePicker.GetValue();
 
 	Victual.Api.Get('objects/meal_plan?query[]=day=' + dayFrom,
 		function(sourceMealPlanEntries)
