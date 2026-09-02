@@ -4,7 +4,7 @@
 // Publishes the ambient state snapshot and the Home Assistant discovery payloads to the
 // configured MQTT broker, then exits.
 //
-//   php bin/victual-publish-state [--retract] [--quiet]
+//   php bin/victual-publish-state [--retract] [--drain] [--quiet]
 //
 // This is the "publish on boot" half of docs/plans/18-mqtt-state-publication.md. PHP has no
 // boot event, so it is a command the deployment runs rather than something the application
@@ -20,6 +20,8 @@
 // failure), 1 when the broker could not be reached or the snapshot could not be assembled.
 
 use Victual\Services\DatabaseService;
+use Victual\Services\Influx\BookingEventPublisher;
+use Victual\Services\Influx\InfluxEventWriter;
 use Victual\Services\Mqtt\MqttStatePublicationService;
 
 if (PHP_SAPI !== 'cli')
@@ -30,10 +32,11 @@ if (PHP_SAPI !== 'cli')
 $arguments = array_slice($argv, 1);
 $quiet = in_array('--quiet', $arguments, true);
 $retract = in_array('--retract', $arguments, true);
+$drain = in_array('--drain', $arguments, true);
 
 if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
 {
-	echo "Usage: php bin/victual-publish-state [--retract] [--quiet]\n\n";
+	echo "Usage: php bin/victual-publish-state [--retract] [--drain] [--quiet]\n\n";
 	echo "  Publishes the Home Assistant discovery payloads and the full state snapshot as\n";
 	echo "  retained MQTT topics. Run it once after every deployment, from a postStart hook\n";
 	echo "  or a Job next to the bin/victual-migrate initContainer.\n\n";
@@ -43,6 +46,11 @@ if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
 	echo "             discovery config topic is how Home Assistant is told to remove the\n";
 	echo "             entity. Both discovery modes' topics are cleared, not just the\n";
 	echo "             configured one.\n";
+	echo "  --drain    Deliver the undelivered InfluxDB events sitting in the outbox and\n";
+	echo "             exit, without publishing anything to MQTT. A request that books\n";
+	echo "             something drains the queue on its way out anyway, so this is for a\n";
+	echo "             household that stopped shopping while InfluxDB was down - run it\n";
+	echo "             from a CronJob, or by hand after fixing the endpoint.\n";
 	echo "  --quiet    Only print errors.\n";
 	exit(0);
 }
@@ -77,6 +85,52 @@ catch (\Victual\Helpers\EInvalidConfig $ex)
 {
 	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
 	exit(1);
+}
+
+// --drain is about InfluxDB, so it is answered before the MQTT gate below rather than
+// behind it - the two are independently configurable and a broker being off is no reason
+// to leave committed events undelivered.
+if ($drain)
+{
+	if (!InfluxEventWriter::IsEnabled())
+	{
+		if (!$quiet)
+		{
+			echo 'INFLUXDB_ENABLED is false, there is nothing to drain.' . PHP_EOL;
+		}
+
+		exit(0);
+	}
+
+	// A CLI run is one request as far as both triggers are concerned
+	MqttStatePublicationService::SuppressRequestEndPublish();
+	BookingEventPublisher::SuppressRequestEndDrain();
+	DatabaseService::GetInstance()->SetCurrentUserId(VICTUAL_USER_ID);
+
+	$hadEvents = BookingEventPublisher::HasBookings();
+
+	if (!$hadEvents)
+	{
+		if (!$quiet)
+		{
+			echo 'The outbox is empty.' . PHP_EOL;
+		}
+
+		exit(0);
+	}
+
+	if (!BookingEventPublisher::Drain())
+	{
+		fwrite(STDERR, 'Draining the outbox failed, the events are still queued - see the log and the outbox table\'s last_error column for why.' . PHP_EOL);
+		exit(1);
+	}
+
+	if (!$quiet)
+	{
+		echo 'Delivered the queued events to ' . VICTUAL_INFLUXDB_URL . '.' . PHP_EOL;
+	}
+
+	exit(0);
 }
 
 if (!MqttStatePublicationService::IsEnabled())

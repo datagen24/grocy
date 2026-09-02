@@ -403,6 +403,11 @@ class StockService extends BaseService
 				}
 
 				$this->CompactStockEntries($productId);
+
+				// Inside the transaction on purpose: the outbox row and the ledger rows
+				// commit together or not at all, so a rolled back booking leaves no event
+				// behind and a crash after the commit still delivers one.
+				BookingEventPublisher::RecordTransaction($transactionId);
 			});
 
 			// After the commit: a printed label should mean the stock entry exists, and a printer
@@ -412,8 +417,6 @@ class StockService extends BaseService
 				$runner = new WebhookRunner();
 				$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 			}
-
-			BookingEventPublisher::RecordTransaction($transactionId);
 
 			return $transactionId;
 		}
@@ -691,9 +694,12 @@ class StockService extends BaseService
 				{
 					$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
 				}
-			});
 
-			BookingEventPublisher::RecordTransaction($transactionId);
+				// Inside the transaction on purpose: the outbox row and the ledger rows
+				// commit together or not at all, so a rolled back booking leaves no event
+				// behind and a crash after the commit still delivers one.
+				BookingEventPublisher::RecordTransaction($transactionId);
+			});
 
 			return $transactionId;
 		}
@@ -795,6 +801,11 @@ class StockService extends BaseService
 
 		$this->CompactStockEntries($stockRow->product_id);
 
+		// The one call not inside a transaction, because this method has none: EditStockEntry
+		// is not among the seven entrypoints plan 13 made transactional. The outbox row
+		// therefore has exactly the durability of the ledger rows it describes - no better
+		// and no worse - which is the honest property here. Wrapping this method is plan 13's
+		// to decide, not this one's.
 		BookingEventPublisher::RecordTransaction($transactionId);
 
 		return $transactionId;
@@ -1558,6 +1569,11 @@ class StockService extends BaseService
 			{
 				$this->AddMissingProductsToShoppingList(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount_list_id'));
 			}
+
+			// Inside the transaction on purpose: the outbox row and the ledger rows commit
+			// together or not at all, so a rolled back booking leaves no event behind and a
+			// crash after the commit still delivers one.
+			BookingEventPublisher::RecordTransaction($transactionId);
 		});
 
 		// After the commit: a reprinted label should mean the new due date was actually
@@ -1567,8 +1583,6 @@ class StockService extends BaseService
 			$runner = new WebhookRunner();
 			$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 		}
-
-		BookingEventPublisher::RecordTransaction($transactionId);
 
 		return $transactionId;
 	}
@@ -1951,6 +1965,11 @@ class StockService extends BaseService
 					$amount = 0;
 				}
 			}
+
+			// Inside the transaction on purpose: the outbox row and the ledger rows commit
+			// together or not at all, so a rolled back booking leaves no event behind and a
+			// crash after the commit still delivers one.
+			BookingEventPublisher::RecordTransaction($transactionId);
 		});
 
 		// After the commit: a printed label should mean the transfer happened, and a printer
@@ -1960,8 +1979,6 @@ class StockService extends BaseService
 			$runner = new WebhookRunner();
 			$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 		}
-
-		BookingEventPublisher::RecordTransaction($transactionId);
 
 		return $transactionId;
 	}
@@ -2184,9 +2201,12 @@ class StockService extends BaseService
 			{
 				throw new \Exception('This booking cannot be undone');
 			}
-		});
 
-		BookingEventPublisher::RecordTransaction($logRow->transaction_id);
+			// Inside the transaction on purpose: the outbox row and the ledger rows commit
+			// together or not at all, so a rolled back booking leaves no event behind and a
+			// crash after the commit still delivers one.
+			BookingEventPublisher::RecordTransaction($logRow->transaction_id);
+		});
 	}
 
 	/**
@@ -2209,15 +2229,18 @@ class StockService extends BaseService
 
 		// A partially undone transaction is a state the ledger cannot represent, so the
 		// bookings are undone all together or not at all.
-		DatabaseService::GetInstance()->InTransaction(function () use ($transactionBookings)
+		DatabaseService::GetInstance()->InTransaction(function () use ($transactionBookings, $transactionId)
 		{
 			foreach ($transactionBookings as $transactionBooking)
 			{
 				$this->UndoBooking($transactionBooking->id, true);
 			}
-		});
 
-		BookingEventPublisher::RecordTransaction($transactionId);
+			// Inside the transaction on purpose: the outbox row and the ledger rows commit
+			// together or not at all, so a rolled back booking leaves no event behind and a
+			// crash after the commit still delivers one.
+			BookingEventPublisher::RecordTransaction($transactionId);
+		});
 	}
 
 	/**
