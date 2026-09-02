@@ -15,6 +15,14 @@
 // differential test suite can build a schema without standing up a web server. See
 // docs/plans/10-cold-start-statelessness.md.
 //
+// Concurrent runs are serialised on a PostgreSQL session level advisory lock, so two
+// pods starting together are safe. That lock lives on the connection that took it, which
+// means this command has to reach PostgreSQL over a DIRECT connection or through a pool
+// entry in session mode. Behind a transaction-mode pooler (pgbouncer's default) the
+// unlock can land on a different backend than the lock and leak it permanently, wedging
+// every later migration run - see ADR-0009's finding F1, and the docblock on
+// PostgresDialect::WithMigrationLock().
+//
 // Exit codes: 0 on success (including "already up to date"), 1 on failure.
 
 use Victual\Services\DatabaseMigrationService;
