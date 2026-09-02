@@ -18,10 +18,13 @@
 //   3. IDENTITY. Two purchases of one product in the same second produce two price_paid
 //      points with distinct booking_id tags. Without that they share a measurement, tag set
 //      and second-truncated timestamp, which in InfluxDB is one point, not two.
-//   4. THE ENQUEUE IS PART OF THE BOOKING. With the outbox table renamed away, a purchase
+//   4. UNREADABLE ROWS ARE SET ASIDE. A payload this version cannot read is dead-lettered
+//      with a reason, never acknowledged as delivered, and never blocks the valid rows
+//      queued behind it. Acknowledging it would discard a committed event silently.
+//   5. THE ENQUEUE IS PART OF THE BOOKING. With the outbox table renamed away, a purchase
 //      fails and writes no stock_log row. That is the point of not catching the enqueue
 //      failure: a booking whose event cannot be recorded has not fully happened.
-//   5. THE EDIT PATH IS TRANSACTIONAL TOO. A failure injected after EditStockEntry's ledger
+//   6. THE EDIT PATH IS TRANSACTIONAL TOO. A failure injected after EditStockEntry's ledger
 //      writes leaves neither the stock_log pair nor an outbox row.
 //
 // The endpoint is never really contacted for (1)'s first half: an unroutable address is
@@ -75,7 +78,7 @@ function Check(string $what, bool $ok, string $detail = '')
 function OutboxRows(): array
 {
 	return DatabaseService::GetInstance()
-		->ExecuteDbQuery('SELECT id, event_type, payload, delivered_at, attempts, last_error FROM outbox ORDER BY id')
+		->ExecuteDbQuery('SELECT id, event_type, payload, delivered_at, dead_lettered_at, attempts, last_error FROM outbox ORDER BY id')
 		->fetchAll(\PDO::FETCH_ASSOC);
 }
 
@@ -90,7 +93,8 @@ if ($productId === 0)
 	exit(1);
 }
 
-echo 'Product ' . $productId . ', InfluxDB at ' . VICTUAL_INFLUXDB_URL . PHP_EOL . PHP_EOL;
+$engine = DatabaseService::GetInstance()->GetDialect()->GetName();
+echo 'engine=' . $engine . ', product ' . $productId . ', InfluxDB at ' . VICTUAL_INFLUXDB_URL . PHP_EOL . PHP_EOL;
 
 // ---------------------------------------------------------------------------------------
 echo "1. Durability: a failed delivery keeps the event" . PHP_EOL;
@@ -107,7 +111,8 @@ Check('its type is the shared contract\'s', $queued['event_type'] === OutboxServ
 // Self-contained rather than a pointer at the ledger: everything BuildLines() needs was
 // captured inside the booking's transaction, which is what makes a rebuild identical
 $payload = json_decode((string)$queued['payload'], true);
-Check('its payload is a self-contained record', array_keys($payload) === ['transaction_id', 'occurred_at', 'bookings', 'stock']);
+Check('its payload is a self-contained record',
+	array_keys($payload) === ['payload_version', 'event_id', 'transaction_id', 'occurred_at', 'bookings', 'stock']);
 Check('carrying the bookings and the post-commit stock', count($payload['bookings']) > 0 && count($payload['stock']) > 0,
 	count($payload['bookings']) . ' booking(s), ' . count($payload['stock']) . ' product(s)');
 
@@ -199,7 +204,56 @@ echo '        (timestamps ' . ($sameSecond ? 'identical - the collision case' : 
 echo PHP_EOL;
 
 // ---------------------------------------------------------------------------------------
-echo "4. The enqueue is part of the booking, not a best effort beside it" . PHP_EOL;
+echo "4. An unreadable row is set aside, never acknowledged, and never blocks the batch" . PHP_EOL;
+
+// Everything queued so far out of the way, so the batch below is exactly what is asserted
+(new OutboxService())->MarkDelivered(array_column(OutboxRows(), 'id'));
+
+// A version 1 payload: the shape before the event became self-contained. It cannot be
+// upgraded in place - the facts it needed are read from a ledger that has moved on - and it
+// must not be acknowledged, because that would discard a committed event with no trace.
+(new OutboxService())->Enqueue(OutboxService::EVENT_STOCK_TRANSACTION_BOOKED, ['transaction_id' => 'legacy-shape']);
+
+// A valid event queued behind it, which must still be delivered
+$stock->AddProduct($productId, 1, date('Y-m-d', strtotime('+1 year')), StockService::TRANSACTION_TYPE_PURCHASE, date('Y-m-d'), 5.55);
+
+$undeliveredBefore = (new OutboxService())->CountUndelivered(OutboxService::EVENT_STOCK_TRANSACTION_BOOKED);
+Check('two rows waiting: one unreadable, one valid', $undeliveredBefore === 2, $undeliveredBefore . ' waiting');
+
+// The stand-in rejects, so the valid row stays queued; what matters here is the other one
+BookingEventPublisher::Drain();
+
+$rows = OutboxRows();
+$legacy = null;
+$valid = null;
+foreach ($rows as $row)
+{
+	if (str_contains((string)$row['payload'], 'legacy-shape'))
+	{
+		$legacy = $row;
+	}
+	elseif ($row['delivered_at'] === null && $row['dead_lettered_at'] === null)
+	{
+		$valid = $row;
+	}
+}
+
+Check('the unreadable row is dead-lettered', $legacy !== null && $legacy['dead_lettered_at'] !== null);
+Check('and not marked delivered', $legacy !== null && $legacy['delivered_at'] === null);
+Check('with last_error saying why', $legacy !== null && !empty($legacy['last_error']),
+	substr((string)($legacy['last_error'] ?? ''), 0, 60));
+Check('and attempts advanced', $legacy !== null && (int)$legacy['attempts'] > 0, 'attempts=' . ($legacy['attempts'] ?? '?'));
+
+Check('it no longer counts as waiting',
+	(new OutboxService())->CountUndelivered(OutboxService::EVENT_STOCK_TRANSACTION_BOOKED) === 1);
+Check('and is counted as dead-lettered',
+	(new OutboxService())->CountDeadLettered(OutboxService::EVENT_STOCK_TRANSACTION_BOOKED) >= 1);
+Check('the valid row behind it is still deliverable', $valid !== null);
+
+echo PHP_EOL;
+
+// ---------------------------------------------------------------------------------------
+echo "5. The enqueue is part of the booking, not a best effort beside it" . PHP_EOL;
 
 $ledgerBefore = (int)DatabaseService::GetInstance()->ExecuteDbQuery('SELECT COUNT(*) FROM stock_log')->fetchColumn();
 
@@ -228,7 +282,7 @@ Check('and left no ledger row behind', $ledgerAfter === $ledgerBefore, $ledgerBe
 echo PHP_EOL;
 
 // ---------------------------------------------------------------------------------------
-echo "5. EditStockEntry is transactional too" . PHP_EOL;
+echo "6. EditStockEntry is transactional too" . PHP_EOL;
 
 // Something to edit
 $editTransaction = null;
@@ -275,5 +329,5 @@ if (count($failures) > 0)
 	exit(1);
 }
 
-echo "All outbox checks passed.\n";
+echo "All outbox checks passed (engine: $engine).\n";
 exit(0);
