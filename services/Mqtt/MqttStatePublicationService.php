@@ -2,8 +2,6 @@
 
 namespace Victual\Services\Mqtt;
 
-use Victual\Services\DatabaseService;
-
 /**
  * Ties the three pieces of MQTT state publication together and owns the two triggers.
  *
@@ -53,33 +51,17 @@ class MqttStatePublicationService
 
 	/**
 	 * The request-end trigger, called from DatabaseService's shutdown handler when the
-	 * request changed data.
+	 * request changed data and every transaction is closed.
 	 *
-	 * The publish must not run with a transaction still open: the whole point of hanging off
-	 * the after-commit seam is that a published state which then rolls back is a lie that
-	 * persists in a retained topic. An open transaction at shutdown means something threw
-	 * past InTransaction()'s rollback, so the honest thing is to skip and say so rather than
-	 * publish a state that may be about to disappear.
+	 * That last condition is checked by the caller rather than here, because the caller owns
+	 * the PDO connection - but it is the point of the whole seam: a state published inside a
+	 * transaction that then rolls back is a lie that persists in a retained topic.
 	 *
 	 * @return bool True when a snapshot was published
 	 */
 	public static function PublishForRequestEnd(): bool
 	{
 		if (self::$RequestEndPublishSuppressed || !self::IsEnabled())
-		{
-			return false;
-		}
-
-		try
-		{
-			if (DatabaseService::GetInstance()->GetDbConnectionRaw()->inTransaction())
-			{
-				error_log('Victual: skipped the MQTT state publish because a database transaction was still open at the end of the request');
-
-				return false;
-			}
-		}
-		catch (\Throwable $ex)
 		{
 			return false;
 		}
@@ -94,14 +76,56 @@ class MqttStatePublicationService
 	 */
 	public static function PublishState(): bool
 	{
+		return self::Publish(false);
+	}
+
+	/**
+	 * Publishes the discovery payloads and then the full state snapshot - what
+	 * bin/victual-publish-state does, and what a fresh deployment needs so that Home
+	 * Assistant learns the entities exist before it is told their values.
+	 */
+	public static function PublishDiscoveryAndState(): bool
+	{
+		return self::Publish(true);
+	}
+
+	/**
+	 * Assembles and publishes: the ambient state topics always, the ambient discovery
+	 * payloads when asked, and whichever per-product entities have appeared, changed or gone
+	 * since the last publish.
+	 *
+	 * The ambient half is unconditional because a whole snapshot every time is the design -
+	 * a publish lost to a broker restart is repaired by the next write with no
+	 * reconciliation logic. The per-product half is a diff because it cannot be: retracting
+	 * a removed entity means knowing it was there, and republishing hundreds of unchanged
+	 * discovery payloads on every purchase would be a real cost rather than a theoretical
+	 * one.
+	 *
+	 * The ledger is only updated after the broker has accepted the batch, so a failed publish
+	 * is retried by the next one rather than being recorded as done.
+	 */
+	private static function Publish(bool $includeDiscovery): bool
+	{
 		if (!self::IsEnabled())
 		{
 			return false;
 		}
 
+		$builder = new DiscoveryPayloadBuilder();
+		$ledger = new PublicationLedger();
+
 		try
 		{
 			$topics = self::BuildStateTopics();
+
+			if ($includeDiscovery)
+			{
+				$topics = array_merge($builder->BuildDiscoveryPayloads(), $topics);
+			}
+
+			$assembler = new StateSnapshotAssembler();
+			$entities = $assembler->AssemblePerProductEntities();
+			$orphanedFlags = $assembler->GetOrphanedFlagProductIds();
 		}
 		catch (\Throwable $ex)
 		{
@@ -112,33 +136,64 @@ class MqttStatePublicationService
 			return false;
 		}
 
-		return (new MqttPublisher())->PublishBatch($topics);
-	}
+		$publishedBefore = $ledger->GetPublished();
 
-	/**
-	 * Publishes the discovery payloads and then the full state snapshot - what
-	 * bin/victual-publish-state does, and what a fresh deployment needs so that Home
-	 * Assistant learns the entities exist before it is told their values.
-	 */
-	public static function PublishDiscoveryAndState(): bool
-	{
-		if (!self::IsEnabled())
+		$record = [];
+		foreach ($entities as $objectId => $entity)
+		{
+			$discovery = $builder->BuildProductDiscoveryPayload($entity['product_id'], $entity['attributes']);
+			$state = StateSnapshotAssembler::EncodePayload($entity);
+			$hash = hash('sha256', $discovery . "\n" . $state);
+
+			if (($publishedBefore[$objectId] ?? null) === $hash)
+			{
+				// Byte-identical to what the ledger says is already retained: publishing it
+				// again would change nothing a subscriber can see
+				continue;
+			}
+
+			$topics[$builder->GetProductDiscoveryTopic($entity['product_id'])] = $discovery;
+			$topics[$builder->GetProductStateTopic($entity['product_id'])] = $state;
+			$record[$objectId] = $hash;
+		}
+
+		$forget = [];
+		foreach (array_keys($publishedBefore) as $objectId)
+		{
+			if (isset($entities[$objectId]) || !str_starts_with($objectId, StateSnapshotAssembler::PER_PRODUCT_OBJECT_ID_PREFIX))
+			{
+				continue;
+			}
+
+			// Gone: the product was deleted, deactivated, or its opt-in flag cleared. An empty
+			// retained payload on the config topic is how Home Assistant is told to remove it
+			$productId = (int)substr($objectId, strlen(StateSnapshotAssembler::PER_PRODUCT_OBJECT_ID_PREFIX));
+
+			$topics[$builder->GetProductDiscoveryTopic($productId)] = '';
+			$topics[$builder->GetProductStateTopic($productId)] = '';
+			$forget[] = $objectId;
+		}
+
+		if (!(new MqttPublisher())->PublishBatch($topics))
 		{
 			return false;
 		}
 
-		try
+		foreach ($record as $objectId => $hash)
 		{
-			$topics = array_merge((new DiscoveryPayloadBuilder())->BuildDiscoveryPayloads(), self::BuildStateTopics());
-		}
-		catch (\Throwable $ex)
-		{
-			error_log('Victual: could not assemble the MQTT state snapshot, nothing was published: ' . $ex->getMessage());
-
-			return false;
+			$ledger->Record($objectId, $hash);
 		}
 
-		return (new MqttPublisher())->PublishBatch($topics);
+		foreach ($forget as $objectId)
+		{
+			$ledger->Forget($objectId);
+		}
+
+		// Only now that their entities are retracted: a flag row for a product that no longer
+		// exists has nothing left to describe
+		$ledger->DropFlags($orphanedFlags);
+
+		return true;
 	}
 
 	/**
@@ -174,7 +229,30 @@ class MqttStatePublicationService
 			$topics[$topic] = '';
 		}
 
-		return (new MqttPublisher())->PublishBatch($topics);
+		// Per-product entities are only known from the ledger, which is exactly what it is for
+		$ledger = new PublicationLedger();
+
+		foreach (array_keys($ledger->GetPublished()) as $objectId)
+		{
+			if (!str_starts_with($objectId, StateSnapshotAssembler::PER_PRODUCT_OBJECT_ID_PREFIX))
+			{
+				continue;
+			}
+
+			$productId = (int)substr($objectId, strlen(StateSnapshotAssembler::PER_PRODUCT_OBJECT_ID_PREFIX));
+
+			$topics[$builder->GetProductDiscoveryTopic($productId)] = '';
+			$topics[$builder->GetProductStateTopic($productId)] = '';
+		}
+
+		if (!(new MqttPublisher())->PublishBatch($topics))
+		{
+			return false;
+		}
+
+		$ledger->ForgetAll();
+
+		return true;
 	}
 
 	/**
@@ -201,7 +279,7 @@ class MqttStatePublicationService
 
 		foreach ($snapshot as $entity => $payload)
 		{
-			$topics[$builder->GetStateTopic($entity)] = json_encode($payload);
+			$topics[$builder->GetStateTopic($entity)] = StateSnapshotAssembler::EncodePayload($payload);
 		}
 
 		return $topics;
