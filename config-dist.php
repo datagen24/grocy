@@ -44,6 +44,24 @@ Setting('DB_SSLMODE', ''); // One of disable, allow, prefer, require, verify-ca,
 // read-only, so that the data directory is the only writable path left
 Setting('VIEWCACHE_PATH', VICTUAL_DATAPATH . '/viewcache');
 
+
+// --- File storage -----------------------------------------------------------------
+// Where uploaded files - product, recipe and user pictures, user files and equipment
+// manuals - are kept.
+//
+// "filesystem" (the default) puts them below <data path>/storage, one folder per group,
+// which is what this fork has always done and what an ordinary installation wants.
+//
+// "database" stores them as BYTEA rows instead, so that the application directory needs
+// no persistent volume at all and one pg_dump captures a file and the row that points at
+// it together rather than in two backup streams that can disagree. It requires
+// DB_DRIVER = "pgsql" and is refused in demo/prerelease mode; both are checked at
+// startup. Files already on disk are NOT read after the switch - run
+// "php bin/victual-files-import" once to move them in
+Setting('FILE_STORAGE', 'filesystem');
+// --- End of file storage ----------------------------------------------------------
+
+
 // Whether a request to "/" is allowed to migrate the database schema.
 // Migrating is something you do - "php bin/victual-migrate" - rather than something that
 // happens to whoever sends the first request after a deployment, so this is off by
