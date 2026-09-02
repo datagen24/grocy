@@ -44,10 +44,6 @@ $("#ical-button").on("click", function(e)
 					+ QrCodeImgHtml(result.url) + "</p>",
 				closeButton: false
 			});
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });

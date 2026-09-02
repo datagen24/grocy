@@ -84,10 +84,6 @@ $('#save-shoppinglist-button').on('click', function(e)
 
 							window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
 							window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
-						},
-						function(xhr)
-						{
-							console.error(xhr);
 						}
 					);
 				}
@@ -99,7 +95,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 			function(xhr)
 			{
 				Victual.FrontendHelpers.EndUiBusy("shoppinglist-form");
-				console.error(xhr);
+				Victual.Api.DefaultErrorHandler(xhr);
 			}
 		);
 	}
@@ -126,10 +122,6 @@ $('#save-shoppinglist-button').on('click', function(e)
 
 								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
 								window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
-							},
-							function(xhr)
-							{
-								console.error(xhr);
 							}
 						);
 					}
@@ -147,7 +139,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 			function(xhr)
 			{
 				Victual.FrontendHelpers.EndUiBusy("shoppinglist-form");
-				console.error(xhr);
+				Victual.Api.DefaultErrorHandler(xhr);
 			}
 		);
 	}
@@ -173,10 +165,6 @@ $('#save-shoppinglist-button').on('click', function(e)
 
 								window.parent.postMessage(WindowMessageBag("ShoppingListChanged", $("#shopping_list_id").val().toString()), Victual.BaseUrl);
 								window.parent.postMessage(WindowMessageBag("CloseLastModal"), Victual.BaseUrl);
-							},
-							function(xhr)
-							{
-								console.error(xhr);
 							}
 						);
 					}
@@ -194,7 +182,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 			function(xhr)
 			{
 				Victual.FrontendHelpers.EndUiBusy("shoppinglist-form");
-				console.error(xhr);
+				Victual.Api.DefaultErrorHandler(xhr);
 			}
 		);
 	}
@@ -235,10 +223,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 				}, Victual.FormFocusDelay);
 				Victual.FrontendHelpers.ValidateForm('shoppinglist-form');
 				Victual.ShoppingListItemFormInitialLoadDone = true;
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}

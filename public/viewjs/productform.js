@@ -340,10 +340,6 @@ $(document).on('click', '.qu-conversion-delete-button', function (e)
 					{
 						Victual.ProductEditFormRedirectUri = "reload";
 						$('#save-product-button').click();
-					},
-					function (xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -378,10 +374,6 @@ $(document).on('click', '.barcode-delete-button', function (e)
 					{
 						Victual.ProductEditFormRedirectUri = "reload";
 						$('#save-product-button').click();
-					},
-					function (xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -510,10 +502,6 @@ if (Victual.EditMode == "create" && GetUriParam("copy-of") != undefined)
 			}
 
 			Victual.FrontendHelpers.ValidateForm('product-form');
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 }
@@ -572,10 +560,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 				{
 					$('#min_stock_amount').removeAttr("disabled");
 				}
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}

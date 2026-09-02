@@ -116,10 +116,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 				$('#display_amount').focus();
 				Victual.FrontendHelpers.ValidateForm('recipe-pos-form');
 				Victual.RecipePosFormInitialLoadDone = true;
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}

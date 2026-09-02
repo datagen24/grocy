@@ -45,14 +45,14 @@ $('#save-batterytracking-button').on('click', function (e)
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("batterytracking-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("batterytracking-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -156,10 +156,6 @@ function UndoChargeCycle(chargeCycleId)
 		function (result)
 		{
 			toastr.success(__t("Charge cycle successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
