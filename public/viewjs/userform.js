@@ -144,17 +144,15 @@ $('#user-form input').keydown(function (event)
 });
 
 // A newly chosen picture file replaces the "current picture" preview with the
-// file-chosen label. Note: this sets Victual.DeleteUserePictureOnSave (misspelled, "Usere")
-// rather than the Victual.DeleteUserPictureOnSave flag actually checked on submit further
-// below - so picking a new file after clicking "delete current picture" does not clear
-// the pending deletion flag as apparently intended.
+// file-chosen label and cancels a pending "delete current picture" flag, so choosing a
+// new file after clicking delete keeps the newly uploaded picture.
 $("#user-picture").on("change", function (e)
 {
 	$("#user-picture-label").removeClass("d-none");
 	$("#user-picture-label-none").addClass("d-none");
 	$("#delete-current-user-picture-on-save-hint").addClass("d-none");
 	$("#current-user-picture").addClass("d-none");
-	Victual.DeleteUserePictureOnSave = false;
+	Victual.DeleteUserPictureOnSave = false;
 });
 
 Victual.DeleteUserPictureOnSave = false;

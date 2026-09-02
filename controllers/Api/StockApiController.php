@@ -311,9 +311,7 @@ class StockApiController extends BaseApiController
 	 * product from stock. Requires the STOCK_CONSUME permission (403 otherwise).
 	 * Body fields: amount (required), spoiled, stock_entry_id (consume a specific
 	 * entry), location_id, recipe_id, exact_amount and allow_subproduct_substitution;
-	 * transaction_type defaults to "consume" (note: the override is only picked up
-	 * from a body field spelled "transactiontype" while the presence check looks at
-	 * "transaction_type", so both must be sent to take effect).
+	 * transaction_type defaults to "consume".
 	 * Returns the stock_log rows of the resulting transaction (200) or a 400 error response.
 	 */
 	public function ConsumeProduct(Request $request, Response $response, array $args)
@@ -341,9 +339,9 @@ class StockApiController extends BaseApiController
 			}
 
 			$transactionType = StockService::TRANSACTION_TYPE_CONSUME;
-			if (array_key_exists('transaction_type', $requestBody) && !empty($requestBody['transactiontype']))
+			if (array_key_exists('transaction_type', $requestBody) && !empty($requestBody['transaction_type']))
 			{
-				$transactionType = $requestBody['transactiontype'];
+				$transactionType = $requestBody['transaction_type'];
 			}
 
 			$specificStockEntryId = 'default';
