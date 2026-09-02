@@ -161,6 +161,37 @@ abstract class DatabaseDialect
 	abstract public function GetOptimizeStatement(): ?string;
 
 	/**
+	 * Runs $work with a cross process lock held, so that only one process at a time
+	 * assembles and publishes the retained MQTT state.
+	 *
+	 * A separate lock from the migration one, on a separate key, because they guard
+	 * unrelated things and sharing a key would have a publish wait behind a migration for
+	 * no reason.
+	 *
+	 * The race it closes is a lost update with no error anywhere. Publishing is
+	 * read-then-write across a network: request A assembles the snapshot, request B commits
+	 * a later change and publishes it, then A publishes the state it read earlier. Retained
+	 * topics have no version and no ordering, so the broker simply keeps whatever arrived
+	 * last - and A's stale snapshot stands until the next write, which on a pod that sleeps
+	 * for days is exactly the failure this whole plan exists to prevent. Nothing logs it,
+	 * because nothing failed.
+	 *
+	 * **The assembly has to be inside the lock, not just the publish.** A lock around the
+	 * publish alone still lets both requests read before either writes, which is the same
+	 * lost update with a smaller window. Holding it across assemble, diff, publish and the
+	 * ledger update makes the loser re-read after the winner released, so it publishes
+	 * state that is at least as new.
+	 *
+	 * It lives on the dialect for the same reason WithMigrationLock() does - locking is
+	 * where engines differ most - and has the same one real implementation.
+	 *
+	 * @param callable $work Receives no arguments; its return value is passed through
+	 * @return mixed Whatever $work returns
+	 * @throws \Throwable Whatever $work throws, after the lock is released
+	 */
+	abstract public function WithPublicationLock(callable $work);
+
+	/**
 	 * Quotes a single table or column name for safe interpolation into SQL.
 	 */
 	abstract public function QuoteIdentifier(string $name): string;
