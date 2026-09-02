@@ -395,6 +395,255 @@ which is 19's own framing of why this channel is the hard case.
    > now paid deliberately: question 7's InfluxDB event stream is that add, on a channel
    > with its own credentials rather than a broadcast one. (2026-08-31.)
 
+## Executed
+
+Landed 2026-09-02, against the eight Responses recorded above on 2026-08-31 rather than
+against the leans they replaced. Measurements below were taken on
+`.claude/worktrees/agent-ad096754dd4a1d9ea` (branch `worktree-agent-ad096754dd4a1d9ea`),
+PHP 8.4.19, PostgreSQL 16 on `127.0.0.1:5432`, and an `aedes` broker on `127.0.0.1:1884`.
+
+Eight commits, in the order the plan argues for — the dependency, then the transport, then
+the assembler, then the triggers, then question 2's schema, then the two answers that
+changed the shape of the work:
+
+- **`e794ea8` — the dependency.** `php-mqtt/client` v2.3.2, MIT. **Divergence from the
+  security notes' third bullet:** it is not one package with no runtime dependencies beyond
+  PSR-3. It also pulls `myclabs/php-enum` 1.8.5, so `composer.json` grows by one direct and
+  two installed packages. Cheap either way, and worth the sweep's dependency review knowing
+  the real number.
+- **`39cd2f7` — settings, publisher, discovery.** `MqttPublisher` connects, publishes a
+  batch of retained QoS 0 topics over MQTT 3.1.1, disconnects. No last will, no availability
+  topic. `DiscoveryPayloadBuilder` owns the topic layout and both discovery shapes.
+  `ConfigurationValidator` refuses `MQTT_ENABLED=true` with an empty host.
+- **`d4911d6` — the assembler**, reading the views the UI reads, with the price deny-list
+  and the per-entity allow-list.
+- **`185ed1c` — the triggers**, and `bin/victual-publish-state`.
+- **`d8ed0b9` — migration 257 and the `ExposedEntity` entry**, question 2's opt-in flag and
+  the publication ledger.
+- **`30179ea` — the seventh and eighth ambient entities and the per-product diff.**
+- **`e888f3e` — question 7's InfluxDB event writer.**
+- **`5653658` — the devtools** under `.devtools/mqtt/`.
+
+### The seam the after-commit trigger hangs off
+
+`DatabaseService`, not the seven `StockService` entrypoints, and the choice is worth
+recording because the plan's own text points at the entrypoints.
+
+A write statement reaching the database marks the request dirty; `SetDbChangedTime()` — the
+call `SessionService` and `ApiKeyService` already make to hide a last-used stamp from
+`GET /api/system/db-changed-time` — clears the mark again. The shutdown handler then
+publishes once, after `FlushDbChangedTime()`, having first asked PDO whether a transaction
+is still open and skipped with a log line if one is.
+
+Three properties follow, and only the first is available at the entrypoints:
+
+1. **It is the same question the changed time already answers.** Chores, batteries, tasks,
+   the shopping list and every generic CRUD write are covered without being named. Explicit
+   `StockService` calls would have published a stock snapshot on a purchase and nothing at
+   all on a chore being ticked.
+2. **It fires once per request rather than once per commit,** which is what question 3 asks
+   for. A shopping trip is many commits and one snapshot.
+3. **Bookkeeping writes cost nothing,** because the existing restore idiom already says
+   they are not data changes. Measured: an authenticated `GET /api/stock` advanced
+   `api_keys.last_used` from `12:34:50` to `12:35:01` and published no topic.
+
+One cost, and it is real: `DatabaseService` now names `MqttStatePublicationService` and
+`BookingEventPublisher` directly. A listener registry would be cleaner, but registering a
+listener needs a boot event PHP does not have, and holding the registry in process memory
+between requests is what ADR-0007 forbids. The reference is guarded by
+`defined('VICTUAL_MQTT_ENABLED')`, so an installation with the feature off pays one
+constant read and never loads the class.
+
+On SQLite the LessQL query callback had to be installed where it previously was not:
+`SqliteDialect::RequiresChangeTracking()` returns false because the file modification time
+*is* the changed time, so nothing was watching statements at all. The callback is now
+installed when either change tracking or MQTT wants it.
+
+### Topic layout
+
+Prefix `victual`, no version (question 4). Each entity's state and attributes ride **one**
+retained topic carrying `{"state": …, "attributes": {…}}`, read back through
+`value_template` and `json_attributes_template`. One topic rather than two means state and
+attributes can never be seen half updated, and halves what a subscriber receives.
+
+```
+victual/state/stock                              7 ambient sensors
+victual/state/shopping_list
+victual/state/next_chore
+victual/state/next_battery
+victual/state/next_task
+victual/state/products_due_soon
+victual/state/products_expired
+victual/state/last_published                     the freshness fact
+victual/state/product/<product_id>               one per opted-in product
+
+homeassistant/device/victual/config              MQTT_DISCOVERY_MODE=device (default)
+homeassistant/sensor/victual/<object_id>/config  MQTT_DISCOVERY_MODE=entity
+homeassistant/sensor/victual/product_<id>/config always, whatever the mode
+```
+
+Per-product entities always take the per-entity discovery form. Removing one product must
+retract exactly that entity, and folding hundreds of them into the single device config
+would make every removal a rewrite of every other product's config.
+
+Example payloads, from the demo database:
+
+```
+victual/state/stock
+{"state":24,"attributes":{"products":[{"product_id":1,"product_name":"Cookies",
+ "amount":14,"unit":"Pack","best_before_date":"2027-01-01"}, …]}}
+
+victual/state/next_chore
+{"state":"2026-08-27T23:59:59+00:00","attributes":{"chores":[{"chore_id":2,
+ "chore_name":"Mop the kitchen floor",
+ "next_estimated_execution_time":"2026-08-27T23:59:59+00:00"}, …]}}
+
+victual/state/products_due_soon
+{"state":4,"attributes":{"due_soon_days":5}}
+
+victual/state/product/1
+{"state":14,"attributes":{"product_id":1,"product_name":"Cookies","unit":"Pack",
+ "best_before_date":"2027-01-01"}}
+```
+
+### On boot
+
+PHP has no boot event, so "publish on boot" is `bin/victual-publish-state`, run from a
+postStart hook or a Job alongside the initContainer that runs `bin/victual-migrate`. It
+publishes discovery and the full snapshot, exits 0/1, and suppresses the request-end trigger
+so one CLI run cannot publish twice. `--retract` clears every retained topic this version
+owns, in **both** discovery modes plus every per-product topic the ledger remembers.
+
+`bin/victual-migrate` and `bin/victual-db-import` deliberately do *not* suppress it: they
+change data, so the request-end publish is exactly right for them and an out-of-band change
+self-heals. There is no first-request-per-process publish; that would need process state.
+
+### Divergences from the Responses, and what was deferred
+
+- **Question 2's flag is a side table, not a column on `products`.** A column would change
+  the shape of every products response — the invariant [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md)
+  names — and on PostgreSQL it would not reach `products_view` or the views built on it
+  without recreating all of them, where SQLite's `SELECT p.*` would pick it up silently.
+  That is a divergence the differential suite would catch and nobody should have to fix.
+  `mqtt_product_entities` is invisible to both.
+- **Migration 257 is a pair, not one portable file.** Generated primary keys have no
+  spelling both engines accept: SQLite's `INTEGER PRIMARY KEY AUTOINCREMENT` assigns ids on
+  insert and PostgreSQL's `INTEGER PRIMARY KEY` does not.
+  `.devtools/pgsql/check-migrations.php` reports a complete per-engine set, which needs no
+  marker. Everything else about the two files is the same schema.
+- **No foreign key on `mqtt_product_entities.product_id`.** This schema does its cascades
+  with triggers rather than constraints (`products_DELETE`, `migrations/0225.sql`), and
+  SQLite would not enforce a `REFERENCES` clause without a pragma the application does not
+  set. The cascade is handled where it matters: the publisher joins `products`, so a
+  deleted or deactivated product's entity is retracted and its orphan flag row dropped on
+  the next publish. Verified below.
+- **No product-form checkbox — deferred.** The flag is set and cleared through
+  `POST`/`DELETE /api/objects/mqtt_product_entities`. The product form files belong to
+  track B this wave, so a UI for it is a follow-on rather than part of this change.
+- **`mqtt_product_entities` joins the `ExposedEntity` enum,** which adds a value to
+  `GET /api/openapi/specification`. Additive, and the only wire change this plan makes; the
+  Client impact section's "no HTTP client sees anything change" holds for every existing
+  route and field.
+- **The two count sensors are a knowing exception to this plan's own first rule.** A count
+  of what is due within N days is a function of the clock, so it is a fact at publish time
+  and stale afterwards. Question 1's Response promotes them anyway; the exception is
+  contained by publishing no per-row derived boolean anywhere, so the stock summary still
+  carries the dates a consumer needs to re-derive the number locally after midnight. The
+  horizon comes from the configured `stock_due_soon_days` default rather than from the user
+  who happened to make the request, because these topics are one household-wide snapshot
+  with no reader identity.
+- **Question 8's `x-visibility` form is a marked seam, not code.** The annotations arrive
+  with [19](19-rbac.md)'s piece 2 in wave 5. Until then `StateSnapshotAssembler::DENIED_COLUMNS`
+  is the deny-list the rule denotes, written out so it can be checked against the views by
+  eye, and its docblock says where the spec-driven form plugs in.
+- **Question 6's "once per process" is APCu-if-available.** ADR-0007 allows process memory
+  only for pure caches, and a suppression window whose loss costs one extra log line is
+  exactly that. Where APCu is absent — as it is in this environment — it degrades to one
+  line per publish attempt, which for a web request is one line per request. Measured: three
+  failing writes produced three log lines.
+
+### Verification
+
+Home Assistant itself was not available, so verifications **2** (entities repopulate after
+a Home Assistant restart with the pod at zero), the Home-Assistant half of **4** (a template
+derived from the attributes changes as the day rolls over) and **8** (a week of pod idle
+time) **could not be run**. Everything else was, against a real broker.
+
+1. **Retention actually retains.** Publisher connected, published, disconnected. A *fresh*
+   subscriber (`php .devtools/mqtt/subscribe.php 127.0.0.1 1884 '#' 2`, clean session, a
+   client id nothing else uses) then received all 11 topics — 8 ambient, 1 device discovery
+   config, and one opted-in product's config and state — every one with `retain=true` and
+   the correct payload.
+3. **A write propagates, a read does not.** `POST /api/stock/products/1/add` (3 units at
+   2.75) moved `victual/state/stock`'s product 1 from `amount 11, best_before 2027-03-01`
+   to `amount 14, best_before 2027-01-01`, observed by a subscriber that connected only
+   after the write. Two reads — `GET /api/stock` and `GET /stockoverview` — left the
+   broker's log at exactly 28 lines. A bookkeeping-only request published nothing while
+   provably writing: `api_keys.last_used` advanced from `12:34:50` to `12:35:01`.
+4. **Facts, not derived states.** Every payload was read. No boolean appears anywhere in
+   any of them; the only clock-dependent values are the two counts question 1's Response
+   promotes deliberately, and `chores_current`'s own rollover recomputation, which is the
+   view's behaviour and the same number the chores page shows.
+5. **The broker being down cannot hurt a write.** Against a *refused* connection the write
+   succeeded in **0.046 s** (`curl -w '%{time_total}'`) — a closed local port fails
+   instantly, so this bounds nothing. Against an *unroutable* address (`10.255.255.1`, with
+   InfluxDB pointed at the same) the write succeeded in **4.11 s** and **4.05 s** on two
+   attempts, which is the two configured 2-second timeouts in sequence and nothing more; a
+   read on the same instance took 0.012 s. Both failures were logged, neither reached the
+   response, and both writes returned 200. **Worth an operator's attention:** this tree does
+   not call `fastcgi_finish_request()`, so the delay is on the response rather than only on
+   the process — two unreachable targets cost the sum of their timeouts.
+6. **Retraction works.** With 11 retained topics on the broker,
+   `php bin/victual-publish-state --retract` exited 0 and a fresh subscriber then saw
+   **0 messages**. The per-product path was verified three ways: clearing the flag
+   (`DELETE /api/objects/mqtt_product_entities/1`) published empty payloads to
+   `homeassistant/sensor/victual/product_1/config` and `victual/state/product/1`;
+   deactivating a flagged product (`PUT /api/objects/products/2` with `active: 0`) did the
+   same and left **0** orphan flag rows behind; and running `bin/victual-publish-state`
+   twice in a row published the per-product topics **once**, the second run finding the
+   ledger hash unchanged.
+7. **The assembler agrees on both engines.** `.devtools/mqtt/engine-diff.sh` migrates a
+   fresh SQLite database, seeds it, migrates a fresh PostgreSQL database, copies the first
+   into it with the real `bin/victual-db-import`, assembles on each and diffs:
+   `MQTT PAYLOAD IDENTICAL ON BOTH ENGINES`, 3735 bytes over 124 lines, byte-identical
+   rather than merely equivalent. The fixture is deliberately awkward — the null-due-date
+   sentinel, a below-minimum product with no stock, a priced purchase, a shopping list note,
+   an expired product, a chore with no schedule, a battery with no interval, a task with no
+   due date, and two opted-in products of which one has no stock.
+
+Alongside those: `.devtools/mqtt/price-guard.php` passes all 22 checks (the deny-list covers
+every column the security note names, no allow-list admits a money-shaped key, and
+`AssertNoForbiddenKeys` rejects a price nested inside an attribute row while accepting a
+realistic snapshot). `.devtools/pgsql/run-tests.sh` is green on all five phases —
+`MIGRATION NUMBERING OK`, `MIGRATED STATE IDENTICAL`, `ALL VIEWS IDENTICAL` ×5,
+`TRIGGER BEHAVIOUR IDENTICAL`, `EVERY FAILED OPERATION ROLLED BACK` on both engines,
+`QUERY FILTER OPERATORS IDENTICAL`, `SUITE PASSED` — which matters because
+`services/DatabaseService.php` was touched. `php -l` is clean on all 15 changed PHP files
+and `victual.openapi.json` parses. The suite ran with `MQTT_ENABLED` and `INFLUXDB_ENABLED`
+at their defaults, so the whole feature is provably inert when off.
+
+Question 7's write path was verified against a stand-in InfluxDB (a small node server that
+records the body and answers 204). A three-unit purchase at 2.75 produced exactly:
+
+```
+POST /api/v2/write?org=household&bucket=victual&precision=ns
+authorization: Token …
+content-type: text/plain; charset=utf-8
+price_paid,product_id=1 price=2.75,amount=3.0 1788352542000000000
+stock_value,product_id=1 value=33.66,amount=14.0 1788352542000000000
+```
+
+No user id, no note, no location — `product_id` is the only tag.
+
+### What this changes in the record above
+
+The security notes' third bullet understates the dependency: two packages are installed,
+not one (`e794ea8`). The fourth bullet's column list is now implemented as
+`StateSnapshotAssembler::DENIED_COLUMNS`, which adds `avg_price`, `last_price_unit`,
+`last_price_total`, `note` and `api_key` to the names it gives, and is enforced twice over
+by a per-entity allow-list and a `/price|cost|value/i` guard that refuses to publish rather
+than publishing something with a price in it.
+
 ## Effort
 
 Small, and mostly not the MQTT part.
@@ -428,10 +677,12 @@ connection the application makes that is not the label printer.
 - **Credentials are settings**, so they land in `data/config.php` or the environment and
   must never be added to `SystemApiController`'s `EXPOSED_SETTINGS` allowlist. The
   allowlist is an allowlist precisely so this stays a non-event.
-- **A new dependency is a new supply chain.** `php-mqtt/client` is one package with no
-  runtime dependencies of its own beyond PSR-3, which is the cheap end of this, but it is
-  the first addition to `composer.json` this fork has made and the sweep's dependency
-  review should pick it up next time round.
+- **A new dependency is a new supply chain.** `php-mqtt/client` is the cheap end of this,
+  but it is the first addition to `composer.json` this fork has made and the sweep's
+  dependency review should pick it up next time round. Corrected on landing: it is not one
+  package with no runtime dependencies beyond PSR-3 — it also pulls `myclabs/php-enum`
+  1.8.5, so the installed count grows by two. Question 7's InfluxDB writer adds no package
+  at all; it goes through the Guzzle client already in the tree.
 - **The retained payload is household data on a shared broker.** Anything with access to
   the broker can read the household's stock and chores without authenticating to Victual.
   That is a real widening of who can see this data, it is accepted here because the broker
@@ -449,7 +700,14 @@ connection the application makes that is not the label printer.
   Concretely, the v1 entity set in question 1 carries none of `stock.price`,
   `stock_log.price`, `products_average_price`, `product_price_history`,
   `products_last_purchased.price`, `last_price`, `avg_price` or a recipe's `costs`, and
-  adding an entity that would is a change this bullet has to be edited to permit.
+  adding an entity that would is a change this bullet has to be edited to permit. As built
+  that list is `StateSnapshotAssembler::DENIED_COLUMNS`, which also names
+  `last_price_unit`, `last_price_total`, `note` and `api_key`, and it is not trusted on its
+  own: each entity carries an allow-list of the only keys it may emit, and
+  `AssertNoForbiddenKeys()` walks the finished payload and throws on any key matching
+  `/price|cost|value/i` rather than publishing it. `.devtools/mqtt/price-guard.php` is the
+  check. Question 2's per-product entities carry product name, unit, amount and
+  `best_before_date` and nothing else, so they do not widen this.
 - **Question 7 adds a second outbound connection: InfluxDB.** Same treatment as the
   broker — the endpoint is a configured constant nothing in a request can influence, the
   token is a setting that never joins `EXPOSED_SETTINGS`, and a failed write to it never
