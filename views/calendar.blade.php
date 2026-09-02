@@ -35,7 +35,7 @@
 <hr class="my-2">
 
 <script>
-	var fullcalendarEventSources = {!! json_encode(array($fullcalendarEventSources)) !!}
+	Victual.FullcalendarEventSources = {!! json_encode(array($fullcalendarEventSources)) !!}
 </script>
 
 <div class="row">

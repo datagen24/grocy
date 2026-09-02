@@ -3,11 +3,11 @@
 // (recipes, products, notes) and consume/"add missing to shopping list"/done actions.
 //
 // The Blade template provides these globals (inline <script> block):
-// - fullcalendarEventSources: event feed for all calendars (one event per meal plan entry)
-// - internalRecipes: the hidden shadow recipes Victual keeps per meal plan entry/day/week
+// - Victual.FullcalendarEventSources: event feed for all calendars (one event per meal plan entry)
+// - Victual.InternalRecipes: the hidden shadow recipes Victual keeps per meal plan entry/day/week
 //   (named "<day>#<entry id>", "<day>" and "<year>-<week>" respectively)
-// - recipesResolved: recipes_resolved rows (costs, calories, stock fulfillment) for those
-// - weekRecipe: the shadow recipe of the currently displayed week (or null)
+// - Victual.RecipesResolved: recipes_resolved rows (costs, calories, stock fulfillment) for those
+// - Victual.WeekRecipe: the shadow recipe of the currently displayed week (or null)
 // Each .calendar container carries data-section-id/-name, data-primary-section and
 // data-last-section attributes.
 
@@ -69,7 +69,7 @@ $(".calendar").each(function()
 		"header": headerConfig,
 		"weekNumbers": false,
 		"eventLimit": false,
-		"eventSources": fullcalendarEventSources,
+		"eventSources": Victual.FullcalendarEventSources,
 		"defaultView": ($(window).width() < 768 || GetUriParam("days") == "0") ? "agendaDay" : "agendaWeek",
 		"allDayText": sectionName,
 		"allDayHtml": sectionName,
@@ -104,9 +104,9 @@ $(".calendar").each(function()
 			var weekRecipeOrderMissingButtonHtml = "";
 			var weekRecipeConsumeButtonHtml = "";
 			var weekCostsHtml = "";
-			if (weekRecipe !== null)
+			if (Victual.WeekRecipe !== null)
 			{
-				var weekRecipeResolved = FindObjectInArrayByPropertyValue(recipesResolved, "recipe_id", weekRecipe.id);
+				var weekRecipeResolved = FindObjectInArrayByPropertyValue(Victual.RecipesResolved, "recipe_id", Victual.WeekRecipe.id);
 
 				if (Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
 				{
@@ -123,10 +123,10 @@ $(".calendar").each(function()
 				var weekRecipeOrderMissingButtonHtml = "";
 				if (Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST)
 				{
-					weekRecipeOrderMissingButtonHtml = '<a class="ml-2 btn btn-outline-primary btn-xs recipe-order-missing-button d-print-none ' + weekRecipeOrderMissingButtonDisabledClasses + '" href="#" data-toggle="tooltip" title="' + __t("Put missing products on shopping list") + '" data-recipe-id="' + weekRecipe.id.toString() + '" data-recipe-name="' + weekRecipe.name + '" data-recipe-type="' + weekRecipe.type + '"><i class="fa-solid fa-cart-plus"></i></a>';
+					weekRecipeOrderMissingButtonHtml = '<a class="ml-2 btn btn-outline-primary btn-xs recipe-order-missing-button d-print-none ' + weekRecipeOrderMissingButtonDisabledClasses + '" href="#" data-toggle="tooltip" title="' + __t("Put missing products on shopping list") + '" data-recipe-id="' + Victual.WeekRecipe.id.toString() + '" data-recipe-name="' + Victual.WeekRecipe.name + '" data-recipe-type="' + Victual.WeekRecipe.type + '"><i class="fa-solid fa-cart-plus"></i></a>';
 				}
 
-				weekRecipeConsumeButtonHtml = '<a class="ml-2 btn btn-outline-success btn-xs recipe-consume-button d-print-none" href="#" data-toggle="tooltip" title="' + __t("Consume all ingredients needed by this weeks recipes or products") + '" data-recipe-id="' + weekRecipe.id.toString() + '" data-recipe-name="' + weekRecipe.name + '" data-recipe-type="' + weekRecipe.type + '"><i class="fa-solid fa-utensils"></i></a>'
+				weekRecipeConsumeButtonHtml = '<a class="ml-2 btn btn-outline-success btn-xs recipe-consume-button d-print-none" href="#" data-toggle="tooltip" title="' + __t("Consume all ingredients needed by this weeks recipes or products") + '" data-recipe-id="' + Victual.WeekRecipe.id.toString() + '" data-recipe-name="' + Victual.WeekRecipe.name + '" data-recipe-type="' + Victual.WeekRecipe.type + '"><i class="fa-solid fa-utensils"></i></a>'
 			}
 			$(".calendar[data-primary-section='true'] .fc-header-toolbar .fc-center").html("<h4>" + weekCostsHtml + weekRecipeOrderMissingButtonHtml + weekRecipeConsumeButtonHtml + "</h4>");
 		},
@@ -168,8 +168,8 @@ $(".calendar").each(function()
 
 				recipe.name = recipe.name.escapeHTML();
 
-				var internalShadowRecipe = FindObjectInArrayByPropertyValue(internalRecipes, "name", mealPlanEntry.day + "#" + mealPlanEntry.id);
-				var resolvedRecipe = FindObjectInArrayByPropertyValue(recipesResolved, "recipe_id", internalShadowRecipe.id);
+				var internalShadowRecipe = FindObjectInArrayByPropertyValue(Victual.InternalRecipes, "name", mealPlanEntry.day + "#" + mealPlanEntry.id);
+				var resolvedRecipe = FindObjectInArrayByPropertyValue(Victual.RecipesResolved, "recipe_id", internalShadowRecipe.id);
 
 				element.attr("data-recipe", event.recipe);
 
@@ -324,10 +324,10 @@ $(".calendar").each(function()
 			var dayRecipeName = event.start.format("YYYY-MM-DD");
 			if (!$("#day-summary-" + dayRecipeName).length) // This runs for every event/recipe, so maybe multiple times per day, so only add the day summary once
 			{
-				var dayRecipe = FindObjectInArrayByPropertyValue(internalRecipes, "name", dayRecipeName);
+				var dayRecipe = FindObjectInArrayByPropertyValue(Victual.InternalRecipes, "name", dayRecipeName);
 				if (dayRecipe != null)
 				{
-					var dayRecipeResolved = FindObjectInArrayByPropertyValue(recipesResolved, "recipe_id", dayRecipe.id);
+					var dayRecipeResolved = FindObjectInArrayByPropertyValue(Victual.RecipesResolved, "recipe_id", dayRecipe.id);
 
 					var costsAndCaloriesPerDay = ""
 					if (Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_STOCK_PRICE_TRACKING)
