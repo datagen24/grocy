@@ -6,10 +6,12 @@ those copies have already accumulated.
 **Depends on:** nothing. Must land before [05](05-store-shopping-lists.md),
 [06](06-location-barcodes.md) and [08](08-nested-locations.md) add more list/form pairs to
 copy from.
-**Status:** **steps 1 and 2 landed**, with verification 1's baseline; steps 3 to 6
-outstanding — including step 3a, sweep finding **S29**, a High stored-XSS class across
-~45 sites assigned here on 2026-08-30, which is why the remaining steps must not slip.
-See [Executed](#executed--steps-1-and-2-and-the-baseline) below.
+**Status:** **steps 1 to 4 landed**, with verification checks 1 to 5. Step 3a — sweep
+finding **S29**, a High stored-XSS class across ~45 sites assigned here on 2026-08-30 — is
+**closed**, proved with a stored payload rather than by reading the diff. Steps 5 and 6
+(`purchase.js`, `datetimepicker2`, the Blade tidy-up) are outstanding and carry no security
+content. See [Executed — steps 1 and 2](#executed--steps-1-and-2-and-the-baseline) and
+[Executed — steps 3, 3a and 4](#executed--steps-3-3a-and-4) below.
 
 ## Today
 
@@ -794,9 +796,11 @@ unreached in exactly the pages that do the most work.
 
 ### Verification
 
-Against two demo-mode SQLite instances booted from the same working copy on 2026-09-02 —
-`59456dd` unmodified on one port and this branch on the other, each on a freshly migrated
-demo database so the absolute row counts are comparable too. Reproduce with
+Against two demo-mode SQLite instances run side by side on 2026-09-02 — `59456dd` extracted
+with `git archive` into a scratch directory and served on one port, this branch served on
+another — each on its own freshly migrated demo database, so the absolute row counts are
+comparable too and not only the deltas. Both were driven by *this* branch's copy of the
+harness, so the probes are identical and only the application differs. Reproduce with
 `.agents/skills/run-app/SKILL.md` plus `.devtools/frontend/README.md`.
 
 - **Check 1, the baseline, before and after.**
