@@ -6,12 +6,13 @@ those copies have already accumulated.
 **Depends on:** nothing. Must land before [05](05-store-shopping-lists.md),
 [06](06-location-barcodes.md) and [08](08-nested-locations.md) add more list/form pairs to
 copy from.
-**Status:** **steps 1 to 4 landed**, with verification checks 1 to 5. Step 3a — sweep
-finding **S29**, a High stored-XSS class across ~45 sites assigned here on 2026-08-30 — is
-**closed**, proved with a stored payload rather than by reading the diff. Steps 5 and 6
-(`purchase.js`, `datetimepicker2`, the Blade tidy-up) are outstanding and carry no security
-content. See [Executed — steps 1 and 2](#executed--steps-1-and-2-and-the-baseline) and
-[Executed — steps 3, 3a and 4](#executed--steps-3-3a-and-4) below.
+**Status:** **landed in full**, steps 1 to 6, with all seven verification checks. Step 3a —
+sweep finding **S29**, a High stored-XSS class across ~45 sites assigned here on 2026-08-30 —
+is **closed**, proved with a stored payload rather than by reading the diff. Steps 5 and 6
+carried no security content. See
+[Executed — steps 1 and 2](#executed--steps-1-and-2-and-the-baseline),
+[Executed — steps 3, 3a and 4](#executed--steps-3-3a-and-4) and
+[Executed — steps 5 and 6](#executed--steps-5-and-6) below.
 
 ## Today
 
@@ -884,3 +885,252 @@ commit left in the three Blade views, and the previous agent's finding still hol
 two of the three pushes look removable outright. `datetimepicker2` is untouched;
 `stockentryform.js` and `mealplan.js` are the pages where two pickers coexist. The Blade
 repetition step 6 names is still there in the ~14 list templates.
+
+## Executed — steps 5 and 6
+
+Landed 2026-09-02 on `worktree-agent-a8014d7cd55b9c1fb`, against the working copy at
+`cce729b` (the merge of steps 3, 3a and 4). **This completes the plan.** Five commits,
+43 files, +1373 / −1654.
+
+| | |
+|---|---|
+| `b88b5c9` | Give the stock booking toasts one Undo helper instead of five (step 5a) |
+| `8bf2282` | Parameterise the datetimepicker instead of keeping a second copy of it (step 5b) |
+| `057fb55` | Put the repeated list-page chrome in two partials (step 6) |
+| `f8219a5` | Namespace the last injected globals, and register the last two components (step 6) |
+| `5bcaa92` | Add the Undo-toast and two-picker probes to the frontend harness |
+
+### Step 5a — `purchase.js` stops being a library by side effect
+
+`public/js/victual_stock_dialogs.js` holds one `UndoStockBooking`, one
+`UndoStockTransaction` and one `UndoStockBookingEntry`, loaded from the layout on every page
+after `victual_entity.js`. The five page-script copies are gone, and so are all three
+`@push`es of `purchase.js` — `stockoverview`, `stockentries` and `shoppinglist` — with the
+step-1 comments that marked them.
+
+They have to be globals under exactly those names because they are reached from inline
+`onclick=` inside a toast, and **the toast is not always shown by the page that built it**:
+`consume`, `purchase`, `transfer` and `inventory` post their success message to the *parent*
+window when they are opened in a modal, so the Undo link runs against whatever the parent
+page defined. That is the mechanism the plan's "secretly a shared library" was describing,
+and it is why the shared file is a plain script with globals rather than a
+`Victual.Components` entry. `Victual.StockDialogs` mirrors the three, plus the one shared
+`BroadcastProductChanged` helper, so the namespace has them too.
+
+**The five copies were not identical, which the plan did not know.** Diffing them:
+
+| Copy | `UndoStockBooking` | `UndoStockTransaction` |
+|---|---|---|
+| `consume.js` | undo, toast | undo, toast |
+| `inventory.js` | undo, toast | undo, toast |
+| `transfer.js` | undo, toast | undo, toast |
+| `mealplan.js` | — (never had one) | undo, toast |
+| `purchase.js` | undo, toast, **re-read the booking and broadcast `ProductChanged`** | undo, toast, **re-read the transaction and broadcast `ProductChanged`** |
+
+**The broadcasting pair is the one that survived**, for two reasons. It is the copy
+`stockoverview` and `stockentries` actually executed, through the push — so keeping it is
+what makes deleting the push a no-op on the two pages the plan was worried about. And the
+four quiet copies read as the drift rather than the intent: all four of those pages already
+broadcast `ProductChanged` when they *book* stock, and undoing a booking is the same event
+in reverse. The consequence, recorded rather than hidden: on the standalone `/consume`,
+`/inventory`, `/transfer` and `/mealplan` pages an undo now fires one extra `GET` and one
+`postMessage` that no listener on those pages consumes.
+
+`UndoStockBookingEntry` stayed a separate function deliberately. It undoes a *booking*
+rather than a transaction, takes the product id from its caller instead of re-fetching it,
+and its three-argument signature is the contract of the inline links in `stockentries.js`.
+
+**`UndoStockBooking` has no call site anywhere in the tree.** All five copies were dead
+code; one is kept, because it is part of the global surface these toasts define and the
+next stock dialog will want it. Worth knowing before someone counts it as used.
+
+**One pre-existing bug found and deliberately not fixed**, because it is not on any of this
+plan's lists: `stockentryform.js:70` builds
+`onclick="UndoStockBookingEntry('<result.id>','<rowId>')"` — two arguments where the
+function takes three, so the `productId` it broadcasts is `undefined`; and `result` there is
+the array the save returned, so `result.id` is `undefined` too. The link has been inert since
+before this plan. `stockentries.js`'s own two toasts pass all three arguments correctly and
+work, which is what verification check 2 exercises.
+
+### Step 5b — `datetimepicker2` is gone
+
+**Q4's diff, re-run and confirmed.** Normalizing the `2` out of every identifier makes
+`datetimepicker2.js` differ from `datetimepicker.js` in **nothing but its own header comment
+saying it is the copy** — and the two Blade components become byte-identical. No validation
+difference, no format difference, no page-state dependency. Q4 predicted exactly this and
+verification 6 was its safety net; neither was needed.
+
+The component is parameterised by an instance suffix. Every per-instance id and class is
+built from it, so `'instance' => 'secondary'` renders precisely the markup the second copy
+rendered, with `-secondary` where it had `2`. The JS is a factory,
+`Victual.Components.CreateDateTimePicker(suffix)`; a third picker is one call. 373 + 88 lines
+deleted, ~60 added to parameterise: net −399 in the picker files.
+
+**One thing a naive merge would have broken, and the reason the merged file registers
+instances conditionally.** `purchase.js` uses `if (Victual.Components.DateTimePicker)` as a
+*feature test for whether the picker was rendered* — its due date field is behind
+`VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING`, and today the object is undefined
+because the component script is only pushed when the include runs. A single merged script
+that always defined both objects would have quietly turned that test into a constant and
+sent `best_before_date: undefined` instead of `null`. So each instance is registered only if
+its markup is on the page, which reproduces the old semantics exactly.
+
+`Victual.Components.DateTimePicker2` is `Victual.Components.SecondaryDateTimePicker` in its
+four callers (`purchase`, `inventory`, `mealplan`, `stockentryform`); the four pages and
+`userfieldsform` pass the new argument. `grep -rn "datetimepicker2" .` returns nothing
+outside `docs/`.
+
+Incidentally fixed while moving the code: `Clear()` assigned to an undeclared `value`,
+creating a global. Nothing read it.
+
+### Step 6 — the Blade minor items
+
+**The plan's step 6 is wrong in its first sentence, and this is the correction.** It says
+"partials for it already exist and are used elsewhere; apply the existing idiom". No such
+partial exists: `views/` has `components/`, `layout/` and `errors/` only, and nothing in
+`components/` is list chrome. The idiom had to be written, not applied.
+
+Two partials, and the ids are the point rather than the line count:
+
+- `components/list_collapse_toggles.blade.php` — the two narrow-screen buttons that collapse
+  `#table-filter-row` and `#related-links`. Byte-identical in all twelve factory-driven list
+  templates, `@if($embedded) pr-5 @endif` included.
+- `components/list_filter_row.blade.php` — the whole `#table-filter-row`: search box,
+  optional "show disabled" checkbox, clear-filter button. Two parameters cover the whole
+  spread: five of the twelve have no "show disabled" column, and `productgroups`' search
+  group carries an extra `mb-3`.
+
+`#search`, `#show-disabled` and `#clear-filter-button` are `Victual.EntityList`'s contract —
+`.SearchFilter` and `.ShowDisabledToggle` look them up by id — so a list page that misspells
+one silently loses its filtering with nothing to catch it. That, not the duplication, is why
+this is worth a partial.
+
+**`userfields` keeps its own filter row** and takes only the toggles partial. It has a third
+control, the entity select, between the search box and the clear button; a hook for one
+caller is how a shared partial starts growing hooks, which is the same reasoning that kept
+twelve forms off `EntityForm` in step 3.
+
+**The plan names `recipes` as injecting bare globals; it does not.** `recipes.blade.php`
+injects `Victual.QuantityUnits` and `Victual.QuantityUnitConversionsResolved` and nothing
+bare. The second offender is `calendar.blade.php`, which injects the *same*
+`fullcalendarEventSources` global that `mealplan.blade.php` does, for `calendar.js`. So both
+moved: `Victual.FullcalendarEventSources`, `.InternalRecipes`, `.RecipesResolved`,
+`.WeekRecipe`. Leaving `calendar` behind would have split one name across two conventions.
+`mealplan.js` and `calendar.js` were touched only for those reads — they remain Q5
+leave-alone files.
+
+**The two unregistered components are `calendarcard.js` and `numberpicker.js`**, as the plan
+says. Each gains a `Victual.Components.<Name>.Init()` holding exactly the code that used to
+run at load, called once at the bottom: load-time behaviour unchanged, and a page that adds
+the markup later now has something to call.
+
+### Verification
+
+Two demo-mode SQLite instances run side by side on 2026-09-02 — `cce729b` extracted with
+`git archive` into a scratch directory and served on 8601, this branch served on 8602, each
+on its own freshly migrated demo database — both driven by *this* branch's harness, so the
+probes are identical and only the application differs. Reproduce with
+`.agents/skills/run-app/SKILL.md` plus `.devtools/frontend/README.md`.
+
+- **Check 1, the baseline, before and after.**
+  `node .devtools/frontend/baseline.js --url http://127.0.0.1:860X`. Across 13 round-tripped
+  lists, 10 load-probed pages and 22 form pages the two `.md` summaries differ in **two
+  lines**: the base URL, and the per-run random token inside `userobjectform`'s probe URL.
+  Every recorded cell — row counts, create/edit/delete deltas, reload conventions, delete
+  styles, the Enter-to-submit column and the console column — is byte identical, including
+  `userobjects`'s pre-existing `aDataSort` error. Steps 5 and 6 change no list or form
+  behaviour and the harness says so.
+
+- **Check 2, last item — every Undo toast, with the pushes gone.**
+  `node .devtools/frontend/undo-toasts.js --url http://127.0.0.1:8602 --db "$VDATA/victual_en.db"`,
+  a new probe. It books stock on each page that renders an Undo toast, clicks the Undo link
+  in the toast that page produced, and reads `stock_log` back.
+
+  | Page | How the Undo was reached | Rows booked | Rows `undone = 1` |
+  |---|---|---|---|
+  | `stockoverview` | row consume button → toast Undo | 1 | 1 |
+  | `consume` | consume form → toast Undo | 1 | 1 |
+  | `purchase` | purchase form → toast Undo | 1 | 1 |
+  | `inventory` | inventory form → toast Undo | 1 | 1 |
+  | `transfer` | transfer form → toast Undo | 2 | 2 |
+  | `stockentries` | stock entry consume → toast Undo (`UndoStockBookingEntry`) | 1 | 1 |
+  | `mealplan` | `UndoStockTransaction()` invoked on the page, as its toast's `onclick` does | 1 | 1 |
+
+  7 of 7. The meal plan row is the one that is not a real toast click: its Undo toast only
+  appears after consuming a meal plan entry whose recipe is fully in stock, which the demo
+  data does not reliably provide, so the probe books a transaction and calls exactly the
+  global the toast's `onclick` names, on the loaded meal plan page.
+
+  **The probe is known to be capable of failing**, which is the part that matters. Deleting
+  the `purchase.js` `@push` from `cce729b`'s `stockoverview.blade.php` — the plan's own
+  check-2 instruction — makes it report `UndoStockTransaction is not defined`, 1 row booked
+  and **0** undone. That is the latent bug the plan listed, demonstrated rather than argued.
+
+- **Check 6, two datetimepickers on one page.** `node .devtools/frontend/two-pickers.js`,
+  a new probe: after every action on one picker it reads the *other* one's value and
+  validity back. 66 observations per run across `stockentryform` (`best_before_date` +
+  `purchase_date`), `purchase` and `inventory` (`best_before_date` + `purchased_date`) and
+  `mealplan` (`day` + `copy_to_date`, one per modal). **66/66 on both trees, and the two
+  output tables are byte-identical** — the merge changed nothing an observer can see.
+
+  What each shortcut did, on `stockentryform`, identical before and after:
+
+  | Action | acted-on picker, before → after | the other picker, before → after |
+  |---|---|---|
+  | type `2027-03-04` into primary | `2027-09-02` valid → `2027-03-04` valid | `2026-08-19` valid → unchanged |
+  | type `2028-06-07` into secondary | `2026-08-19` valid → `2028-06-07` valid | `2027-03-04` valid → unchanged |
+  | secondary: "now" (widget Go-to-today) | `2028-06-07` valid → `2026-09-02` valid | `2027-03-04` valid → unchanged |
+  | secondary: "clear" (`Clear()`) | `2026-09-02` valid → empty, **invalid** | `2027-03-04` valid → unchanged |
+  | primary: "now" | `2027-03-04` valid → `2026-09-02` valid | empty invalid → unchanged |
+  | primary: "clear" | `2026-09-02` valid → empty, **invalid** | empty invalid → unchanged |
+  | primary: typed `x` (never overdue) | empty invalid → `2999-12-31` valid | empty invalid → unchanged |
+  | primary: "Never overdue" checkbox on | `2999-12-31` valid → empty, invalid | empty invalid → unchanged |
+  | primary: "Never overdue" checkbox off | empty invalid → `2999-12-31` valid | empty invalid → unchanged |
+
+  One thing the plan's wording assumes and the app does not have: **there is no "clear"
+  button in the picker widget**. The component's `buttons` config enables `showToday` and
+  `showClose` only, so tempusdominus never renders its trash-can action on any page. The
+  "clear" exercised above is the component's `Clear()` API — what `inventory.js`,
+  `purchase.js` and `mealplan.js` actually call.
+
+- **Step 6 is a rendering no-op, proved by rendering.** All twelve list pages fetched from
+  both instances and their chrome regions diffed: identical once indentation is normalised,
+  which is the only thing that moves, because a Blade `@include` does not re-indent what it
+  emits. The remaining textual differences are the port and rows the S29 probe had left in
+  the other database.
+
+- **Checks 3 and 5 still pass.** `node .devtools/frontend/forced-failure.js`, 9/9 on both
+  trees. `node .devtools/frontend/s29-payload.js`, 16/16 clean on both — the toasts step 5a
+  moved carry the escaped names and the escaping moved with them.
+
+- **Every view route.** `node .devtools/frontend/routes-smoke.js`: 80 loadable routes, 0
+  non-200, and the same two console problems on both trees — `/productbarcodes/new` opened
+  without its `product` parameter, and `/api`, the Swagger UI page. Zero new console errors.
+
+- **Syntax.** `node --check` clean on all 105 files under `public/js`, `public/viewjs` and
+  `.devtools/frontend`. No `.php` source file was changed — the diff is `public/js`,
+  `public/viewjs`, `views/` templates and `.devtools/frontend` — so there was nothing to
+  `php -l`; the templates render, which the route smoke covers.
+
+- **`grep -rn "datetimepicker2" .`** returns nothing outside `docs/`, where it survives as
+  this plan's own history. `grep -rc console.error public/viewjs/` is still 0 in all 86
+  files.
+
+### The plan's own text, re-read against what landed
+
+Three claims in the sections above did not survive contact, recorded here rather than edited
+away:
+
+- **"partials for it already exist and are used elsewhere; apply the existing idiom"**
+  (step 6) — no list-chrome partial existed anywhere in `views/`. The idiom was written here.
+- **"`mealplan` and `recipes` blades inject bare globals"** (step 6) — `recipes` does not.
+  `calendar` does, and moved with `mealplan`.
+- **"Steps 4–6 are tidy-up that can ride along"** (Effort) — true of step 6 and of the
+  picker merge, not of step 5a. Five copies that looked identical differed in whether they
+  broadcast `ProductChanged`, the page that most needed the extraction executed the odd one
+  out, and one of the two functions had no caller at all. That is a judgement about which
+  behaviour is correct, not a move.
+
+Two that held exactly: **Q4**'s "the diff has effectively been run… naming-only differences"
+was right to the line, and **Q6**'s no-bundler decision cost one more `<script>` tag in the
+layout and nothing else.
