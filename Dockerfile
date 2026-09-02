@@ -182,25 +182,26 @@ RUN { \
 # verification 4 of docs/plans/10-cold-start-statelessness.md is what checks that claim
 # rather than repeating it.
 #
-# Two Debian details that decide the list. APACHE_LOCK_DIR defaults to /var/lock/apache2,
-# which does not exist in this image, and apache2-foreground does "mkdir -p" over it on
-# every start - which fails on a read-only root filesystem before Apache is ever reached.
-# Pointing it at /tmp, which always exists and is always writable, removes both the mkdir
-# and any mutex file the configuration might one day ask for, without a third mount. The
-# grep afterwards is deliberate: if a future base image spells that variable differently,
-# the build fails here rather than the container failing to start somewhere else.
+# Two Debian details that decide the list. Debian's apache2.conf declares
+# "Mutex file:${APACHE_LOCK_DIR} default", so Apache writes its mutex files into
+# APACHE_LOCK_DIR (/var/lock/apache2 by default), which a read-only root filesystem
+# refuses. The official php:apache image rewrites /etc/apache2/envvars so that every
+# APACHE_* variable is a default the environment may override (": ${VAR:=value}" rather
+# than "export VAR=value"), which is why the ENV below is enough and why the first version
+# of this file, which tried to sed the export line, failed its own guard in CI: there is
+# no such line. Pointing the lock directory at /tmp, which always exists and is always
+# writable, keeps the list at three paths instead of four.
 #
 # APACHE_LOG_DIR stays /var/log/apache2 and is never written, because the logs go to the
 # container's stdout and stderr instead - set globally as well as per vhost, since the
 # main server opens its error log before any vhost applies, and other-vhosts-access-log is
 # disabled because it would write a file this image has no use for.
+ENV APACHE_LOCK_DIR=/tmp
 RUN set -eux; \
 	a2enmod rewrite; \
 	a2dissite 000-default; \
 	a2disconf other-vhosts-access-log || true; \
 	sed -ri 's!^Listen 80$!Listen 8080!' /etc/apache2/ports.conf; \
-	sed -ri 's!^export APACHE_LOCK_DIR=.*$!export APACHE_LOCK_DIR=/tmp!' /etc/apache2/envvars; \
-	grep -q '^export APACHE_LOCK_DIR=/tmp$' /etc/apache2/envvars; \
 	{ \
 		echo 'ServerName victual'; \
 		echo 'ServerTokens Prod'; \
