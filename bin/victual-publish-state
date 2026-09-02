@@ -1,0 +1,128 @@
+#!/usr/bin/env php
+<?php
+
+// Publishes the ambient state snapshot and the Home Assistant discovery payloads to the
+// configured MQTT broker, then exits.
+//
+//   php bin/victual-publish-state [--retract] [--quiet]
+//
+// This is the "publish on boot" half of docs/plans/18-mqtt-state-publication.md. PHP has no
+// boot event, so it is a command the deployment runs rather than something the application
+// does to itself: a postStart hook, or a Job alongside the initContainer that runs
+// bin/victual-migrate. It is what makes the design self-healing - a migration, a
+// bin/victual-db-import or someone in psql all get picked up here rather than silently
+// diverging from what the broker still holds.
+//
+// Which database and which broker come from config.php, exactly as they do for the web
+// application.
+//
+// Exit codes: 0 when everything was published (or when MQTT is disabled, which is not a
+// failure), 1 when the broker could not be reached or the snapshot could not be assembled.
+
+use Victual\Services\DatabaseService;
+use Victual\Services\Mqtt\MqttStatePublicationService;
+
+if (PHP_SAPI !== 'cli')
+{
+	exit('This is a command line script');
+}
+
+$arguments = array_slice($argv, 1);
+$quiet = in_array('--quiet', $arguments, true);
+$retract = in_array('--retract', $arguments, true);
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/victual-publish-state [--retract] [--quiet]\n\n";
+	echo "  Publishes the Home Assistant discovery payloads and the full state snapshot as\n";
+	echo "  retained MQTT topics. Run it once after every deployment, from a postStart hook\n";
+	echo "  or a Job next to the bin/victual-migrate initContainer.\n\n";
+	echo "  Does nothing (and succeeds) when MQTT_ENABLED is false.\n\n";
+	echo "  --retract  Clear every retained topic this version owns instead of publishing,\n";
+	echo "             by sending an empty retained payload to each. An empty payload on a\n";
+	echo "             discovery config topic is how Home Assistant is told to remove the\n";
+	echo "             entity. Both discovery modes' topics are cleared, not just the\n";
+	echo "             configured one.\n";
+	echo "  --quiet    Only print errors.\n";
+	exit(0);
+}
+
+if (!defined('VICTUAL_DATAPATH'))
+{
+	define('VICTUAL_DATAPATH', getenv('VICTUAL_DATAPATH') ?: __DIR__ . '/../data');
+}
+
+require_once __DIR__ . '/../packages/autoload.php';
+
+// Same shape as bin/victual-migrate: config.php is optional so that a checkout with only
+// environment variables set still works
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
+{
+	require_once VICTUAL_DATAPATH . '/config.php';
+}
+
+require_once __DIR__ . '/../config-dist.php';
+
+// The views this reads resolve user settings on some engines, so they need a user context
+if (!defined('VICTUAL_USER_ID'))
+{
+	define('VICTUAL_USER_ID', 1);
+}
+
+try
+{
+	(new Victual\Helpers\ConfigurationValidator())->validateConfig();
+}
+catch (\Victual\Helpers\EInvalidConfig $ex)
+{
+	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+	exit(1);
+}
+
+if (!MqttStatePublicationService::IsEnabled())
+{
+	if (!$quiet)
+	{
+		echo 'MQTT_ENABLED is false, nothing to publish.' . PHP_EOL;
+	}
+
+	exit(0);
+}
+
+// A CLI run is one request as far as the publish trigger is concerned. Without this the
+// shutdown handler in DatabaseService would publish a second time on the way out of any run
+// that happened to write (the always-run migration fixups do), and the two would race for
+// the same retained topics.
+MqttStatePublicationService::SuppressRequestEndPublish();
+
+DatabaseService::GetInstance()->SetCurrentUserId(VICTUAL_USER_ID);
+
+if ($retract)
+{
+	if (!MqttStatePublicationService::Retract())
+	{
+		fwrite(STDERR, 'Retracting the MQTT topics failed, see the log for why.' . PHP_EOL);
+		exit(1);
+	}
+
+	if (!$quiet)
+	{
+		echo 'Retracted every retained topic under ' . VICTUAL_MQTT_TOPIC_PREFIX . '/ and the discovery topics under ' . VICTUAL_MQTT_DISCOVERY_PREFIX . '/.' . PHP_EOL;
+	}
+
+	exit(0);
+}
+
+if (!MqttStatePublicationService::PublishDiscoveryAndState())
+{
+	fwrite(STDERR, 'Publishing the state snapshot failed, see the log for why.' . PHP_EOL);
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'Published the discovery payloads (' . VICTUAL_MQTT_DISCOVERY_MODE . ' mode) and the state snapshot to '
+		. VICTUAL_MQTT_HOST . ':' . VICTUAL_MQTT_PORT . ' under ' . VICTUAL_MQTT_TOPIC_PREFIX . '/.' . PHP_EOL;
+}
+
+exit(0);
