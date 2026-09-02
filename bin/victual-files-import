@@ -1,0 +1,248 @@
+#!/usr/bin/env php
+<?php
+
+// Moves the files under <data path>/storage into the database, then exits.
+//
+//   php bin/victual-files-import [--quiet]
+//
+// This is the one-off step between "FILE_STORAGE = filesystem" and
+// "FILE_STORAGE = database". Plan 01 answered its open question with an explicit import
+// rather than a read-through fallback: a fallback means a file can live in two places
+// indefinitely, and a filesystem the application still reads is a persistent volume you
+// can never delete with confidence. So this is the moment the bytes move, and until it
+// has run, images 404.
+//
+// On k3s it is a one-off Job mounting the old PVC, run before the Deployment is flipped
+// to the volume-less spec. That is why it is idempotent: a file that is already in the
+// database at the same size is skipped, so a Job that was killed halfway simply runs
+// again. A file that is there at a *different* size is re-imported, because a half
+// written row from a killed run is the one case where "already there" is not "already
+// done".
+//
+// It imports only. There is deliberately no --delete-after: deleting the source is a
+// decision to make after looking at the result, not a flag on the command that produced
+// it.
+//
+// Exit codes: 0 when everything imported or was already there, 1 on failure.
+
+use Victual\Services\Storage\DatabaseStorage;
+use Victual\Services\Storage\FileStorage;
+
+if (PHP_SAPI !== 'cli')
+{
+	exit('This is a command line script');
+}
+
+$arguments = array_slice($argv, 1);
+$quiet = in_array('--quiet', $arguments, true);
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/victual-files-import [--quiet]\n\n";
+	echo "  Imports the files under <data path>/storage into the database, one row per\n";
+	echo "  file, and exits. Requires FILE_STORAGE = \"database\" and DB_DRIVER = \"pgsql\".\n\n";
+	echo "  Safe to run repeatedly: a file already in the database at the same size is\n";
+	echo "  skipped. Nothing is deleted from disk - check the result, then remove the\n";
+	echo "  storage directory yourself.\n\n";
+	echo "  --quiet  Only print the summary and any errors.\n";
+	exit(0);
+}
+
+if (!defined('VICTUAL_DATAPATH'))
+{
+	define('VICTUAL_DATAPATH', getenv('VICTUAL_DATAPATH') ?: __DIR__ . '/../data');
+}
+
+require_once __DIR__ . '/../packages/autoload.php';
+
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
+{
+	require_once VICTUAL_DATAPATH . '/config.php';
+}
+
+require_once __DIR__ . '/../config-dist.php';
+
+// DatabaseService opens a connection the same way it does for a request, and the
+// application's connection setup expects a user context.
+if (!defined('VICTUAL_USER_ID'))
+{
+	define('VICTUAL_USER_ID', 1);
+}
+
+try
+{
+	(new Victual\Helpers\ConfigurationValidator())->validateConfig();
+}
+catch (\Victual\Helpers\EInvalidConfig $ex)
+{
+	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+	exit(1);
+}
+
+// The configuration checks are what make the rest of this script simple: with them
+// passed, FileStorage::GetInstance() is a DatabaseStorage and there is a files table to
+// write into. Running against the filesystem backend would copy the storage directory
+// onto itself.
+if (VICTUAL_FILE_STORAGE !== FileStorage::STORAGE_DATABASE)
+{
+	fwrite(STDERR, 'FILE_STORAGE is "' . VICTUAL_FILE_STORAGE . '", so there is nothing to import into.' . PHP_EOL
+		. 'Set FILE_STORAGE to "database" first - this command moves files from the storage' . PHP_EOL
+		. 'directory into the database, and only that backend reads them afterwards.' . PHP_EOL);
+	exit(1);
+}
+
+if (strtolower(VICTUAL_DB_DRIVER) !== 'pgsql')
+{
+	fwrite(STDERR, 'DB_DRIVER is "' . VICTUAL_DB_DRIVER . '", but the database file storage is PostgreSQL only.' . PHP_EOL);
+	exit(1);
+}
+
+$storagePath = VICTUAL_DATAPATH . '/storage';
+
+if (!is_dir($storagePath))
+{
+	echo 'No storage directory at ' . $storagePath . ' - nothing to import.' . PHP_EOL;
+	exit(0);
+}
+
+$storage = FileStorage::GetInstance();
+
+if (!($storage instanceof DatabaseStorage))
+{
+	fwrite(STDERR, 'The configured storage backend is not the database one.' . PHP_EOL);
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'Source: ' . $storagePath . PHP_EOL;
+	echo 'Target: ' . VICTUAL_DB_NAME . ' on ' . VICTUAL_DB_HOST . ':' . VICTUAL_DB_PORT . ' (files table)' . PHP_EOL;
+	echo PHP_EOL;
+}
+
+$imported = 0;
+$replaced = 0;
+$skipped = 0;
+$failed = 0;
+
+foreach (ListDirectory($storagePath) as $group)
+{
+	$groupPath = $storagePath . '/' . $group;
+
+	if (!is_dir($groupPath))
+	{
+		// A stray file directly under storage/ belongs to no group and cannot be named in
+		// a (group, name) pair, so it is reported rather than guessed at.
+		if (!$quiet)
+		{
+			echo '  skipping "' . $group . '", which is not a group directory' . PHP_EOL;
+		}
+
+		continue;
+	}
+
+	if (!$quiet)
+	{
+		echo $group . ':' . PHP_EOL;
+	}
+
+	foreach (ListDirectory($groupPath) as $name)
+	{
+		$filePath = $groupPath . '/' . $name;
+
+		if (!is_file($filePath))
+		{
+			continue;
+		}
+
+		$sizeOnDisk = filesize($filePath);
+		$sizeInDatabase = $storage->GetSizeBytes($group, $name);
+
+		if ($sizeInDatabase === $sizeOnDisk)
+		{
+			$skipped++;
+			if (!$quiet)
+			{
+				echo '  skipped  ' . $name . ' (already imported, ' . $sizeOnDisk . ' bytes)' . PHP_EOL;
+			}
+
+			continue;
+		}
+
+		$handle = fopen($filePath, 'rb');
+		if ($handle === false)
+		{
+			$failed++;
+			fwrite(STDERR, '  FAILED   ' . $group . '/' . $name . ': could not be opened' . PHP_EOL);
+			continue;
+		}
+
+		try
+		{
+			// Write rather than Create: a row that is there at a different size is a
+			// partial import to finish, not a collision to refuse.
+			$storage->Write($group, $name, $handle);
+
+			if ($sizeInDatabase === null)
+			{
+				$imported++;
+				$verb = '  imported ';
+			}
+			else
+			{
+				$replaced++;
+				$verb = '  replaced ';
+			}
+
+			if (!$quiet)
+			{
+				echo $verb . $name . ' (' . $sizeOnDisk . ' bytes)' . PHP_EOL;
+			}
+		}
+		catch (\Throwable $ex)
+		{
+			$failed++;
+			fwrite(STDERR, '  FAILED   ' . $group . '/' . $name . ': ' . $ex->getMessage() . PHP_EOL);
+		}
+		finally
+		{
+			if (is_resource($handle))
+			{
+				fclose($handle);
+			}
+		}
+	}
+}
+
+echo PHP_EOL;
+echo 'Imported ' . $imported . ', replaced ' . $replaced . ', skipped ' . $skipped . ', failed ' . $failed . '.' . PHP_EOL;
+
+if ($failed > 0)
+{
+	echo 'Nothing was deleted from disk. Fix the failures and run this again.' . PHP_EOL;
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'Nothing was deleted from disk - check the result, then remove ' . $storagePath . ' yourself.' . PHP_EOL;
+}
+
+exit(0);
+
+/**
+ * The entries of a directory in a stable order, without "." and "..".
+ *
+ * @return string[]
+ */
+function ListDirectory(string $path): array
+{
+	$entries = scandir($path);
+
+	if ($entries === false)
+	{
+		return [];
+	}
+
+	return array_values(array_filter($entries, fn($entry) => $entry !== '.' && $entry !== '..'));
+}

@@ -153,6 +153,24 @@ class DatabaseStorage extends FileStorage
 	}
 
 	/**
+	 * The stored size of a file in bytes, or null when there is no such row.
+	 *
+	 * Not part of the FileStorage contract - nothing in the request path asks how big a
+	 * stored file is. bin/victual-files-import does, because "already imported" is the
+	 * question that makes it re-runnable, and size_bytes is stored precisely so that
+	 * answering it does not mean pulling every file's content back out of the database.
+	 */
+	public function GetSizeBytes(string $group, string $name): ?int
+	{
+		$statement = $this->Pdo->prepare('SELECT size_bytes FROM files WHERE file_group = ? AND name = ?');
+		$statement->execute([$group, $name]);
+
+		$size = $statement->fetchColumn();
+
+		return $size === false ? null : (int)$size;
+	}
+
+	/**
 	 * Escapes the wildcards in a literal prefix so that a file name containing "%" or "_"
 	 * matches itself rather than everything.
 	 *
