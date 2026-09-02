@@ -416,15 +416,20 @@ $('#product_id_text_input').on('blur', function (e)
 								}, Victual.FormFocusDelay);
 							}
 						},
-						function (xhr)
+						function ()
 						{
-							console.error(xhr);
+							// Deliberately silent, twice: this pair resolves whatever was typed
+							// or scanned into the picker, on every blur of the field, and "this
+							// is not a known product or barcode" is the ordinary outcome - it
+							// already has its own UI in the branches above (the create/assign
+							// dialog and the "not in stock" message). A toast here would fire
+							// during ordinary scanning. Plan 12, Q2.
 						}
 					);
 				},
-				function (xhr)
+				function ()
 				{
-					console.error(xhr);
+					// See above - the barcode half of the same lookup pair.
 				}
 			);
 		}
