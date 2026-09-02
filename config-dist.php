@@ -226,6 +226,30 @@ Setting('MQTT_DISCOVERY_MODE', 'device'); // "device" for one config topic decla
 Setting('MQTT_CONNECT_TIMEOUT_SECONDS', 2); // Also the socket timeout - this bounds how long a write can be delayed when the broker is unreachable
 Setting('MQTT_DEVICE_NAME', 'Victual'); // The device name Home Assistant shows for the published entities
 
+// InfluxDB event writing (same plan, question 7)
+//
+// The other half of the split the plan draws. MQTT carries facts anything on the broker may
+// read and therefore carries no prices at all; InfluxDB is queried with its own credentials
+// rather than broadcast, so it is where "how has spending shifted" is answered.
+//
+// Only *events* are written, never sampled state: a point when a purchase commits produces a
+// series whose gaps mean "no purchases", which is true, where sampling stock from a pod that
+// is mostly asleep would produce holes that mean "nobody was shopping". Two measurements,
+// both tagged only with product_id and carrying no user-identifying data:
+//
+//   price_paid,product_id=<id>  price=<paid>,amount=<booked>   at the booking's own timestamp
+//   stock_value,product_id=<id> value=<worth>,amount=<in stock> at the end of the request
+//
+// Written on the same after-commit seam as the MQTT publish, over InfluxDB's v2
+// /api/v2/write line-protocol endpoint. A failure is logged and never reaches the write that
+// triggered it.
+Setting('INFLUXDB_ENABLED', false);
+Setting('INFLUXDB_URL', ''); // Base URL of the InfluxDB v2 server, e.g. "http://influxdb:8086" - required when INFLUXDB_ENABLED is true
+Setting('INFLUXDB_TOKEN', ''); // An API token with write access to the bucket below; never exposed via GET /api/system/config
+Setting('INFLUXDB_ORG', 'victual'); // The InfluxDB organisation
+Setting('INFLUXDB_BUCKET', 'victual'); // The bucket the points are written to
+Setting('INFLUXDB_TIMEOUT_SECONDS', 2); // Connect and total timeout - this bounds how long a write can be delayed when InfluxDB is unreachable
+
 
 // Default user settings
 // These settings can be changed per user and via the UI,

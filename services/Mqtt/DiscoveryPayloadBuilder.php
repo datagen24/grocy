@@ -65,6 +65,18 @@ class DiscoveryPayloadBuilder
 			'icon' => 'mdi:checkbox-marked-circle-outline',
 			'device_class' => 'timestamp'
 		],
+		StateSnapshotAssembler::ENTITY_PRODUCTS_DUE_SOON => [
+			'name' => 'Products due soon',
+			'icon' => 'mdi:clock-alert-outline',
+			'unit_of_measurement' => 'products',
+			'state_class' => 'measurement'
+		],
+		StateSnapshotAssembler::ENTITY_PRODUCTS_EXPIRED => [
+			'name' => 'Products expired',
+			'icon' => 'mdi:food-off-outline',
+			'unit_of_measurement' => 'products',
+			'state_class' => 'measurement'
+		],
 		StateSnapshotAssembler::ENTITY_LAST_PUBLISHED => [
 			'name' => 'Last published',
 			'icon' => 'mdi:clock-outline',
@@ -180,6 +192,60 @@ class DiscoveryPayloadBuilder
 				'qos' => 0
 			])
 		];
+	}
+
+	/**
+	 * The retained topic carrying one opted-in product's state and attributes.
+	 */
+	public function GetProductStateTopic(int $productId): string
+	{
+		return rtrim((string)VICTUAL_MQTT_TOPIC_PREFIX, '/') . '/state/product/' . $productId;
+	}
+
+	/**
+	 * The discovery config topic for one opted-in product.
+	 *
+	 * Per-product entities always use the per-entity discovery form, whatever
+	 * MQTT_DISCOVERY_MODE says, and that is deliberate rather than an oversight. Question 2's
+	 * Response requires that removing one product's entity - by deleting the product,
+	 * deactivating it or clearing its flag - retracts exactly that entity; an empty retained
+	 * payload on its own config topic is the removal path the plan names and the only one
+	 * this fork has confirmed. Folding hundreds of them into the single device config would
+	 * make every product's removal a rewrite of every other product's config.
+	 */
+	public function GetProductDiscoveryTopic(int $productId): string
+	{
+		return rtrim((string)VICTUAL_MQTT_DISCOVERY_PREFIX, '/') . '/sensor/' . $this->GetNodeId()
+			. '/' . StateSnapshotAssembler::PER_PRODUCT_OBJECT_ID_PREFIX . $productId . '/config';
+	}
+
+	/**
+	 * The discovery payload for one opted-in product, as JSON.
+	 *
+	 * It belongs to the same Home Assistant device as the ambient sensors, so the household
+	 * sees one Victual device with the summary sensors and whichever products it promoted.
+	 *
+	 * @param array $attributes The entity's attributes, for the product name
+	 */
+	public function BuildProductDiscoveryPayload(int $productId, array $attributes): string
+	{
+		$objectId = StateSnapshotAssembler::PER_PRODUCT_OBJECT_ID_PREFIX . $productId;
+		$stateTopic = $this->GetProductStateTopic($productId);
+
+		return json_encode([
+			'unique_id' => $this->GetNodeId() . '_' . $objectId,
+			'object_id' => $this->GetNodeId() . '_' . $objectId,
+			'name' => $attributes['product_name'] ?? ('Product ' . $productId),
+			'icon' => 'mdi:package-variant-closed',
+			'state_class' => 'measurement',
+			'unit_of_measurement' => $attributes['unit'] ?? null,
+			'state_topic' => $stateTopic,
+			'value_template' => '{{ value_json.state }}',
+			'json_attributes_topic' => $stateTopic,
+			'json_attributes_template' => '{{ value_json.attributes | tojson }}',
+			'device' => $this->BuildDevice(),
+			'origin' => $this->BuildOrigin()
+		]);
 	}
 
 	/**

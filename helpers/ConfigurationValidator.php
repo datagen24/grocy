@@ -11,8 +11,8 @@ class EInvalidConfig extends \Exception
 
 /**
  * Validates the VICTUAL_* configuration constants (mode, database driver,
- * locale, currency, entry page, week start days, auto night mode range)
- * on application startup.
+ * locale, currency, entry page, week start days, auto night mode range,
+ * and the MQTT and InfluxDB outbound targets) on application startup.
  */
 class ConfigurationValidator
 {
@@ -32,6 +32,7 @@ class ConfigurationValidator
 		self::checkMealplanFirstDayOfWeek();
 		self::checkAutoNightModeRange();
 		self::checkMqttSettings();
+		self::checkInfluxDbSettings();
 	}
 
 	private function checkMode()
@@ -145,6 +146,34 @@ class ConfigurationValidator
 		if (!is_numeric(VICTUAL_MQTT_CONNECT_TIMEOUT_SECONDS) || (int)VICTUAL_MQTT_CONNECT_TIMEOUT_SECONDS < 1)
 		{
 			throw new EInvalidConfig('MQTT_CONNECT_TIMEOUT_SECONDS needs to be a whole number of seconds, at least 1');
+		}
+	}
+
+	/**
+	 * Same shape as checkMqttSettings(), same reason: the write path swallows its own
+	 * failures so that a metrics server can never break a committed booking, which means a
+	 * misconfiguration would otherwise be entirely silent.
+	 */
+	private function checkInfluxDbSettings()
+	{
+		if (!VICTUAL_INFLUXDB_ENABLED)
+		{
+			return;
+		}
+
+		if (empty(trim(VICTUAL_INFLUXDB_URL)))
+		{
+			throw new EInvalidConfig('INFLUXDB_URL needs to be set when INFLUXDB_ENABLED is true');
+		}
+
+		if (empty(trim(VICTUAL_INFLUXDB_BUCKET)) || empty(trim(VICTUAL_INFLUXDB_ORG)))
+		{
+			throw new EInvalidConfig('INFLUXDB_ORG and INFLUXDB_BUCKET need to be set when INFLUXDB_ENABLED is true');
+		}
+
+		if (!is_numeric(VICTUAL_INFLUXDB_TIMEOUT_SECONDS) || (int)VICTUAL_INFLUXDB_TIMEOUT_SECONDS < 1)
+		{
+			throw new EInvalidConfig('INFLUXDB_TIMEOUT_SECONDS needs to be a whole number of seconds, at least 1');
 		}
 	}
 
