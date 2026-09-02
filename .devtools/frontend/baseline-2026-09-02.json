@@ -1,0 +1,835 @@
+{
+	"recordedAt": "2026-09-02",
+	"baseUrl": "http://127.0.0.1:8200",
+	"mode": "demo mode, SQLite, PHP built-in server",
+	"commit": "c998aaf55019aac2bffbdb62194e324de3c05545",
+	"lists": [
+		{
+			"key": "locations",
+			"url": "/locations",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 5,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "locations-VBASEMTK2XIE6-1",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 5,
+					"rowsAfter": 6,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 6,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 6,
+					"rowsAfter": 5,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "shoppinglocations",
+			"url": "/shoppinglocations",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 2,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "shoppinglocations-VBASEMTK2XIE6-2",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 2,
+					"rowsAfter": 3,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 3,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 3,
+					"rowsAfter": 2,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "quantityunits",
+			"url": "/quantityunits",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 13,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "own page",
+					"savedName": "quantityunits-VBASEMTK2XIE6-3",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 13,
+					"rowsAfter": 14,
+					"delta": 1,
+					"foundInList": true
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 14,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 14,
+					"rowsAfter": 13,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "productgroups",
+			"url": "/productgroups",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 7,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "productgroups-VBASEMTK2XIE6-4",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 7,
+					"rowsAfter": 8,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": true,
+					"convention": "reloads on CloseLastModal"
+				},
+				"edit": {
+					"navigatedBackToList": false,
+					"formLeftDisabledAfterSave": true,
+					"rowsAfter": 8,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 8,
+					"rowsAfter": 7,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "batteries",
+			"url": "/batteries",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 4,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "batteries-VBASEMTK2XIE6-5",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 4,
+					"rowsAfter": 5,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 5,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 5,
+					"rowsAfter": 4,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "chores",
+			"url": "/chores",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 6,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "own page",
+					"savedName": "chores-VBASEMTK2XIE6-6",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 6,
+					"rowsAfter": 7,
+					"delta": 1,
+					"foundInList": true
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 7,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 7,
+					"rowsAfter": 6,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "equipment",
+			"url": "/equipment",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 2,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "own page",
+					"savedName": "equipment-VBASEMTK2XIE6-7",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 2,
+					"rowsAfter": 3,
+					"delta": 1,
+					"foundInList": true
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 3,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 3,
+					"rowsAfter": 2,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "taskcategories",
+			"url": "/taskcategories",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 3,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "taskcategories-VBASEMTK2XIE6-8",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 3,
+					"rowsAfter": 4,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 4,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 4,
+					"rowsAfter": 3,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "mealplansections",
+			"url": "/mealplansections",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 3,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "mealplansections-VBASEMTK2XIE6-9",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 3,
+					"rowsAfter": 4,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 4,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 4,
+					"rowsAfter": 3,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "tasks",
+			"url": "/tasks",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 5,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "tasks-VBASEMTK2XIE6-10",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 5,
+					"rowsAfter": 6,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 6,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": false,
+					"removalStyle": "row removed in place",
+					"rowsBefore": 6,
+					"rowsAfter": 6,
+					"delta": 0,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "userfields",
+			"url": "/userfields",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 2,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "userfields_vbasemtk2xie6_11",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 2,
+					"rowsAfter": 3,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 3,
+					"delta": 0,
+					"editedField": "#name",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 3,
+					"rowsAfter": 2,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "userentities",
+			"url": "/userentities",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 1,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "embedded dialog",
+					"savedName": "userentities_vbasemtk2xie6_12",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 1,
+					"rowsAfter": 2,
+					"delta": 1,
+					"foundInList": true
+				},
+				"dismissDialog": {
+					"parentReloadedOnDismiss": false,
+					"convention": "no reload on close"
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 2,
+					"delta": 0,
+					"editedField": "#caption",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 2,
+					"rowsAfter": 1,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		},
+		{
+			"key": "users",
+			"url": "/users",
+			"steps": {
+				"load": {
+					"status": "ok",
+					"rows": 4,
+					"tableFound": true,
+					"attempts": 1
+				},
+				"create": {
+					"via": "own page",
+					"savedName": "users-VBASEMTK2XIE6-13",
+					"parentReloadedOnSave": true,
+					"rowsBefore": 4,
+					"rowsAfter": 5,
+					"delta": 1,
+					"foundInList": true
+				},
+				"edit": {
+					"navigatedBackToList": true,
+					"formLeftDisabledAfterSave": false,
+					"rowsAfter": 5,
+					"delta": 0,
+					"editedField": "#username",
+					"rowStillListed": true
+				},
+				"delete": {
+					"confirmDialog": "bootbox.confirm",
+					"navigatedAfterDelete": true,
+					"removalStyle": "reload/redirect to the list",
+					"rowsBefore": 5,
+					"rowsAfter": 4,
+					"delta": -1,
+					"stillInList": false
+				}
+			},
+			"consoleProblems": []
+		}
+	],
+	"loadOnly": [
+		{
+			"key": "products",
+			"url": "/products",
+			"status": 200,
+			"rows": 29,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "recipes",
+			"url": "/recipes",
+			"status": 200,
+			"rows": 6,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "shoppinglist",
+			"url": "/shoppinglist",
+			"status": 200,
+			"rows": 5,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "stockoverview",
+			"url": "/stockoverview",
+			"status": 200,
+			"rows": 24,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "stockentries",
+			"url": "/stockentries",
+			"status": 200,
+			"rows": 81,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "stockjournal",
+			"url": "/stockjournal",
+			"status": 200,
+			"rows": 107,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "manageapikeys",
+			"url": "/manageapikeys",
+			"status": 200,
+			"rows": 0,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "quantityunitconversionsresolved",
+			"url": "/quantityunitconversionsresolved",
+			"status": 200,
+			"rows": 0,
+			"tableFound": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "mealplan",
+			"url": "/mealplan",
+			"status": 200,
+			"rows": null,
+			"tableFound": null,
+			"consoleProblems": []
+		},
+		{
+			"key": "userobjects",
+			"url": "/userobjects/vbaseline_vbasemtk2xie6",
+			"status": 200,
+			"rows": 0,
+			"tableFound": true,
+			"consoleProblems": [
+				"pageerror: Cannot read properties of undefined (reading 'aDataSort')"
+			]
+		}
+	],
+	"forms": [
+		{
+			"key": "locationform",
+			"url": "/location/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "shoppinglocationform",
+			"url": "/shoppinglocation/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "quantityunitform",
+			"url": "/quantityunit/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "productgroupform",
+			"url": "/productgroup/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "batteryform",
+			"url": "/battery/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "choreform",
+			"url": "/chore/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "equipmentform",
+			"url": "/equipment/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "taskcategoryform",
+			"url": "/taskcategory/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "mealplansectionform",
+			"url": "/mealplansection/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "taskform",
+			"url": "/task/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "userfieldform",
+			"url": "/userfield/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "userentityform",
+			"url": "/userentity/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "userform",
+			"url": "/user/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "productform",
+			"url": "/product/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "recipeform",
+			"url": "/recipe/new",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "shoppinglistform",
+			"url": "/shoppinglist/new?embedded",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "shoppinglistitemform",
+			"url": "/shoppinglistitem/new?embedded&list=1",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "stockentryform",
+			"url": "/stockentry/1",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "productbarcodeform",
+			"url": "/productbarcodes/new?embedded&product=1",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "quantityunitconversionform",
+			"url": "/quantityunitconversion/new?embedded&product=1",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "recipeposform",
+			"url": "/recipe/1/pos/new?embedded",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": true,
+			"consoleProblems": []
+		},
+		{
+			"key": "userobjectform",
+			"url": "/userobject/vbaseline_vbasemtk2xie6/new?embedded",
+			"status": 200,
+			"formFound": true,
+			"saveButtonFound": true,
+			"enterSubmitsHandler": false,
+			"consoleProblems": []
+		}
+	]
+}
