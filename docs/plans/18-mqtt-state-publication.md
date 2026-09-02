@@ -590,9 +590,13 @@ time) **could not be run**. Everything else was, against a real broker.
    InfluxDB pointed at the same) the write succeeded in **4.11 s** and **4.05 s** on two
    attempts, which is the two configured 2-second timeouts in sequence and nothing more; a
    read on the same instance took 0.012 s. Both failures were logged, neither reached the
-   response, and both writes returned 200. **Worth an operator's attention:** this tree does
-   not call `fastcgi_finish_request()`, so the delay is on the response rather than only on
-   the process — two unreachable targets cost the sum of their timeouts.
+   response, and both writes returned 200. **Worth an operator's attention:** the shutdown
+   handler calls `fastcgi_finish_request()` when the runtime has it, so **the delay is off
+   the response under php-fpm and on it under mod_php** or the built-in server — where two
+   unreachable targets cost the sum of their timeouts. The 4 s above was measured under
+   `php -S`, which is the on-the-response case; `function_exists('fastcgi_finish_request')`
+   is false there, confirmed by probe, so it is the honest upper bound rather than the
+   deployed one.
 6. **Retraction works.** With 11 retained topics on the broker,
    `php bin/victual-publish-state --retract` exited 0 and a fresh subscriber then saw
    **0 messages**. The per-product path was verified three ways: clearing the flag
@@ -634,6 +638,34 @@ stock_value,product_id=1 value=33.66,amount=14.0 1788352542000000000
 ```
 
 No user id, no note, no location — `product_id` is the only tag.
+
+**The InfluxDB path does not depend on the MQTT gate, and did on first landing.** Review
+caught it and the fix is recorded here with the baseline that makes it mean something.
+`SqliteDialect::RequiresChangeTracking()` is false — the file modification time *is* the
+changed time — so on SQLite the LessQL query callback is installed only because something
+else asks for it, and the flag asked only whether MQTT was enabled. With
+`INFLUXDB_ENABLED=true` and `MQTT_ENABLED=false` on SQLite, measured against the pre-fix
+code: a **purchase** wrote both points, and a **consume** wrote nothing at all. The purchase
+survived by accident — `CompactStockEntries` issues raw SQL, which marks the request dirty
+through `ExecuteDbStatement` — while `ConsumeProduct` is LessQL only and had no such
+accident. Two entrypoints of the same feature behaving differently is the shape of the bug,
+and it would have been silent: the write succeeds, nothing is logged, and the series simply
+has a hole.
+
+Two halves to the fix. The callback is now installed when *either* publisher wants it
+(`MqttStatePublicationService::IsEnabled() || InfluxEventWriter::IsEnabled()`), and the
+shutdown guard asks for two independent pieces of evidence rather than one
+(`!self::$DataChanged && !BookingEventPublisher::HasBookings()`) — the booking collector is
+the InfluxDB path's own record of work and should not have to borrow MQTT's. The
+open-transaction check still gates both. After the fix, the same consume on the same
+configuration wrote its `stock_value` point (and correctly no `price_paid`, a consume not
+being a purchase). Reads still publish nothing: three reads left the broker log unchanged
+and the following write produced the full batch.
+
+SQLite is dev-only once [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) is
+accepted, and on PostgreSQL `RequiresChangeTracking()` is true so the callback was always
+installed. The guard was wrong on its own terms regardless, which is why it is fixed rather
+than documented as an engine quirk.
 
 ### What this changes in the record above
 
