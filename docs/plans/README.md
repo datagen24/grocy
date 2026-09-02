@@ -22,7 +22,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
-| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2; **Q1–Q8 answered 2026-08-31** |
+| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`48f14f2`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
@@ -55,7 +55,7 @@ them are routing sentences in *this file* that were never true.
 
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
-| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0); **shortened by ADR-0008's acceptance — re-read before track A starts** |
+| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | **landed** (`cced9e8`, `6b46fdf`, `258aadf`, `841c4f6`, `5ec3e72`, `5a3ab76`, 2026-09-02) — shortened in flight by ADR-0008's acceptance: Q7's `dialect` column dropped unbuilt, one lock implementation, Q3 moot; sweep **S25** closed with it |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
 | 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | draft — **carries a High finding** since 2026-08-30 |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
@@ -445,14 +445,28 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 
 ### Wave 1 — platform (four parallel tracks, disjoint files; C is done)
 
-- **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
-  easier to reason about once cold start no longer rewrites requests. Together they end
-  the PVC. 10 is the first plan to publish an image from the Dockerfile, so sweep S25
-  (`.dockerignore`, non-root `USER`) is 10's — settled there, and in the sweep, after
-  spending a day assigned to 10 by this file and to 15 by the sweep and carried by
-  neither — and 01 inherits S2's per-group
-  extension allow-list and S10's upload cap when it moves storage into the database —
-  a blob column with no size limit is the same DoS with a different disk.
+- **Track A: 10 cold start — done** (2026-09-02); then **01 file storage**. 10 first —
+  01's importer is easier to reason about once cold start no longer rewrites requests.
+  Together they end the PVC. 10 landed the split view-cache path and
+  `bin/victual-warm-cache`, the PostgreSQL migration lock, the deletion of the
+  version-hash redirect, `MIGRATE_ON_ROOT_REQUEST` (default off) with an unconditional
+  503 boot check, the driver-conditional prerequisite check, and the production image that
+  closes sweep **S25** (`.dockerignore`, non-root `USER`, a baked and unwritable view
+  cache, no baked credentials) — settled there, and in the sweep, after spending a day
+  assigned to 10 by this file and to 15 by the sweep and carried by neither.
+  ADR-0008's acceptance shortened 10 in flight: one lock implementation rather than two,
+  Q3 moot, Q7's `dialect` column not built. Two things its Executed section records that
+  the plan did not predict: the container-level read-only-filesystem check could not run
+  where it was built (no Docker), so the production image and its CI job are reviewed
+  rather than proven until CI runs them; and browsing every page on PostgreSQL turned up
+  **three pre-existing PostgreSQL-only 500s** (`/shoppinglist`, `/mealplan`,
+  `/locationcontentsheet` — two `GROUP BY` strictness errors in PHP-built queries and one
+  `ifnull()` written into PHP) that belong to no plan yet and become "the application is
+  broken" once 0008's retirement lands; they need an owner, 15's table or a hotfix.
+  Migration numbers: 18's opt-in table took **0257** (a per-engine pair), so 01 takes
+  **0258** rather than the 0257 its text names. 01 inherits S2's per-group extension
+  allow-list and S10's upload cap when it moves storage into the database — a blob column
+  with no size limit is the same DoS with a different disk.
 - **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
   3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
   is going to be long, pull the ~20 toast sites forward on their own, since they need no
@@ -465,12 +479,23 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 - **Track C: 13 write-path transactions** — **done**, ahead of the rest of this wave
   (`7abfd2fa`, `782289b8`, `96f9ec99`, 2026-08-29). All seven entrypoints, webhook after
   commit, and the importer made atomic. Tracks A and B are still open.
-- **Track D: 18 MQTT state publication.** New, from 17's Q2. Disjoint from A, B and C: it
-  adds a service and a call at the end of the write paths 13 already centralised, and
-  touches no file the other tracks open. It belongs in this wave rather than later because
-  track A's whole point is a pod that sleeps, and until 18 exists the household's Home
-  Assistant is the reason it will not. 13 is its prerequisite and is already in — the
-  publish hangs off the same after-commit seam the label-printer webhook uses.
+- **Track D: 18 MQTT state publication — done** (`e794ea8`…`48f14f2`, 2026-09-02). New,
+  from 17's Q2. Disjoint from A, B and C, as planned: a service, a CLI and one seam. The
+  seam turned out to be `DatabaseService`'s request end rather than 13's seven
+  `StockService` entrypoints — the dirty flag is the same "did anything really change"
+  question `db-changed-time` answers, so chores, batteries, tasks, the shopping list and
+  generic CRUD are covered without being named, and it fires once per request rather than
+  once per commit (Q3). It belongs in this wave rather than later because track A's whole
+  point is a pod that sleeps, and until 18 existed the household's Home Assistant was the
+  reason it would not. Q7 reversed its lean on the maintainer's answer: price and
+  stock-value *events* go to InfluxDB on the same seam, with their own credentials. Q2's
+  per-product entities landed as an opt-in flag in a side table (`migrations/0257`, a
+  per-engine pair — a column on `products` would have changed every products response and
+  diverged the two engines' `products_view`), exposed through `/api/objects`; **the
+  product-form checkbox for that flag is deferred** because track B owns those files this
+  wave, and is a follow-on. `bin/victual-publish-state` is the "publish on boot" half and
+  runs from a postStart hook or a Job beside the `bin/victual-migrate` initContainer. The
+  verifications that need a real Home Assistant (2, 4, 8) are outstanding.
 
   **18 takes [19](19-rbac.md)'s Q5 here rather than 19 waiting on 18.** 19 asked 18 to
   record whether published state carries prices, and gated itself on 18 to make sure — but
