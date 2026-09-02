@@ -16,6 +16,12 @@
 
 name: tests
 
+# The token needs to read the repository and nothing else: no job here writes to it, and
+# the coverage upload goes through the artifact API, which contents: read covers. Named
+# explicitly so the default grant never applies (CodeQL: actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
