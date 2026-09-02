@@ -86,8 +86,11 @@ CMD ["php", "-v"]
 # Front end packages
 # ---------------------------------------------------------------------------------------
 # The views load CSS and JS from /packages/..., which yarn installs into public/packages
-# (see .yarnrc). Built in its own stage so that node is not in the shipped image.
-FROM node:22-bookworm-slim AS assets
+# (see .yarnrc). Built in its own stage so that node is not in the shipped image. The
+# full image rather than the slim one because yarn.lock pins at least one package to a
+# git repository, and yarn shells out to git to fetch it - the slim image has none and
+# the first CI build of this stage failed on exactly that.
+FROM node:22-bookworm AS assets
 
 WORKDIR /app
 COPY package.json yarn.lock .yarnrc ./
