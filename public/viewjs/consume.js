@@ -623,34 +623,6 @@ $("#qu_id").on("change", function()
 	RefreshForm();
 });
 
-/**
- * Undoes a stock booking (POST stock/bookings/{id}/undo). Currently unused from this view
- * but kept available as a global for other views/inline handlers.
- */
-function UndoStockBooking(bookingId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function(result)
-		{
-			toastr.success(__t("Booking successfully undone"));
-		}
-	);
-};
-
-/**
- * Undoes a stock transaction (POST stock/transactions/{id}/undo). Called from the "Undo"
- * link in the success toast shown after consuming/opening stock.
- */
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function(result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-		}
-	);
-};
-
 // When embedded (opened from another view in a modal), pick up the product/location/stock
 // entry to prefill from URI params and kick off the product-picker change chain
 if (GetUriParam("embedded") !== undefined)

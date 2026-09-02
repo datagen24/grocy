@@ -144,9 +144,9 @@ $(document).on('click', '.product-grocycode-label-print', function (e)
 
 // Consumes (or marks spoiled) the given amount of a product's aggregated stock
 // (allow_subproduct_substitution lets sub-products cover the amount too), shows a toast
-// with an inline "Undo" link (calling the UndoStockTransaction() helper, which is defined
-// in purchase.js - also loaded on this view for its quick-entry modal), and refreshes
-// both that product's row and the summary widgets
+// with an inline "Undo" link (calling the UndoStockTransaction() helper from
+// public/js/victual_stock_dialogs.js, loaded on every page), and refreshes both that
+// product's row and the summary widgets
 $(document).on('click', '.product-consume-button', function (e)
 {
 	e.preventDefault();

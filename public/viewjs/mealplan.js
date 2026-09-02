@@ -1064,16 +1064,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 	}
 });
 
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function(result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-		}
-	);
-};
-
 Victual.Components.RecipePicker.GetPicker().on('change', function(e)
 {
 	var recipeId = $(e.target).val();

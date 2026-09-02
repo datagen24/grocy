@@ -4,13 +4,6 @@
 
 @section('title', $__t('Stock overview'))
 
-@push('pageScripts')
-{{-- purchase.js is pushed as a shared library, not as this page's own view script:
-     stockoverview.js calls UndoStockTransaction(), which is defined there. Plan 12
-     step 5 extracts these stock dialog helpers into a properly loaded shared file. --}}
-<script src="{{ $U('/viewjs/purchase.js?v=', true) }}{{ $version }}"></script>
-@endpush
-
 @section('content')
 <div class="row">
 	<div class="col">

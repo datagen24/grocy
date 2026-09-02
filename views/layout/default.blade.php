@@ -756,6 +756,7 @@
 	<script src="{{ $U('/js/victual_menu_layout.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/js/victual.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/js/victual_entity.js?v=', true) }}{{ $version }}"></script>
+	<script src="{{ $U('/js/victual_stock_dialogs.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/js/victual_dbchangedhandling.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/js/victual_wakelockhandling.js?v=', true) }}{{ $version }}"></script>
 	<script src="{{ $U('/js/victual_nightmode.js?v=', true) }}{{ $version }}"></script>
