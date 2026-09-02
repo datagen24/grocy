@@ -110,16 +110,6 @@ if ($drain)
 	BookingEventPublisher::SuppressRequestEndDrain();
 	DatabaseService::GetInstance()->SetCurrentUserId(VICTUAL_USER_ID);
 
-	if (!BookingEventPublisher::HasBookings())
-	{
-		if (!$quiet)
-		{
-			echo 'The outbox is empty.' . PHP_EOL;
-		}
-
-		exit(0);
-	}
-
 	// The whole backlog, not one batch of it. A drain takes a bounded batch so that one
 	// request never turns into an unbounded write, but this command is the thing an
 	// operator runs *because* a backlog exists - stopping after the first 200 events and
@@ -128,23 +118,52 @@ if ($drain)
 	// The loop stops on the first failed delivery rather than continuing: whatever made one
 	// batch fail will make the next one fail too, and the point of stopping is that the
 	// exit code says the queue is not empty.
+	//
+	// CountUndelivered() rather than HasBookings(), and this is the whole difference: it
+	// throws where the database cannot answer, so this command cannot exit 0 on a queue
+	// nobody managed to look at. HasBookings() swallows, because its caller is a shutdown
+	// handler that must not throw.
 	$batches = 0;
 
-	while (BookingEventPublisher::HasBookings())
+	try
 	{
-		if (!BookingEventPublisher::Drain())
+		while (BookingEventPublisher::CountUndelivered() > 0)
 		{
-			fwrite(STDERR, 'Draining the outbox failed after ' . $batches . ' batch(es); the rest is still queued - see the log and the outbox table\'s last_error column for why.' . PHP_EOL);
-			exit(1);
+			if (!BookingEventPublisher::Drain())
+			{
+				fwrite(STDERR, 'Draining the outbox failed after ' . $batches . ' batch(es); the rest is still queued - see the log and the outbox table\'s last_error column for why.' . PHP_EOL);
+				exit(1);
+			}
+
+			$batches++;
 		}
 
-		$batches++;
+		$deadLettered = BookingEventPublisher::CountDeadLettered();
+	}
+	catch (\Throwable $ex)
+	{
+		fwrite(STDERR, 'Could not read the outbox after ' . $batches . ' batch(es): ' . $ex->getMessage() . PHP_EOL);
+		exit(1);
 	}
 
 	if (!$quiet)
 	{
-		echo 'Delivered the queued events to ' . VICTUAL_INFLUXDB_URL . ' in ' . $batches . ' batch(es) of up to '
-			. OutboxService::DRAIN_BATCH_SIZE . '.' . PHP_EOL;
+		if ($batches === 0)
+		{
+			echo 'The outbox is empty.' . PHP_EOL;
+		}
+		else
+		{
+			echo 'Delivered the queued events to ' . VICTUAL_INFLUXDB_URL . ' in ' . $batches . ' batch(es) of up to '
+				. OutboxService::DRAIN_BATCH_SIZE . '.' . PHP_EOL;
+		}
+
+		// Reported whether or not anything was delivered: a queue that is empty only because
+		// some rows stopped counting is not the same as a queue that drained
+		if ($deadLettered > 0)
+		{
+			echo $deadLettered . ' event(s) are set aside as undeliverable and were not sent - see the outbox table\'s last_error column.' . PHP_EOL;
+		}
 	}
 
 	exit(0);
