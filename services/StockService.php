@@ -5,6 +5,7 @@ namespace Victual\Services;
 use Victual\Helpers\Grocycode;
 use Victual\Helpers\WebhookRunner;
 use Victual\Services\Influx\BookingEventPublisher;
+use Victual\Services\Storage\FileStorage;
 use GuzzleHttp\Client;
 
 /**
@@ -876,7 +877,7 @@ class StockService extends BaseService
 						if (!empty($fileExtension) && !empty($imageData))
 						{
 							$fileName = $pluginOutput['__barcode'] . '.' . $fileExtension;
-							file_put_contents(FilesService::GetInstance()->GetFilePath('productpictures', $fileName), $imageData);
+							FileStorage::GetInstance()->Write('productpictures', $fileName, (string)$imageData);
 							$productData['picture_file_name'] = $fileName;
 						}
 					}

@@ -44,6 +44,33 @@ Setting('DB_SSLMODE', ''); // One of disable, allow, prefer, require, verify-ca,
 // read-only, so that the data directory is the only writable path left
 Setting('VIEWCACHE_PATH', VICTUAL_DATAPATH . '/viewcache');
 
+
+// --- File storage -----------------------------------------------------------------
+// Where uploaded files - product, recipe and user pictures, user files and equipment
+// manuals - are kept.
+//
+// "filesystem" (the default) puts them below <data path>/storage, one folder per group,
+// which is what this fork has always done and what an ordinary installation wants.
+//
+// "database" stores them as BYTEA rows instead, so that the application directory needs
+// no persistent volume at all and one pg_dump captures a file and the row that points at
+// it together rather than in two backup streams that can disagree. It requires
+// DB_DRIVER = "pgsql" and is refused in demo/prerelease mode; both are checked at
+// startup. Files already on disk are NOT read after the switch - run
+// "php bin/victual-files-import" once to move them in
+Setting('FILE_STORAGE', 'filesystem');
+
+// The largest file that may be uploaded, in megabytes, for both storage backends.
+// A raw PUT body is not subject to PHP's own post_max_size, so without this there is no
+// bound on an upload at all.
+// The effective limit is the smallest of this setting, upload_max_filesize and
+// post_max_size: setting 64 here on a PHP that accepts 2 MB gives you 2 MB, a line in the
+// error log saying so, and the effective value (not this one) reported by
+// GET /api/system/config. Raise the php.ini directives as well if you raise this
+Setting('FILE_STORAGE_MAX_SIZE_MB', 64);
+// --- End of file storage ----------------------------------------------------------
+
+
 // Whether a request to "/" is allowed to migrate the database schema.
 // Migrating is something you do - "php bin/victual-migrate" - rather than something that
 // happens to whoever sends the first request after a deployment, so this is off by
