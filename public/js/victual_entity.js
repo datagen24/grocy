@@ -424,20 +424,24 @@ Victual.FrontendHelpers.EscapeHtml = function (value)
 			submit({ button: $(e.currentTarget) });
 		});
 
-		$(formSelector + ' input').keyup(function ()
+		// Delegated from the form rather than bound to the inputs it has right now: a
+		// userobject form's inputs are all userfields, and an entity with none has no
+		// inputs at page load at all - which is why that one form never got an
+		// Enter-to-submit handler in the first place.
+		$(formSelector).on('keyup', 'input', function ()
 		{
 			Victual.FrontendHelpers.ValidateForm(formId);
 		});
 
 		if (options.validateOnSelectChange)
 		{
-			$(formSelector + ' select').change(function ()
+			$(formSelector).on('change', 'select', function ()
 			{
 				Victual.FrontendHelpers.ValidateForm(formId);
 			});
 		}
 
-		$(formSelector + ' input').keydown(function (event)
+		$(formSelector).on('keydown', 'input', function (event)
 		{
 			if (event.keyCode !== 13) // Enter
 			{
