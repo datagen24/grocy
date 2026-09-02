@@ -10,273 +10,238 @@
 Victual.Api = {};
 
 /**
- * Executes a GET request against the Victual API.
- * @param {string} apiFunction API path relative to /api, e.g. "system/db-changed-time"
- * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
- * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ * How long a request may run before it is abandoned. A request that is answered - even
+ * with an error - resolves one of the two callbacks; a request that is never answered
+ * used to resolve neither, which left the form it came from disabled forever. This is a
+ * plain setting rather than a constant so a console session (or a test) can shorten it.
+ * @type {number}
  */
-Victual.Api.Get = function (apiFunction, success, error)
-{
-	var xhr = new XMLHttpRequest();
-	var url = U('/api/' + apiFunction);
-
-	xhr.onreadystatechange = function ()
-	{
-		if (xhr.readyState === XMLHttpRequest.DONE)
-		{
-			if (xhr.status === 200 || xhr.status === 204)
-			{
-				if (success)
-				{
-					if (xhr.status === 200)
-					{
-						success(JSON.parse(xhr.responseText));
-					}
-					else
-					{
-						success({});
-					}
-				}
-			}
-			else
-			{
-				if (error)
-				{
-					error(xhr);
-				}
-			}
-		}
-	};
-
-	xhr.open('GET', url, true);
-	xhr.send();
-};
+Victual.Api.TimeoutMilliseconds = 30000;
 
 /**
- * Executes a POST request (JSON body) against the Victual API.
- * @param {string} apiFunction API path relative to /api
- * @param {Object} jsonData Request body, sent as JSON
- * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
- * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+ * The error callback used when a caller passes none, or passes something that is not a
+ * function. It renders the same toast the explicit handlers render.
+ *
+ * Note this is *not* Victual.FrontendHelpers.ShowGenericError itself: that takes
+ * (message, exception), and an error callback is called with one argument, so wiring it
+ * up directly would put the XMLHttpRequest where the message text belongs and run it
+ * through __t(). This adapter is what "defaults to ShowGenericError" means in practice.
+ * @param {XMLHttpRequest|Object} xhr The request that failed, or the failure descriptor
+ *                                    synthesised for a timeout / transport error
  */
-Victual.Api.Post = function (apiFunction, jsonData, success, error)
+Victual.Api.DefaultErrorHandler = function (xhr)
 {
-	var xhr = new XMLHttpRequest();
-	var url = U('/api/' + apiFunction);
+	Victual.FrontendHelpers.ShowGenericError('A server error occured while processing your request', xhr && xhr.response ? xhr.response : xhr);
+};
 
-	xhr.onreadystatechange = function ()
+(function ()
+{
+	/**
+	 * Builds the object handed to the error callback when the request never produced an
+	 * HTTP response at all. Callers reach into `response`/`responseText` (some of them
+	 * JSON.parse it and read error_message) and log the whole thing, so the shape has to
+	 * look enough like an XMLHttpRequest for all three of those to keep working - a real
+	 * XMLHttpRequest would JSON.stringify to "{}" and tell the reader nothing.
+	 * @param {string} kind "timeout" or "error"
+	 * @param {string} message Human readable cause
+	 * @returns {Object} xhr-like failure descriptor
+	 */
+	function networkFailure(kind, message)
 	{
-		if (xhr.readyState === XMLHttpRequest.DONE)
+		var payload = JSON.stringify({ error_message: message });
+
+		return {
+			readyState: 4,
+			status: 0,
+			statusText: kind,
+			response: payload,
+			responseText: payload,
+			error_message: message,
+			victualNetworkError: kind
+		};
+	}
+
+	/**
+	 * The one request path. Every Victual.Api.* function below is a wrapper around this.
+	 * @param {string} method HTTP method
+	 * @param {string} url Absolute URL (the wrappers build it through U())
+	 * @param {*} [body] Request body; undefined sends none
+	 * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+	 * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status,
+	 *                           or with a failure descriptor on timeout / transport error;
+	 *                           defaults to Victual.Api.DefaultErrorHandler
+	 * @param {Object} [opts] { contentType: string } - the Content-Type header to set
+	 */
+	function request(method, url, body, success, error, opts)
+	{
+		opts = opts || {};
+
+		if (typeof error !== 'function')
 		{
-			if (xhr.status === 200 || xhr.status === 204)
+			error = Victual.Api.DefaultErrorHandler;
+		}
+
+		var xhr = new XMLHttpRequest();
+
+		// A dropped connection fires readystatechange (status 0) *and* onerror, and a
+		// timeout fires readystatechange *and* ontimeout, so without this exactly one
+		// failure would call the error callback twice.
+		var settled = false;
+		var settle = function (callback, argument)
+		{
+			if (settled)
 			{
-				if (success)
+				return;
+			}
+
+			settled = true;
+
+			if (callback)
+			{
+				callback(argument);
+			}
+		};
+
+		xhr.onreadystatechange = function ()
+		{
+			if (xhr.readyState === XMLHttpRequest.DONE)
+			{
+				if (xhr.status === 200 || xhr.status === 204)
 				{
 					if (xhr.status === 200)
 					{
-						success(JSON.parse(xhr.responseText));
+						settle(success, JSON.parse(xhr.responseText));
 					}
 					else
 					{
-						success({});
+						settle(success, {});
 					}
 				}
-			}
-			else
-			{
-				if (error)
+				else if (xhr.status === 0)
 				{
-					error(xhr);
+					// No HTTP response at all - let ontimeout/onerror describe it instead.
+					return;
+				}
+				else
+				{
+					settle(error, xhr);
 				}
 			}
-		}
-	};
+		};
 
-	xhr.open('POST', url, true);
-	xhr.setRequestHeader('Content-Type', 'application/json');
-	xhr.send(JSON.stringify(jsonData));
-};
+		xhr.timeout = Victual.Api.TimeoutMilliseconds;
 
-/**
- * Executes a PUT request (JSON body) against the Victual API.
- * @param {string} apiFunction API path relative to /api
- * @param {Object} jsonData Request body, sent as JSON
- * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
- * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
- */
-Victual.Api.Put = function (apiFunction, jsonData, success, error)
-{
-	var xhr = new XMLHttpRequest();
-	var url = U('/api/' + apiFunction);
-
-	xhr.onreadystatechange = function ()
-	{
-		if (xhr.readyState === XMLHttpRequest.DONE)
+		xhr.ontimeout = function ()
 		{
-			if (xhr.status === 200 || xhr.status === 204)
-			{
-				if (success)
-				{
-					if (xhr.status === 200)
-					{
-						success(JSON.parse(xhr.responseText));
-					}
-					else
-					{
-						success({});
-					}
-				}
-			}
-			else
-			{
-				if (error)
-				{
-					error(xhr);
-				}
-			}
-		}
-	};
+			settle(error, networkFailure('timeout', 'The request to ' + url + ' timed out after ' + xhr.timeout + ' ms'));
+		};
 
-	xhr.open('PUT', url, true);
-	xhr.setRequestHeader('Content-Type', 'application/json');
-	xhr.send(JSON.stringify(jsonData));
-};
-
-/**
- * Executes a DELETE request against the Victual API.
- * @param {string} apiFunction API path relative to /api
- * @param {Object} jsonData Request body, sent as JSON (usually {})
- * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
- * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
- */
-Victual.Api.Delete = function (apiFunction, jsonData, success, error)
-{
-	var xhr = new XMLHttpRequest();
-	var url = U('/api/' + apiFunction);
-
-	xhr.onreadystatechange = function ()
-	{
-		if (xhr.readyState === XMLHttpRequest.DONE)
+		xhr.onerror = function ()
 		{
-			if (xhr.status === 200 || xhr.status === 204)
-			{
-				if (success)
-				{
-					if (xhr.status === 200)
-					{
-						success(JSON.parse(xhr.responseText));
-					}
-					else
-					{
-						success({});
-					}
-				}
-			}
-			else
-			{
-				if (error)
-				{
-					error(xhr);
-				}
-			}
-		}
-	};
+			settle(error, networkFailure('error', 'The request to ' + url + ' could not be completed (connection lost or blocked)'));
+		};
 
-	xhr.open('DELETE', url, true);
-	xhr.setRequestHeader('Content-Type', 'application/json');
-	xhr.send(JSON.stringify(jsonData));
-};
-
-/**
- * Uploads a file via PUT /api/files/{group}/{fileName} (raw octet-stream body).
- * @param {Blob|File} file The file contents to upload
- * @param {string} group File group (server side subfolder, e.g. "productpictures", "recipepictures")
- * @param {string} fileName File name; is BASE64 encoded for the URL
- * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
- * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
- */
-Victual.Api.UploadFile = function (file, group, fileName, success, error)
-{
-	var xhr = new XMLHttpRequest();
-	var url = U('/api/files/' + group + '/' + btoa(fileName));
-
-	xhr.onreadystatechange = function ()
-	{
-		if (xhr.readyState === XMLHttpRequest.DONE)
+		// Nothing in the tree calls abort() today, but the readystatechange branch above
+		// no longer reports status 0, so the third way to get there needs its own exit.
+		xhr.onabort = function ()
 		{
-			if (xhr.status === 200 || xhr.status === 204)
-			{
-				if (success)
-				{
-					if (xhr.status === 200)
-					{
-						success(JSON.parse(xhr.responseText));
-					}
-					else
-					{
-						success({});
-					}
-				}
-			}
-			else
-			{
-				if (error)
-				{
-					error(xhr);
-				}
-			}
-		}
-	};
+			settle(error, networkFailure('abort', 'The request to ' + url + ' was aborted'));
+		};
 
-	xhr.open('PUT', url, true);
-	xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-	xhr.send(file);
-};
+		xhr.open(method, url, true);
 
-/**
- * Deletes a file via DELETE /api/files/{group}/{fileName}.
- * @param {string} fileName File name; is BASE64 encoded for the URL
- * @param {string} group File group (server side subfolder)
- * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
- * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
- */
-Victual.Api.DeleteFile = function (fileName, group, success, error)
-{
-	var xhr = new XMLHttpRequest();
-	var url = U('/api/files/' + group + '/' + btoa(fileName));
-
-	xhr.onreadystatechange = function ()
-	{
-		if (xhr.readyState === XMLHttpRequest.DONE)
+		if (opts.contentType)
 		{
-			if (xhr.status === 200 || xhr.status === 204)
-			{
-				if (success)
-				{
-					if (xhr.status === 200)
-					{
-						success(JSON.parse(xhr.responseText));
-					}
-					else
-					{
-						success({});
-					}
-				}
-			}
-			else
-			{
-				if (error)
-				{
-					error(xhr);
-				}
-			}
+			xhr.setRequestHeader('Content-Type', opts.contentType);
 		}
+
+		if (body === undefined)
+		{
+			xhr.send();
+		}
+		else
+		{
+			xhr.send(body);
+		}
+	}
+
+	var JSON_CONTENT_TYPE = { contentType: 'application/json' };
+
+	/**
+	 * Executes a GET request against the Victual API.
+	 * @param {string} apiFunction API path relative to /api, e.g. "system/db-changed-time"
+	 * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+	 * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+	 */
+	Victual.Api.Get = function (apiFunction, success, error)
+	{
+		request('GET', U('/api/' + apiFunction), undefined, success, error, {});
 	};
 
-	xhr.open('DELETE', url, true);
-	xhr.setRequestHeader('Content-Type', 'application/json');
-	xhr.send();
-};
+	/**
+	 * Executes a POST request (JSON body) against the Victual API.
+	 * @param {string} apiFunction API path relative to /api
+	 * @param {Object} jsonData Request body, sent as JSON
+	 * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+	 * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+	 */
+	Victual.Api.Post = function (apiFunction, jsonData, success, error)
+	{
+		request('POST', U('/api/' + apiFunction), JSON.stringify(jsonData), success, error, JSON_CONTENT_TYPE);
+	};
+
+	/**
+	 * Executes a PUT request (JSON body) against the Victual API.
+	 * @param {string} apiFunction API path relative to /api
+	 * @param {Object} jsonData Request body, sent as JSON
+	 * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+	 * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+	 */
+	Victual.Api.Put = function (apiFunction, jsonData, success, error)
+	{
+		request('PUT', U('/api/' + apiFunction), JSON.stringify(jsonData), success, error, JSON_CONTENT_TYPE);
+	};
+
+	/**
+	 * Executes a DELETE request against the Victual API.
+	 * @param {string} apiFunction API path relative to /api
+	 * @param {Object} jsonData Request body, sent as JSON (usually {})
+	 * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+	 * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+	 */
+	Victual.Api.Delete = function (apiFunction, jsonData, success, error)
+	{
+		request('DELETE', U('/api/' + apiFunction), JSON.stringify(jsonData), success, error, JSON_CONTENT_TYPE);
+	};
+
+	/**
+	 * Uploads a file via PUT /api/files/{group}/{fileName} (raw octet-stream body).
+	 * @param {Blob|File} file The file contents to upload
+	 * @param {string} group File group (server side subfolder, e.g. "productpictures", "recipepictures")
+	 * @param {string} fileName File name; is BASE64 encoded for the URL
+	 * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+	 * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+	 */
+	Victual.Api.UploadFile = function (file, group, fileName, success, error)
+	{
+		request('PUT', U('/api/files/' + group + '/' + btoa(fileName)), file, success, error, { contentType: 'application/octet-stream' });
+	};
+
+	/**
+	 * Deletes a file via DELETE /api/files/{group}/{fileName}.
+	 * Note the argument order is (fileName, group), the mirror image of UploadFile's, and
+	 * that this sends no body where Victual.Api.Delete sends "{}" - both are long standing
+	 * and both are kept.
+	 * @param {string} fileName File name; is BASE64 encoded for the URL
+	 * @param {string} group File group (server side subfolder)
+	 * @param {Function} [success] Called with the parsed JSON response ({} on HTTP 204)
+	 * @param {Function} [error] Called with the XMLHttpRequest on any non 200/204 status
+	 */
+	Victual.Api.DeleteFile = function (fileName, group, success, error)
+	{
+		request('DELETE', U('/api/files/' + group + '/' + btoa(fileName)), undefined, success, error, JSON_CONTENT_TYPE);
+	};
+})();
 
 /**
  * Turns a root relative path (e.g. "/api/stock" or "/css/victual.css") into an
@@ -314,7 +279,19 @@ __t = function (text, ...placeholderValues)
 		var text2 = text;
 		if (Victual.LocalizationStrings && !Victual.LocalizationStrings.messages[""].hasOwnProperty(text2))
 		{
-			Victual.Api.Post('system/log-missing-localization', { "text": text2 });
+			Victual.Api.Post('system/log-missing-localization', { "text": text2 },
+				function (result)
+				{
+					// Nothing to do...
+				},
+				function ()
+				{
+					// Deliberately silent: this call is made from inside __t()/__n(), and the
+					// default error handler renders a toast whose own text goes back through
+					// __t() - so a failing localization log could re-enter localization and
+					// recurse. Plan 12, Q2.
+				}
+			);
 		}
 	}
 
@@ -348,7 +325,19 @@ __n = function (number, singularForm, pluralForm, isQu = false)
 		var singularForm2 = singularForm;
 		if (Victual.LocalizationStrings && !Victual.LocalizationStrings.messages[""].hasOwnProperty(singularForm2))
 		{
-			Victual.Api.Post('system/log-missing-localization', { "text": singularForm2 });
+			Victual.Api.Post('system/log-missing-localization', { "text": singularForm2 },
+				function (result)
+				{
+					// Nothing to do...
+				},
+				function ()
+				{
+					// Deliberately silent: this call is made from inside __t()/__n(), and the
+					// default error handler renders a toast whose own text goes back through
+					// __t() - so a failing localization log could re-enter localization and
+					// recurse. Plan 12, Q2.
+				}
+			);
 		}
 	}
 

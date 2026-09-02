@@ -40,9 +40,9 @@ $("#status-filter").on("change", function ()
 	tasksTable.column(tasksTable.colReorder.transpose(5)).search(value).draw();
 });
 
-// Assigned-user filter, matched against the user column (index 4).
-// Note: the anchored-regex expression in the else-branch below is never assigned/used,
-// so it has no effect - the filter always ends up doing a plain (non-regex) substring search.
+// Assigned-user filter, matched against the user column (index 4). The selected name is
+// anchored (and regex-escaped) so a user whose name is a substring of another user's name
+// does not match both.
 $("#user-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -52,7 +52,7 @@ $("#user-filter").on("change", function ()
 	}
 	else
 	{
-		"^" + $.fn.dataTable.util.escapeRegex(value) + "$"
+		value = "^" + $.fn.dataTable.util.escapeRegex(value) + "$";
 	}
 
 	tasksTable.column(tasksTable.colReorder.transpose(4)).search(value, true, false).draw();
