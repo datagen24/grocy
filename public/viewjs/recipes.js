@@ -169,10 +169,6 @@ $(".recipe-delete").on('click', function(e)
 					function(result)
 					{
 						window.location.href = U('/recipes');
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -240,7 +236,7 @@ $(document).on('click', '.recipe-shopping-list', function(e)
 					function(xhr)
 					{
 						Victual.FrontendHelpers.EndUiBusy();
-						console.error(xhr);
+						Victual.Api.DefaultErrorHandler(xhr);
 					}
 				);
 			}
@@ -420,10 +416,6 @@ $('#servings-scale').keyup(function(event)
 		function(result)
 		{
 			window.location.reload();
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });

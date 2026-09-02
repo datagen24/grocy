@@ -122,10 +122,6 @@ $("#delete-selected-shopping-list").on("click", function ()
 					function (result)
 					{
 						window.location.href = U('/shoppinglist');
-					},
-					function (xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -155,7 +151,7 @@ $(document).on('click', '.shoppinglist-delete-button', function (e)
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -167,10 +163,6 @@ $(document).on('click', '#add-products-below-min-stock-amount', function (e)
 		function (result)
 		{
 			window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -185,16 +177,8 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 				function (result)
 				{
 					window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -235,7 +219,7 @@ $(document).on('click', '#clear-shopping-list', function (e)
 					function (xhr)
 					{
 						Victual.FrontendHelpers.EndUiBusy();
-						console.error(xhr);
+						Victual.Api.DefaultErrorHandler(xhr);
 					}
 				);
 			}
@@ -250,10 +234,6 @@ $(document).on("click", "#clear-done-items", function (e)
 		function (result)
 		{
 			window.location.reload();
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -395,7 +375,7 @@ $(document).on('click', '.order-listitem-button', function (e)
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -418,10 +398,6 @@ function OnListItemRemoved()
 		{
 			$("#total-value").text(items.reduce((x, { last_price_total }) => x + last_price_total, 0));
 			RefreshLocaleNumberDisplay();
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 }
@@ -540,7 +516,7 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 						},
 						function (xhr)
 						{
-							console.error(xhr);
+							Victual.Api.DefaultErrorHandler(xhr);
 							var validResponse = true;
 
 							try
@@ -640,10 +616,6 @@ $(document).on("click", "#save-description-button", function (e)
 		function (result)
 		{
 			$("#save-description-button").addClass("disabled");
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
