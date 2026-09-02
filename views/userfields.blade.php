@@ -9,20 +9,7 @@
 	<div class="col">
 		<div class="title-related-links">
 			<h2 class="title">@yield('title')</h2>
-			<div class="float-right @if($embedded) pr-5 @endif">
-				<button class="btn btn-outline-dark d-md-none mt-2 order-1 order-md-3"
-					type="button"
-					data-toggle="collapse"
-					data-target="#table-filter-row">
-					<i class="fa-solid fa-filter"></i>
-				</button>
-				<button class="btn btn-outline-dark d-md-none mt-2 order-1 order-md-3"
-					type="button"
-					data-toggle="collapse"
-					data-target="#related-links">
-					<i class="fa-solid fa-ellipsis-v"></i>
-				</button>
-			</div>
+			@include('components.list_collapse_toggles')
 			<div class="related-links collapse d-md-flex order-2 width-xs-sm-100 m-1 mt-md-0 mb-md-0 float-right"
 				id="related-links">
 				<a id="new-userfield-button"

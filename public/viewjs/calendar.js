@@ -1,5 +1,5 @@
 ﻿// View script for the calendar page (views/calendar.blade.php):
-// FullCalendar setup fed by the server-rendered fullcalendarEventSources global,
+// FullCalendar setup fed by the server-rendered Victual.FullcalendarEventSources global,
 // iCal sharing link retrieval via GET /api/calendar/ical/sharing-link and event color configuration modal
 
 // First day of week comes from the Victual.CalendarFirstDayOfWeek user setting (empty = locale default)
@@ -22,7 +22,7 @@ var calendar = $("#calendar").fullCalendar({
 	"firstDay": firstDay,
 	"eventLimit": false,
 	"height": "auto",
-	"eventSources": fullcalendarEventSources,
+	"eventSources": Victual.FullcalendarEventSources,
 	"eventClick": function(info)
 	{
 		location.href = info.link;

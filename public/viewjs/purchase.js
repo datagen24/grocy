@@ -74,7 +74,7 @@ $('#save-purchase-button').on('click', function (e)
 
 			if (BoolVal(Victual.UserSettings.show_purchased_date_on_purchase))
 			{
-				jsonData.purchased_date = Victual.Components.DateTimePicker2.GetValue();
+				jsonData.purchased_date = Victual.Components.SecondaryDateTimePicker.GetValue();
 			}
 
 			if (Victual.Components.DateTimePicker)
@@ -665,19 +665,19 @@ if (Victual.Components.DateTimePicker)
 }
 
 // Purchased date picker (only rendered when show_purchased_date_on_purchase is enabled): same re-validation, plus an initial input trigger
-if (Victual.Components.DateTimePicker2)
+if (Victual.Components.SecondaryDateTimePicker)
 {
-	Victual.Components.DateTimePicker2.GetInputElement().on('change', function (e)
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().on('change', function (e)
 	{
 		Victual.FrontendHelpers.ValidateForm('purchase-form');
 	});
 
-	Victual.Components.DateTimePicker2.GetInputElement().on('keypress', function (e)
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().on('keypress', function (e)
 	{
 		Victual.FrontendHelpers.ValidateForm('purchase-form');
 	});
 
-	Victual.Components.DateTimePicker2.GetInputElement().trigger("input");
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().trigger("input");
 }
 
 // Recompute the "means X per Y" price hint whenever the price, its type (unit/total) or the amount changes
@@ -739,52 +739,6 @@ function RefreshPriceHint()
 	{
 		$('#price-hint').text("");
 	}
-};
-
-/**
- * Undoes a single stock booking (stock/bookings/{id}/undo) and notifies the parent window/other
- * views that the affected product changed. Invoked from inline onclick handlers built server-side
- * (not used directly in this file, e.g. see stock journal "Undo" buttons).
- * @param {number|string} bookingId The stock booking id to undo
- */
-function UndoStockBooking(bookingId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Booking successfully undone"));
-
-			Victual.Api.Get('stock/bookings/' + bookingId.toString(),
-				function (result)
-				{
-					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result.product_id)), Victual.BaseUrl);
-				}
-			);
-		}
-	);
-};
-
-/**
- * Undoes a whole stock transaction (stock/transactions/{id}/undo, e.g. a purchase composed of
- * multiple bookings) and notifies the parent window/other views that the affected product
- * changed. Called from the "Undo" link embedded in the purchase success toast.
- * @param {number|string} transactionId The stock transaction id to undo
- */
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-
-			Victual.Api.Get('stock/transactions/' + transactionId.toString(),
-				function (result)
-				{
-					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result[0].product_id)), Victual.BaseUrl);
-				}
-			);
-		}
-	);
 };
 
 // Requesting the notification-sound permission the first time scan mode gets enabled

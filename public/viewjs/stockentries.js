@@ -343,22 +343,3 @@ $(window).on("message", function(e)
 
 // Apply the initial product filter (from the product picker's pre-filled value, if any)
 Victual.Components.ProductPicker.GetPicker().trigger('change');
-
-/**
- * Undoes a stock booking (consume/open) via stock/bookings/{id}/undo, then broadcasts
- * a "ProductChanged" message so all views showing this product refresh themselves.
- * Invoked from the inline "Undo" link injected into the consume/open toast messages.
- * @param {number} bookingId - id of the booking to undo
- * @param {number} stockRowId - unused by the undo call itself, kept for the caller's context
- * @param {number} productId - product id, broadcast to trigger refreshes elsewhere
- */
-function UndoStockBookingEntry(bookingId, stockRowId, productId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function(result)
-		{
-			Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", productId)), Victual.BaseUrl);
-			toastr.success(__t("Booking successfully undone"));
-		}
-	);
-};

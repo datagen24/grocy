@@ -51,7 +51,7 @@ $('#save-inventory-button').on('click', function (e)
 			}
 			if (Victual.UserSettings.show_purchased_date_on_purchase)
 			{
-				jsonData.purchased_date = Victual.Components.DateTimePicker2.GetValue();
+				jsonData.purchased_date = Victual.Components.SecondaryDateTimePicker.GetValue();
 			}
 
 			jsonData.price = price;
@@ -535,35 +535,6 @@ $('#qu_id').on('change', function (e)
 {
 	RefreshPriceHint();
 });
-
-/**
- * Reverts a single stock booking (POST /api/stock/bookings/{id}/undo).
- * @param {number|string} bookingId - Id of the stock booking to undo
- */
-function UndoStockBooking(bookingId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Booking successfully undone"));
-		}
-	);
-};
-
-/**
- * Reverts a whole stock transaction (POST /api/stock/transactions/{id}/undo);
- * used by the undo link inside the success toast after booking.
- * @param {string} transactionId - Id of the stock transaction to undo
- */
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-		}
-	);
-};
 
 $("#display_amount").attr("min", "0");
 

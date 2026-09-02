@@ -30,7 +30,7 @@ $('#save-stockentry-button').on('click', function(e)
 	var jsonData = {};
 	jsonData.amount = jsonForm.amount;
 	jsonData.best_before_date = Victual.Components.DateTimePicker.GetValue();
-	jsonData.purchased_date = Victual.Components.DateTimePicker2.GetValue();
+	jsonData.purchased_date = Victual.Components.SecondaryDateTimePicker.GetValue();
 	jsonData.note = jsonForm.note;
 	jsonData.price = price;
 	jsonData.open = $("#open").is(":checked");
@@ -109,7 +109,7 @@ $('#stockentry-form input').keydown(function(event)
 	}
 });
 
-// Re-validate as the best-before-date (DateTimePicker) and purchased-date (DateTimePicker2)
+// Re-validate as the best-before-date (DateTimePicker) and purchased-date (SecondaryDateTimePicker)
 // fields change
 Victual.Components.DateTimePicker.GetInputElement().on('change', function(e)
 {
@@ -121,12 +121,12 @@ Victual.Components.DateTimePicker.GetInputElement().on('keypress', function(e)
 	Victual.FrontendHelpers.ValidateForm('stockentry-form');
 });
 
-Victual.Components.DateTimePicker2.GetInputElement().on('change', function(e)
+Victual.Components.SecondaryDateTimePicker.GetInputElement().on('change', function(e)
 {
 	Victual.FrontendHelpers.ValidateForm('stockentry-form');
 });
 
-Victual.Components.DateTimePicker2.GetInputElement().on('keypress', function(e)
+Victual.Components.SecondaryDateTimePicker.GetInputElement().on('keypress', function(e)
 {
 	Victual.FrontendHelpers.ValidateForm('stockentry-form');
 });
