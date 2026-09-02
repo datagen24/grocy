@@ -87,7 +87,7 @@ $('.save-recipe').on('click', function(e)
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("recipe-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -145,7 +145,9 @@ $('#recipe-form input').keydown(function(event)
 		}
 		else
 		{
-			$('#save-recipe-button').click();
+			// The save buttons carry the class ".save-recipe", not an id - this used to
+			// click "#save-recipe-button", which does not exist, so Enter did nothing
+			$('.save-recipe').first().click();
 		}
 	}
 });
@@ -157,7 +159,9 @@ $(document).on('click', '.recipe-pos-delete-button', function(e)
 	var objectId = $(e.currentTarget).attr('data-recipe-pos-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to delete recipe ingredient "%s"?', objectName),
+		// objectName came from a data- attribute read back with .attr(), which returns the
+		// decoded string, and bootbox renders its message with .html() (sweep finding S29)
+		message: __t('Are you sure you want to delete recipe ingredient "%s"?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -177,10 +181,6 @@ $(document).on('click', '.recipe-pos-delete-button', function(e)
 					function(result)
 					{
 						window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -195,7 +195,7 @@ $(document).on('click', '.recipe-include-delete-button', function(e)
 	var objectId = $(e.currentTarget).attr('data-recipe-include-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to remove the included recipe "%s"?', objectName),
+		message: __t('Are you sure you want to remove the included recipe "%s"?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -215,10 +215,6 @@ $(document).on('click', '.recipe-include-delete-button', function(e)
 					function(result)
 					{
 						window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -269,10 +265,6 @@ $(document).on('click', '.recipe-include-edit-button', function(e)
 			$("#includes_servings").val(recipeServings);
 			$("#recipe-include-editform-modal").modal("show");
 			Victual.FrontendHelpers.ValidateForm("recipe-include-form");
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -303,10 +295,6 @@ $("#recipe-include-add-button").on("click", function(e)
 			Victual.Components.RecipePicker.GetInputElement().focus();
 			$("#recipe-include-editform-modal").modal("show");
 			Victual.FrontendHelpers.ValidateForm("recipe-include-form");
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -398,10 +386,6 @@ $(window).on("message", function(e)
 			function(result)
 			{
 				window.location.href = U('/recipe/' + Victual.EditObjectId);
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}

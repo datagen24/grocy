@@ -78,7 +78,7 @@ $('#save-stockentry-button').on('click', function(e)
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("stockentry-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -136,10 +136,6 @@ Victual.Api.Get('stock/products/' + Victual.EditObjectProductId,
 	function(productDetails)
 	{
 		$('#amount_qu_unit').text(productDetails.quantity_unit_stock.name);
-	},
-	function(xhr)
-	{
-		console.error(xhr);
 	}
 );
 

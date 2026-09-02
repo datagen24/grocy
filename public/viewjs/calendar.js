@@ -40,14 +40,13 @@ $("#ical-button").on("click", function(e)
 		{
 			bootbox.alert({
 				title: __t('Share/Integrate calendar (iCal)'),
-				message: __t('Use the following (public) URL to share or integrate the calendar in iCal format') + '<input type="text" class="form-control form-control-sm mt-2 easy-link-copy-textbox" value="' + result.url + '"><p class="text-center mt-4">'
+				// The URL is server generated, but it is concatenated into an attribute value
+				// inside a message bootbox renders with .html(), so it is escaped like every
+				// other interpolation into that sink (sweep finding S29)
+				message: __t('Use the following (public) URL to share or integrate the calendar in iCal format') + '<input type="text" class="form-control form-control-sm mt-2 easy-link-copy-textbox" value="' + Victual.FrontendHelpers.EscapeHtml(result.url) + '"><p class="text-center mt-4">'
 					+ QrCodeImgHtml(result.url) + "</p>",
 				closeButton: false
 			});
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });

@@ -148,7 +148,10 @@ $('#save-purchase-button').on('click', function (e)
 					{
 						amountMessage = Number.parseFloat(jsonForm.amount) - productDetails.stock_amount - productDetails.product.tare_weight;
 					}
-					var successMessage = __t('Added %1$s of %2$s to stock', amountMessage + " " + __n(amountMessage, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+					// Product and quantity unit names are text columns rendered into a
+					// toastr message, which is an HTML sink - escaped at the point of use
+					// (sweep finding S29).
+					var successMessage = __t('Added %1$s of %2$s to stock', amountMessage + " " + __n(amountMessage, Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(productDetails.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 
 					// Fire the configured label printer webhook (Victual.Webhooks.labelprinter), either once per
 					// purchase (single label) or once per individual stock entry created (label per unit)
@@ -185,10 +188,6 @@ $('#save-purchase-button').on('click', function (e)
 
 											Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, webhookData);
 										});
-									},
-									function (xhr)
-									{
-										console.error(xhr);
 									}
 								);
 							}
@@ -272,14 +271,14 @@ $('#save-purchase-button').on('click', function (e)
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("purchase-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("purchase-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -467,10 +466,6 @@ if (Victual.Components.ProductPicker !== undefined)
 
 								// Barcode has a defined amount, so don't force it back to a single unit
 								ScanModeSubmit(false);
-							},
-							function (xhr)
-							{
-								console.error(xhr);
 							}
 						);
 					}
@@ -482,10 +477,6 @@ if (Victual.Components.ProductPicker !== undefined)
 					}
 
 					$('#display_amount').trigger("keyup");
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
 		}
@@ -767,16 +758,8 @@ function UndoStockBooking(bookingId)
 				function (result)
 				{
 					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result.product_id)), Victual.BaseUrl);
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
@@ -798,16 +781,8 @@ function UndoStockTransaction(transactionId)
 				function (result)
 				{
 					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result[0].product_id)), Victual.BaseUrl);
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

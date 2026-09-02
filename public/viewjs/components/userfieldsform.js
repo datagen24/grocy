@@ -223,10 +223,6 @@ Victual.Components.UserfieldsForm.Load = function ()
 				{
 					Victual.FrontendHelpers.ValidateForm(this.id);
 				});
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -312,10 +308,6 @@ Victual.Components.UserfieldsForm.Load = function ()
 				{
 					Victual.FrontendHelpers.ValidateForm(this.id);
 				});
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -390,10 +382,6 @@ Victual.Components.UserfieldsForm.Clear = function ()
 			{
 				Victual.FrontendHelpers.ValidateForm(this.id);
 			});
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 }

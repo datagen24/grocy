@@ -92,11 +92,16 @@ $('#save-consume-button').on('click', function(e)
 					// Tare-weight products consume "amount minus tare/current weight" unless an exact amount was entered
 					if (productDetails.product.enable_tare_weight_handling == 1 && !jsonData.exact_amount)
 					{
-						var successMessage = __t('Removed %1$s of %2$s from stock', Math.abs(jsonForm.amount - (productDetails.product.tare_weight + productDetails.stock_amount)) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						// The product and quantity unit names go into a toastr message, which
+						// is rendered as HTML - they are text columns and are escaped here, at
+						// the point of use (sweep finding S29). The Undo anchor below is
+						// deliberate markup, which is why toastr.options.escapeHtml is not the
+						// fix.
+						var successMessage = __t('Removed %1$s of %2$s from stock', Math.abs(jsonForm.amount - (productDetails.product.tare_weight + productDetails.stock_amount)) + " " + __n(jsonForm.amount, Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(productDetails.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 					else
 					{
-						var successMessage = __t('Removed %1$s of %2$s from stock', Math.abs(jsonForm.amount) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						var successMessage = __t('Removed %1$s of %2$s from stock', Math.abs(jsonForm.amount) + " " + __n(jsonForm.amount, Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(productDetails.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 
 					// When embedded (e.g. in a modal iframe), notify the parent window instead of
@@ -147,14 +152,13 @@ $('#save-consume-button').on('click', function(e)
 				{
 					Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 					Victual.FrontendHelpers.EndUiBusy("consume-form");
-					console.error(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("consume-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -202,12 +206,12 @@ $('#save-mark-as-open-button').on('click', function(e)
 					}
 
 					Victual.FrontendHelpers.EndUiBusy("consume-form");
-					toastr.success(__t('Marked %1$s of %2$s as opened', Number.parseFloat(jsonForm.amount).toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
+					toastr.success(__t('Marked %1$s of %2$s as opened', Number.parseFloat(jsonForm.amount).toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(jsonForm.amount, Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(productDetails.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
 
 					// Inform the user when opening also relocated the stock entry (product's move_on_open setting)
 					if (productDetails.product.move_on_open == 1 && productDetails.default_consume_location != null)
 					{
-						toastr.info('<span>' + __t("Moved to %1$s", productDetails.default_consume_location.name) + "</span> <i class='fa-solid fa-exchange-alt'></i>");
+						toastr.info('<span>' + __t("Moved to %1$s", Victual.FrontendHelpers.EscapeHtml(productDetails.default_consume_location.name)) + "</span> <i class='fa-solid fa-exchange-alt'></i>");
 					}
 
 					if (BoolVal(Victual.UserSettings.stock_default_consume_amount_use_quick_consume_amount))
@@ -227,14 +231,14 @@ $('#save-mark-as-open-button').on('click', function(e)
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("consume-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("consume-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -268,10 +272,6 @@ $("#location_id").on('change', function(e)
 					{
 						OnLocationChange(stockEntries[0].location_id, gc[3]);
 						$('#display_amount').val(stockEntries[0].amount);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -347,10 +347,6 @@ function OnLocationChange(locationId, stockId)
 					{
 						current_productDetails = productDetails;
 						RefreshForm();
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -358,10 +354,6 @@ function OnLocationChange(locationId, stockId)
 				{
 					ScanModeSubmit();
 				}
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -493,17 +485,9 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 											ScanModeSubmit(false);
 										}
 									}
-								},
-								function(xhr)
-								{
-									console.error(xhr);
 								}
 							);
 						}
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -534,10 +518,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 				{
 					$("#save-mark-as-open-button").removeClass("disabled");
 				}
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -608,10 +588,6 @@ $("#specific_stock_entry").on("change", function(e)
 				{
 					$("#display_amount").parent().find(".invalid-feedback").text(__t('There are no units available at this location'));
 				}
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -657,10 +633,6 @@ function UndoStockBooking(bookingId)
 		function(result)
 		{
 			toastr.success(__t("Booking successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
@@ -675,10 +647,6 @@ function UndoStockTransaction(transactionId)
 		function(result)
 		{
 			toastr.success(__t("Transaction successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
