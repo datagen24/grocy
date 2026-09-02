@@ -3,6 +3,7 @@
 namespace Victual\Services;
 
 use Victual\Services\Database\DatabaseDialect;
+use Victual\Services\Mqtt\MqttStatePublicationService;
 use LessQL\Database;
 
 /**
@@ -22,6 +23,7 @@ class DatabaseService
 	private static $Dialect = null;
 	private static $instance = null;
 	private static $ShutdownHandlerRegistered = false;
+	private static $DataChanged = false;
 
 	/**
 	 * Executes a SQL query and returns its result set.
@@ -96,9 +98,14 @@ class DatabaseService
 
 		// Raw SQL bypasses LessQL, so the changed time has to be maintained here too
 		$dialect = $this->GetDialect();
-		if ($dialect->RequiresChangeTracking() && $dialect->IsWriteStatement($sql))
+		if ($dialect->IsWriteStatement($sql))
 		{
-			$dialect->MarkDbChanged($pdo);
+			if ($dialect->RequiresChangeTracking())
+			{
+				$dialect->MarkDbChanged($pdo);
+			}
+
+			$this->MarkDataChanged();
 		}
 
 		return true;
@@ -148,15 +155,26 @@ class DatabaseService
 
 			$trackChanges = $dialect->RequiresChangeTracking();
 
-			if ($trackChanges || $this->IsQueryLoggingEnabled())
+			// MQTT publication needs the same "did this request write anything" answer the
+			// changed time gives, and it needs it on SQLite too - where the file
+			// modification time makes per-statement tracking unnecessary and the callback
+			// would otherwise not be installed at all
+			$notifyOnChange = MqttStatePublicationService::IsEnabled();
+
+			if ($trackChanges || $notifyOnChange || $this->IsQueryLoggingEnabled())
 			{
-				self::$DbConnection->setQueryCallback(function ($query, $params) use ($pdo, $dialect, $trackChanges)
+				self::$DbConnection->setQueryCallback(function ($query, $params) use ($pdo, $dialect, $trackChanges, $notifyOnChange)
 				{
 					$this->LogQuery($query, $params);
 
-					if ($trackChanges && $dialect->IsWriteStatement($query))
+					if (($trackChanges || $notifyOnChange) && $dialect->IsWriteStatement($query))
 					{
-						$dialect->MarkDbChanged($pdo);
+						if ($trackChanges)
+						{
+							$dialect->MarkDbChanged($pdo);
+						}
+
+						$this->MarkDataChanged();
 					}
 				});
 			}
@@ -271,6 +289,36 @@ class DatabaseService
 	public function SetDbChangedTime($dateTime)
 	{
 		$this->GetDialect()->SetDbChangedTime($this->GetDbConnectionRaw(), $dateTime);
+
+		// Restoring the changed time is how a bookkeeping write says "this was not a data
+		// change". The dirty flag means the same thing, so it is cleared here rather than
+		// left to a second, separate call that could be forgotten - and it is cleared after
+		// the dialect call, because on engines that keep the changed time in a table the
+		// restore is itself an UPDATE which has just set the flag again.
+		self::$DataChanged = false;
+	}
+
+	/**
+	 * Records that this request wrote data, as opposed to having only read or having written
+	 * a bookkeeping row (see SetDbChangedTime(), which clears this again).
+	 *
+	 * Deliberately the same question DatabaseDialect::MarkDbChanged() answers for
+	 * GET /api/system/db-changed-time, and deliberately maintained here rather than on the
+	 * dialect: SQLite's dialect has nothing to do for the changed time (the file
+	 * modification time is the changed time) and would never be asked.
+	 */
+	public function MarkDataChanged()
+	{
+		self::$DataChanged = true;
+	}
+
+	/**
+	 * Whether this request has written data. Used by the request-end MQTT publish to skip
+	 * reads entirely; a request that wrote nothing has nothing new to say.
+	 */
+	public function HasDataChanged(): bool
+	{
+		return self::$DataChanged;
 	}
 
 	/**
@@ -316,7 +364,8 @@ class DatabaseService
 
 	/**
 	 * Registers a once-per-request shutdown handler which flushes a pending
-	 * "db changed" mark to the database (a no-op for dialects that write immediately).
+	 * "db changed" mark to the database (a no-op for dialects that write immediately),
+	 * and then publishes the MQTT state snapshot when the request changed data.
 	 */
 	private function RegisterShutdownHandler()
 	{
@@ -340,6 +389,18 @@ class DatabaseService
 			catch (\Exception $ex)
 			{
 				// A failure here must never turn an otherwise successful request into an error
+			}
+
+			// The after-commit seam for plan 18: the end of the request is the first moment
+			// every transaction is provably closed, and the dirty flag is the same "really
+			// changed" test the changed time uses, so reads and bookkeeping writes cost
+			// nothing here. Named directly rather than through a listener registry because
+			// there is no boot event to register one at, and holding one in process memory
+			// between requests is what ADR-0007 forbids. Everything past this point catches
+			// its own failures.
+			if (self::$DataChanged)
+			{
+				MqttStatePublicationService::PublishForRequestEnd();
 			}
 		});
 	}
