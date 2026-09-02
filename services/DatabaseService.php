@@ -3,6 +3,7 @@
 namespace Victual\Services;
 
 use Victual\Services\Database\DatabaseDialect;
+use Victual\Services\Influx\BookingEventPublisher;
 use Victual\Services\Mqtt\MqttStatePublicationService;
 use LessQL\Database;
 
@@ -398,10 +399,25 @@ class DatabaseService
 			// there is no boot event to register one at, and holding one in process memory
 			// between requests is what ADR-0007 forbids. Everything past this point catches
 			// its own failures.
-			if (self::$DataChanged)
+			if (!self::$DataChanged)
 			{
-				MqttStatePublicationService::PublishForRequestEnd();
+				return;
 			}
+
+			// A snapshot published from inside a transaction that then rolls back is a lie
+			// that persists in a retained topic, and a time series point written for a
+			// booking that rolled back is a number nothing will ever correct. An open
+			// transaction here means something escaped InTransaction()'s rollback, so the
+			// honest thing is to skip both and say so.
+			if (self::$DbConnectionRaw !== null && self::$DbConnectionRaw->inTransaction())
+			{
+				error_log('Victual: skipped the after-commit MQTT publish and InfluxDB write because a database transaction was still open at the end of the request');
+
+				return;
+			}
+
+			MqttStatePublicationService::PublishForRequestEnd();
+			BookingEventPublisher::WriteForRequestEnd();
 		});
 	}
 }
