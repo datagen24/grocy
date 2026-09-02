@@ -2,14 +2,18 @@
 
 namespace Victual\Services;
 
+use Victual\Services\Storage\FileStorage;
 use Gumlet\ImageResize;
 use Gumlet\ImageResizeException;
 
 /**
- * Manages uploaded files (product pictures, equipment manuals, ...) below
- * <data path>/storage, organized in per purpose group folders, including cached
- * downscaled versions of images. In demo/prerelease mode the storage path gets a per
- * demo instance suffix, mirroring the separate demo databases.
+ * Manages uploaded files (product pictures, equipment manuals, ...), organized in per
+ * purpose groups, including cached downscaled versions of images.
+ *
+ * Where the bytes actually live is the storage backend's business
+ * (Victual\Services\Storage\FileStorage); this service knows only names. That is why
+ * everything here takes and returns a file *name* rather than a path - a path is the one
+ * thing a database backend cannot supply.
  */
 class FilesService extends BaseService
 {
@@ -19,59 +23,49 @@ class FilesService extends BaseService
 	 */
 	const FILE_SERVE_TYPE_PICTURE = 'picture';
 
-	public function __construct()
-	{
-		parent::__construct();
-
-		$this->StoragePath = VICTUAL_DATAPATH . '/storage';
-		if (!file_exists($this->StoragePath))
-		{
-			mkdir($this->StoragePath);
-		}
-
-		if (VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
-		{
-			$dbSuffix = VICTUAL_DEFAULT_LOCALE;
-			if (defined('VICTUAL_DEMO_DB_SUFFIX'))
-			{
-				$dbSuffix = VICTUAL_DEMO_DB_SUFFIX;
-			}
-
-			$this->StoragePath = $this->StoragePath . '/' . $dbSuffix;
-			if (!file_exists($this->StoragePath))
-			{
-				mkdir($this->StoragePath);
-			}
-		}
-	}
-
-	private $StoragePath;
+	/**
+	 * The infix that marks a cached downscaled copy, which is also the prefix scan the
+	 * delete path uses to find every copy of one image.
+	 */
+	const DOWNSCALED_INFIX = '__downscaledto';
 
 	/**
-	 * Returns the path of a downscaled copy of the given image, created on first use
-	 * and cached next to the original as "<name>__downscaledto<h>x<w>.<ext>".
-	 * Falls back to the original file when resizing fails.
+	 * Returns the name of a downscaled copy of the given image, created on first use and
+	 * cached alongside the original as "<name>__downscaledto<h>x<w>.<ext>".
+	 * Falls back to the original file name when resizing fails.
 	 *
-	 * @param string $group Group folder name, e.g. "productpictures"
+	 * Resizing works on bytes rather than on files - ImageResize::createFromString() and
+	 * getImageAsString() - because a database backend has no path to hand the library.
+	 *
+	 * @param string $group Group name, e.g. "productpictures"
 	 * @param string $fileName
 	 * @param int|null $bestFitHeight Maximum height in pixels, or null for no height limit
 	 * @param int|null $bestFitWidth Maximum width in pixels, or null for no width limit
-	 * @return string Absolute path of the file to serve
+	 * @return string Name of the file to serve
 	 */
 	public function DownscaleImage($group, $fileName, $bestFitHeight = null, $bestFitWidth = null)
 	{
-		$filePath = $this->GetFilePath($group, $fileName);
-		$fileNameWithoutExtension = pathinfo($filePath, PATHINFO_FILENAME);
-		$fileExtension = pathinfo($filePath, PATHINFO_EXTENSION);
+		$storage = FileStorage::GetInstance();
 
-		$fileNameDownscaled = $fileNameWithoutExtension . '__downscaledto' . ($bestFitHeight ? $bestFitHeight : 'auto') . 'x' . ($bestFitWidth ? $bestFitWidth : 'auto') . '.' . $fileExtension;
-		$filePathDownscaled = $this->GetFilePath($group, $fileNameDownscaled);
+		$fileNameWithoutExtension = pathinfo($fileName, PATHINFO_FILENAME);
+		$fileExtension = pathinfo($fileName, PATHINFO_EXTENSION);
+
+		$fileNameDownscaled = $fileNameWithoutExtension . self::DOWNSCALED_INFIX . ($bestFitHeight ? $bestFitHeight : 'auto') . 'x' . ($bestFitWidth ? $bestFitWidth : 'auto') . '.' . $fileExtension;
 
 		try
 		{
-			if (!file_exists($filePathDownscaled))
+			if (!$storage->Exists($group, $fileNameDownscaled))
 			{
-				$image = new ImageResize($filePath);
+				$source = $storage->Read($group, $fileName);
+				if ($source === null)
+				{
+					// Mirrors what "new ImageResize(<missing path>)" used to do: hand the
+					// original name back and let the caller answer 404 for it.
+					return $fileName;
+				}
+
+				$image = ImageResize::createFromString(stream_get_contents($source));
+				fclose($source);
 
 				if ($bestFitHeight !== null && $bestFitWidth !== null)
 				{
@@ -86,67 +80,68 @@ class FilesService extends BaseService
 					$image->resizeToWidth($bestFitWidth);
 				}
 
-				$image->save($filePathDownscaled);
+				// A GET that writes. It is a cache fill rather than a state change - the
+				// row is derived from the original and can be dropped and regenerated at
+				// any time - but "GETs do not write" is otherwise a nice invariant, so it
+				// is worth saying out loud that this one does.
+				$storage->Write($group, $fileNameDownscaled, $image->getImageAsString());
 			}
 		}
 		catch (ImageResizeException $ex)
 		{
-			return $filePath;
+			return $fileName;
 		}
 
-		return $filePathDownscaled;
+		return $fileNameDownscaled;
 	}
 
 	/**
 	 * Deletes the given file; for images, also all of its cached "__downscaledto" copies.
 	 *
-	 * @param string $group Group folder name
+	 * @param string $group Group name
 	 * @param string $fileName
 	 */
 	public function DeleteFile($group, $fileName)
 	{
-		$filePath = $this->GetFilePath($group, $fileName);
+		$storage = FileStorage::GetInstance();
 
-		if (file_exists($filePath))
+		if ($storage->Exists($group, $fileName))
 		{
-			$fileNameWithoutExtension = pathinfo($filePath, PATHINFO_FILENAME);
+			$fileNameWithoutExtension = pathinfo($fileName, PATHINFO_FILENAME);
 
 			// Then the file is an image
-			if (getimagesize($filePath) !== false)
+			if ($this->IsImage($group, $fileName))
 			{
 				// Also delete all corresponding "__downscaledto" files when deleting an image
-				$groupFolderPath = $this->StoragePath . '/' . $group;
-				$files = scandir($groupFolderPath);
-				foreach ($files as $file)
+				foreach ($storage->ListNames($group, $fileNameWithoutExtension . self::DOWNSCALED_INFIX) as $name)
 				{
-					if (string_starts_with($file, $fileNameWithoutExtension . '__downscaledto'))
-					{
-						unlink($this->GetFilePath($group, $file));
-					}
+					$storage->Delete($group, $name);
 				}
 			}
 
-			unlink($filePath);
+			$storage->Delete($group, $fileName);
 		}
 	}
 
 	/**
-	 * Returns the absolute path for a file in the given group folder, creating the
-	 * folder when needed (the file itself may or may not exist).
+	 * Whether the stored file really is an image, decided by its content.
 	 *
-	 * @param string $group Group folder name
-	 * @param string $fileName
-	 * @return string
+	 * getimagesizefromstring() rather than getimagesize(), because the latter needs a
+	 * path. The two are the same detection code over the same bytes; what differs is that
+	 * this one holds the file in memory, which is bounded by the upload cap
+	 * (FILE_STORAGE_MAX_SIZE_MB, sweep S10).
 	 */
-	public function GetFilePath($group, $fileName)
+	private function IsImage(string $group, string $fileName): bool
 	{
-		$groupFolderPath = $this->StoragePath . '/' . $group;
-
-		if (!file_exists($groupFolderPath))
+		$stream = FileStorage::GetInstance()->Read($group, $fileName);
+		if ($stream === null)
 		{
-			mkdir($groupFolderPath);
+			return false;
 		}
 
-		return $groupFolderPath . '/' . $fileName;
+		$content = stream_get_contents($stream);
+		fclose($stream);
+
+		return $content !== false && getimagesizefromstring($content) !== false;
 	}
 }
