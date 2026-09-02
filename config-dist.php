@@ -210,6 +210,66 @@ Setting('FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING', false); // Set t
 Setting('FEATURE_FLAG_AUTO_TORCH_ON_WITH_CAMERA', true); // Enables the torch automatically (if the device has one)
 
 
+// ---------------------------------------------------------------------------
+// MQTT state publication (docs/plans/18-mqtt-state-publication.md)
+//
+// Victual can push a snapshot of the household's ambient state - what is in stock, what
+// is on the shopping list, and the next due chore, battery and task - to an MQTT broker
+// as retained topics, with Home Assistant discovery payloads alongside them. The point is
+// that a consumer never has to ask: retained topics survive the server being asleep or
+// gone entirely, so nothing has to poll and the pod can scale to zero.
+//
+// What is published is deliberately narrow. Only facts go on a topic - dates and counts,
+// never "expiring soon" or "overdue", because a derived state is a function of the clock
+// and would need something awake to recompute it. And anything with access to the broker
+// reads this without authenticating to Victual, so the payload carries no user records,
+// no notes, no API keys and no price, cost or value field of any kind.
+//
+// Two triggers: once at the end of any request that changed data, and explicitly via
+// "php bin/victual-publish-state" (run that from a postStart hook or a Job next to the
+// bin/victual-migrate initContainer, so a fresh deployment republishes everything).
+// "php bin/victual-publish-state --retract" clears every retained topic this version owns.
+//
+// Disabled by default: this is a household-specific integration, and an unconfigured
+// install should not try to reach a broker that is not there.
+Setting('MQTT_ENABLED', false);
+Setting('MQTT_HOST', ''); // Broker hostname or IP - required when MQTT_ENABLED is true
+Setting('MQTT_PORT', 1883); // 8883 is the usual port when MQTT_TLS is true
+Setting('MQTT_USERNAME', ''); // Leave empty for an anonymous broker
+Setting('MQTT_PASSWORD', ''); // Never exposed via GET /api/system/config - see SystemApiController::EXPOSED_SETTINGS
+Setting('MQTT_TLS', false); // Whether to wrap the broker connection in TLS
+Setting('MQTT_CLIENT_ID', 'victual'); // Prefix of the MQTT client id; a per-connection suffix is appended so two publishes never collide
+Setting('MQTT_TOPIC_PREFIX', 'victual'); // Root of every topic this publishes, e.g. "victual/state/stock"
+Setting('MQTT_DISCOVERY_PREFIX', 'homeassistant'); // Home Assistant's MQTT discovery prefix
+Setting('MQTT_DISCOVERY_MODE', 'device'); // "device" for one config topic declaring every entity (Home Assistant 2024.11 and newer), "entity" for one config topic per sensor
+Setting('MQTT_CONNECT_TIMEOUT_SECONDS', 2); // Also the socket timeout - this bounds how long a write can be delayed when the broker is unreachable
+Setting('MQTT_DEVICE_NAME', 'Victual'); // The device name Home Assistant shows for the published entities
+
+// InfluxDB event writing (same plan, question 7)
+//
+// The other half of the split the plan draws. MQTT carries facts anything on the broker may
+// read and therefore carries no prices at all; InfluxDB is queried with its own credentials
+// rather than broadcast, so it is where "how has spending shifted" is answered.
+//
+// Only *events* are written, never sampled state: a point when a purchase commits produces a
+// series whose gaps mean "no purchases", which is true, where sampling stock from a pod that
+// is mostly asleep would produce holes that mean "nobody was shopping". Two measurements,
+// both tagged only with product_id and carrying no user-identifying data:
+//
+//   price_paid,product_id=<id>  price=<paid>,amount=<booked>   at the booking's own timestamp
+//   stock_value,product_id=<id> value=<worth>,amount=<in stock> at the end of the request
+//
+// Written on the same after-commit seam as the MQTT publish, over InfluxDB's v2
+// /api/v2/write line-protocol endpoint. A failure is logged and never reaches the write that
+// triggered it.
+Setting('INFLUXDB_ENABLED', false);
+Setting('INFLUXDB_URL', ''); // Base URL of the InfluxDB v2 server, e.g. "http://influxdb:8086" - required when INFLUXDB_ENABLED is true
+Setting('INFLUXDB_TOKEN', ''); // An API token with write access to the bucket below; never exposed via GET /api/system/config
+Setting('INFLUXDB_ORG', 'victual'); // The InfluxDB organisation
+Setting('INFLUXDB_BUCKET', 'victual'); // The bucket the points are written to
+Setting('INFLUXDB_TIMEOUT_SECONDS', 2); // Connect and total timeout - this bounds how long a write can be delayed when InfluxDB is unreachable
+
+
 // Default user settings
 // These settings can be changed per user and via the UI,
 // below are the defaults which are used when the user has not changed the setting so far

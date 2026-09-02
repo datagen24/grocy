@@ -3,6 +3,9 @@
 namespace Victual\Services;
 
 use Victual\Services\Database\DatabaseDialect;
+use Victual\Services\Influx\BookingEventPublisher;
+use Victual\Services\Influx\InfluxEventWriter;
+use Victual\Services\Mqtt\MqttStatePublicationService;
 use LessQL\Database;
 
 /**
@@ -22,6 +25,7 @@ class DatabaseService
 	private static $Dialect = null;
 	private static $instance = null;
 	private static $ShutdownHandlerRegistered = false;
+	private static $DataChanged = false;
 
 	/**
 	 * Executes a SQL query and returns its result set.
@@ -96,9 +100,14 @@ class DatabaseService
 
 		// Raw SQL bypasses LessQL, so the changed time has to be maintained here too
 		$dialect = $this->GetDialect();
-		if ($dialect->RequiresChangeTracking() && $dialect->IsWriteStatement($sql))
+		if ($dialect->IsWriteStatement($sql))
 		{
-			$dialect->MarkDbChanged($pdo);
+			if ($dialect->RequiresChangeTracking())
+			{
+				$dialect->MarkDbChanged($pdo);
+			}
+
+			$this->MarkDataChanged();
 		}
 
 		return true;
@@ -148,15 +157,28 @@ class DatabaseService
 
 			$trackChanges = $dialect->RequiresChangeTracking();
 
-			if ($trackChanges || $this->IsQueryLoggingEnabled())
+			// The after-commit publishes need the same "did this request write anything"
+			// answer the changed time gives, and they need it on SQLite too - where the file
+			// modification time makes per-statement tracking unnecessary and the callback
+			// would otherwise not be installed at all. Both are asked, not just MQTT: they
+			// are independently configurable, and gating the flag on one of them would make
+			// the other silently do nothing on SQLite.
+			$notifyOnChange = MqttStatePublicationService::IsEnabled() || InfluxEventWriter::IsEnabled();
+
+			if ($trackChanges || $notifyOnChange || $this->IsQueryLoggingEnabled())
 			{
-				self::$DbConnection->setQueryCallback(function ($query, $params) use ($pdo, $dialect, $trackChanges)
+				self::$DbConnection->setQueryCallback(function ($query, $params) use ($pdo, $dialect, $trackChanges, $notifyOnChange)
 				{
 					$this->LogQuery($query, $params);
 
-					if ($trackChanges && $dialect->IsWriteStatement($query))
+					if (($trackChanges || $notifyOnChange) && $dialect->IsWriteStatement($query))
 					{
-						$dialect->MarkDbChanged($pdo);
+						if ($trackChanges)
+						{
+							$dialect->MarkDbChanged($pdo);
+						}
+
+						$this->MarkDataChanged();
 					}
 				});
 			}
@@ -271,6 +293,36 @@ class DatabaseService
 	public function SetDbChangedTime($dateTime)
 	{
 		$this->GetDialect()->SetDbChangedTime($this->GetDbConnectionRaw(), $dateTime);
+
+		// Restoring the changed time is how a bookkeeping write says "this was not a data
+		// change". The dirty flag means the same thing, so it is cleared here rather than
+		// left to a second, separate call that could be forgotten - and it is cleared after
+		// the dialect call, because on engines that keep the changed time in a table the
+		// restore is itself an UPDATE which has just set the flag again.
+		self::$DataChanged = false;
+	}
+
+	/**
+	 * Records that this request wrote data, as opposed to having only read or having written
+	 * a bookkeeping row (see SetDbChangedTime(), which clears this again).
+	 *
+	 * Deliberately the same question DatabaseDialect::MarkDbChanged() answers for
+	 * GET /api/system/db-changed-time, and deliberately maintained here rather than on the
+	 * dialect: SQLite's dialect has nothing to do for the changed time (the file
+	 * modification time is the changed time) and would never be asked.
+	 */
+	public function MarkDataChanged()
+	{
+		self::$DataChanged = true;
+	}
+
+	/**
+	 * Whether this request has written data. Used by the request-end MQTT publish to skip
+	 * reads entirely; a request that wrote nothing has nothing new to say.
+	 */
+	public function HasDataChanged(): bool
+	{
+		return self::$DataChanged;
 	}
 
 	/**
@@ -315,8 +367,10 @@ class DatabaseService
 	}
 
 	/**
-	 * Registers a once-per-request shutdown handler which flushes a pending
-	 * "db changed" mark to the database (a no-op for dialects that write immediately).
+	 * Registers a once-per-request shutdown handler which hands the response off where the
+	 * runtime allows it, flushes a pending "db changed" mark to the database (a no-op for
+	 * dialects that write immediately), and then runs the after-commit publishes - the MQTT
+	 * state snapshot and the InfluxDB booking events - when the request has work for them.
 	 */
 	private function RegisterShutdownHandler()
 	{
@@ -330,6 +384,18 @@ class DatabaseService
 		// Dialects which track the changed time in a table batch it into a single write
 		register_shutdown_function(function ()
 		{
+			// Everything below this line happens after the response has been produced, and
+			// the two outbound publishes at the end of it are bounded by their own connect
+			// timeouts rather than by anything fast. Under php-fpm this hands the response
+			// to the web server first, so an unreachable broker costs the pod a moment and
+			// costs the caller nothing. The function only exists under FPM; under mod_php or
+			// the built-in server there is nothing to hand off to and the timeouts are on
+			// the response, which is the honest limit of what can be done here.
+			if (function_exists('fastcgi_finish_request'))
+			{
+				fastcgi_finish_request();
+			}
+
 			try
 			{
 				if (self::$DbConnectionRaw !== null)
@@ -341,6 +407,39 @@ class DatabaseService
 			{
 				// A failure here must never turn an otherwise successful request into an error
 			}
+
+			// The after-commit seam for plan 18: the end of the request is the first moment
+			// every transaction is provably closed, and the dirty flag is the same "really
+			// changed" test the changed time uses, so reads and bookkeeping writes cost
+			// nothing here. Named directly rather than through a listener registry because
+			// there is no boot event to register one at, and holding one in process memory
+			// between requests is what ADR-0007 forbids. Everything past this point catches
+			// its own failures.
+			//
+			// Two independent pieces of evidence that there is work to do, not one. The
+			// dirty flag covers everything that writes through this service; the booking
+			// collector covers the InfluxDB events specifically, which are recorded at
+			// StockService's entrypoints and would otherwise be lost whenever nothing
+			// installed the query callback - a SQLite database with MQTT off, for instance.
+			if (!self::$DataChanged && !BookingEventPublisher::HasBookings())
+			{
+				return;
+			}
+
+			// A snapshot published from inside a transaction that then rolls back is a lie
+			// that persists in a retained topic, and a time series point written for a
+			// booking that rolled back is a number nothing will ever correct. An open
+			// transaction here means something escaped InTransaction()'s rollback, so the
+			// honest thing is to skip both and say so.
+			if (self::$DbConnectionRaw !== null && self::$DbConnectionRaw->inTransaction())
+			{
+				error_log('Victual: skipped the after-commit MQTT publish and InfluxDB write because a database transaction was still open at the end of the request');
+
+				return;
+			}
+
+			MqttStatePublicationService::PublishForRequestEnd();
+			BookingEventPublisher::WriteForRequestEnd();
 		});
 	}
 }
