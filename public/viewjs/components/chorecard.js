@@ -47,10 +47,6 @@ Victual.Components.ChoreCard.Refresh = function(choreId)
 			}
 
 			RefreshContextualTimeago(".chorecard");
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
