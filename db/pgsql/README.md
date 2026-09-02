@@ -74,6 +74,25 @@ refuses a lone engine-specific file that does not carry one. A missing counterpa
 deliberate omission look identical in a directory listing; the marker is what tells them
 apart.
 
+**An engine-exclusive migration that creates a *table* needs one more thing.** The marker
+tells `check-migrations.php` that the missing counterpart is deliberate, but it says
+nothing to the differential suite, whose `migratedifftest.php` compares the two engines'
+table sets and treats a table only one side has as the loudest possible defect — which is
+what that phase is for. So a table that exists on one engine on purpose has to be named in
+`ENGINE_EXCLUSIVE_TABLES` at the top of `migratedifftest.php`, with the reason, or the
+suite fails on it. Naming it is the point: an exemption the suite does not know about is a
+missing table wearing a different hat.
+
+`migrations/0258.pgsql.sql`'s `files` table is the first (`0256.sqlite.sql` was a view
+change, so this case had not come up). It holds uploaded files as `BYTEA` when
+`FILE_STORAGE` is `database`, and `ConfigurationValidator` refuses that setting on any
+driver but `pgsql` — so a SQLite counterpart would be a table nothing could ever read.
+Note that this is a *different* list from `DatabaseImporter::TARGET_ONLY_TABLES`, which is
+about tables the PostgreSQL baseline owns outright; `bin/victual-db-import` deliberately
+still reports `files` as a target table with no source counterpart that stays empty, since
+a household importing a SQLite installation wants to be told that its pictures have not
+come across with it.
+
 The same script rejects an engine-specific file that silently shadows a portable one of the
 same number. Overriding is still legal — the loader prefers the specific file — but it has
 to say `@overrides-generic`, because left implicit it means one engine never runs the
