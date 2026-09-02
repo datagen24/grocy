@@ -185,10 +185,6 @@ $('#save-purchase-button').on('click', function (e)
 
 											Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, webhookData);
 										});
-									},
-									function (xhr)
-									{
-										console.error(xhr);
 									}
 								);
 							}
@@ -272,14 +268,14 @@ $('#save-purchase-button').on('click', function (e)
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("purchase-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("purchase-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -467,10 +463,6 @@ if (Victual.Components.ProductPicker !== undefined)
 
 								// Barcode has a defined amount, so don't force it back to a single unit
 								ScanModeSubmit(false);
-							},
-							function (xhr)
-							{
-								console.error(xhr);
 							}
 						);
 					}
@@ -482,10 +474,6 @@ if (Victual.Components.ProductPicker !== undefined)
 					}
 
 					$('#display_amount').trigger("keyup");
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
 		}
@@ -767,16 +755,8 @@ function UndoStockBooking(bookingId)
 				function (result)
 				{
 					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result.product_id)), Victual.BaseUrl);
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
@@ -798,16 +778,8 @@ function UndoStockTransaction(transactionId)
 				function (result)
 				{
 					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result[0].product_id)), Victual.BaseUrl);
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

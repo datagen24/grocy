@@ -88,10 +88,6 @@ $(document).on('click', '.undo-battery-execution-button', function(e)
 			element.closest(".undo-battery-execution-button").addClass("disabled");
 			RefreshContextualTimeago("#charge-cycle-" + chargeCycleId + "-row");
 			toastr.success(__t("Charge cycle successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });

@@ -87,7 +87,7 @@ $('.save-recipe').on('click', function(e)
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("recipe-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -177,10 +177,6 @@ $(document).on('click', '.recipe-pos-delete-button', function(e)
 					function(result)
 					{
 						window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -215,10 +211,6 @@ $(document).on('click', '.recipe-include-delete-button', function(e)
 					function(result)
 					{
 						window.postMessage(WindowMessageBag("IngredientsChanged"), Victual.BaseUrl);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -269,10 +261,6 @@ $(document).on('click', '.recipe-include-edit-button', function(e)
 			$("#includes_servings").val(recipeServings);
 			$("#recipe-include-editform-modal").modal("show");
 			Victual.FrontendHelpers.ValidateForm("recipe-include-form");
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -303,10 +291,6 @@ $("#recipe-include-add-button").on("click", function(e)
 			Victual.Components.RecipePicker.GetInputElement().focus();
 			$("#recipe-include-editform-modal").modal("show");
 			Victual.FrontendHelpers.ValidateForm("recipe-include-form");
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -398,10 +382,6 @@ $(window).on("message", function(e)
 			function(result)
 			{
 				window.location.href = U('/recipe/' + Victual.EditObjectId);
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}

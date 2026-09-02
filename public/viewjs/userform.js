@@ -73,7 +73,7 @@ $('#save-user-button').on('click', function (e)
 			function (xhr)
 			{
 				Victual.FrontendHelpers.EndUiBusy("user-form");
-				console.error(xhr);
+				Victual.Api.DefaultErrorHandler(xhr);
 			}
 		);
 	}
@@ -102,7 +102,7 @@ $('#save-user-button').on('click', function (e)
 			function (xhr)
 			{
 				Victual.FrontendHelpers.EndUiBusy("user-form");
-				console.error(xhr);
+				Victual.Api.DefaultErrorHandler(xhr);
 			}
 		);
 	}

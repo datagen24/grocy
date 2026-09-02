@@ -108,14 +108,14 @@ $(document).on('click', '.stock-consume-button', function(e)
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -155,14 +155,14 @@ $(document).on('click', '.product-open-button', function(e)
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -254,10 +254,6 @@ function RefreshStockEntryRow(stockRowId)
 
 						$('#stock-' + stockRowId + '-location').attr('data-location-id', result.location_id);
 						$('#stock-' + stockRowId + '-location').text(locationName);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -276,10 +272,6 @@ function RefreshStockEntryRow(stockRowId)
 						{
 							$(".product-open-button[data-stockrow-id='" + stockRowId + "']").addClass("disabled");
 						}
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -297,10 +289,6 @@ function RefreshStockEntryRow(stockRowId)
 
 							$('#stock-' + stockRowId + '-shopping-location').attr('data-shopping-location-id', result.location_id);
 							$('#stock-' + stockRowId + '-shopping-location').text(shoppingLocationName);
-						},
-						function(xhr)
-						{
-							console.error(xhr);
 						}
 					);
 				}
@@ -330,7 +318,7 @@ function RefreshStockEntryRow(stockRowId)
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 }
@@ -368,10 +356,6 @@ function UndoStockBookingEntry(bookingId, stockRowId, productId)
 		{
 			Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", productId)), Victual.BaseUrl);
 			toastr.success(__t("Booking successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

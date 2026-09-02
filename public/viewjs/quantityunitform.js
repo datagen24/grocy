@@ -196,10 +196,6 @@ $(document).on('click', '.qu-conversion-delete-button', function(e)
 					function(result)
 					{
 						window.location.reload();
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}

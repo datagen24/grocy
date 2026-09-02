@@ -45,14 +45,14 @@ $('.save-choretracking-button').on('click', function (e)
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("choretracking-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("choretracking-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -94,10 +94,6 @@ $('#chore_id').on('change', function (e)
 				}
 
 				Victual.FrontendHelpers.ValidateForm('choretracking-form');
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 
@@ -184,10 +180,6 @@ function UndoChoreExecution(executionId)
 		function (result)
 		{
 			toastr.success(__t("Chore execution successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

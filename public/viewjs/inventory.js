@@ -125,10 +125,6 @@ $('#save-inventory-button').on('click', function (e)
 
 											Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, webhookData);
 										});
-									},
-									function (xhr)
-									{
-										console.error(xhr);
 									}
 								);
 							}
@@ -194,21 +190,21 @@ $('#save-inventory-button').on('click', function (e)
 						function (xhr)
 						{
 							Victual.FrontendHelpers.EndUiBusy();
-							console.error(xhr);
+							Victual.Api.DefaultErrorHandler(xhr);
 						}
 					);
 				},
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("inventory-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("inventory-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -324,10 +320,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 									RefreshLocaleNumberInput();
 								}
 							}
-						},
-						function (xhr)
-						{
-							console.error(xhr);
 						}
 					);
 				}
@@ -341,10 +333,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 				}, Victual.FormFocusDelay);
 				$('#display_amount').trigger('keyup');
 				RefreshPriceHint();
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -535,10 +523,6 @@ $('#display_amount,#qu_id').on('keyup change', function (e)
 
 				RefreshPriceHint();
 				Victual.FrontendHelpers.ValidateForm('inventory-form');
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -559,10 +543,6 @@ function UndoStockBooking(bookingId)
 		function (result)
 		{
 			toastr.success(__t("Booking successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
@@ -578,10 +558,6 @@ function UndoStockTransaction(transactionId)
 		function (result)
 		{
 			toastr.success(__t("Transaction successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

@@ -147,14 +147,13 @@ $('#save-consume-button').on('click', function(e)
 				{
 					Victual.FrontendHelpers.ShowGenericError('Error while saving, probably this item already exists', xhr.response);
 					Victual.FrontendHelpers.EndUiBusy("consume-form");
-					console.error(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("consume-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -227,14 +226,14 @@ $('#save-mark-as-open-button').on('click', function(e)
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("consume-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("consume-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -268,10 +267,6 @@ $("#location_id").on('change', function(e)
 					{
 						OnLocationChange(stockEntries[0].location_id, gc[3]);
 						$('#display_amount').val(stockEntries[0].amount);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -347,10 +342,6 @@ function OnLocationChange(locationId, stockId)
 					{
 						current_productDetails = productDetails;
 						RefreshForm();
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -358,10 +349,6 @@ function OnLocationChange(locationId, stockId)
 				{
 					ScanModeSubmit();
 				}
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -493,17 +480,9 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 											ScanModeSubmit(false);
 										}
 									}
-								},
-								function(xhr)
-								{
-									console.error(xhr);
 								}
 							);
 						}
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -534,10 +513,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 				{
 					$("#save-mark-as-open-button").removeClass("disabled");
 				}
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -608,10 +583,6 @@ $("#specific_stock_entry").on("change", function(e)
 				{
 					$("#display_amount").parent().find(".invalid-feedback").text(__t('There are no units available at this location'));
 				}
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -657,10 +628,6 @@ function UndoStockBooking(bookingId)
 		function(result)
 		{
 			toastr.success(__t("Booking successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
@@ -675,10 +642,6 @@ function UndoStockTransaction(transactionId)
 		function(result)
 		{
 			toastr.success(__t("Transaction successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

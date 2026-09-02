@@ -137,14 +137,14 @@ $('#save-transfer-button').on('click', function (e)
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("transfer-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("transfer-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -226,10 +226,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 							$("#location_id_from").val(GetUriParam("locationId"));
 							$("#location_id_from").trigger("change");
 						}
-					},
-					function (xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -262,10 +258,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 									RefreshLocaleNumberInput();
 								}
 							}
-						},
-						function (xhr)
-						{
-							console.error(xhr);
 						}
 					);
 				}
@@ -282,10 +274,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 							function (stockEntries)
 							{
 								$("#location_id_from").val(stockEntries[0].location_id);
-							},
-							function (xhr)
-							{
-								console.error(xhr);
 							}
 						);
 					}
@@ -310,10 +298,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 				{
 					$('#display_amount').focus();
 				}, Victual.FormFocusDelay);
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -407,10 +391,6 @@ $("#location_id_from").on('change', function (e)
 				{
 					$("#display_amount").parent().find(".invalid-feedback").text(__t('There are no units available at this location'));
 				}
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -479,10 +459,6 @@ $("#specific_stock_entry").on("change", function (e)
 				{
 					$("#display_amount").parent().find(".invalid-feedback").text(__t('There are no units available at this location'));
 				}
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -527,10 +503,6 @@ function UndoStockBooking(bookingId)
 		function (result)
 		{
 			toastr.success(__t("Booking successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
@@ -547,10 +519,6 @@ function UndoStockTransaction(transactionId)
 		function (result)
 		{
 			toastr.success(__t("Transaction successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };
