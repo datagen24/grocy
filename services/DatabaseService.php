@@ -315,6 +315,9 @@ class DatabaseService
 	 * Keyed, so that a caller invoked many times inside one transaction registers once. The
 	 * key is the caller's to choose and is how "one event per transaction id" is expressed.
 	 *
+	 * **Called with no transaction open, the work runs immediately** - see the body for why
+	 * that is the honest reading of "before the outermost commit" rather than a fallback.
+	 *
 	 * This is process state for the length of one transaction, not between requests - the
 	 * same category as the label-webhook payloads StockService collects inside a transaction
 	 * and fires after it, and not the cold-start problem ADR-0007 forbids.
@@ -324,6 +327,24 @@ class DatabaseService
 	 */
 	public function RegisterBeforeOutermostCommit(string $key, callable $work): void
 	{
+		// No transaction open means there is no later moment to wait for: this call site is
+		// already the end of a unit of work that happens to consist of autocommitted
+		// statements, so its "outermost commit" is now. Running it immediately is the
+		// degenerate case rather than a special one.
+		//
+		// The alternative - storing it anyway - fails twice over and silently. Nothing would
+		// ever run it, so the work is lost; and it would sit in the static array until the
+		// next unrelated InTransaction() in the same process picked it up and ran it there,
+		// describing a unit of work that committed long before. Throwing instead would be
+		// worse than either: a caller that books outside a transaction still has to get its
+		// event, and refusing would turn a working write path into a failing one.
+		if (!$this->GetDbConnectionRaw()->inTransaction())
+		{
+			$work();
+
+			return;
+		}
+
 		if (array_key_exists($key, self::$BeforeOutermostCommitListeners))
 		{
 			return;

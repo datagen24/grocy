@@ -218,7 +218,32 @@ echo '        (timestamps ' . (count($seconds) === 1 ? 'identical - the collisio
 echo PHP_EOL;
 
 // ---------------------------------------------------------------------------------------
-echo '4. An unreadable payload is refused rather than guessed at' . PHP_EOL;
+echo '4. Registering outside a transaction runs the work, once' . PHP_EOL;
+
+// The capture hook is public, and a caller that books through autocommitted statements has
+// no outermost commit to wait for. Storing the listener anyway would lose the work and then
+// fire it inside the next unrelated transaction in the same process, describing a unit of
+// work that committed long before - silently, both times.
+$ranImmediately = 0;
+
+DatabaseService::GetInstance()->RegisterBeforeOutermostCommit('probe.no-transaction', function () use (&$ranImmediately)
+{
+	$ranImmediately++;
+});
+
+Check('the work ran immediately', $ranImmediately === 1, 'ran ' . $ranImmediately . ' time(s)');
+
+DatabaseService::GetInstance()->InTransaction(function ()
+{
+	// Deliberately empty: what is being asserted is that nothing was carried into it
+});
+
+Check('and a later transaction does not run it again', $ranImmediately === 1, 'ran ' . $ranImmediately . ' time(s)');
+
+echo PHP_EOL;
+
+// ---------------------------------------------------------------------------------------
+echo '5. An unreadable payload is refused rather than guessed at' . PHP_EOL;
 
 $version1 = ['transaction_id' => 'x'];
 Check('a version 1 payload is unreadable', BookingEventPublisher::DescribeUnreadable($version1) !== null,
