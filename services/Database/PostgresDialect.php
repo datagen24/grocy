@@ -22,10 +22,12 @@ class PostgresDialect extends DatabaseDialect
 	/**
 	 * The key WithPublicationLock() takes its advisory lock on.
 	 *
-	 * A different number from the migration key, deliberately: the two guard unrelated
-	 * things, and sharing a key would have every publish queue behind a migration run for no
-	 * reason. The ASCII bytes of "vic" followed by "P" for publish (0x766963 50), chosen the
-	 * same way - recognisable in pg_locks rather than meaningful.
+	 * PostgreSQL keeps advisory locks in one database-wide namespace of arbitrary 64 bit
+	 * integers, so the value only has to be a number nothing else in this database picks -
+	 * and a number of its own rather than one shared with another lock, since two locks that
+	 * guard unrelated things should not make callers of one wait on the other. It is the
+	 * ASCII bytes of "vic" followed by "P" for publish (0x766963 50), chosen to be
+	 * recognisable in pg_locks rather than to mean anything.
 	 */
 	const PUBLICATION_ADVISORY_LOCK_KEY = 1986943824;
 
@@ -150,15 +152,15 @@ class PostgresDialect extends DatabaseDialect
 	 * assemble-publish-record cycle so two requests cannot interleave a read of the state
 	 * with a write of it.
 	 *
-	 * Taken on the raw connection, for the reasons WithMigrationLock() gives: a session
-	 * level lock lives on the connection that took it, so a dying process closes its
-	 * connection and PostgreSQL releases the lock with nobody having to clean up. It blocks
-	 * until it can be taken and is reentrant within one session, so nesting cannot deadlock
-	 * against itself.
+	 * Taken on the raw connection, because a session level lock lives on the connection
+	 * that took it - which is also what makes a crash safe, since a dying process closes
+	 * its connection and PostgreSQL releases the lock with nobody having to clean up.
+	 * pg_advisory_lock() blocks until it can be taken and is reentrant within one session,
+	 * so nesting cannot deadlock against itself.
 	 *
-	 * **This lock requires a direct connection, or a pool in session mode** - the same
-	 * caveat, and worth restating rather than cross-referencing because the deployment
-	 * consequence is the same and the failure is as quiet. A transaction-mode pooler
+	 * **This lock requires a direct connection, or a pool in session mode.** The
+	 * consequence falls on the deployment and the failure is quiet, so it is worth stating
+	 * wherever a session level advisory lock is taken. A transaction-mode pooler
 	 * (pgbouncer's default) may hand the unlock to a different backend than the lock, which
 	 * leaks the lock permanently; every later publish then blocks in a shutdown handler
 	 * until the connect timeout, on every request that writes. ADR-0009's finding F1 records

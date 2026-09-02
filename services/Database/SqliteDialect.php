@@ -117,16 +117,15 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
-	 * Runs the publication without taking a lock of its own, for the same reason
-	 * WithMigrationLock() does not.
+	 * Runs the publication without taking a lock of its own. Not an oversight.
 	 *
 	 * Under ADR-0008 SQLite is not a runtime engine - it is what bin/victual-db-import
 	 * reads, what the differential suite builds, and what a local dev boot uses, and every
 	 * one of those is one process at a time. The built-in server that serves a dev boot is
 	 * single-process, so there is no second request to interleave with.
 	 *
-	 * Unlike the migration case there is no file locking to fall back on either, because the
-	 * race is not between two database writers: it is between a read here and a network
+	 * There is no file locking to fall back on here either, because the race is not
+	 * between two database writers: it is between a read here and a network
 	 * write to a broker, which SQLite knows nothing about. That is an argument for not
 	 * pretending this engine is safe for concurrent publication rather than for inventing a
 	 * lock file - and it costs nothing, because the deployment that publishes runs on

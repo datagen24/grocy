@@ -164,9 +164,9 @@ abstract class DatabaseDialect
 	 * Runs $work with a cross process lock held, so that only one process at a time
 	 * assembles and publishes the retained MQTT state.
 	 *
-	 * A separate lock from the migration one, on a separate key, because they guard
-	 * unrelated things and sharing a key would have a publish wait behind a migration for
-	 * no reason.
+	 * It takes a key of its own rather than sharing one with any other lock this dialect
+	 * grows, because two locks that guard unrelated things should not make callers of one
+	 * wait on the other.
 	 *
 	 * The race it closes is a lost update with no error anywhere. Publishing is
 	 * read-then-write across a network: request A assembles the snapshot, request B commits
@@ -182,8 +182,10 @@ abstract class DatabaseDialect
 	 * ledger update makes the loser re-read after the winner released, so it publishes
 	 * state that is at least as new.
 	 *
-	 * It lives on the dialect for the same reason WithMigrationLock() does - locking is
-	 * where engines differ most - and has the same one real implementation.
+	 * It lives on the dialect because locking is where engines differ most, and there is
+	 * only one real implementation: PostgreSQL's advisory lock. Under ADR-0008 PostgreSQL
+	 * is the only runtime engine, and SqliteDialect's version is a deliberate no-op - see
+	 * the reasoning there.
 	 *
 	 * @param callable $work Receives no arguments; its return value is passed through
 	 * @return mixed Whatever $work returns
