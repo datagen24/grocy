@@ -17,8 +17,9 @@ CREATE TABLE outbox (
 	payload TEXT NOT NULL,
 	row_created_timestamp TIMESTAMP DEFAULT date_trunc('second', LOCALTIMESTAMP),
 	delivered_at TIMESTAMP,
+	dead_lettered_at TIMESTAMP,
 	attempts INTEGER NOT NULL DEFAULT 0,
 	last_error TEXT
 );
 
-CREATE INDEX outbox_undelivered ON outbox (delivered_at, id);
+CREATE INDEX outbox_undelivered ON outbox (delivered_at, dead_lettered_at, id);
