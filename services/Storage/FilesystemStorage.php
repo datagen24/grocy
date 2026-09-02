@@ -105,7 +105,11 @@ class FilesystemStorage extends FileStorage
 		}
 		catch (\Throwable $ex)
 		{
+			// "wb" has already truncated whatever was here, so the previous content is
+			// gone either way; removing the partial file leaves "nothing" rather than a
+			// truncated file that still answers Exists().
 			fclose($fileHandle);
+			@unlink($filePath);
 			throw $ex;
 		}
 

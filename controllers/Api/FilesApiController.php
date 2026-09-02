@@ -6,6 +6,7 @@ use Victual\Controllers\Users\PermissionMissingException;
 use Victual\Controllers\Users\User;
 use Victual\Services\FilesService;
 use Victual\Services\Storage\FileStorage;
+use Victual\Services\Storage\FileTooLargeException;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Exception\HttpNotFoundException;
@@ -78,6 +79,22 @@ class FilesApiController extends BaseApiController
 	 * so it is never treated as anything else.
 	 */
 	const INLINE_SERVED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+
+	/**
+	 * The picture sizes a downscaled variant may be cached at.
+	 *
+	 * Sweep finding S10: best_fit_height/best_fit_width were only checked with is_numeric,
+	 * and every distinct pair decodes the image again and stores another copy, so a caller
+	 * could ask for a million of them. Only five sizes are actually asked for - 32 and 64
+	 * for the list thumbnails, 250 for a userfield picture, 400 for the detail views - and
+	 * 800 is here as a sane larger default for a client that wants something better than a
+	 * detail view without inventing its own size.
+	 *
+	 * A value outside the list snaps to the nearest one rather than being refused, so an
+	 * existing client asking for 401 keeps getting a picture. It is a cache key, not a
+	 * contract: the response is still an image of about the size that was asked for.
+	 */
+	const ALLOWED_BEST_FIT_SIZES = [32, 64, 250, 400, 800];
 
 	/**
 	 * Throws unless the caller may write to the given group.
@@ -172,8 +189,8 @@ class FilesApiController extends BaseApiController
 	 * with a 30 day Cache-Control header. {fileName} may also be two BASE64 encoded names
 	 * joined by "_" (actual file name + download file name). Query parameters
 	 * force_serve_as=picture with optional best_fit_height/best_fit_width serve a
-	 * downscaled image variant. Any failure (including an invalid group or filename)
-	 * results in a 404 HttpNotFoundException.
+	 * downscaled image variant, at the nearest of ALLOWED_BEST_FIT_SIZES. Any failure
+	 * (including an invalid group or filename) results in a 404 HttpNotFoundException.
 	 */
 	public function ServeFile(Request $request, Response $response, array $args)
 	{
@@ -243,8 +260,8 @@ class FilesApiController extends BaseApiController
 	 * PUT /api/files/{group}/{fileName} - stores the raw request body as a new file,
 	 * streamed into the configured storage in 1 MB chunks. Fails when the file already
 	 * exists (exclusive create), when the extension is not one the group accepts, or when
-	 * a file stored under an image extension is not an image. Returns 204 on success or a
-	 * 400 error response.
+	 * a file stored under an image extension is not an image. Returns 204 on success, 413
+	 * when the body exceeds the effective upload limit, or a 400 error response.
 	 */
 	public function UploadFile(Request $request, Response $response, array $args)
 	{
@@ -285,6 +302,12 @@ class FilesApiController extends BaseApiController
 		catch (PermissionMissingException $ex)
 		{
 			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
+		}
+		catch (FileTooLargeException $ex)
+		{
+			// 413 rather than the 400 every other upload failure gets, because "this one
+			// was too big" is the one refusal a client can act on by sending less
+			return $this->GenericErrorResponse($response, $ex->getMessage(), 413);
 		}
 		catch (\Exception $ex)
 		{
@@ -349,6 +372,29 @@ class FilesApiController extends BaseApiController
 	}
 
 	/**
+	 * Snaps a requested best-fit size to the nearest of ALLOWED_BEST_FIT_SIZES.
+	 *
+	 * Snapping rather than refusing so that a client asking for a size nobody listed keeps
+	 * getting a picture; what it bounds is how many distinct copies of one image can be
+	 * decoded and stored (sweep S10). A tie goes to the smaller size.
+	 */
+	protected function ClampBestFitSize($requested): int
+	{
+		$requested = (int)$requested;
+		$nearest = self::ALLOWED_BEST_FIT_SIZES[0];
+
+		foreach (self::ALLOWED_BEST_FIT_SIZES as $allowed)
+		{
+			if (abs($allowed - $requested) < abs($nearest - $requested))
+			{
+				$nearest = $allowed;
+			}
+		}
+
+		return $nearest;
+	}
+
+	/**
 	 * Resolves which stored file answers this request; when the query parameters ask for
 	 * force_serve_as=picture, a downscaled variant honoring best_fit_height/best_fit_width
 	 * is created and its name returned instead.
@@ -366,13 +412,13 @@ class FilesApiController extends BaseApiController
 			$bestFitHeight = null;
 			if (isset($queryParams['best_fit_height']) && !empty($queryParams['best_fit_height']) && is_numeric($queryParams['best_fit_height']))
 			{
-				$bestFitHeight = $queryParams['best_fit_height'];
+				$bestFitHeight = $this->ClampBestFitSize($queryParams['best_fit_height']);
 			}
 
 			$bestFitWidth = null;
 			if (isset($queryParams['best_fit_width']) && !empty($queryParams['best_fit_width']) && is_numeric($queryParams['best_fit_width']))
 			{
-				$bestFitWidth = $queryParams['best_fit_width'];
+				$bestFitWidth = $this->ClampBestFitSize($queryParams['best_fit_width']);
 			}
 
 			return FilesService::GetInstance()->DownscaleImage($group, $fileName, $bestFitHeight, $bestFitWidth);

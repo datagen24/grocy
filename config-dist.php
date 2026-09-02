@@ -59,6 +59,15 @@ Setting('VIEWCACHE_PATH', VICTUAL_DATAPATH . '/viewcache');
 // startup. Files already on disk are NOT read after the switch - run
 // "php bin/victual-files-import" once to move them in
 Setting('FILE_STORAGE', 'filesystem');
+
+// The largest file that may be uploaded, in megabytes, for both storage backends.
+// A raw PUT body is not subject to PHP's own post_max_size, so without this there is no
+// bound on an upload at all.
+// The effective limit is the smallest of this setting, upload_max_filesize and
+// post_max_size: setting 64 here on a PHP that accepts 2 MB gives you 2 MB, a line in the
+// error log saying so, and the effective value (not this one) reported by
+// GET /api/system/config. Raise the php.ini directives as well if you raise this
+Setting('FILE_STORAGE_MAX_SIZE_MB', 64);
 // --- End of file storage ----------------------------------------------------------
 
 

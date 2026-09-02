@@ -5,6 +5,7 @@ namespace Victual\Controllers\Api;
 use Victual\Services\ApplicationService;
 use Victual\Services\DatabaseService;
 use Victual\Services\LocalizationService;
+use Victual\Services\Storage\FileSizeLimit;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -50,9 +51,10 @@ class SystemApiController extends BaseApiController
 
 	/**
 	 * GET /api/system/config - returns the config settings which are safe to expose
-	 * to clients (self::EXPOSED_SETTINGS plus all VICTUAL_FEATURE_FLAG_* constants) as
-	 * a key/value map with the VICTUAL_ prefix stripped. Settings which are not defined
-	 * are omitted (no null values). 400 error response on failure.
+	 * to clients (self::EXPOSED_SETTINGS plus all VICTUAL_FEATURE_FLAG_* constants, plus
+	 * the effective FILE_STORAGE_MAX_SIZE_MB) as a key/value map with the VICTUAL_ prefix
+	 * stripped. Settings which are not defined are omitted (no null values). 400 error
+	 * response on failure.
 	 */
 	public function GetConfig(Request $request, Response $response, array $args)
 	{
@@ -67,6 +69,15 @@ class SystemApiController extends BaseApiController
 					$returnArray[$setting] = constant('VICTUAL_' . $setting);
 				}
 			}
+
+			// The upload limit is reported as the value actually in force rather than as the
+			// configured one: FILE_STORAGE_MAX_SIZE_MB is clamped to PHP's own
+			// upload_max_filesize and post_max_size at startup, and a client told 64 by an
+			// installation that will refuse anything over 2 has been told a number that is
+			// not true. It is therefore computed here rather than read out of the constant,
+			// which is why it is not simply another name in EXPOSED_SETTINGS. Sweep S10 /
+			// plan 01 Q2.
+			$returnArray['FILE_STORAGE_MAX_SIZE_MB'] = FileSizeLimit::EffectiveMaxMegabytes();
 
 			// Feature flags are not sensitive by definition, so all of them are exposed
 			$constants = get_defined_constants();
