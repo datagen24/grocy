@@ -58,6 +58,21 @@ class DatabaseMigrationService extends BaseService
 	{
 		$dialect = DatabaseService::GetInstance()->GetDialect();
 
+		// The whole run, baseline and the always-run 8888 included, happens with the
+		// engine's migration lock held: everything below is check-then-apply, so two
+		// processes starting together interleave rather than one waiting for the other.
+		// See DatabaseDialect::WithMigrationLock().
+		$dialect->WithMigrationLock(function () use ($dialect, $seedInitialData)
+		{
+			$this->RunMigrations($dialect, $seedInitialData);
+		});
+	}
+
+	/**
+	 * The migration run itself, always called with the migration lock held.
+	 */
+	private function RunMigrations(DatabaseDialect $dialect, bool $seedInitialData)
+	{
 		$this->EnsureMigrationsTable($dialect);
 		$this->ApplyBaselineSchemaWhenNeeded($dialect, $seedInitialData);
 

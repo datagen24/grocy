@@ -161,6 +161,33 @@ abstract class DatabaseDialect
 	abstract public function GetOptimizeStatement(): ?string;
 
 	/**
+	 * Runs $work with a cross process lock held, so that only one migration run at a
+	 * time touches this database.
+	 *
+	 * DatabaseMigrationService is check-then-apply from end to end - does this migration
+	 * number exist, is the migrations table empty, does location 1 exist - and two
+	 * processes starting together interleave those checks. The losing one rolls back on
+	 * a primary key violation rather than corrupting anything, but it exits non-zero, and
+	 * an initContainer that fails because a sibling won is an outage rather than a
+	 * no-op. The always-run 8888 fixup is worse: it is outside the per-migration
+	 * try/catch, so its race has nothing to catch it at all.
+	 *
+	 * It lives on the dialect because locking is where engines differ most, but there is
+	 * only one real implementation: PostgreSQL's advisory lock. Under
+	 * ADR-0008 PostgreSQL is the only runtime engine, and SqliteDialect's version is a
+	 * deliberate no-op - see the reasoning there. Engine-neutral composition of work
+	 * belongs on DatabaseService (see InTransaction); this is its counterpart.
+	 *
+	 * It wraps the entire MigrateDatabase() call rather than each migration, baseline
+	 * included, because the checks that race are spread across all of it.
+	 *
+	 * @param callable $work Receives no arguments; its return value is passed through
+	 * @return mixed Whatever $work returns
+	 * @throws \Throwable Whatever $work throws, after the lock is released
+	 */
+	abstract public function WithMigrationLock(callable $work);
+
+	/**
 	 * Quotes a single table or column name for safe interpolation into SQL.
 	 */
 	abstract public function QuoteIdentifier(string $name): string;
