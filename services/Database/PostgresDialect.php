@@ -29,6 +29,16 @@ class PostgresDialect extends DatabaseDialect
 	 */
 	const MIGRATION_ADVISORY_LOCK_KEY = 1986947956;
 
+	/**
+	 * The key WithPublicationLock() takes its advisory lock on.
+	 *
+	 * A different number from the migration key, deliberately: the two guard unrelated
+	 * things, and sharing a key would have every publish queue behind a migration run for no
+	 * reason. The ASCII bytes of "vic" followed by "P" for publish (0x766963 50), chosen the
+	 * same way - recognisable in pg_locks rather than meaningful.
+	 */
+	const PUBLICATION_ADVISORY_LOCK_KEY = 1986943824;
+
 	/** @var bool True while a data change has been recorded but not yet written to the changed time table */
 	private $DbChangedPending = false;
 
@@ -204,6 +214,44 @@ class PostgresDialect extends DatabaseDialect
 		finally
 		{
 			$pdo->prepare('SELECT pg_advisory_unlock(?)')->execute([self::MIGRATION_ADVISORY_LOCK_KEY]);
+		}
+	}
+
+	/**
+	 * A session level advisory lock on PUBLICATION_ADVISORY_LOCK_KEY, held across the whole
+	 * assemble-publish-record cycle so two requests cannot interleave a read of the state
+	 * with a write of it.
+	 *
+	 * Taken on the raw connection, for the reasons WithMigrationLock() gives: a session
+	 * level lock lives on the connection that took it, so a dying process closes its
+	 * connection and PostgreSQL releases the lock with nobody having to clean up. It blocks
+	 * until it can be taken and is reentrant within one session, so nesting cannot deadlock
+	 * against itself.
+	 *
+	 * **This lock requires a direct connection, or a pool in session mode** - the same
+	 * caveat, and worth restating rather than cross-referencing because the deployment
+	 * consequence is the same and the failure is as quiet. A transaction-mode pooler
+	 * (pgbouncer's default) may hand the unlock to a different backend than the lock, which
+	 * leaks the lock permanently; every later publish then blocks in a shutdown handler
+	 * until the connect timeout, on every request that writes. ADR-0009's finding F1 records
+	 * the mechanism. The transaction-scoped pg_advisory_xact_lock() is the safe form where
+	 * the work fits in one transaction, and this one deliberately does not: it runs at the
+	 * end of a request with every transaction already closed, which is the whole point of
+	 * the seam it is called from.
+	 */
+	public function WithPublicationLock(callable $work)
+	{
+		$pdo = \Victual\Services\DatabaseService::GetInstance()->GetDbConnectionRaw();
+
+		$pdo->prepare('SELECT pg_advisory_lock(?)')->execute([self::PUBLICATION_ADVISORY_LOCK_KEY]);
+
+		try
+		{
+			return $work();
+		}
+		finally
+		{
+			$pdo->prepare('SELECT pg_advisory_unlock(?)')->execute([self::PUBLICATION_ADVISORY_LOCK_KEY]);
 		}
 	}
 
