@@ -2,6 +2,8 @@
 
 namespace Victual\Services\Mqtt;
 
+use Victual\Services\DatabaseService;
+
 /**
  * Ties the three pieces of MQTT state publication together and owns the two triggers.
  *
@@ -111,6 +113,23 @@ class MqttStatePublicationService
 			return false;
 		}
 
+		// Everything from the read to the ledger update is one critical section. Two
+		// requests would otherwise interleave a read of the state with a write of it and
+		// leave the older snapshot retained - silently, since nothing failed and retained
+		// topics carry no ordering. The assembly is inside the lock, not just the publish:
+		// a lock around the publish alone lets both requests read before either writes,
+		// which is the same lost update with a smaller window.
+		return DatabaseService::GetInstance()->GetDialect()->WithPublicationLock(function () use ($includeDiscovery)
+		{
+			return self::PublishLocked($includeDiscovery);
+		});
+	}
+
+	/**
+	 * The body of Publish(), called with the publication lock held.
+	 */
+	private static function PublishLocked(bool $includeDiscovery): bool
+	{
 		$builder = new DiscoveryPayloadBuilder();
 		$ledger = new PublicationLedger();
 
@@ -215,6 +234,20 @@ class MqttStatePublicationService
 			return false;
 		}
 
+		// Under the same lock as Publish(): a retraction racing a publish would otherwise
+		// let the publish land after the empty payloads and resurrect every topic this was
+		// asked to clear.
+		return DatabaseService::GetInstance()->GetDialect()->WithPublicationLock(function ()
+		{
+			return self::RetractLocked();
+		});
+	}
+
+	/**
+	 * The body of Retract(), called with the publication lock held.
+	 */
+	private static function RetractLocked(): bool
+	{
 		$builder = new DiscoveryPayloadBuilder();
 
 		$topics = [];

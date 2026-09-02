@@ -46,6 +46,18 @@ class MqttPublisher
 	const FAILURE_LOG_SUPPRESSION_SECONDS = 300;
 
 	/**
+	 * The longest client id every MQTT 3.1.1 broker is required to accept. Brokers may allow
+	 * more; nothing here needs more.
+	 */
+	const CLIENT_ID_MAX_LENGTH = 23;
+
+	/**
+	 * Random bytes in the per-connection suffix, hex encoded - so twelve of the twenty-three
+	 * characters are random and the configured prefix gets the other ten.
+	 */
+	const CLIENT_ID_SUFFIX_BYTES = 6;
+
+	/**
 	 * Publishes a batch of retained topics in a single broker connection.
 	 *
 	 * @param array<string, string> $topics Topic => payload. An empty string payload is a
@@ -114,8 +126,14 @@ class MqttPublisher
 	 * MQTT brokers disconnect an existing session when a second connection presents the same
 	 * client id, so a fixed id would have two overlapping requests knocking each other off
 	 * the broker. The configured value is a prefix; the suffix makes each connection its own
-	 * session. Trimmed to 23 characters because that is the length MQTT 3.1.1 requires every
-	 * broker to accept, and there is nothing to gain by being longer.
+	 * session.
+	 *
+	 * The whole id is capped at 23 characters, the length MQTT 3.1.1 requires every broker
+	 * to accept, and the **prefix** is what gets trimmed to fit - never the suffix. Trimming
+	 * the joined string instead would silently eat the randomness as the configured prefix
+	 * grew: a prefix of 23 characters or more would leave no suffix at all, which is exactly
+	 * the collision this method exists to avoid, arriving only for installations that
+	 * configured a long name.
 	 */
 	private function BuildClientId(): string
 	{
@@ -125,7 +143,9 @@ class MqttPublisher
 			$prefix = 'victual';
 		}
 
-		return substr($prefix . '-' . bin2hex(random_bytes(6)), 0, 23);
+		$suffix = bin2hex(random_bytes(self::CLIENT_ID_SUFFIX_BYTES));
+
+		return substr($prefix, 0, self::CLIENT_ID_MAX_LENGTH - 1 - strlen($suffix)) . '-' . $suffix;
 	}
 
 	/**

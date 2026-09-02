@@ -417,10 +417,17 @@ class DatabaseService
 			// its own failures.
 			//
 			// Two independent pieces of evidence that there is work to do, not one. The
-			// dirty flag covers everything that writes through this service; the booking
-			// collector covers the InfluxDB events specifically, which are recorded at
-			// StockService's entrypoints and would otherwise be lost whenever nothing
-			// installed the query callback - a SQLite database with MQTT off, for instance.
+			// dirty flag covers everything that writes through this service; the outbox
+			// covers the InfluxDB events specifically, which are recorded at StockService's
+			// entrypoints and would otherwise be lost whenever nothing installed the query
+			// callback - a SQLite database with MQTT off, for instance.
+			//
+			// Asking the outbox costs one indexed query per request, and only when InfluxDB
+			// is configured on (HasBookings() returns false on a constant read otherwise).
+			// That is deliberate rather than merely tolerable: it is what lets a request
+			// that booked nothing deliver what an earlier failed attempt left behind, so a
+			// queue drains itself once the endpoint comes back rather than waiting for
+			// somebody to notice.
 			if (!self::$DataChanged && !BookingEventPublisher::HasBookings())
 			{
 				return;
