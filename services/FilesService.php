@@ -84,6 +84,13 @@ class FilesService extends BaseService
 				// row is derived from the original and can be dropped and regenerated at
 				// any time - but "GETs do not write" is otherwise a nice invariant, so it
 				// is worth saying out loud that this one does.
+				//
+				// It writes twice, in fact: getImageAsString() is a tempnam() in
+				// sys_get_temp_dir() that the library saves to, reads back and unlinks. So
+				// this line needs a writable temporary directory, not only a writable
+				// storage backend, and a deployment with a read-only root filesystem has to
+				// provide one - which is why the image sets sys_temp_dir and names /tmp
+				// among the paths it needs mounted (Dockerfile, plan 10 verification 4).
 				$storage->Write($group, $fileNameDownscaled, $image->getImageAsString());
 			}
 		}

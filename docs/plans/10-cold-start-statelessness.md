@@ -586,10 +586,11 @@ reproduces it.
    tree** — they are pre-existing PostgreSQL defects, not cold-start ones. See *What this
    turned up* below.
 
-   **The container-level read-only root filesystem could not be tested: Docker is not
-   available in this environment.** Neither could the image be built. The production
-   target, its Apache configuration and the CI job that builds it are therefore unproven
-   as written — reviewed, not run.
+   **The container-level read-only root filesystem could not be tested here: Docker is
+   not available in this environment.** Neither could the image be built. The production
+   target, its Apache configuration and the CI job that builds it were therefore unproven
+   as written — reviewed, not run. **That gap is now closed in CI rather than by
+   assertion**; see *Review fix* below.
 6. **Check 5 — the differential suite.** `.devtools/pgsql/run-tests.sh`, all five phases,
    against this working copy: **SUITE PASSED**, including `check-migrations.php`
    ("MIGRATION NUMBERING OK"), `MIGRATED STATE IDENTICAL`, all view phases, both rollback
@@ -600,6 +601,69 @@ reproduces it.
    (200) and its pages with **no SQLite extension loaded at all**. With `DB_DRIVER=sqlite`
    the same runtime refuses to start: *"PHP module 'pdo_sqlite' not installed, but required
    for the 'sqlite' database driver."*
+
+### Review fix: the temporary directory a read-only filesystem still needs
+
+The maintainer's review of this plan's pull request found the hole the environment above
+could not: **the image named its writable paths and the list was wrong.** It said
+`/var/run/apache2` and the data directory and nothing else, while
+`FilesService::GetDownscaledFileName` calls `ImageResize::getImageAsString()`, which is
+implemented as `save()` to a `tempnam(sys_get_temp_dir(), '')` followed by
+`file_get_contents` and `unlink`. On a read-only root filesystem with no temporary
+directory provisioned, the first request for a thumbnail fails — not at boot, where it
+would be obvious, but on whichever page first shows a picture.
+[01](01-file-storage.md)'s `DatabaseStorage` reaches the same place from the other
+direction: it streams through `php://temp/maxmemory:2097152`, which spills to the
+temporary directory for anything over 2 MiB.
+
+**The complete list, now in the Dockerfile where an operator writing a deployment reads
+it:** `/data` (the data directory — uploads under `FILE_STORAGE=filesystem`, and a SQLite
+database where one is used), `/var/run/apache2` (Apache's pid file), and `/tmp` (PHP's
+temporary directory, and now Apache's lock directory too). `TMPDIR`, `sys_temp_dir` and
+`upload_tmp_dir` are all set to `/tmp` rather than left to the default, because
+`sys_get_temp_dir()` consults the ini setting before the environment and because a value
+an operator can read in `phpinfo()` beats one they have to infer.
+
+Two things the fix turned up on the way:
+
+- **Apache's lock directory would have killed the container before Apache started.**
+  Debian's `envvars` sets `APACHE_LOCK_DIR=/var/lock/apache2`, which does not exist in
+  this image, and `apache2-foreground` runs `mkdir -p` over it on every start — which
+  fails on a read-only root. It is repointed at `/tmp`, which always exists and is always
+  writable, so the list stays at three paths rather than four. The build greps for the
+  line it rewrote, so a base image that spells the variable differently fails the build
+  rather than the container. `APACHE_LOG_DIR` needs nothing: the logs go to the
+  container's stdout and stderr, set globally as well as per vhost because the main server
+  opens its error log before any vhost applies.
+- **The image was quietly capping every upload at 2 MiB.** `php.ini-production` sets
+  `upload_max_filesize = 2M`, and [01](01-file-storage.md)'s `FileSizeLimit` takes the
+  smallest of that, `post_max_size` and `FILE_STORAGE_MAX_SIZE_MB` as the effective limit —
+  so a household configuring 64 MB got 2. Both directives are 8M in the image's own ini
+  now, which is what `php.ini-production`'s `post_max_size` already was.
+
+**The finding was reproduced before it was fixed**, without Docker, because the failure
+does not need a container: a booted instance served as `ubuntu` against a baked read-only
+cache, with `php -d sys_temp_dir=<a mode 555 directory>`, which is what a read-only root
+filesystem looks like to `tempnam()`. Uploading a 200×200 PNG succeeds (**204**) and the
+next request for it — `?force_serve_as=picture&best_fit_width=64` — is a **500**. Pointed
+at a writable directory instead, the same request is **200** and the served image really
+is 64×64. Nothing wrote into the read-only cache directory in either run. The same host
+also printed `FileSizeLimit`'s own clamp on startup — *"FILE_STORAGE_MAX_SIZE_MB is 64 MB,
+but PHP's upload_max_filesize (2M) is smaller, so uploads are limited to 2 MB"* — which is
+the second item above, measured rather than reasoned about.
+
+**Verification 4 now runs in CI**, in the `images` job, as the step *"The production image
+serves with a read-only root filesystem"*. It runs the production image with `--read-only`
+and tmpfs mounts for exactly the three paths above and nothing else, migrates through
+`bin/victual-migrate` (nothing migrates inside a request any more), waits for
+`/stockoverview`, and then exercises the two paths the finding names: a 200×200 PNG
+uploaded and re-fetched with `best_fit_width=64`, which is the `tempnam` path, and a
+3 MiB body through the upload API, which is over the old clamp. The `php://temp` spill is
+exercised directly in the container rather than through an upload, because the database
+backend only exists on PostgreSQL — `ConfigurationValidator` refuses it on SQLite — while
+the spill is a property of the filesystem the container is running on. Finally
+`docker diff` must be empty: every write above landed on a tmpfs, and a tmpfs is not part
+of the container layer, so anything the image wrote to itself shows up there.
 
 ### What this turned up
 

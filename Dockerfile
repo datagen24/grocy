@@ -135,22 +135,78 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # the development one.
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
+# Where PHP puts temporary files, said out loud rather than left to the default.
+#
+# This image is meant to run with a read-only root filesystem, and PHP needs a writable
+# temporary directory more often than the code suggests. Three callers, all real:
+#
+#   - gumlet/php-image-resize's getImageAsString() writes the re-encoded image to
+#     tempnam(sys_get_temp_dir(), '') and reads it back, so every first request for a
+#     thumbnail (FilesService::GetDownscaledFileName) needs one.
+#   - DatabaseStorage streams a file through php://temp/maxmemory:2097152, which spills
+#     to the temporary directory for anything over 2 MiB.
+#   - PHP's own multipart upload handling, which is upload_tmp_dir.
+#
+# sys_temp_dir and upload_tmp_dir are set as well as TMPDIR because sys_get_temp_dir()
+# consults the ini setting first and the environment only after it, and because a value
+# an operator can read in phpinfo() is worth more than one they have to infer.
+#
+# The two size directives are here because php.ini-production sets upload_max_filesize to
+# 2M, and Victual takes the smallest of that, post_max_size and FILE_STORAGE_MAX_SIZE_MB
+# as its effective upload limit (services/Storage/FileSizeLimit.php, plan 01 Q2). Left
+# alone, this image would quietly cap every upload at 2 MiB no matter what the household
+# configured. 8M matches php.ini-production's own post_max_size, which is the number it
+# would have had if the two directives agreed.
+ENV TMPDIR=/tmp
+RUN { \
+		echo 'sys_temp_dir = /tmp'; \
+		echo 'upload_tmp_dir = /tmp'; \
+		echo 'upload_max_filesize = 8M'; \
+		echo 'post_max_size = 8M'; \
+	} > "$PHP_INI_DIR/conf.d/victual.ini"
+
 # Apache: serve /app/public on 8080, let .htaccess do the URL rewriting, and log to the
 # container's stdout/stderr rather than to files.
 #
-# Everything Apache writes goes to /var/run/apache2 (its pid file and mutexes). That is the
-# only writable path this image needs besides the data directory, so a read-only root
-# filesystem wants a tmpfs or an emptyDir mounted there. Nothing under /app is ever
-# written: the view cache is baked below and the application no longer writes to it.
+# **The complete list of paths this image needs writable, and what writes to each:**
+#
+#   /data              the application's own data directory - config.php is read, but
+#                      FILE_STORAGE=filesystem writes uploads under it, and a SQLite
+#                      database (dev, or bin/victual-db-import) lives there
+#   /var/run/apache2   Apache's pid file, which apache2-foreground removes and apache2
+#                      then writes
+#   /tmp               PHP's temporary directory - see the ini above for the three things
+#                      that use it - and Apache's lock directory, below
+#
+# Nothing else. Nothing under /app is ever written: the view cache is baked below, and
+# verification 4 of docs/plans/10-cold-start-statelessness.md is what checks that claim
+# rather than repeating it.
+#
+# Two Debian details that decide the list. APACHE_LOCK_DIR defaults to /var/lock/apache2,
+# which does not exist in this image, and apache2-foreground does "mkdir -p" over it on
+# every start - which fails on a read-only root filesystem before Apache is ever reached.
+# Pointing it at /tmp, which always exists and is always writable, removes both the mkdir
+# and any mutex file the configuration might one day ask for, without a third mount. The
+# grep afterwards is deliberate: if a future base image spells that variable differently,
+# the build fails here rather than the container failing to start somewhere else.
+#
+# APACHE_LOG_DIR stays /var/log/apache2 and is never written, because the logs go to the
+# container's stdout and stderr instead - set globally as well as per vhost, since the
+# main server opens its error log before any vhost applies, and other-vhosts-access-log is
+# disabled because it would write a file this image has no use for.
 RUN set -eux; \
 	a2enmod rewrite; \
 	a2dissite 000-default; \
+	a2disconf other-vhosts-access-log || true; \
 	sed -ri 's!^Listen 80$!Listen 8080!' /etc/apache2/ports.conf; \
+	sed -ri 's!^export APACHE_LOCK_DIR=.*$!export APACHE_LOCK_DIR=/tmp!' /etc/apache2/envvars; \
+	grep -q '^export APACHE_LOCK_DIR=/tmp$' /etc/apache2/envvars; \
 	{ \
 		echo 'ServerName victual'; \
 		echo 'ServerTokens Prod'; \
 		echo 'ServerSignature Off'; \
 		echo 'TraceEnable Off'; \
+		echo 'ErrorLog /proc/self/fd/2'; \
 		echo '<VirtualHost *:8080>'; \
 		echo '    DocumentRoot /app/public'; \
 		echo '    ErrorLog /proc/self/fd/2'; \
@@ -188,10 +244,15 @@ COPY . /app
 COPY --from=assets /app/public/packages /app/public/packages
 
 # The data directory is a mount, not part of the image: it holds config.php (a ConfigMap
-# or a bind mount) and, until plan 01 lands, uploaded files. Nothing is baked into it, and
-# in particular no credentials are - the database connection arrives as VICTUAL_DB_*
-# environment variables or as settingoverrides files, per S25.
+# or a bind mount) and, when FILE_STORAGE is "filesystem", uploaded files. Nothing is baked
+# into it, and in particular no credentials are - the database connection arrives as
+# VICTUAL_DB_* environment variables or as settingoverrides files, per S25.
+#
+# The empty directory is created here so that it is a mount point the image declares rather
+# than one the container runtime invents, and so that www-data can write it when what gets
+# mounted is a bare tmpfs.
 ENV VICTUAL_DATAPATH=/data
+RUN mkdir -p /data && chown www-data:www-data /data
 
 # The cache lives in the image rather than in the data directory, which is the whole point:
 # it is derived from the source tree, so it is a layer. Baked here, owned by root, and the
