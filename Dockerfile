@@ -1,15 +1,25 @@
-# Development and CI image for this fork.
+# Two images from one file.
 #
-# This is not a production image. It exists so that `.devtools/pgsql/difftest.php` and
-# `trigdifftest.php` — and the regression suite built on them — can run from a clean
-# checkout with no host setup beyond Docker. Production packaging is a separate concern
-# and deliberately not solved here.
+#   docker build --target dev .          the development and CI image (the one that existed first)
+#   docker build .                       the production image, which is the default target
+#
+# They are deliberately different things. The dev image exists so that
+# `.devtools/pgsql/difftest.php`, `trigdifftest.php` and the regression suite built on
+# them run from a clean checkout with no host setup beyond Docker: it carries a PHP CLI, a
+# PostgreSQL client, pcov, and the working tree mounted over it. The production image
+# serves HTTP, runs as a non-root user, writes nothing outside the data directory, and
+# carries a view cache baked at build time - see docs/plans/10-cold-start-statelessness.md
+# and sweep finding S25.
 #
 # PHP 8.5 even though composer.json pins 8.4: the fork's floor is 8.4 (so an 8.4 box can
 # still run it) while the shipped image stays current. See docs/plans/15-deliberate-cleanup.md,
 # question 4.
 
-FROM php:8.5-cli-bookworm
+
+# ---------------------------------------------------------------------------------------
+# Development and CI
+# ---------------------------------------------------------------------------------------
+FROM php:8.5-cli-bookworm AS dev
 
 # libpq-dev for building pdo_pgsql, the image libraries for gd, ICU for intl, and libzip
 # for zip. postgresql-client is separate and not optional: libpq-dev ships headers and the
@@ -67,3 +77,132 @@ COPY . /app
 ENV VICTUAL_ROOT=/app
 
 CMD ["php", "-v"]
+
+
+# ---------------------------------------------------------------------------------------
+# Front end packages
+# ---------------------------------------------------------------------------------------
+# The views load CSS and JS from /packages/..., which yarn installs into public/packages
+# (see .yarnrc). Built in its own stage so that node is not in the shipped image.
+FROM node:22-bookworm-slim AS assets
+
+WORKDIR /app
+COPY package.json yarn.lock .yarnrc ./
+RUN yarn install --frozen-lockfile
+
+
+# ---------------------------------------------------------------------------------------
+# Production
+# ---------------------------------------------------------------------------------------
+# Apache with mod_php rather than php-fpm: this image serves HTTP by itself, which is one
+# container rather than two and one fewer thing to get wrong for a household-sized
+# deployment. It listens on 8080 because it runs as www-data, and a non-root process
+# cannot bind 80.
+FROM php:8.5-apache-bookworm AS production
+
+# pdo_sqlite is installed even though ADR-0008 makes PostgreSQL the only runtime engine:
+# bin/victual-db-import reads SQLite as an import format, which is the one thing that
+# record keeps SQLite for. DB_DRIVER still refuses to be anything but pgsql here.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		libpq-dev \
+		libicu-dev \
+		libzip-dev \
+		libpng-dev \
+		libjpeg62-turbo-dev \
+		libfreetype6-dev \
+	&& docker-php-ext-configure gd --with-freetype --with-jpeg \
+	&& docker-php-ext-install -j"$(nproc)" \
+		pdo_sqlite \
+		pdo_pgsql \
+		gd \
+		intl \
+		zip \
+	&& rm -rf /var/lib/apt/lists/*
+
+# The upstream production ini: display_errors off, and the other defaults that differ from
+# the development one.
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
+# Apache: serve /app/public on 8080, let .htaccess do the URL rewriting, and log to the
+# container's stdout/stderr rather than to files.
+#
+# Everything Apache writes goes to /var/run/apache2 (its pid file and mutexes). That is the
+# only writable path this image needs besides the data directory, so a read-only root
+# filesystem wants a tmpfs or an emptyDir mounted there. Nothing under /app is ever
+# written: the view cache is baked below and the application no longer writes to it.
+RUN set -eux; \
+	a2enmod rewrite; \
+	a2dissite 000-default; \
+	sed -ri 's!^Listen 80$!Listen 8080!' /etc/apache2/ports.conf; \
+	{ \
+		echo 'ServerName victual'; \
+		echo 'ServerTokens Prod'; \
+		echo 'ServerSignature Off'; \
+		echo 'TraceEnable Off'; \
+		echo '<VirtualHost *:8080>'; \
+		echo '    DocumentRoot /app/public'; \
+		echo '    ErrorLog /proc/self/fd/2'; \
+		echo '    CustomLog /proc/self/fd/1 combined'; \
+		echo '    <Directory /app/public>'; \
+		echo '        Options -Indexes +FollowSymLinks'; \
+		echo '        AllowOverride All'; \
+		echo '        Require all granted'; \
+		echo '    </Directory>'; \
+		echo '</VirtualHost>'; \
+	} > /etc/apache2/sites-available/victual.conf; \
+	a2ensite victual; \
+	mkdir -p /var/run/apache2; \
+	chown -R www-data:www-data /var/run/apache2
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+# --no-dev: the only development dependency is the coverage driver the suite uses, and the
+# suite does not run here. Composer itself is removed afterwards - a production image with
+# a package manager in it is a production image someone will install something into.
+COPY composer.json composer.lock ./
+RUN composer install \
+		--no-interaction \
+		--no-progress \
+		--no-scripts \
+		--no-dev \
+		--ignore-platform-req=php \
+	&& rm -f /usr/bin/composer
+
+COPY . /app
+COPY --from=assets /app/public/packages /app/public/packages
+
+# The data directory is a mount, not part of the image: it holds config.php (a ConfigMap
+# or a bind mount) and, until plan 01 lands, uploaded files. Nothing is baked into it, and
+# in particular no credentials are - the database connection arrives as VICTUAL_DB_*
+# environment variables or as settingoverrides files, per S25.
+ENV VICTUAL_DATAPATH=/data
+
+# The cache lives in the image rather than in the data directory, which is the whole point:
+# it is derived from the source tree, so it is a layer. Baked here, owned by root, and the
+# process below runs as www-data, so "read-only" is a file permission rather than a promise.
+ENV VICTUAL_VIEWCACHE_PATH=/app/viewcache
+
+# The route cache is compiled with the base path baked in, because Slim prefixes it onto
+# every pattern before FastRoute sees them. An installation served under a subdirectory
+# therefore has to build with it:
+#
+#   docker build --build-arg VICTUAL_BASE_PATH=/victual .
+#
+# Getting it wrong is loud rather than subtle - Slim refuses to start against a cache file
+# it cannot find in a directory it cannot write.
+ARG VICTUAL_BASE_PATH=""
+ENV VICTUAL_BASE_PATH=${VICTUAL_BASE_PATH}
+
+RUN php bin/victual-warm-cache
+
+# Non-root, and the tree is not writable by the user that serves it (S25).
+USER www-data
+
+EXPOSE 8080
+
+# Migrations are not run here. `php bin/victual-migrate` in an initContainer, or once by
+# hand, is what brings a database up to date; an application whose schema does not match
+# refuses to serve and says so.
+CMD ["apache2-foreground"]
