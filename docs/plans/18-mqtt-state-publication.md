@@ -684,7 +684,7 @@ schema discriminated by event type"** rather than a private queue for this one c
 Migration 259 (a pair, for the same generated-primary-key reason 257 is) creates `outbox`
 with `event_type`, a JSON `payload`, `delivered_at`, `attempts` and `last_error`.
 `BookingEventPublisher::RecordTransaction()` now writes a row **inside the booking's own
-transaction** — the calls moved into the six `InTransaction` closures, one line each — so a
+transaction** — the calls moved into the `InTransaction` closures, one line each — so a
 rollback takes the event with it and the queue can never describe a booking that did not
 happen. `Drain()` reads the undelivered rows, builds one batch, POSTs it, and marks them
 delivered **only on success**; a failure increments `attempts`, stores `last_error` and
@@ -699,10 +699,9 @@ one indexed query per request when InfluxDB is on and buys the thing that matter
 that books nothing still delivers what an earlier failed attempt left behind, so a queue
 drains itself when the endpoint comes back rather than waiting for somebody to notice.
 
-`EditStockEntry` is the one call not inside a transaction, because that method has none — it
-is not among the seven entrypoints [13](13-write-path-transactions.md) made transactional.
-Its outbox row therefore has exactly the durability of the ledger rows it describes, no
-better and no worse. Wrapping that method is 13's decision, not this plan's.
+`EditStockEntry` was the one call not inside a transaction, because that method had none.
+**Corrected in the second review round below**: it is now an eighth transactional
+entrypoint, and [13](13-write-path-transactions.md)'s Executed section records that too.
 
 **2. A purchase point had no unique identity.** `price_paid` was identified by `product_id`
 and a timestamp truncated to the second, so two purchases of one product within one second
@@ -742,8 +741,9 @@ ten characters first and the full twelve-hex suffix appended after.
 **Verification of the fixes**, all reproducible from `.devtools/mqtt/`:
 
 - **Durability and atomicity** — `outbox-check.php`, run against an unroutable endpoint. A
-  booking enqueued one row of type `stock.transaction_booked` whose payload is `{"transaction_id"}`
-  and nothing else; the drain failed, the row stayed undelivered, `attempts` advanced to 1
+  booking enqueued one row of type `stock.transaction_booked` (whose payload was the
+  identifier only at the time; the second round made it self-contained); the drain failed,
+  the row stayed undelivered, `attempts` advanced to 1
   and `last_error` recorded `cURL error 28: Connection timed out after 2003 milliseconds`. A
   booking failed deliberately mid-transaction left the outbox at exactly the row count it
   started with. Pointing `INFLUXDB_URL` at a stand-in server and running
@@ -777,6 +777,86 @@ One environment note for anyone reproducing this: the PostgreSQL server had been
 between sessions and came back as a stock cluster without the `victual` role, so the role was
 recreated with the documented credentials before the suite would run. Nothing in the data was
 reinitialised.
+
+### Review fixes, second round
+
+Four more findings on the merged branch, plus one process gap, fixed 2026-09-02. The
+outbox landed with the right shape and the wrong details: it made delivery durable and left
+three ways for the durability to be undone.
+
+**1. An enqueue failure was swallowed, which made the guarantee conditional.**
+`RecordTransaction()` caught everything `Enqueue()` threw and logged it. The reasoning at
+the time - a metrics queue should not be able to stop the household recording their
+shopping - reads well and is wrong, because catching it does not make the booking succeed
+cleanly. An error that does not abort the transaction commits a booking with no event; on
+PostgreSQL an error that *does* abort it surfaces later at `commit()` as something
+apparently unrelated. Either way the caller is lied to. The catch is gone: a booking whose
+event cannot be recorded has not fully happened, and rolling it back is the honest outcome.
+
+**2. `stock_value` was derived at delivery time, so redelivery was not idempotent.** Two
+distinct defects, one cause. The point used the clock at delivery, so a retry after a POST
+that succeeded but was never acknowledged wrote a *second* point a second later - the exact
+case at-least-once delivery makes routine. And it re-read `stock_current`, so a backlog
+drained after an outage gave every queued transaction the *latest* snapshot rather than each
+one's own post-commit value: a week of shopping would arrive as a week of identical
+readings.
+
+The fix is that the outbox event is now a self-contained immutable record. `CaptureEvent()`
+runs inside the booking's transaction and stores `occurred_at` (the commit moment), the
+`bookings` rows as they stand at that moment, and the per-product `stock_current` snapshot
+for the products touched. `BuildLines()` reads the payload and **queries nothing**, so
+rebuilding an event a week later is byte-identical. Payloads stay bounded because a
+transaction touches a handful of products, and the facts are still the ledger's - captured
+from it rather than duplicated into it by hand.
+
+One thing that fell out of this: `UndoBooking` was enqueuing a second event for a
+transaction `UndoTransaction` had already recorded, describing a half-undone state. Only the
+outermost call records now.
+
+**3. `--drain` delivered one batch and reported success.** A drain takes a bounded batch so
+that one request never becomes an unbounded write, but the CLI is the thing an operator runs
+*because* a backlog exists, so stopping after 200 events and exiting 0 was the least useful
+possible behaviour. It now loops until the outbox is empty, reporting the batch count, and
+stops at the first failed delivery with exit 1. The request-end drain deliberately still
+takes one batch per request, which its docblock now says.
+
+**4. `EditStockEntry` had no transaction.** It writes a correlated pair of `stock_log` rows
+and mutates the stock row between them, so a failure part way left a booking pair whose
+halves disagreed - and adding the outbox event gave it a ninth write that has to commit with
+the rest. It is now an eighth transactional entrypoint in 13's shape, recorded in
+[13](13-write-path-transactions.md)'s Executed section as well as here, because that list is
+the authority on which paths are transactional.
+
+**5. The probes were not run by anything.** Three probes guarding four silent defects sat in
+`.devtools/mqtt/` where neither the suite nor CI invoked them, so the green light protected
+none of the fixes. `run-tests.sh` has a sixth phase, `mqtt`, part of `all` and therefore of
+the workflow, which runs the client-id check, the price guard, the lock check (against its
+own `SUITE_PGSQL_MQTT_DB`), the outbox probe, the new idempotency probe and the both-engine
+payload diff. Every one of them is self-contained: no broker, no node, and InfluxDB stood in
+for by PHP's own built-in server (`.devtools/mqtt/influx-standin.php`), because a probe that
+only runs where somebody installed extra software is a probe CI skips. `db/pgsql/README.md`
+listed four phases and now lists six.
+
+**Verification.** All of it through the suite, which is the point of finding 5:
+
+- **The enqueue is part of the booking** - `outbox-check.php` renames the outbox table out
+  from under a purchase: the booking throws and `stock_log` is at exactly the row count it
+  started with.
+- **Redelivery is idempotent** - `idempotency-check.php` builds one event's lines, waits past
+  a second boundary, books more stock to move the ledger underneath it, and builds again:
+  byte-identical. Then two transactions on one product drained in one batch, `12` and `16`
+  units, each `stock_value` point carrying its own post-commit amount rather than the later
+  one.
+- **The whole backlog drains** - 450 synthetic events delivered by one
+  `bin/victual-publish-state --drain` in **3 batches of up to 200**, exit 0, 0 undelivered.
+  With a stand-in rigged to reject after two writes: `failed after 2 batch(es)`, exit **1**,
+  **50** left queued with `attempts=1`.
+- **The edit path rolls back whole** - a failure injected after `EditStockEntry`'s ledger
+  writes leaves neither the `stock_log` pair nor an outbox row.
+- **The suite** - `SUITE PASSED` on all six phases with the `trackd_*` databases, the new
+  phase's output visible: client id, price guard, `SERIALISED - the second caller waited for
+  the first`, outbox, idempotency, and `MQTT PAYLOAD IDENTICAL ON BOTH ENGINES`.
+  `check-migrations.php` reports four numbers above the baseline, and `php -l` is clean.
 
 ### What this changes in the record above
 

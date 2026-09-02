@@ -340,6 +340,16 @@ then the entrypoints that use it, then the importer.
   the SQLite write-lock window stays as short as the work. The label-printer webhooks
   moved out of the transaction per question 1(a), with payloads still built inside the
   loop so a label describes the entry as it was booked.
+
+  **Eight since 2026-09-02**: `EditStockEntry` was wrapped by
+  [18](18-mqtt-state-publication.md)'s review, which found it writing a correlated pair of
+  `stock_log` rows and mutating the stock row between them with no transaction at all. That
+  it was missed here is the interesting part - "every stock write path is transactional"
+  was said above about the seven *booking* entrypoints, and an edit that rewrites a booking
+  pair is one of those by any reading. 18 forced the question by adding a ninth write to
+  the method that has to commit with the rest or not at all; the fix is 13's shape applied
+  to an eighth entrypoint, recorded here so this list stays the authority on which paths
+  are transactional.
 - **`96f9ec99` — the importer.** The transaction covers the truncate, the trigger
   toggling and the copy, which it has to: the truncate happens before anything can go
   wrong, and a failure between disabling and re-enabling triggers leaves a target that
