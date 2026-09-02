@@ -57,7 +57,7 @@ them are routing sentences in *this file* that were never true.
 |---|---|---|---|---|---|
 | 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | **landed** (`cced9e8`, `6b46fdf`, `258aadf`, `841c4f6`, `5ec3e72`, `5a3ab76`, 2026-09-02) — shortened in flight by ADR-0008's acceptance: Q7's `dialect` column dropped unbuilt, one lock implementation, Q3 moot; sweep **S25** closed with it |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
-| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | draft — **carries a High finding** since 2026-08-30 |
+| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | **landed** in three PRs, 2026-09-02 (`98a4c93`…`3cbf5c0`, `c7555fc`…`112a090`, `b88b5c9`…`cd487e1`): the `request()` core, `Victual.EntityList`/`EntityForm`, all 157 silent `console.error` handlers gone (six documented survivors), **S29 closed** and proved with a stored payload, `purchase.js` no longer a library by `@push`, `datetimepicker2` deleted. No longer gates 05, 06 or 08 |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
@@ -232,7 +232,10 @@ rename and the registry claims happen at announcement time, not in a commit.
   the confirmations structurally rather than 31 times over. The ordering does not change;
   the reasoning does. "12 before 05/06/08" was about duplication and is now also about
   exposure, since every list/form pair added first is another copy of the vulnerable
-  dialog.
+  dialog. **Closed on 2026-09-02 in 12's step 3a**: the confirmations structurally in
+  `public/js/victual_entity.js`, the toasts by hand, proved with the payload check in
+  `.devtools/frontend/s29-payload.js`. What deferring the rest of 12 would have cost is
+  moot; it landed in full.
 - **Three sweep items are constraints on plans, not work of their own.** S11 (the
   query-string API key path) must not be inherited by [02](02-mcp-endpoint.md)'s bearer
   seam, and S4's trusted-proxy pattern is the model for it; S14 (barcode filename and
@@ -339,7 +342,8 @@ to freeze while its visibility half changes response shapes and cannot precede t
 snapshot that proves it. Waves are strictly ordered; tracks inside a wave touch disjoint
 files and can run as parallel sessions.
 
-Wave 0 is complete and wave 1's track C is done; the rest is unstarted. Wave 4's shape
+Wave 0 and wave 1 are complete (wave 1 on 2026-09-02, on `claude/wave-1-execution-6xidrj`);
+wave 2 is next. Wave 4's shape
 is no longer settled — see 07-Q6 there. Two things sat between wave 0 and wave 1:
 a hotfix the security sweep forced, and a decision 17 has been owed since 16 landed.
 Neither is a wave; both are a single sitting, and wave 1 does not start until both are
@@ -443,7 +447,7 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   written here, not forked, so the licence question is closed and only distribution is
   open); Q1, the version string, is still open and still blocks nothing.
 
-### Wave 1 — platform (four parallel tracks, disjoint files; C is done)
+### Wave 1 — platform (four parallel tracks, disjoint files) — **complete**
 
 - **Track A: 10 cold start**, then **01 file storage** — **both done** (2026-09-02). 10 first —
   01's importer is easier to reason about once cold start no longer rewrites requests.
@@ -474,15 +478,28 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   one-off Job that runs against the old volume before the volume-less spec is applied.
   `files` is the first engine-exclusive *table*; the suite's migration phase carries it as
   a named exemption and `db/pgsql/README.md` records it.
-- **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
-  3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
-  is going to be long, pull the ~20 toast sites forward on their own, since they need no
-  factory and close most of the exposure. Land steps 1–2 as their own PR: the four latent
-  bug fixes plus the `request()` core with `timeout`/`onerror`. Note what that PR does
-  *not* deliver — all 157 `console.error` handlers are passed explicitly, so the default
-  error toast cannot fire until they are deleted, and those deletions belong to the
-  files step 3 rewrites wholesale. The handler deletions therefore ride with the factory
-  conversions, per file, so each one is exercised as it lands.
+- **Track B: 12 frontend shared core — done** (2026-09-02), in the three PRs this
+  paragraph asked for. The first landed the four latent bugs and the single `request()`
+  core that gives every call a timeout and an `onerror` path, plus the Playwright baseline
+  harness under `.devtools/frontend/` that made the rest checkable; it also measured the
+  claim below that the default toast "cannot fire until the handlers are deleted" and
+  found 22 call sites that passed no error argument at all, which started toasting that
+  day. The second converted the pure clones to `Victual.EntityList`/`Victual.EntityForm`
+  (12 lists, 10 forms — the plan's "22 byte-identical form scripts" was optimistic, and
+  12 forms keep their own save handlers with a reason each), gave the partial clones the
+  shared pieces as mixins, deleted all 157 silent `console.error` handlers per file as the
+  plan asked (six documented survivors per Q2), moved the one divergent reload convention,
+  and **closed sweep S29** — structurally in the factories and by hand across the ~20
+  sites no factory reaches — proved with a stored `<img onerror>` payload on 16 probes
+  that all fired on the unfixed head and none after. The third finished steps 5 and 6:
+  the stock-booking Undo helpers became one shared file, so `stockoverview`,
+  `stockentries` and `shoppinglist` stop importing symbols by `@push`ing `purchase.js`;
+  `datetimepicker2` was deleted after its diff confirmed Q4's naming-only claim; and the
+  repeated list-page chrome became two partials that own the ids the factory binds by.
+  Two things left for someone: `stockentryform.js`'s own Undo link has been inert since
+  before this plan (two arguments to a three-argument function), and 18's deferred
+  product-form checkbox for its opt-in flag now has a factory-free `productform.js` to
+  land in.
 - **Track C: 13 write-path transactions** — **done**, ahead of the rest of this wave
   (`7abfd2fa`, `782289b8`, `96f9ec99`, 2026-08-29). All seven entrypoints, webhook after
   commit, and the importer made atomic. Tracks A and B are still open.
