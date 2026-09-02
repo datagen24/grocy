@@ -283,7 +283,7 @@ jobs:
           test -s thumb.png
 
           # A body over 2 MiB, which php.ini-production's 2M upload_max_filesize would have
-          # clamped before the ini in this image raised it.
+          # clamped through FileSizeLimit before the ini in this image raised it.
           head -c 3145728 /dev/zero | tr '\0' 'x' > big.txt
           document=$(printf 'probe-big.txt' | base64 -w0)
           status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT \
