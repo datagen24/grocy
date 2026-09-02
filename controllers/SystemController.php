@@ -37,16 +37,23 @@ class SystemController extends BaseController
 	}
 
 	/**
-	 * Handles the application root (route GET /): runs pending database schema
-	 * migrations, populates demo data in dev/demo/prerelease mode (on SQLite only,
-	 * as the demo data generator uses SQLite specific SQL) and redirects to the
-	 * configured entry page.
+	 * Handles the application root (route GET /): populates demo data in
+	 * dev/demo/prerelease mode (on SQLite only, as the demo data generator uses SQLite
+	 * specific SQL) and redirects to the configured entry page.
+	 *
+	 * It also migrates the schema when MIGRATE_ON_ROOT_REQUEST says so, which is off by
+	 * default. Migrating inside a request made this route special - it was the only one
+	 * that could bring a database up to date, which is why the cold start path used to
+	 * redirect every request here first, answering an API call with an HTML page. The
+	 * setting keeps the old behaviour available for an installation with no init step to
+	 * run bin/victual-migrate from, and makes it a choice rather than the only way.
 	 */
 	public function Root(Request $request, Response $response, array $args)
 	{
-		// Schema migration is done here
-		$databaseMigrationService = DatabaseMigrationService::GetInstance();
-		$databaseMigrationService->MigrateDatabase();
+		if (VICTUAL_MIGRATE_ON_ROOT_REQUEST)
+		{
+			DatabaseMigrationService::GetInstance()->MigrateDatabase();
+		}
 
 		if (VICTUAL_MODE === 'dev' || VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
 		{

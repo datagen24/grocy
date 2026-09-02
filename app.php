@@ -5,6 +5,7 @@ use Victual\Helpers\CachePaths;
 use Victual\Helpers\SlimBladeView;
 use Victual\Helpers\UrlManager;
 use Victual\Middleware\LocaleMiddleware;
+use Victual\Middleware\SchemaVersionMiddleware;
 use Psr\Container\ContainerInterface as Container;
 use Slim\Factory\AppFactory;
 
@@ -58,26 +59,6 @@ if (!file_exists(VICTUAL_VIEWCACHE_PATH))
 	@mkdir(VICTUAL_VIEWCACHE_PATH, 0755, true);
 }
 
-// Empty data/viewcache when and trigger database migrations when:
-// The version changed (so when an update was done)
-// VICTUAL_BASE_URL OR VICTUAL_BASE_PATH changed
-$hash = hash('sha256', file_get_contents(__DIR__ . '/version.json') . VICTUAL_BASE_URL . VICTUAL_BASE_PATH);
-$hashCacheFile = $viewcachePath . "/$hash.txt";
-if (!file_exists($hashCacheFile))
-{
-	EmptyFolder($viewcachePath);
-	touch($hashCacheFile);
-
-	if (function_exists('opcache_reset'))
-	{
-		opcache_reset();
-	}
-
-	// Schema migration happens on the root route, so redirect to there
-	header('Location: ' . (new UrlManager(VICTUAL_BASE_URL))->ConstructUrl('/'));
-	exit();
-}
-
 // Setup base application
 AppFactory::setContainer(new DI\Container());
 $app = AppFactory::create();
@@ -114,6 +95,10 @@ $app->add(new $authMiddlewareClass($container, $app->getResponseFactory()));
 // Add default middleware
 $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
+// Outside routing and authentication on purpose: a database whose schema does not match
+// this code cannot be trusted to resolve a route or identify a user, and the answer is
+// the same for every route anyway
+$app->add(new SchemaVersionMiddleware($container, $app->getResponseFactory()));
 // Error details (including stack traces) are only displayed in dev mode
 // (arguments are displayErrorDetails, logErrors, logErrorDetails)
 $errorMiddleware = $app->addErrorMiddleware(VICTUAL_MODE === 'dev', false, false);
