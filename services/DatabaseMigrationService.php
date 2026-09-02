@@ -66,6 +66,9 @@ class DatabaseMigrationService extends BaseService
 		{
 			$this->RunMigrations($dialect, $seedInitialData);
 		});
+
+		// Whatever the boot check read before this ran is now wrong
+		self::$AppliedMigrationNumber = null;
 	}
 
 	/**
@@ -104,6 +107,41 @@ class DatabaseMigrationService extends BaseService
 			}
 		}
 	}
+
+	/**
+	 * The highest migration number this database has recorded, or 0 when it has recorded
+	 * none - which is also the answer for a database that is completely empty and has no
+	 * migrations table yet.
+	 *
+	 * Memoized for the request: the boot check asks on every request and the answer
+	 * cannot change underneath it, since nothing migrates during a request unless this
+	 * process does it, and the memo is dropped when it does. APCu is the answer if the
+	 * one query per request ever becomes measurable; ADR-0007 is explicit that a cache
+	 * losing its memo on a restart is the acceptable kind of lost state.
+	 */
+	public function GetAppliedMigrationNumber(): int
+	{
+		if (self::$AppliedMigrationNumber === null)
+		{
+			try
+			{
+				$value = DatabaseService::GetInstance()->ExecuteDbQuery('SELECT MAX(migration) FROM migrations')->fetchColumn();
+				self::$AppliedMigrationNumber = ($value === null || $value === false) ? 0 : intval($value);
+			}
+			catch (\Exception $ex)
+			{
+				// No migrations table at all: an untouched database, which is behind by
+				// every migration there is. Distinguishing "no table" from "table with no
+				// rows" would not change what the caller does about it.
+				self::$AppliedMigrationNumber = 0;
+			}
+		}
+
+		return self::$AppliedMigrationNumber;
+	}
+
+	/** @var int|null Memo for GetAppliedMigrationNumber(), for the life of the request */
+	private static $AppliedMigrationNumber = null;
 
 	/**
 	 * Returns the migrations which apply to the given engine, keyed and ordered by
