@@ -145,7 +145,9 @@ $('#recipe-form input').keydown(function(event)
 		}
 		else
 		{
-			$('#save-recipe-button').click();
+			// The save buttons carry the class ".save-recipe", not an id - this used to
+			// click "#save-recipe-button", which does not exist, so Enter did nothing
+			$('.save-recipe').first().click();
 		}
 	}
 });
