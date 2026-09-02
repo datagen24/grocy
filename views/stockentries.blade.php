@@ -5,6 +5,10 @@
 @section('title', $__t('Stock entries'))
 
 @push('pageScripts')
+{{-- purchase.js is pushed as a shared library here for the same reason as on
+     stockoverview (plan 12 step 5); this page's script defines its own undo helpers
+     and references no purchase.js symbol, so this push is a candidate for removal
+     once the extraction lands. --}}
 <script src="{{ $U('/viewjs/purchase.js?v=', true) }}{{ $version }}"></script>
 @endpush
 
