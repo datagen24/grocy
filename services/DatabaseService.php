@@ -28,6 +28,15 @@ class DatabaseService
 	private static $DataChanged = false;
 
 	/**
+	 * Work to run inside the outermost transaction just before it commits, keyed so that a
+	 * caller reached many times in one transaction registers once. See
+	 * RegisterBeforeOutermostCommit().
+	 *
+	 * @var array<string, callable>
+	 */
+	private static $BeforeOutermostCommitListeners = [];
+
+	/**
 	 * Executes a SQL query and returns its result set.
 	 *
 	 * The statement is executed twice by design (once via ExecuteDbStatement for
@@ -254,6 +263,12 @@ class DatabaseService
 		try
 		{
 			$result = $work();
+
+			// Still inside the transaction, and only for the outermost caller: this is the
+			// one moment where the whole unit of work is done and none of it is committed
+			// yet. Anything that has to be written exactly once per transaction, describing
+			// its final state, belongs here - see RegisterBeforeOutermostCommit().
+			$this->RunBeforeOutermostCommit();
 		}
 		catch (\Throwable $ex)
 		{
@@ -265,12 +280,74 @@ class DatabaseService
 				$pdo->rollBack();
 			}
 
+			// The listeners describe a transaction that is not happening, so nothing may
+			// carry over into whatever this request does next
+			self::$BeforeOutermostCommitListeners = [];
+
 			throw $ex;
 		}
 
 		$pdo->commit();
 
 		return $result;
+	}
+
+	/**
+	 * Registers work to run once, inside the outermost transaction, just before it commits.
+	 *
+	 * The problem this solves is that "once per transaction" has no other honest seam. The
+	 * call graph nests - RecipesService::ConsumeRecipe wraps ConsumeProduct and AddProduct,
+	 * OpenProduct delegates to TransferProduct, UndoTransaction loops over UndoBooking - and
+	 * InTransaction() deliberately lets an inner call join the outer one. So a side effect
+	 * written at the end of an inner method runs several times per transaction, each time
+	 * describing a state that is real only in the middle of the work: intermediate stock
+	 * amounts, bookings not yet undone. That is fine for something idempotent and wrong for
+	 * anything that records what happened, which is what plan 18's outbox does.
+	 *
+	 * Listeners run in registration order, before the commit rather than after, so whatever
+	 * they write is part of the same transaction and a rollback takes it with them. They are
+	 * cleared once run, and cleared again on rollback: a listener describes a transaction
+	 * that either committed or did not happen, and must never leak into the next one.
+	 *
+	 * A listener throwing aborts the transaction, deliberately. It is running as part of the
+	 * unit of work, not beside it.
+	 *
+	 * Keyed, so that a caller invoked many times inside one transaction registers once. The
+	 * key is the caller's to choose and is how "one event per transaction id" is expressed.
+	 *
+	 * This is process state for the length of one transaction, not between requests - the
+	 * same category as the label-webhook payloads StockService collects inside a transaction
+	 * and fires after it, and not the cold-start problem ADR-0007 forbids.
+	 *
+	 * @param string $key Identifies the work; a second registration under the same key is ignored
+	 * @param callable $work Receives no arguments; its return value is discarded
+	 */
+	public function RegisterBeforeOutermostCommit(string $key, callable $work): void
+	{
+		if (array_key_exists($key, self::$BeforeOutermostCommitListeners))
+		{
+			return;
+		}
+
+		self::$BeforeOutermostCommitListeners[$key] = $work;
+	}
+
+	/**
+	 * Runs and clears the registered listeners.
+	 *
+	 * Taken and cleared before running rather than after, so that a listener which itself
+	 * registers something cannot loop - and so that a listener throwing leaves nothing
+	 * behind for the next transaction to pick up.
+	 */
+	private function RunBeforeOutermostCommit(): void
+	{
+		$listeners = self::$BeforeOutermostCommitListeners;
+		self::$BeforeOutermostCommitListeners = [];
+
+		foreach ($listeners as $work)
+		{
+			$work();
+		}
 	}
 
 	/**
