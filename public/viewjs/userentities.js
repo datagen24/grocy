@@ -1,67 +1,15 @@
-﻿// Powers the custom "user entities" list view (userentities.blade.php): user-defined
+// Powers the custom "user entities" list view (userentities.blade.php): user-defined
 // data structures managed under Settings. Table listing, search filtering, deletion.
-var userentitiesTable = $('#userentities-table').DataTable({
-	'order': [[1, 'asc']],
-	'columnDefs': [
-		{ 'orderable': false, 'targets': 0 },
-		{ 'searchable': false, "targets": 0 }
-	].concat($.fn.dataTable.defaults.columnDefs)
-});
-$('#userentities-table tbody').removeClass("d-none");
-userentitiesTable.columns.adjust().draw();
+// All of it is the shared list factory (public/js/victual_entity.js).
 
-// Free-text search box, debounced via Delay()
-$("#search").on("keyup", Delay(function()
-{
-	var value = $(this).val();
-	if (value === "all")
-	{
-		value = "";
+Victual.EntityList({
+	table: '#userentities-table',
+	list: '/userentities',
+	delete: {
+		button: '.userentity-delete-button',
+		idAttr: 'data-userentity-id',
+		nameAttr: 'data-userentity-name',
+		endpoint: 'objects/userentities',
+		message: 'Are you sure you want to delete userentity "%s"?'
 	}
-
-	userentitiesTable.search(value).draw();
-}, Victual.FormFocusDelay));
-
-$("#clear-filter-button").on("click", function()
-{
-	$("#search").val("");
-	userentitiesTable.search("").draw();
-});
-
-// Deletes a user entity (DELETE objects/userentities/{id}) after confirmation
-$(document).on('click', '.userentity-delete-button', function(e)
-{
-	var objectName = $(e.currentTarget).attr('data-userentity-name');
-	var objectId = $(e.currentTarget).attr('data-userentity-id');
-
-	bootbox.confirm({
-		message: __t('Are you sure you want to delete userentity "%s"?', objectName),
-		closeButton: false,
-		buttons: {
-			confirm: {
-				label: __t('Yes'),
-				className: 'btn-success'
-			},
-			cancel: {
-				label: __t('No'),
-				className: 'btn-danger'
-			}
-		},
-		callback: function(result)
-		{
-			if (result === true)
-			{
-				Victual.Api.Delete('objects/userentities/' + objectId, {},
-					function(result)
-					{
-						window.location.href = U('/userentities');
-					},
-					function(xhr)
-					{
-						console.error(xhr);
-					}
-				);
-			}
-		}
-	});
 });
