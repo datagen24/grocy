@@ -41,6 +41,18 @@ if (VICTUAL_DISABLE_AUTH === true)
 	}
 }
 
+// The prerequisites which depend on the configured database engine. public/index.php
+// checks everything else before this file is even loaded; the driver is only known here,
+// once the configuration has been read.
+try
+{
+	(new Victual\Helpers\PrerequisiteChecker())->checkDatabaseRequirements(VICTUAL_DB_DRIVER);
+}
+catch (\Victual\Helpers\ERequirementNotMet $ex)
+{
+	exit('Unable to run Victual: ' . $ex->getMessage());
+}
+
 // Check if any invalid entries in config.php have been made
 try
 {
