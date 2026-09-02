@@ -31,6 +31,7 @@ class ConfigurationValidator
 		self::checkEntryPage();
 		self::checkMealplanFirstDayOfWeek();
 		self::checkAutoNightModeRange();
+		self::checkMqttSettings();
 	}
 
 	private function checkMode()
@@ -112,6 +113,38 @@ class ConfigurationValidator
 			(is_numeric(VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK) && VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK >= -1 && VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK <= 6)))
 		{
 			throw new EInvalidConfig('Invalid value for MEAL_PLAN_FIRST_DAY_OF_WEEK');
+		}
+	}
+
+	/**
+	 * MQTT is off by default, so the only way to get this wrong is to turn it on. Both
+	 * checks catch a misconfiguration that would otherwise be silent: a publish path
+	 * swallows every failure by design (a broker must never break a write), so an empty
+	 * host would show up as nothing being published and no error anywhere.
+	 */
+	private function checkMqttSettings()
+	{
+		if (!VICTUAL_MQTT_ENABLED)
+		{
+			return;
+		}
+
+		if (empty(trim(VICTUAL_MQTT_HOST)))
+		{
+			throw new EInvalidConfig('MQTT_HOST needs to be set when MQTT_ENABLED is true');
+		}
+
+		$allowedDiscoveryModes = ['device', 'entity'];
+		if (!in_array(VICTUAL_MQTT_DISCOVERY_MODE, $allowedDiscoveryModes))
+		{
+			throw new EInvalidConfig('Invalid MQTT_DISCOVERY_MODE "' . VICTUAL_MQTT_DISCOVERY_MODE . '" set, only ' . implode(', ', $allowedDiscoveryModes) . ' allowed');
+		}
+
+		// The library rejects anything below 1 second outright, and this timeout is what
+		// bounds how long an unreachable broker delays a committed write
+		if (!is_numeric(VICTUAL_MQTT_CONNECT_TIMEOUT_SECONDS) || (int)VICTUAL_MQTT_CONNECT_TIMEOUT_SECONDS < 1)
+		{
+			throw new EInvalidConfig('MQTT_CONNECT_TIMEOUT_SECONDS needs to be a whole number of seconds, at least 1');
 		}
 	}
 
