@@ -367,10 +367,10 @@ class DatabaseService
 	}
 
 	/**
-	 * Registers a once-per-request shutdown handler which flushes a pending "db changed"
-	 * mark to the database (a no-op for dialects that write immediately), and then runs the
-	 * after-commit publishes - the MQTT state snapshot and the InfluxDB booking events -
-	 * when the request has work for them.
+	 * Registers a once-per-request shutdown handler which hands the response off where the
+	 * runtime allows it, flushes a pending "db changed" mark to the database (a no-op for
+	 * dialects that write immediately), and then runs the after-commit publishes - the MQTT
+	 * state snapshot and the InfluxDB booking events - when the request has work for them.
 	 */
 	private function RegisterShutdownHandler()
 	{
@@ -384,6 +384,18 @@ class DatabaseService
 		// Dialects which track the changed time in a table batch it into a single write
 		register_shutdown_function(function ()
 		{
+			// Everything below this line happens after the response has been produced, and
+			// the two outbound publishes at the end of it are bounded by their own connect
+			// timeouts rather than by anything fast. Under php-fpm this hands the response
+			// to the web server first, so an unreachable broker costs the pod a moment and
+			// costs the caller nothing. The function only exists under FPM; under mod_php or
+			// the built-in server there is nothing to hand off to and the timeouts are on
+			// the response, which is the honest limit of what can be done here.
+			if (function_exists('fastcgi_finish_request'))
+			{
+				fastcgi_finish_request();
+			}
+
 			try
 			{
 				if (self::$DbConnectionRaw !== null)
