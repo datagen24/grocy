@@ -1,6 +1,7 @@
 <?php
 
 use Victual\Controllers\ExceptionController;
+use Victual\Helpers\CachePaths;
 use Victual\Helpers\SlimBladeView;
 use Victual\Helpers\UrlManager;
 use Victual\Middleware\LocaleMiddleware;
@@ -49,11 +50,12 @@ catch (\Victual\Helpers\EInvalidConfig $ex)
 	exit('Invalid setting in config.php: ' . $ex->getMessage());
 }
 
-// Create data/viewcache folder if it doesn't exist
-$viewcachePath = VICTUAL_DATAPATH . '/viewcache';
-if (!file_exists($viewcachePath))
+// Create the view cache folder if it doesn't exist. A baked, read-only cache directory
+// already exists and is not writable, so a failure here is not one: whatever is missing
+// surfaces where it is used, with a message about that file rather than about mkdir.
+if (!file_exists(VICTUAL_VIEWCACHE_PATH))
 {
-	mkdir($viewcachePath);
+	@mkdir(VICTUAL_VIEWCACHE_PATH, 0755, true);
 }
 
 // Empty data/viewcache when and trigger database migrations when:
@@ -83,7 +85,7 @@ $app = AppFactory::create();
 $container = $app->getContainer();
 $container->set('view', function (Container $container)
 {
-	return new SlimBladeView(__DIR__ . '/views', VICTUAL_DATAPATH . '/viewcache');
+	return new SlimBladeView(__DIR__ . '/views', VICTUAL_VIEWCACHE_PATH);
 });
 
 $container->set('UrlManager', function (Container $container)
@@ -117,7 +119,7 @@ $app->addRoutingMiddleware();
 $errorMiddleware = $app->addErrorMiddleware(VICTUAL_MODE === 'dev', false, false);
 $errorMiddleware->setDefaultErrorHandler(new ExceptionController($container, $app->getResponseFactory()));
 
-$app->getRouteCollector()->setCacheFile(VICTUAL_DATAPATH . '/viewcache/route_cache.php');
+$app->getRouteCollector()->setCacheFile(CachePaths::RouteCacheFile());
 
 ob_clean(); // No response output before here
 $app->run();

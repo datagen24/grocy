@@ -35,6 +35,15 @@ Setting('DB_USER', 'victual');
 Setting('DB_PASSWORD', '');
 Setting('DB_SSLMODE', ''); // One of disable, allow, prefer, require, verify-ca, verify-full - leave empty for the libpq default
 
+// Where the compiled Blade templates, the route cache and the HTMLPurifier definition
+// cache go. Everything here is derived from the source tree and can be thrown away and
+// rebuilt at any time - nothing in it is data.
+// It defaults to a subdirectory of the data directory, which is what an ordinary
+// installation wants. A container image points it somewhere image-local instead (e.g.
+// /app/viewcache), bakes it at build time with bin/victual-warm-cache and mounts it
+// read-only, so that the data directory is the only writable path left
+Setting('VIEWCACHE_PATH', VICTUAL_DATAPATH . '/viewcache');
+
 // The directory name of one of the available localization folders
 // in the "/localization" directory (e.g. "en" or "de")
 // Victual uses the first available locale / setting in this order
