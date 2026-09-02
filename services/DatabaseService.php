@@ -4,6 +4,7 @@ namespace Victual\Services;
 
 use Victual\Services\Database\DatabaseDialect;
 use Victual\Services\Influx\BookingEventPublisher;
+use Victual\Services\Influx\InfluxEventWriter;
 use Victual\Services\Mqtt\MqttStatePublicationService;
 use LessQL\Database;
 
@@ -156,11 +157,13 @@ class DatabaseService
 
 			$trackChanges = $dialect->RequiresChangeTracking();
 
-			// MQTT publication needs the same "did this request write anything" answer the
-			// changed time gives, and it needs it on SQLite too - where the file
+			// The after-commit publishes need the same "did this request write anything"
+			// answer the changed time gives, and they need it on SQLite too - where the file
 			// modification time makes per-statement tracking unnecessary and the callback
-			// would otherwise not be installed at all
-			$notifyOnChange = MqttStatePublicationService::IsEnabled();
+			// would otherwise not be installed at all. Both are asked, not just MQTT: they
+			// are independently configurable, and gating the flag on one of them would make
+			// the other silently do nothing on SQLite.
+			$notifyOnChange = MqttStatePublicationService::IsEnabled() || InfluxEventWriter::IsEnabled();
 
 			if ($trackChanges || $notifyOnChange || $this->IsQueryLoggingEnabled())
 			{
@@ -364,9 +367,10 @@ class DatabaseService
 	}
 
 	/**
-	 * Registers a once-per-request shutdown handler which flushes a pending
-	 * "db changed" mark to the database (a no-op for dialects that write immediately),
-	 * and then publishes the MQTT state snapshot when the request changed data.
+	 * Registers a once-per-request shutdown handler which flushes a pending "db changed"
+	 * mark to the database (a no-op for dialects that write immediately), and then runs the
+	 * after-commit publishes - the MQTT state snapshot and the InfluxDB booking events -
+	 * when the request has work for them.
 	 */
 	private function RegisterShutdownHandler()
 	{
@@ -399,7 +403,13 @@ class DatabaseService
 			// there is no boot event to register one at, and holding one in process memory
 			// between requests is what ADR-0007 forbids. Everything past this point catches
 			// its own failures.
-			if (!self::$DataChanged)
+			//
+			// Two independent pieces of evidence that there is work to do, not one. The
+			// dirty flag covers everything that writes through this service; the booking
+			// collector covers the InfluxDB events specifically, which are recorded at
+			// StockService's entrypoints and would otherwise be lost whenever nothing
+			// installed the query callback - a SQLite database with MQTT off, for instance.
+			if (!self::$DataChanged && !BookingEventPublisher::HasBookings())
 			{
 				return;
 			}
