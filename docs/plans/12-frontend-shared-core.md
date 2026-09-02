@@ -6,7 +6,8 @@ those copies have already accumulated.
 **Depends on:** nothing. Must land before [05](05-store-shopping-lists.md),
 [06](06-location-barcodes.md) and [08](08-nested-locations.md) add more list/form pairs to
 copy from.
-**Status:** draft for review.
+**Status:** **steps 1 and 2 landed**, with verification 1's baseline; steps 3 to 6
+outstanding. See [Executed](#executed--steps-1-and-2-and-the-baseline) below.
 
 ## Today
 
@@ -372,3 +373,151 @@ files. Step 3 is the bulk: one pair converted carefully, then ~35 mechanical con
 with the baseline from verification check 1 as the acceptance list. Steps 4–6 are tidy-up
 that can ride along. Worth splitting: 1 and 2 are worth landing on their own even if the
 factories wait.
+
+## Executed — steps 1 and 2, and the baseline
+
+Landed 2026-09-02 on `worktree-agent-af99b0184155cc937`, against the working copy at
+`c998aaf`, in the order the plan argues for: the bugs first, then the request core, then
+the record of what the pages did before either. **Steps 3 to 6 are outstanding** — the
+factories, the reload convention, the `purchase.js` and `datetimepicker2` extractions and
+the Blade tidy-up are all untouched, and so are the 157 `console.error` handlers.
+
+**Step 1 — the four latent bugs** (`98a4c93`).
+
+- `userform.js` set `Victual.DeleteUserePictureOnSave` where the submit handler reads
+  `Victual.DeleteUserPictureOnSave`. Choosing a new picture after clicking "delete current
+  picture" therefore left the deletion flag standing, which nulled `picture_file_name` and
+  skipped the upload — the new picture was silently discarded. One letter.
+- `tasks.js` built the anchored, escaped regex in its else-branch and threw it away, so the
+  filter fell back to a substring search. Now assigned.
+- `StockApiController::ConsumeProduct` checked `transaction_type` and read
+  `transactiontype`. Fixed to the documented spelling only, per Q1 — no deprecation window,
+  because a client sending only the undocumented spelling has never worked and a client
+  sending both is a client that read this exact broken source. The doc comment describing
+  the old behaviour went with it. The typo is not a family: `AddProduct` already used the
+  documented spelling, and `OpenProduct`, `InventoryProduct` and `TransferProduct` accept no
+  transaction type at all. Neither does any caller in the tree send one — the consume dialog
+  (`consume.js`), `stockoverview.js`, `stockentries.js` and `mealplan.js` all omit the field
+  entirely — so nothing in `public/` or `bin/` needed changing to match.
+- The `stockoverview.js` ↔ `purchase.js` `@push` dependency is **recorded, not fixed**, as
+  the plan intends: the three Blade views that push `purchase.js` now say why. Reading them
+  turned up something step 5 will want: of the three, only `stockoverview.js` references a
+  `purchase.js` symbol (`UndoStockTransaction()`). `stockentries.js` defines its own
+  `UndoStockBookingEntry` and `shoppinglist.js` loads the purchase form in an iframe; neither
+  names anything `purchase.js` defines, so two of the three pushes look removable outright.
+
+**Step 2 — one `request()` in `Victual.Api`** (`05a6d6e`). The six copies collapse into one
+private `request(method, url, body, success, error, opts)`. Diffing them first found exactly
+two deliberate differences, both preserved: `DeleteFile` takes `(fileName, group)` — the
+mirror image of `UploadFile`'s `(file, group, fileName)` — and sends **no** body where
+`Delete` sends `"{}"`. The `onreadystatechange` handlers were byte identical.
+
+The core adds a 30 s `timeout` (`Victual.Api.TimeoutMilliseconds`, a setting rather than a
+constant so it can be shortened from a console or a probe), `ontimeout`, `onerror` and
+`onabort`, and a `settled` guard — a dropped connection fires `readystatechange` *and*
+`onerror`, so without the guard one failure would call the error callback twice. A request
+that never produces an HTTP response now reaches the error callback with an xhr-like
+descriptor carrying `status: 0`, a `statusText` of `timeout`/`error`/`abort`, and a
+`response`/`responseText` holding a readable `error_message` — because callers log the whole
+object and two of them `JSON.parse(xhr.response).error_message`, and a real `XMLHttpRequest`
+renders as `{}` through `JSON.stringify`.
+
+**Divergences from the plan, both in step 2.**
+
+*The default is `Victual.Api.DefaultErrorHandler`, which delegates to `ShowGenericError`
+rather than being it.* `ShowGenericError(message, exception)` takes two arguments and an
+error callback is called with one, so assigning it directly would put the XMLHttpRequest
+where the message text belongs and run it through `__t()`. The adapter is what "defaults to
+`ShowGenericError`" has to mean.
+
+*"Be honest about what that default does on the day it lands: nothing" is not quite true,
+and the plan's own Q2 response is why it noticed.* Q2 caught the two
+`log-missing-localization` posts that pass no error argument at all. A count of every
+`Victual.Api.*` call in the tree — 258 of them — finds **22 more** that pass none:
+
+| What | Where | Count |
+|---|---|---|
+| grocycode label-print handlers | `stockoverview`, `stockjournal`, `stockentries`, `productform`, `recipes`, `recipeform`, `choreform`, `choresoverview`, `batteryform`, `batteriesoverview`, and `stockentryform` after a save | 11 |
+| consume/open submit: product re-fetch and the booking POST inside it | `consume.js` | 4 |
+| chore execute, its re-fetch, and reschedule | `choresoverview.js` | 4 |
+| purchase submit product re-fetch, and the barcode-defaults lookup | `purchase.js` | 2 |
+| recipe create | `recipeform.js` | 1 |
+
+Every one of them is user-initiated, which is precisely the case Q2's criterion says should
+toast, so they are left to the new default and the arrival of the toast on those paths is
+this PR's, not step 3's. The 157 explicit `console.error` handlers are untouched and still
+count 157; those remain step 3's, per file.
+
+**Q2's silent list.** The two `system/log-missing-localization` posts in `__t()` and `__n()`
+now pass an explicit `function () { }` with the recursion as the stated reason. Grepping the
+tree for the *shape* Q2 asks about — a `Victual.Api.*` call made from inside a rendering or
+translation helper — finds no others: `victual_dbchangedhandling.js`, the product card's
+price-history fetch and the barcode lookups all already pass explicit handlers and are
+step 3's to classify, and `Victual.FrontendHelpers.SaveUserSetting` passes one too.
+
+**The baseline** (`cf1179d`), verification check 1, in `.devtools/frontend/`. It walks 13
+master data lists through a real create/edit/delete round trip, load-probes the 10 pages that
+are not round-tripped and all 22 `*form.js` pages, and records row-count deltas, the reload
+convention, the delete style and every console message. It lives outside the repo root
+`package.json`, which is a yarn manifest installing into `public/packages`, and pins its own
+Playwright. Four things it wrote down that the plan above did not know:
+
+- **`productgroups` is the only list that reloads on dialog *dismiss*.** Saving reloads the
+  parent under both conventions, so only pressing Escape distinguishes them. That is Q3's
+  drift marker, confirmed from the page rather than the source, and the probe that finds it
+  is the acceptance test for step 4.
+- **`productgroupform` on its own page never finishes.** It only posts `CloseLastModal`, and
+  has no `embedded` branch at all, so `/productgroup/{id}` saves successfully and then sits
+  there with every input still disabled by `BeginUiBusy`. Step 4 converts this pair anyway;
+  the standalone page is the part to check afterwards.
+- **`userobjectform` is the one form page with no Enter-to-submit handler bound**, confirming
+  the plan's claim by observation.
+- **The `userobjects` list throws on load** — `Cannot read properties of undefined (reading
+  'aDataSort')` — for a user entity with no userfields. Pre-existing, unrelated to this plan,
+  and the only console error in the whole recorded run.
+
+Two more found while reading, neither fixed here because neither is on step 1's list:
+`quantityunitform.js:147`/`:217` and `recipeform.js:148` click `#save-quantityunit-button`
+and `#save-recipe-button`, which do not exist — both forms carry *class*-named save buttons
+(`.save-quantityunit-button`, `.save-recipe`) — so Enter-to-submit is dead on both, as is the
+plural-testing return path. Step 3's factory should fix them by construction.
+
+### Verification
+
+Against a demo-mode SQLite instance and a PostgreSQL 16 instance, both booted from this
+working copy on 2026-09-02. Reproduce with `.agents/skills/run-app/SKILL.md` plus the
+harness README.
+
+- **Check 1, baseline.** `node .devtools/frontend/baseline.js --url http://127.0.0.1:8200`.
+  13 lists round-tripped, 32 further pages probed, no harness errors. Recorded as
+  `.devtools/frontend/baseline-2026-09-02.{json,md}`.
+- **Check 2, each bug on its own.** User form: with the fix the delete-picture flag clears
+  when a new file is chosen and `Victual.DeleteUserePictureOnSave` no longer exists; without
+  it the flag stays `true`. Tasks: with two probe tasks assigned to "Demo User" and "Demo
+  User 2", filtering by "Demo User" showed 5 rows across both users before the fix and 4 rows
+  from "Demo User" alone after it. Consume, on **both engines**: `transaction_type` alone now
+  reaches `stock_log.transaction_type`, `transactiontype` alone is ignored, and sending
+  neither still books `consume` — confirmed by reading the rows back from SQLite and from
+  `psql`. Stock overview loads clean with `UndoStockTransaction` defined, which is the no-op
+  check it is meant to be while the push is still there.
+- **Check 3, forced failures.** With Playwright intercepting `POST /api/objects/locations`:
+  `route.abort('connectionreset')` re-enabled the form and produced the error toast; a route
+  that never answers left the form disabled and the cursor busy for the shortened 2 s
+  timeout and then re-enabled it and toasted, which is the failure mode that had no exit
+  before. A forced 500 on `DELETE /api/objects/locations/{id}` reached the locations list's
+  explicit `console.error` handler unchanged and produced **no** toast, which is the default
+  staying inert where a handler exists.
+- **Check 4 is step 3's, and stays where it was:** `grep -rc console.error public/viewjs/`
+  is byte-identical before and after step 2, 157 occurrences.
+- **Check 6, both engines.** `.devtools/pgsql/run-tests.sh triggers` before and after the
+  consume fix: identical output, "TRIGGER BEHAVIOUR IDENTICAL", suite passed. `php -l` clean
+  on `StockApiController.php`.
+- **The refactor is a no-op.** Re-running the baseline harness against the step-2 tree
+  reproduced every recorded field except the absolute row counts, which move because the
+  probes themselves add and remove rows.
+
+### Outstanding
+
+Steps 3 to 6 in full, and with them the plan's checks 4 and 5. The baseline is the
+acceptance list for step 3; the dialog-dismiss probe is the acceptance test for step 4; the
+`purchase.js` push comments in the three Blade views are step 5's starting marker.
