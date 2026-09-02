@@ -191,6 +191,42 @@ Setting('FEATURE_FLAG_DISABLE_BROWSER_BARCODE_CAMERA_SCANNING', false); // Set t
 Setting('FEATURE_FLAG_AUTO_TORCH_ON_WITH_CAMERA', true); // Enables the torch automatically (if the device has one)
 
 
+// ---------------------------------------------------------------------------
+// MQTT state publication (docs/plans/18-mqtt-state-publication.md)
+//
+// Victual can push a snapshot of the household's ambient state - what is in stock, what
+// is on the shopping list, and the next due chore, battery and task - to an MQTT broker
+// as retained topics, with Home Assistant discovery payloads alongside them. The point is
+// that a consumer never has to ask: retained topics survive the server being asleep or
+// gone entirely, so nothing has to poll and the pod can scale to zero.
+//
+// What is published is deliberately narrow. Only facts go on a topic - dates and counts,
+// never "expiring soon" or "overdue", because a derived state is a function of the clock
+// and would need something awake to recompute it. And anything with access to the broker
+// reads this without authenticating to Victual, so the payload carries no user records,
+// no notes, no API keys and no price, cost or value field of any kind.
+//
+// Two triggers: once at the end of any request that changed data, and explicitly via
+// "php bin/victual-publish-state" (run that from a postStart hook or a Job next to the
+// bin/victual-migrate initContainer, so a fresh deployment republishes everything).
+// "php bin/victual-publish-state --retract" clears every retained topic this version owns.
+//
+// Disabled by default: this is a household-specific integration, and an unconfigured
+// install should not try to reach a broker that is not there.
+Setting('MQTT_ENABLED', false);
+Setting('MQTT_HOST', ''); // Broker hostname or IP - required when MQTT_ENABLED is true
+Setting('MQTT_PORT', 1883); // 8883 is the usual port when MQTT_TLS is true
+Setting('MQTT_USERNAME', ''); // Leave empty for an anonymous broker
+Setting('MQTT_PASSWORD', ''); // Never exposed via GET /api/system/config - see SystemApiController::EXPOSED_SETTINGS
+Setting('MQTT_TLS', false); // Whether to wrap the broker connection in TLS
+Setting('MQTT_CLIENT_ID', 'victual'); // Prefix of the MQTT client id; a per-connection suffix is appended so two publishes never collide
+Setting('MQTT_TOPIC_PREFIX', 'victual'); // Root of every topic this publishes, e.g. "victual/state/stock"
+Setting('MQTT_DISCOVERY_PREFIX', 'homeassistant'); // Home Assistant's MQTT discovery prefix
+Setting('MQTT_DISCOVERY_MODE', 'device'); // "device" for one config topic declaring every entity (Home Assistant 2024.11 and newer), "entity" for one config topic per sensor
+Setting('MQTT_CONNECT_TIMEOUT_SECONDS', 2); // Also the socket timeout - this bounds how long a write can be delayed when the broker is unreachable
+Setting('MQTT_DEVICE_NAME', 'Victual'); // The device name Home Assistant shows for the published entities
+
+
 // Default user settings
 // These settings can be changed per user and via the UI,
 // below are the defaults which are used when the user has not changed the setting so far
