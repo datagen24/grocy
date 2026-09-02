@@ -799,7 +799,9 @@ $(document).on('click', '.recipe-order-missing-button', function(e)
 	var servings = $(e.currentTarget).attr('data-mealplan-servings');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to put all missing ingredients for recipe "%s" on the shopping list?', objectName),
+		// objectName came from a data- attribute read back with .attr(), which returns the
+		// decoded string, and bootbox renders its message with .html() (sweep finding S29)
+		message: __t('Are you sure you want to put all missing ingredients for recipe "%s" on the shopping list?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -865,7 +867,7 @@ $(document).on('click', '.product-consume-button', function(e)
 				{
 					// toastr renders its message as HTML (escapeHtml defaults to false), so the
 					// product name is escaped before it goes in - see sweep finding S29
-					var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toString() + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name.escapeHTML()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+					var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toString() + " " + __n(consumeAmount, Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(result.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 
 					Victual.Api.Put('objects/meal_plan/' + mealPlanEntryId, { "done": 1 },
 						function(result)
@@ -903,7 +905,7 @@ $(document).on('click', '.recipe-consume-button', function(e)
 	var mealPlanEntryId = $(e.currentTarget).attr('data-mealplan-entry-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to consume all ingredients needed by recipe "%s" (ingredients marked with "only check if any amount is in stock" will be ignored)?', objectName) +
+		message: __t('Are you sure you want to consume all ingredients needed by recipe "%s" (ingredients marked with "only check if any amount is in stock" will be ignored)?', Victual.FrontendHelpers.EscapeHtml(objectName)) +
 			"<br><br>(" + __t("For ingredients that are only partially in stock, the in stock amount will be consumed.") + ")",
 		closeButton: false,
 		buttons: {
@@ -929,7 +931,7 @@ $(document).on('click', '.recipe-consume-button', function(e)
 							function(result)
 							{
 								Victual.FrontendHelpers.EndUiBusy();
-								toastr.success(__t('Removed all in stock ingredients needed by recipe \"%s\" from stock', objectName));
+								toastr.success(__t('Removed all in stock ingredients needed by recipe \"%s\" from stock', Victual.FrontendHelpers.EscapeHtml(objectName)));
 								window.location.reload();
 							},
 							function(xhr)

@@ -102,7 +102,9 @@ $("#delete-selected-shopping-list").on("click", function ()
 	var objectId = $("#selected-shopping-list").val();
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to delete shopping list "%s"?', objectName),
+		// objectName came out of an <option>'s data- attribute with .attr(), which returns
+		// the decoded string, and bootbox renders its message with .html() (S29)
+		message: __t('Are you sure you want to delete shopping list "%s"?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -186,7 +188,9 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 // Empties the selected shopping list entirely (all items removed), after confirmation
 $(document).on('click', '#clear-shopping-list', function (e)
 {
-	var confirmMessage = __t('Are you sure you want to empty shopping list "%s"?', $("#selected-shopping-list option:selected").text());
+	// The list name comes out of the <option>'s text, which is the decoded string, and
+	// bootbox renders its message with .html() (sweep finding S29)
+	var confirmMessage = __t('Are you sure you want to empty shopping list "%s"?', Victual.FrontendHelpers.EscapeHtml($("#selected-shopping-list option:selected").text()));
 	if (!BoolVal(Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS))
 	{
 		confirmMessage = __t('Are you sure you want to empty the shopping list?');

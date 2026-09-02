@@ -157,7 +157,9 @@ $(document).on('click', '.recipe-pos-delete-button', function(e)
 	var objectId = $(e.currentTarget).attr('data-recipe-pos-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to delete recipe ingredient "%s"?', objectName),
+		// objectName came from a data- attribute read back with .attr(), which returns the
+		// decoded string, and bootbox renders its message with .html() (sweep finding S29)
+		message: __t('Are you sure you want to delete recipe ingredient "%s"?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -191,7 +193,7 @@ $(document).on('click', '.recipe-include-delete-button', function(e)
 	var objectId = $(e.currentTarget).attr('data-recipe-include-id');
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to remove the included recipe "%s"?', objectName),
+		message: __t('Are you sure you want to remove the included recipe "%s"?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {

@@ -75,11 +75,16 @@ $('#save-transfer-button').on('click', function (e)
 					// to the else-branch below
 					if (productDetails.product.enable_tare_weight_handling == 1)
 					{
-						var successMessage = __t('Transfered %1$s of %2$s from %3$s to %4$s', Math.abs(jsonForm.amount - productDetails.product.tare_weight) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name, $('option:selected', "#location_id_from").text(), $('option:selected', "#location_id_to").text()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						// Product, quantity unit and both location names go into a toastr
+						// message, which is rendered as HTML. The two location names come back
+						// out of the DOM with .text(), which returns the decoded string, so
+						// they need escaping here just like the two that came from the API
+						// (sweep finding S29).
+						var successMessage = __t('Transfered %1$s of %2$s from %3$s to %4$s', Math.abs(jsonForm.amount - productDetails.product.tare_weight) + " " + __n(jsonForm.amount, Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(productDetails.product.name), Victual.FrontendHelpers.EscapeHtml($('option:selected', "#location_id_from").text()), Victual.FrontendHelpers.EscapeHtml($('option:selected', "#location_id_to").text())) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 					else
 					{
-						var successMessage = __t('Transfered %1$s of %2$s from %3$s to %4$s', Math.abs(jsonForm.amount) + " " + __n(jsonForm.amount, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name, $('option:selected', "#location_id_from").text(), $('option:selected', "#location_id_to").text()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						var successMessage = __t('Transfered %1$s of %2$s from %3$s to %4$s', Math.abs(jsonForm.amount) + " " + __n(jsonForm.amount, Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(productDetails.product.name), Victual.FrontendHelpers.EscapeHtml($('option:selected', "#location_id_from").text()), Victual.FrontendHelpers.EscapeHtml($('option:selected', "#location_id_to").text())) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 
 					if (GetUriParam("embedded") !== undefined)

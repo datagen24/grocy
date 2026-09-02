@@ -138,7 +138,10 @@ $('#save-inventory-button').on('click', function (e)
 					Victual.Api.Get('stock/products/' + jsonForm.product_id,
 						function (result)
 						{
-							var successMessage = __t('Stock amount of %1$s is now %2$s', result.product.name, result.stock_amount + " " + __n(result.stock_amount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+							// Product and quantity unit names are text columns rendered into a
+							// toastr message, which is an HTML sink - escaped at the point of
+							// use (sweep finding S29).
+							var successMessage = __t('Stock amount of %1$s is now %2$s', Victual.FrontendHelpers.EscapeHtml(result.product.name), result.stock_amount + " " + __n(result.stock_amount, Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name_plural), true)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 
 							if (GetUriParam("embedded") !== undefined)
 							{

@@ -166,14 +166,19 @@ $(document).on('click', '.product-consume-button', function (e)
 				{
 					// For tare-weight-handled products, the toast reports the original total
 					// stock amount rather than the (weight-derived) consumeAmount; the message
-					// text itself is otherwise identical to the else-branch below
+					// text itself is otherwise identical to the else-branch below.
+					//
+					// The product and quantity unit names are text columns rendered into a
+					// toastr message, which is an HTML sink, so they are escaped at the point
+					// of use (sweep finding S29). The Undo anchor appended after them is
+					// deliberate markup, which is why toastr.options.escapeHtml is not the fix.
 					if (result.product.enable_tare_weight_handling == 1)
 					{
-						var toastMessage = __t('Removed %1$s of %2$s from stock', originalTotalStockAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						var toastMessage = __t('Removed %1$s of %2$s from stock', originalTotalStockAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(result.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 					else
 					{
-						var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+						var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(result.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 					}
 
 					if (wasSpoiled)
@@ -222,11 +227,14 @@ $(document).on('click', '.product-open-button', function (e)
 				function (result)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					toastr.success(__t('Marked %1$s of %2$s as opened', amount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + productQuName, productName) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
+					// productQuName and productName come from data- attributes read back with
+					// .attr(), which returns the decoded string - so the escaping the template
+					// applied when it wrote them is not in effect here (sweep finding S29).
+					toastr.success(__t('Marked %1$s of %2$s as opened', amount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + Victual.FrontendHelpers.EscapeHtml(productQuName), Victual.FrontendHelpers.EscapeHtml(productName)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
 
 					if (result.product.move_on_open == 1 && result.default_consume_location != null)
 					{
-						toastr.info('<span>' + __t("Moved to %1$s", result.default_consume_location.name) + "</span> <i class='fa-solid fa-exchange-alt'></i>");
+						toastr.info('<span>' + __t("Moved to %1$s", Victual.FrontendHelpers.EscapeHtml(result.default_consume_location.name)) + "</span> <i class='fa-solid fa-exchange-alt'></i>");
 					}
 
 					RefreshStatistics();
