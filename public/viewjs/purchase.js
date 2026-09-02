@@ -74,7 +74,7 @@ $('#save-purchase-button').on('click', function (e)
 
 			if (BoolVal(Victual.UserSettings.show_purchased_date_on_purchase))
 			{
-				jsonData.purchased_date = Victual.Components.DateTimePicker2.GetValue();
+				jsonData.purchased_date = Victual.Components.SecondaryDateTimePicker.GetValue();
 			}
 
 			if (Victual.Components.DateTimePicker)
@@ -665,19 +665,19 @@ if (Victual.Components.DateTimePicker)
 }
 
 // Purchased date picker (only rendered when show_purchased_date_on_purchase is enabled): same re-validation, plus an initial input trigger
-if (Victual.Components.DateTimePicker2)
+if (Victual.Components.SecondaryDateTimePicker)
 {
-	Victual.Components.DateTimePicker2.GetInputElement().on('change', function (e)
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().on('change', function (e)
 	{
 		Victual.FrontendHelpers.ValidateForm('purchase-form');
 	});
 
-	Victual.Components.DateTimePicker2.GetInputElement().on('keypress', function (e)
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().on('keypress', function (e)
 	{
 		Victual.FrontendHelpers.ValidateForm('purchase-form');
 	});
 
-	Victual.Components.DateTimePicker2.GetInputElement().trigger("input");
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().trigger("input");
 }
 
 // Recompute the "means X per Y" price hint whenever the price, its type (unit/total) or the amount changes

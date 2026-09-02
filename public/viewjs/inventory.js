@@ -51,7 +51,7 @@ $('#save-inventory-button').on('click', function (e)
 			}
 			if (Victual.UserSettings.show_purchased_date_on_purchase)
 			{
-				jsonData.purchased_date = Victual.Components.DateTimePicker2.GetValue();
+				jsonData.purchased_date = Victual.Components.SecondaryDateTimePicker.GetValue();
 			}
 
 			jsonData.price = price;
