@@ -38,6 +38,14 @@ class InfluxEventWriter
 	 * Whether event writing is configured on at all. Read as a constant so that a fork with
 	 * it off pays one constant lookup.
 	 */
+	/**
+	 * Why the last Write() failed, or null when it succeeded. Read by the outbox drain so
+	 * that a stuck queue records the reason on the rows it could not deliver.
+	 *
+	 * @var string|null
+	 */
+	private $LastError = null;
+
 	public static function IsEnabled(): bool
 	{
 		return defined('VICTUAL_INFLUXDB_ENABLED') && VICTUAL_INFLUXDB_ENABLED === true;
@@ -78,6 +86,8 @@ class InfluxEventWriter
 				'body' => implode("\n", $lines)
 			]);
 
+			$this->LastError = null;
+
 			return true;
 		}
 		// GuzzleException rather than RequestException, for the reason WebhookRunner records:
@@ -85,17 +95,29 @@ class InfluxEventWriter
 		// or a connect timeout would otherwise escape - and those are the likely failures here
 		catch (GuzzleException $ex)
 		{
+			$this->LastError = $ex->getMessage();
+
 			error_log('Victual: writing events to InfluxDB at ' . VICTUAL_INFLUXDB_URL
-				. ' failed, the write itself was unaffected: ' . $ex->getMessage());
+				. ' failed, the events stay in the outbox for the next drain: ' . $ex->getMessage());
 
 			return false;
 		}
 		catch (\Throwable $ex)
 		{
-			error_log('Victual: writing events to InfluxDB failed, the write itself was unaffected: ' . $ex->getMessage());
+			$this->LastError = $ex->getMessage();
+
+			error_log('Victual: writing events to InfluxDB failed, the events stay in the outbox for the next drain: ' . $ex->getMessage());
 
 			return false;
 		}
+	}
+
+	/**
+	 * The message from the last failed Write(), or null when the last one succeeded.
+	 */
+	public function GetLastError(): ?string
+	{
+		return $this->LastError;
 	}
 
 	/**
