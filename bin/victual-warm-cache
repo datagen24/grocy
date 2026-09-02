@@ -87,7 +87,14 @@ $failures = [];
 // Every .blade.php under views/, including the components/, layout/ and errors/
 // subdirectories - a partial is compiled separately from the page that includes it, so
 // "the pages compile" is not the same claim as "everything compiles".
-$viewsPath = __DIR__ . '/../views';
+// realpath(), not the "bin/../views" spelling, and this is load-bearing rather than
+// tidiness: Blade names a compiled file after a hash of the absolute path of its source,
+// so "…/bin/../views/stockoverview.blade.php" and "…/views/stockoverview.blade.php"
+// compile to two different file names. Warming under the first spelling leaves the
+// application - which asks for the second - to compile everything again at runtime, which
+// on a read-only cache directory means every page is a 500. That is exactly the failure
+// this warmer exists to prevent, and it is invisible while the directory is writable.
+$viewsPath = realpath(__DIR__ . '/../views');
 $compiler = (new Blade($viewsPath, VICTUAL_VIEWCACHE_PATH, null))->compiler();
 
 $templates = [];
