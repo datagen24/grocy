@@ -22,7 +22,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
-| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2; **Q1–Q8 answered 2026-08-31** |
+| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`6a0d1fb`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7, delivered through a transactional outbox. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
@@ -465,12 +465,25 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 - **Track C: 13 write-path transactions** — **done**, ahead of the rest of this wave
   (`7abfd2fa`, `782289b8`, `96f9ec99`, 2026-08-29). All seven entrypoints, webhook after
   commit, and the importer made atomic. Tracks A and B are still open.
-- **Track D: 18 MQTT state publication.** New, from 17's Q2. Disjoint from A, B and C: it
-  adds a service and a call at the end of the write paths 13 already centralised, and
-  touches no file the other tracks open. It belongs in this wave rather than later because
-  track A's whole point is a pod that sleeps, and until 18 exists the household's Home
-  Assistant is the reason it will not. 13 is its prerequisite and is already in — the
-  publish hangs off the same after-commit seam the label-printer webhook uses.
+- **Track D: 18 MQTT state publication — done** (`e794ea8`…`6a0d1fb`, 2026-09-02), three
+  rounds of review fixes included: they turned the after-commit publish into a transactional
+  outbox (`migrations/0259`, a per-engine pair) with per-event identity, dead-lettering and
+  a CLI drain. New, from 17's Q2. Disjoint from A, B and C, as planned: a service, a CLI and
+  one seam. The seam turned out to be `DatabaseService`'s request end rather than 13's seven
+  `StockService` entrypoints — the dirty flag is the same "did anything really change"
+  question `db-changed-time` answers, so chores, batteries, tasks, the shopping list and
+  generic CRUD are covered without being named, and it fires once per request rather than
+  once per commit (Q3). It belongs in this wave rather than later because track A's whole
+  point is a pod that sleeps, and until 18 existed the household's Home Assistant was the
+  reason it would not. Q7 reversed its lean on the maintainer's answer: price and
+  stock-value *events* go to InfluxDB on the same seam, with their own credentials. Q2's
+  per-product entities landed as an opt-in flag in a side table (`migrations/0257`, a
+  per-engine pair — a column on `products` would have changed every products response and
+  diverged the two engines' `products_view`), exposed through `/api/objects`; **the
+  product-form checkbox for that flag is deferred** because track B owns those files this
+  wave, and is a follow-on. `bin/victual-publish-state` is the "publish on boot" half and
+  runs from a postStart hook or a Job beside the `bin/victual-migrate` initContainer. The
+  verifications that need a real Home Assistant (2, 4, 8) are outstanding.
 
   **18 takes [19](19-rbac.md)'s Q5 here rather than 19 waiting on 18.** 19 asked 18 to
   record whether published state carries prices, and gated itself on 18 to make sure — but
