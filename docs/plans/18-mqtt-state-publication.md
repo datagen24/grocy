@@ -667,6 +667,117 @@ accepted, and on PostgreSQL `RequiresChangeTracking()` is true so the callback w
 installed. The guard was wrong on its own terms regardless, which is why it is fixed rather
 than documented as an engine quirk.
 
+### Review fixes
+
+Four findings on PR #32, all blocking, fixed 2026-09-02 in the same working copy. Two of
+them are about durability and are the reason this section is long: the code was correct
+about what it published and wrong about what happened when publishing failed.
+
+**1. InfluxDB events were held in process memory and could be lost after a commit.** The
+transaction ids lived in a static array, cleared before the batch was built, so a crash, a
+timeout or a rejected write permanently lost a committed purchase — silently, since the
+booking succeeded and nothing logged. That is the at-least-once invariant the constitution's
+workload standard states and [ADR-0010](../adr/0010-workload-standard.md) formalises.
+
+The fix is **a transactional outbox, and it is the first instance of ADR-0010's "one outbox
+schema discriminated by event type"** rather than a private queue for this one consumer.
+Migration 259 (a pair, for the same generated-primary-key reason 257 is) creates `outbox`
+with `event_type`, a JSON `payload`, `delivered_at`, `attempts` and `last_error`.
+`BookingEventPublisher::RecordTransaction()` now writes a row **inside the booking's own
+transaction** — the calls moved into the six `InTransaction` closures, one line each — so a
+rollback takes the event with it and the queue can never describe a booking that did not
+happen. `Drain()` reads the undelivered rows, builds one batch, POSTs it, and marks them
+delivered **only on success**; a failure increments `attempts`, stores `last_error` and
+leaves the rows. Both the request-end seam and `bin/victual-publish-state --drain` drain,
+and the acknowledgement is a bookkeeping write through the restore-changed-time idiom so
+draining cannot dirty the request that triggered it.
+
+Two consequences worth stating. **Nothing is enqueued when `INFLUXDB_ENABLED` is false** —
+an outbox nobody drains is a leak, so the gate is at the enqueue site and not only at the
+drain. And the request-end guard now asks the outbox rather than process memory, which costs
+one indexed query per request when InfluxDB is on and buys the thing that matters: a request
+that books nothing still delivers what an earlier failed attempt left behind, so a queue
+drains itself when the endpoint comes back rather than waiting for somebody to notice.
+
+`EditStockEntry` is the one call not inside a transaction, because that method has none — it
+is not among the seven entrypoints [13](13-write-path-transactions.md) made transactional.
+Its outbox row therefore has exactly the durability of the ledger rows it describes, no
+better and no worse. Wrapping that method is 13's decision, not this plan's.
+
+**2. A purchase point had no unique identity.** `price_paid` was identified by `product_id`
+and a timestamp truncated to the second, so two purchases of one product within one second
+were one point in InfluxDB, not two — the second silently replacing the first. `price_paid`
+now carries the `stock_log` row id as `booking_id` and the `transaction_id`; `stock_value`
+carries `transaction_id` too, so two transactions in one request cannot collide either.
+
+This is also what makes finding 1's fix safe. At-least-once delivery means a batch can be
+delivered twice, and a point in InfluxDB is identified by measurement, tag set and
+timestamp — so writing the same identity again overwrites rather than appends, and a
+redelivered batch is indistinguishable from one delivered once. Without unique identity the
+outbox would have traded lost events for merged ones.
+
+**3. Retained state publication could go backwards.** Request A assembles, request B commits
+something later and publishes it, A publishes last — and retained topics carry no version
+and no ordering, so the broker keeps A's stale snapshot until the next write. On a pod that
+sleeps for days that is the failure this plan exists to prevent, and nothing logs it.
+
+`DatabaseDialect::WithPublicationLock()` now sits beside `WithMigrationLock()`, on its own
+advisory key so a publish never queues behind a migration. **Assembly is inside the lock,
+not just the publish**: a lock around the publish alone still lets both requests read before
+either writes, which is the same lost update with a smaller window. `Retract()` takes it
+too, since a retraction racing a publish would otherwise be undone by it. The PostgreSQL
+implementation carries the same session-mode pooling caveat as the migration lock, restated
+rather than cross-referenced because the consequence is the same and the failure is as
+quiet. SQLite's is a documented no-op for the reason its migration lock is.
+
+No version was added to any topic. The `last_published` sensor already carries the freshness
+fact and topic versioning is what question 4 declined; the lock is the fix.
+
+**4. The MQTT client id could lose its randomness.** The suffix was appended and *then* the
+whole string trimmed to 23 characters, so a configured prefix approaching 23 ate the
+randomness and a prefix of 23 or more removed it entirely — two overlapping requests would
+present the same client id and knock each other off the broker. The prefix is now trimmed to
+ten characters first and the full twelve-hex suffix appended after.
+
+**Verification of the fixes**, all reproducible from `.devtools/mqtt/`:
+
+- **Durability and atomicity** — `outbox-check.php`, run against an unroutable endpoint. A
+  booking enqueued one row of type `stock.transaction_booked` whose payload is `{"transaction_id"}`
+  and nothing else; the drain failed, the row stayed undelivered, `attempts` advanced to 1
+  and `last_error` recorded `cURL error 28: Connection timed out after 2003 milliseconds`. A
+  booking failed deliberately mid-transaction left the outbox at exactly the row count it
+  started with. Pointing `INFLUXDB_URL` at a stand-in server and running
+  `bin/victual-publish-state --drain` then delivered the events made while it was down —
+  `price_paid,product_id=1,booking_id=1,transaction_id=… price=1.23,amount=2.0` among them —
+  and left 0 undelivered; a second drain reported an empty outbox and sent nothing.
+- **Recovery without anybody noticing** — a demo instance booked a purchase with the
+  endpoint unroutable (89 events queued, counting demo generation), then a **read-only**
+  `GET /api/stock` after the endpoint came back delivered all 89 in one batch, the 4.44
+  purchase included, in 0.157 s.
+- **Identity** — `outbox-check.php`'s third part: two purchases of one product produced two
+  `price_paid` points with `booking_id` 2 and 3 and *identical* second-truncated timestamps,
+  which is precisely the collision case, and every `stock_value` line carried a
+  `transaction_id`.
+- **Serialisation** — `lock-check.php` holds the lock in a child process and times how long
+  the parent waits to get in. On PostgreSQL: `waited=3.00s while another process held the
+  lock for 3.0s`, `SERIALISED`. On SQLite: `waited=0.00s`, `NOT SERIALISED, as documented for
+  this engine`, which the probe treats as a pass because it is what
+  `SqliteDialect::WithPublicationLock()` says it does.
+- **Client id** — `client-id-check.php` across eight prefix lengths. A 30-character prefix
+  yields `aaaaaaaaaa-a46fab290460`, 23 characters ending in 12 hex; a 23-character prefix the
+  same; two ids from one long prefix differ.
+- **Everything that was green stayed green** — `.devtools/pgsql/run-tests.sh` `SUITE PASSED`
+  on all five phases with migration 259 in place (`MIGRATION NUMBERING OK` reports a complete
+  pair, so no exemption), the both-engine payload diff still `MQTT PAYLOAD IDENTICAL ON BOTH
+  ENGINES` at 3735 bytes over 124 lines, `price-guard.php` 22/22, and `php -l` clean on every
+  changed file. A publish on PostgreSQL through the new lock put all nine topics on the
+  broker.
+
+One environment note for anyone reproducing this: the PostgreSQL server had been restarted
+between sessions and came back as a stock cluster without the `victual` role, so the role was
+recreated with the documented credentials before the suite would run. Nothing in the data was
+reinitialised.
+
 ### What this changes in the record above
 
 The security notes' third bullet understates the dependency: two packages are installed,
