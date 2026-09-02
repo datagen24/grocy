@@ -67,10 +67,10 @@
 
 @section('content')
 <script>
-	var fullcalendarEventSources = {!! json_encode(array($fullcalendarEventSources)) !!};
-	var internalRecipes = {!! json_encode($internalRecipes) !!};
-	var recipesResolved = {!! json_encode($recipesResolved) !!};
-	var weekRecipe = {!! json_encode($weekRecipe) !!};
+	Victual.FullcalendarEventSources = {!! json_encode(array($fullcalendarEventSources)) !!};
+	Victual.InternalRecipes = {!! json_encode($internalRecipes) !!};
+	Victual.RecipesResolved = {!! json_encode($recipesResolved) !!};
+	Victual.WeekRecipe = {!! json_encode($weekRecipe) !!};
 
 	Victual.QuantityUnits = {!! json_encode($quantityUnits) !!};
 	Victual.QuantityUnitConversionsResolved = {!! json_encode($quantityUnitConversionsResolved) !!};
