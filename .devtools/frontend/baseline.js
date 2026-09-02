@@ -496,13 +496,25 @@ async function probeForm(context, entry, shared)
 			record.saveButtonFound = (await page.locator(entry.save).count()) > 0;
 			record.enterSubmitsHandler = await page.evaluate(sel =>
 			{
-				// $._data exposes the handlers jQuery bound; a form whose inputs have no
-				// keydown handler has lost its Enter-to-submit (the plan names
-				// userobjectform as the one that did).
+				// $._data exposes the handlers jQuery bound; a form with no keydown handler
+				// anywhere has lost its Enter-to-submit (the plan names userobjectform as
+				// the one that did).
+				//
+				// Two shapes count, because plan 12 step 3's factory uses the second: a
+				// handler bound directly to each input, and one delegated from the form
+				// element. The delegated form is what lets a userobject form - whose only
+				// inputs are userfields, so an entity with none has no inputs at page load
+				// at all - have an Enter-to-submit handler to find.
 				const form = document.querySelector(sel);
 				if (!form || !window.$ || !$._data)
 				{
 					return null;
+				}
+
+				const formEvents = $._data(form, 'events');
+				if (formEvents && formEvents.keydown)
+				{
+					return true;
 				}
 
 				return Array.from(form.querySelectorAll('input')).some(i =>
