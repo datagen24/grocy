@@ -4,6 +4,7 @@ namespace Victual\Services;
 
 use Victual\Helpers\Grocycode;
 use Victual\Helpers\WebhookRunner;
+use Victual\Services\Influx\BookingEventPublisher;
 use GuzzleHttp\Client;
 
 /**
@@ -412,6 +413,8 @@ class StockService extends BaseService
 				$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 			}
 
+			BookingEventPublisher::RecordTransaction($transactionId);
+
 			return $transactionId;
 		}
 		else
@@ -690,6 +693,8 @@ class StockService extends BaseService
 				}
 			});
 
+			BookingEventPublisher::RecordTransaction($transactionId);
+
 			return $transactionId;
 		}
 		else
@@ -789,6 +794,8 @@ class StockService extends BaseService
 		$logNewRowForStockUpdate->save();
 
 		$this->CompactStockEntries($stockRow->product_id);
+
+		BookingEventPublisher::RecordTransaction($transactionId);
 
 		return $transactionId;
 	}
@@ -1561,6 +1568,8 @@ class StockService extends BaseService
 			$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 		}
 
+		BookingEventPublisher::RecordTransaction($transactionId);
+
 		return $transactionId;
 	}
 
@@ -1952,6 +1961,8 @@ class StockService extends BaseService
 			$runner->run(VICTUAL_LABEL_PRINTER_WEBHOOK, $webhookData, VICTUAL_LABEL_PRINTER_HOOK_JSON);
 		}
 
+		BookingEventPublisher::RecordTransaction($transactionId);
+
 		return $transactionId;
 	}
 
@@ -2174,6 +2185,8 @@ class StockService extends BaseService
 				throw new \Exception('This booking cannot be undone');
 			}
 		});
+
+		BookingEventPublisher::RecordTransaction($logRow->transaction_id);
 	}
 
 	/**
@@ -2203,6 +2216,8 @@ class StockService extends BaseService
 				$this->UndoBooking($transactionBooking->id, true);
 			}
 		});
+
+		BookingEventPublisher::RecordTransaction($transactionId);
 	}
 
 	/**
