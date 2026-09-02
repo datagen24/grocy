@@ -35,7 +35,7 @@ has those will not match `baseline-2026-09-02.md` exactly, and should not:
 
 Anything else that moves is a regression.
 
-## The other two probes
+## The other probes
 
 ```bash
 # plan 12 check 5 - S29, proved with a stored payload rather than by reading the diff
@@ -46,6 +46,12 @@ node forced-failure.js --url http://127.0.0.1:8200
 
 # every view route in routes.php's non-API group: HTTP status and console problems
 node routes-smoke.js --url http://127.0.0.1:8200 --out /tmp/routes.json
+
+# plan 12 check 2, last item - the Undo link in every stock booking toast still undoes
+node undo-toasts.js --url http://127.0.0.1:8200 --db "$VDATA/victual_en.db"
+
+# plan 12 check 6 - two datetimepickers on one page set, clear and validate independently
+node two-pickers.js --url http://127.0.0.1:8200
 ```
 
 `s29-payload.js` seeds records whose name is a live `<img onerror>` tag and asserts that
@@ -54,6 +60,23 @@ on every probe, or it is not capable of failing and proves nothing. It leaves it
 records behind, named with a per-run token, so it needs a throwaway database too.
 
 `forced-failure.js` exits non-zero if any assertion fails, so it can be run as a gate.
+
+`undo-toasts.js` books stock on each of the seven pages that show an Undo toast, clicks
+the Undo link in the toast that page rendered, and reads `stock_log` back to confirm every
+row the booking wrote came back `undone = 1`. It books and undoes real stock, so it needs a
+throwaway database, and it reads that database directly because `stock_log` has no read
+API - hence `--db`. It is the acceptance test for plan 12 step 5's shared
+`public/js/victual_stock_dialogs.js`, and it is known to be capable of failing: delete the
+`purchase.js` `@push` from a pre-step-5 `stockoverview.blade.php` and it reports
+`UndoStockTransaction is not defined`, 1 row booked and 0 undone.
+
+`two-pickers.js` drives both datetimepickers on `stockentryform`, `purchase`, `inventory`
+and `mealplan` and, after each action on one, reads the other's value and validity back. It
+addresses each picker by the id its Blade include was given and the component API by
+whichever name the tree registers, so the same run works before and after step 5's merge.
+Note the "clear" it exercises is the component's `Clear()` API: tempusdominus' own trash-can
+button is never rendered, because the component enables `showToday` and `showClose` only.
+It exits non-zero if any action on one picker moved the other.
 
 `routes-smoke.js` reads its route list from `routes.txt`, which is the `$group->get(...)`
 paths of `routes.php`'s non-API group; regenerate it with
