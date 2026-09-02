@@ -77,7 +77,11 @@ $child = proc_open(
 	$descriptors,
 	$pipes,
 	null,
-	['VICTUAL_DATAPATH' => VICTUAL_DATAPATH] + $_ENV
+	// getenv() rather than $_ENV: PHP's default variables_order has no "E", so $_ENV is
+	// empty and the child would inherit none of the connection settings its config.php
+	// reads - and would then report "never took the lock" for a reason that has nothing to
+	// do with locking.
+	['VICTUAL_DATAPATH' => VICTUAL_DATAPATH] + getenv()
 );
 
 if (!is_resource($child))
@@ -92,7 +96,10 @@ $announced = fgets($pipes[1]);
 
 if (trim((string)$announced) !== 'held')
 {
+	// Whatever the holder said instead is the actual diagnosis - a connection failure, a
+	// missing table - and printing it beats reporting a lock that did not hold
 	fwrite(STDERR, "The holder never took the lock: " . var_export($announced, true) . "\n");
+	fwrite(STDERR, (string)stream_get_contents($pipes[2]));
 	proc_terminate($child);
 	exit(1);
 }
