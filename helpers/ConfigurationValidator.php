@@ -25,6 +25,7 @@ class ConfigurationValidator
 	{
 		self::checkMode();
 		self::checkDatabaseDriver();
+		self::checkFileStorage();
 		self::checkDefaultLocale();
 		self::checkCurrencyFormat();
 		self::checkFirstDayOfWeek();
@@ -68,6 +69,45 @@ class ConfigurationValidator
 			if (!in_array(VICTUAL_DB_SSLMODE, $allowedSslModes))
 			{
 				throw new EInvalidConfig('Invalid DB_SSLMODE "' . VICTUAL_DB_SSLMODE . '" set, only ' . implode(', ', array_filter($allowedSslModes)) . ' allowed');
+			}
+		}
+	}
+
+	/**
+	 * FILE_STORAGE, and the two combinations it may not be in.
+	 *
+	 * Both are refused here rather than at the first upload, which is the point: a
+	 * household that flips the setting finds out at startup, when it can still change its
+	 * mind, instead of when someone tries to attach a picture.
+	 *
+	 * "database" needs PostgreSQL because the backend is BYTEA, bound as a LOB through raw
+	 * PDO; there is deliberately no SQLite BLOB counterpart (plan 01, and ADR-0008 makes
+	 * PostgreSQL the only runtime engine anyway).
+	 *
+	 * It is refused in demo/prerelease mode because FilesystemStorage gives each demo
+	 * instance its own storage sub folder, and the files table's UNIQUE(file_group, name)
+	 * has no column for that suffix - two demo instances sharing a database would collide
+	 * on it. The demo path already provisions a database per instance, so scoping it out
+	 * costs nothing (plan 01 Q4).
+	 */
+	private function checkFileStorage()
+	{
+		$allowedStorages = ['filesystem', 'database'];
+		if (!in_array(VICTUAL_FILE_STORAGE, $allowedStorages))
+		{
+			throw new EInvalidConfig('Invalid file storage "' . VICTUAL_FILE_STORAGE . '" set, only ' . implode(', ', $allowedStorages) . ' allowed');
+		}
+
+		if (VICTUAL_FILE_STORAGE === 'database')
+		{
+			if (strtolower(VICTUAL_DB_DRIVER) !== 'pgsql')
+			{
+				throw new EInvalidConfig('FILE_STORAGE "database" requires DB_DRIVER "pgsql", but DB_DRIVER is "' . VICTUAL_DB_DRIVER . '" - either switch the database driver or set FILE_STORAGE back to "filesystem"');
+			}
+
+			if (VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
+			{
+				throw new EInvalidConfig('FILE_STORAGE "database" is not supported in "' . VICTUAL_MODE . '" mode, because demo instances share a storage location by file name suffix and the files table has no column for it - use FILE_STORAGE "filesystem" here');
 			}
 		}
 	}
