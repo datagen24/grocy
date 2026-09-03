@@ -31,7 +31,10 @@ $('.save-choretracking-button').on('click', function (e)
 					Victual.Components.UserfieldsForm.Save(function ()
 					{
 						Victual.FrontendHelpers.EndUiBusy("choretracking-form");
-						toastr.success(__t('Tracked execution of chore %1$s on %2$s', choreDetails.chore.name, Victual.Components.DateTimePicker.GetValue()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoChoreExecution(' + result.id + ')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
+					// The chore name is a text column and this toastr message is rendered as
+					// HTML - escaped at the point of use. The Undo anchor after it is
+					// deliberate markup (sweep finding S29).
+					toastr.success(__t('Tracked execution of chore %1$s on %2$s', Victual.FrontendHelpers.EscapeHtml(choreDetails.chore.name), Victual.Components.DateTimePicker.GetValue()) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoChoreExecution(' + result.id + ')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
 						Victual.Components.ChoreCard.Refresh($('#chore_id').val());
 
 						$('#chore_id').val('');
@@ -45,14 +48,14 @@ $('.save-choretracking-button').on('click', function (e)
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("choretracking-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("choretracking-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -94,10 +97,6 @@ $('#chore_id').on('change', function (e)
 				}
 
 				Victual.FrontendHelpers.ValidateForm('choretracking-form');
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 
@@ -184,10 +183,6 @@ function UndoChoreExecution(executionId)
 		function (result)
 		{
 			toastr.success(__t("Chore execution successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

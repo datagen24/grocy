@@ -44,7 +44,7 @@ $('#save-chore-button').on('click', function(e)
 						function(xhr)
 						{
 							Victual.FrontendHelpers.EndUiBusy();
-							console.error(xhr);
+							Victual.Api.DefaultErrorHandler(xhr);
 						}
 					);
 				});
@@ -71,7 +71,7 @@ $('#save-chore-button').on('click', function(e)
 						function(xhr)
 						{
 							Victual.FrontendHelpers.EndUiBusy();
-							console.error(xhr);
+							Victual.Api.DefaultErrorHandler(xhr);
 						}
 					);
 				});
@@ -138,10 +138,6 @@ if (Victual.EditMode == "edit")
 			{
 				$(".datetimepicker-input").attr("disabled", "");
 			}
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 }
@@ -278,10 +274,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function(e)
 			function(productDetails)
 			{
 				$('#amount_qu_unit').text(productDetails.quantity_unit_stock.name);
-			},
-			function(xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}

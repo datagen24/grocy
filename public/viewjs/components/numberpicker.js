@@ -1,126 +1,135 @@
 // Implements the NumberPicker widget (views/components/numberpicker.blade.php): a plus/minus
 // stepper wrapped around a number input with dynamic min/max/decimals validation messages.
-// No Victual.Components.* public API - purely class/selector-driven (".numberpicker",
-// ".numberpicker-up-button", ".numberpicker-down-button").
-$(".numberpicker-down-button").unbind('click').on("click", function()
-{
-	var inputElement = $(this).parent().parent().find('input[type="number"]');
-	inputElement.val(Number.parseFloat(inputElement.val() || 1) - 1);
-	inputElement.trigger('keyup');
-	inputElement.trigger('change');
-});
+// It is class/selector-driven (".numberpicker", ".numberpicker-up-button",
+// ".numberpicker-down-button") rather than bound to one element.
+// Public API: Init() - called once here on load, and available for a page that adds
+// numberpicker markup afterwards and needs the handlers and observers bound to it.
+Victual.Components.NumberPicker = {};
 
-$(".numberpicker-up-button").unbind('click').on("click", function()
+/** Binds the stepper buttons, the validation observers and the keyboard/blur helpers */
+Victual.Components.NumberPicker.Init = function ()
 {
-	var inputElement = $(this).parent().parent().find('input[type="number"]');
-	inputElement.val(Number.parseFloat(inputElement.val() || 0) + 1);
-	inputElement.trigger('keyup');
-	inputElement.trigger('change');
-});
+	$(".numberpicker-down-button").unbind('click').on("click", function()
+	{
+		var inputElement = $(this).parent().parent().find('input[type="number"]');
+		inputElement.val(Number.parseFloat(inputElement.val() || 1) - 1);
+		inputElement.trigger('keyup');
+		inputElement.trigger('change');
+	});
 
-// Custom validation: flags the value invalid when it equals data-not-equal (e.g. "amount cannot equal the current stock amount")
-$(".numberpicker").on("keyup", function()
-{
-	if ($(this).attr("data-not-equal") && $(this).attr("data-not-equal") == $(this).val())
+	$(".numberpicker-up-button").unbind('click').on("click", function()
 	{
-		$(this)[0].setCustomValidity("error");
-	}
-	else
-	{
-		$(this)[0].setCustomValidity("");
-	}
-});
+		var inputElement = $(this).parent().parent().find('input[type="number"]');
+		inputElement.val(Number.parseFloat(inputElement.val() || 0) + 1);
+		inputElement.trigger('keyup');
+		inputElement.trigger('change');
+	});
 
-// Watches min/max/data-not-equal/data-initialised attribute changes (set dynamically by other
-// scripts, e.g. ProductAmountPicker/consume.js adjusting limits) and regenerates the localized
-// "invalid-feedback" validation message text to match the new limits
-$(".numberpicker").each(function()
-{
-	new MutationObserver(function(mutations)
+	// Custom validation: flags the value invalid when it equals data-not-equal (e.g. "amount cannot equal the current stock amount")
+	$(".numberpicker").on("keyup", function()
 	{
-		mutations.forEach(function(mutation)
+		if ($(this).attr("data-not-equal") && $(this).attr("data-not-equal") == $(this).val())
 		{
-			if (mutation.type == "attributes" && (mutation.attributeName == "min" || mutation.attributeName == "max" || mutation.attributeName == "data-not-equal" || mutation.attributeName == "data-initialised"))
+			$(this)[0].setCustomValidity("error");
+		}
+		else
+		{
+			$(this)[0].setCustomValidity("");
+		}
+	});
+
+	// Watches min/max/data-not-equal/data-initialised attribute changes (set dynamically by other
+	// scripts, e.g. ProductAmountPicker/consume.js adjusting limits) and regenerates the localized
+	// "invalid-feedback" validation message text to match the new limits
+	$(".numberpicker").each(function()
+	{
+		new MutationObserver(function(mutations)
+		{
+			mutations.forEach(function(mutation)
 			{
-				var element = $(mutation.target);
-				var min = element.attr("min");
-				var decimals = element.attr("data-decimals");
-
-				var max = "";
-				if (element.hasAttr("max"))
+				if (mutation.type == "attributes" && (mutation.attributeName == "min" || mutation.attributeName == "max" || mutation.attributeName == "data-not-equal" || mutation.attributeName == "data-initialised"))
 				{
-					max = element.attr("max");
-				}
+					var element = $(mutation.target);
+					var min = element.attr("min");
+					var decimals = element.attr("data-decimals");
 
-				if (element.hasAttr("data-not-equal"))
-				{
-					var notEqual = element.attr("data-not-equal");
-
-					if (notEqual != "NaN")
+					var max = "";
+					if (element.hasAttr("max"))
 					{
-						if (!max)
-						{
-							element.parent().find(".invalid-feedback").text(__t("This cannot be lower than %1$s or equal %2$s and needs to be a valid number with max. %3$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(notEqual).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), decimals));
-						}
-						else
-						{
-							element.parent().find(".invalid-feedback").text(__t("This must be between %1$s and %2$s, cannot equal %3$s and needs to be a valid number with max. %4$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(max).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(notEqual).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }), decimals));
-						}
+						max = element.attr("max");
+					}
 
-						return;
+					if (element.hasAttr("data-not-equal"))
+					{
+						var notEqual = element.attr("data-not-equal");
+
+						if (notEqual != "NaN")
+						{
+							if (!max)
+							{
+								element.parent().find(".invalid-feedback").text(__t("This cannot be lower than %1$s or equal %2$s and needs to be a valid number with max. %3$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(notEqual).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), decimals));
+							}
+							else
+							{
+								element.parent().find(".invalid-feedback").text(__t("This must be between %1$s and %2$s, cannot equal %3$s and needs to be a valid number with max. %4$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(max).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(notEqual).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }), decimals));
+							}
+
+							return;
+						}
+					}
+
+					if (!max)
+					{
+						element.parent().find(".invalid-feedback").text(__t("This cannot be lower than %1$s and needs to be a valid number with max. %2$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), decimals));
+					}
+					else
+					{
+						element.parent().find(".invalid-feedback").text(__t("This must between %1$s and %2$s and needs to be a valid number with max. %3$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(max).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), decimals));
 					}
 				}
-
-				if (!max)
-				{
-					element.parent().find(".invalid-feedback").text(__t("This cannot be lower than %1$s and needs to be a valid number with max. %2$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), decimals));
-				}
-				else
-				{
-					element.parent().find(".invalid-feedback").text(__t("This must between %1$s and %2$s and needs to be a valid number with max. %3$s decimal places", Number.parseFloat(min).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), Number.parseFloat(max).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: decimals }), decimals));
-				}
-			}
+			});
+		}).observe(this, {
+			attributes: true
 		});
-	}).observe(this, {
-		attributes: true
 	});
-});
-$(".numberpicker").attr("data-initialised", "true"); // Dummy change to trigger MutationObserver above once
+	$(".numberpicker").attr("data-initialised", "true"); // Dummy change to trigger MutationObserver above once
 
-// Arrow up/down keys act as the up/down stepper buttons
-$(".numberpicker").on("keydown", function(e)
-{
-	if (e.key == "ArrowUp")
+	// Arrow up/down keys act as the up/down stepper buttons
+	$(".numberpicker").on("keydown", function(e)
 	{
-		e.preventDefault();
-		$(this).parent().find(".numberpicker-up-button").click();
-	}
-	else if (e.key == "ArrowDown")
-	{
-		e.preventDefault();
-		$(this).parent().find(".numberpicker-down-button").click();
-	}
-});
-
-// When enabled (stock_auto_decimal_separator_prices), auto-inserts a decimal point into a
-// plain-digit price entry (e.g. typing "199" with 2 configured decimal places becomes "1.99")
-$(".numberpicker.locale-number-input.locale-number-currency").on("blur", function()
-{
-	if (BoolVal(Victual.UserSettings.stock_auto_decimal_separator_prices))
-	{
-		var value = this.value.toString();
-		if (!value || value.includes(".") || value.includes(","))
+		if (e.key == "ArrowUp")
 		{
-			return;
+			e.preventDefault();
+			$(this).parent().find(".numberpicker-up-button").click();
 		}
-
-		var decimalPlaces = Victual.UserSettings.stock_decimal_places_prices_input;
-		if (value.length <= decimalPlaces)
+		else if (e.key == "ArrowDown")
 		{
-			value = value.padStart(decimalPlaces, "0");
+			e.preventDefault();
+			$(this).parent().find(".numberpicker-down-button").click();
 		}
+	});
 
-		var valueNew = Number.parseFloat(value.substring(0, value.length - decimalPlaces) + '.' + value.slice(decimalPlaces * -1));
-		$(this).val(valueNew);
-	}
-});
+	// When enabled (stock_auto_decimal_separator_prices), auto-inserts a decimal point into a
+	// plain-digit price entry (e.g. typing "199" with 2 configured decimal places becomes "1.99")
+	$(".numberpicker.locale-number-input.locale-number-currency").on("blur", function()
+	{
+		if (BoolVal(Victual.UserSettings.stock_auto_decimal_separator_prices))
+		{
+			var value = this.value.toString();
+			if (!value || value.includes(".") || value.includes(","))
+			{
+				return;
+			}
+
+			var decimalPlaces = Victual.UserSettings.stock_decimal_places_prices_input;
+			if (value.length <= decimalPlaces)
+			{
+				value = value.padStart(decimalPlaces, "0");
+			}
+
+			var valueNew = Number.parseFloat(value.substring(0, value.length - decimalPlaces) + '.' + value.slice(decimalPlaces * -1));
+			$(this).val(valueNew);
+		}
+	});
+}
+Victual.Components.NumberPicker.Init();

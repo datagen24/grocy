@@ -102,7 +102,9 @@ $("#delete-selected-shopping-list").on("click", function ()
 	var objectId = $("#selected-shopping-list").val();
 
 	bootbox.confirm({
-		message: __t('Are you sure you want to delete shopping list "%s"?', objectName),
+		// objectName came out of an <option>'s data- attribute with .attr(), which returns
+		// the decoded string, and bootbox renders its message with .html() (S29)
+		message: __t('Are you sure you want to delete shopping list "%s"?', Victual.FrontendHelpers.EscapeHtml(objectName)),
 		closeButton: false,
 		buttons: {
 			confirm: {
@@ -122,10 +124,6 @@ $("#delete-selected-shopping-list").on("click", function ()
 					function (result)
 					{
 						window.location.href = U('/shoppinglist');
-					},
-					function (xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -155,7 +153,7 @@ $(document).on('click', '.shoppinglist-delete-button', function (e)
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -167,10 +165,6 @@ $(document).on('click', '#add-products-below-min-stock-amount', function (e)
 		function (result)
 		{
 			window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -185,16 +179,8 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 				function (result)
 				{
 					window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -202,7 +188,9 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 // Empties the selected shopping list entirely (all items removed), after confirmation
 $(document).on('click', '#clear-shopping-list', function (e)
 {
-	var confirmMessage = __t('Are you sure you want to empty shopping list "%s"?', $("#selected-shopping-list option:selected").text());
+	// The list name comes out of the <option>'s text, which is the decoded string, and
+	// bootbox renders its message with .html() (sweep finding S29)
+	var confirmMessage = __t('Are you sure you want to empty shopping list "%s"?', Victual.FrontendHelpers.EscapeHtml($("#selected-shopping-list option:selected").text()));
 	if (!BoolVal(Victual.FeatureFlags.VICTUAL_FEATURE_FLAG_SHOPPINGLIST_MULTIPLE_LISTS))
 	{
 		confirmMessage = __t('Are you sure you want to empty the shopping list?');
@@ -235,7 +223,7 @@ $(document).on('click', '#clear-shopping-list', function (e)
 					function (xhr)
 					{
 						Victual.FrontendHelpers.EndUiBusy();
-						console.error(xhr);
+						Victual.Api.DefaultErrorHandler(xhr);
 					}
 				);
 			}
@@ -250,10 +238,6 @@ $(document).on("click", "#clear-done-items", function (e)
 		function (result)
 		{
 			window.location.reload();
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });
@@ -395,7 +379,7 @@ $(document).on('click', '.order-listitem-button', function (e)
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -418,10 +402,6 @@ function OnListItemRemoved()
 		{
 			$("#total-value").text(items.reduce((x, { last_price_total }) => x + last_price_total, 0));
 			RefreshLocaleNumberDisplay();
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 }
@@ -540,7 +520,7 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 						},
 						function (xhr)
 						{
-							console.error(xhr);
+							Victual.Api.DefaultErrorHandler(xhr);
 							var validResponse = true;
 
 							try
@@ -552,13 +532,16 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 								validResponse = false;
 							}
 
+							// Both branches interpolate a server response into .html(), and a
+							// <pre> does not neutralise a tag inside it - so the message is
+							// escaped as the text it is (sweep finding S29)
 							if (validResponse)
 							{
-								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + jsonError.error_message + '</pre></code>');
+								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + Victual.FrontendHelpers.EscapeHtml(jsonError.error_message) + '</pre></code>');
 							}
 							else
 							{
-								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + xhr.responseText + '</pre></code>');
+								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + Victual.FrontendHelpers.EscapeHtml(xhr.responseText) + '</pre></code>');
 							}
 						}
 					);
@@ -640,10 +623,6 @@ $(document).on("click", "#save-description-button", function (e)
 		function (result)
 		{
 			$("#save-description-button").addClass("disabled");
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });

@@ -1,20 +1,20 @@
-﻿// Powers the products master data list view (views/products.blade.php):
-// DataTable of all products with search, product group/status filters, delete confirmation and a product merge dialog.
+// Powers the products master data list view (views/products.blade.php):
+// DataTable of all products with search, product group/status filters, delete confirmation
+// and a product merge dialog.
+//
+// A partial clone rather than a pure one (plan 12, Q5), so it takes the shared list
+// pieces it wants - Victual.EntityList.Table and .ConfirmDelete - and keeps its own
+// filters, which reload the page rather than filtering client side.
 
-// DataTables setup for the products list (column 0 = row menu; hidden columns 7-9 hold extra searchable/sortable data from the template)
-var productsTable = $('#products-table').DataTable({
-	'order': [[1, 'asc']],
-	'columnDefs': [
-		{ 'orderable': false, 'targets': 0 },
-		{ 'searchable': false, "targets": 0 },
+var productsTable = Victual.EntityList.Table('#products-table', {
+	columnDefs: [
+		// Hidden columns 7-9 hold extra searchable/sortable data from the template
 		{ 'visible': false, 'targets': 7 },
 		{ 'visible': false, 'targets': 8 },
 		{ 'visible': false, 'targets': 9 },
-		{ "type": "html-num-fmt", "targets": 3 }
-	].concat($.fn.dataTable.defaults.columnDefs)
+		{ 'type': 'html-num-fmt', 'targets': 3 }
+	]
 });
-$('#products-table tbody').removeClass("d-none");
-productsTable.columns.adjust().draw();
 
 // Debounced full-text search over the table
 $("#search").on("keyup", Delay(function ()
@@ -72,45 +72,15 @@ if (typeof GetUriParam("product-group") !== "undefined")
 	$("#product-group-filter").trigger("change");
 }
 
-// Delete button per row (expects data-product-name / data-product-id from the template);
-// confirms via bootbox, then DELETEs objects/products/{id}
-$(document).on('click', '.product-delete-button', function (e)
-{
-	var objectName = $(e.currentTarget).attr('data-product-name');
-	var objectId = $(e.currentTarget).attr('data-product-id');
-
-	bootbox.confirm({
-		message: __t('Are you sure you want to delete product "%s"?', objectName) + '<br><br>' + __t('This also removes any stock amount, the journal and all other references of this product - consider disabling it instead, if you want to keep that and just hide the product.'),
-		closeButton: false,
-		buttons: {
-			confirm: {
-				label: __t('Yes'),
-				className: 'btn-success'
-			},
-			cancel: {
-				label: __t('No'),
-				className: 'btn-danger'
-			}
-		},
-		callback: function (result)
-		{
-			if (result === true)
-			{
-				jsonData = {};
-				jsonData.active = 0;
-				Victual.Api.Delete('objects/products/' + objectId, {},
-					function (result)
-					{
-						window.location.href = U('/products');
-					},
-					function (xhr)
-					{
-						console.error(xhr);
-					}
-				);
-			}
-		}
-	});
+// Delete button per row; the shared confirmation escapes the product name into its message
+Victual.EntityList.ConfirmDelete({
+	button: '.product-delete-button',
+	idAttr: 'data-product-id',
+	nameAttr: 'data-product-name',
+	endpoint: 'objects/products',
+	message: 'Are you sure you want to delete product "%s"?',
+	extraMessage: __t('This also removes any stock amount, the journal and all other references of this product - consider disabling it instead, if you want to keep that and just hide the product.'),
+	list: '/products'
 });
 
 // "Show disabled" toggle and status filter both reload the page with updated URI parameters (filtering happens server-side)
