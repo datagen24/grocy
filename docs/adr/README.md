@@ -80,7 +80,7 @@ readers most often need and least often have.
 | [0010](0010-workload-standard.md) | Fork-owned workloads are stateless, idempotent, unprivileged and declared | **Proposed** | [constitution](../constitution.md) |
 | [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Proposed** | [06](../plans/06-location-barcodes.md) |
 | [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Proposed** | — |
-| [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Rejected** 2026-09-03 | [20](../plans/20-deploy-tree.md), [deploy/](../../deploy/README.md) |
+| [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Proposed** | [20](../plans/20-container-infrastructure.md), [nix/](../../nix/README.md), [deploy/](../../deploy/README.md) |
 
 **0008 was accepted 2026-08-31 and supersedes
 [0001](0001-postgresql-alongside-sqlite.md).** 0009 remains a proposal under active
