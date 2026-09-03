@@ -377,6 +377,57 @@ run_filter_tests() {
 	rm -f "$sqlite_db"
 }
 
+# --- Schema gate tests ------------------------------------------------------------
+#
+# One engine at a time, like the rollback phase: the question is what the application
+# believes about the database in front of it, which has no cross-engine comparison in it.
+# The database is built by bin/victual-migrate and nothing else — the gate is about
+# migration bookkeeping, so a fixture would only add rows it does not read.
+#
+# The script mutates the migrations table and puts it back; the databases here are
+# throwaway either way, but SQLite's is a copy rather than the pristine database itself,
+# because the pristine one is the template every other phase starts from.
+
+run_schema_tests() {
+	local datapath="$SUITE_SCRATCH/schema-sqlite"
+
+	rm -rf "$datapath"
+	mkdir -p "$datapath"
+
+	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
+		|| fail 'could not migrate the schema gate test database'
+
+	say ""
+	if ! VICTUAL_DATAPATH="$datapath" php "$SUITE_DIR/schemagatetest.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$datapath"
+
+	build_pgsql "$SCHEMA_DB"
+
+	local pgdatapath="$SUITE_SCRATCH/schema-pgsql"
+	rm -rf "$pgdatapath"
+	mkdir -p "$pgdatapath"
+
+	cat > "$pgdatapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+
+	say ""
+	if ! VICTUAL_DATAPATH="$pgdatapath" DIFFTEST_DB_NAME="$SCHEMA_DB" php "$SUITE_DIR/schemagatetest.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$pgdatapath"
+}
+
 # --- Trigger tests ----------------------------------------------------------------
 
 run_trigger_tests() {
@@ -455,9 +506,9 @@ case "$WHICH" in
 	triggers) run_trigger_tests ;;
 	rollback) run_rollback_tests ;;
 	filter) run_filter_tests ;;
-	files) run_files_import_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_files_import_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, files or all)" ;;
+	schema) run_schema_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then
