@@ -117,6 +117,52 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
+	 * Runs the migration without taking a lock of its own.
+	 *
+	 * Not an oversight. Concurrent migration runs are a deployment problem - several pods
+	 * starting at once - and under ADR-0008 SQLite is not a runtime engine: it is what
+	 * bin/victual-db-import reads and what the differential suite and a local dev boot
+	 * migrate one process at a time. Nothing races here.
+	 *
+	 * What protects the case anyway is SQLite's own file locking: a second writer gets
+	 * SQLITE_BUSY and the run fails, which is loud rather than silent and cannot corrupt
+	 * the database. That is a worse experience than waiting and a perfectly acceptable one
+	 * for a path with no concurrent callers.
+	 *
+	 * This makes plan 10's question 3 - where a SQLite lock file should live - moot. It
+	 * was a real question while SQLite was a deployment target.
+	 */
+	public function WithMigrationLock(callable $work)
+	{
+		return $work();
+	}
+
+	/**
+	 * Whether the error is "no such table", which on SQLite can only be told from the
+	 * message.
+	 *
+	 * PDO_SQLite maps almost every failure onto SQLSTATE HY000 with driver code 1: a
+	 * missing table, a missing column and a syntax error are indistinguishable by code.
+	 * Measured rather than assumed - "no such table: migrations", "no such column: nope"
+	 * and 'near "SELEC": syntax error' all arrive as
+	 * ["HY000", 1, ...] on PHP 8.4's pdo_sqlite. So the message is the only thing that
+	 * separates them, and matching on it is the honest implementation rather than a
+	 * shortcut. The SQLSTATE is still checked first, so an error from some other layer
+	 * that happens to contain the phrase cannot pass.
+	 */
+	public function IsMissingTableError(\PDOException $ex): bool
+	{
+		if (self::SqlStateOf($ex) !== 'HY000')
+		{
+			return false;
+		}
+
+		$message = $ex->errorInfo[2] ?? $ex->getMessage();
+
+		return is_string($message) && stripos($message, 'no such table') !== false;
+	}
+
+	/**
 	 * Standard SQL double-quote quoting, which SQLite supports alongside backticks.
 	 */
 	public function QuoteIdentifier(string $name): string

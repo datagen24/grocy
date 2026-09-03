@@ -3,9 +3,9 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema]
 #
-# Five kinds of check, for five reasons. Views are compared by what they return, because
+# Six kinds of check, for six reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -32,6 +32,13 @@
 # itself, with an identical response shape either way. The filter phase asks both engines
 # the same question through the dialects and compares the rows.
 #
+# The sixth asks what the application believes about the schema it is sitting on. The boot
+# check refuses to serve when the migrations the code ships and the migrations the database
+# recorded are not the same set, and it has to tell a database that has never been migrated
+# apart from a database it cannot reach — a distinction the two engines spell completely
+# differently, since SQLite reports nearly every failure as HY000. Nothing else here ever
+# asks the application that question.
+#
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
 # difftest.php, trigdifftest.php and migratedifftest.php, which share their normalisation
@@ -47,6 +54,7 @@
 #   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default victual_migrate)
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
 #   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
+#   SUITE_PGSQL_SCHEMA_DB                database for the schema gate   (default victual_schema)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
 #   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
@@ -75,6 +83,7 @@ TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-victual_trig}"
 MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
+SCHEMA_DB="${SUITE_PGSQL_SCHEMA_DB:-victual_schema}"
 
 WHICH="${1:-all}"
 
@@ -368,6 +377,57 @@ run_filter_tests() {
 	rm -f "$sqlite_db"
 }
 
+# --- Schema gate tests ------------------------------------------------------------
+#
+# One engine at a time, like the rollback phase: the question is what the application
+# believes about the database in front of it, which has no cross-engine comparison in it.
+# The database is built by bin/victual-migrate and nothing else — the gate is about
+# migration bookkeeping, so a fixture would only add rows it does not read.
+#
+# The script mutates the migrations table and puts it back; the databases here are
+# throwaway either way, but SQLite's is a copy rather than the pristine database itself,
+# because the pristine one is the template every other phase starts from.
+
+run_schema_tests() {
+	local datapath="$SUITE_SCRATCH/schema-sqlite"
+
+	rm -rf "$datapath"
+	mkdir -p "$datapath"
+
+	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
+		|| fail 'could not migrate the schema gate test database'
+
+	say ""
+	if ! VICTUAL_DATAPATH="$datapath" php "$SUITE_DIR/schemagatetest.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$datapath"
+
+	build_pgsql "$SCHEMA_DB"
+
+	local pgdatapath="$SUITE_SCRATCH/schema-pgsql"
+	rm -rf "$pgdatapath"
+	mkdir -p "$pgdatapath"
+
+	cat > "$pgdatapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+
+	say ""
+	if ! VICTUAL_DATAPATH="$pgdatapath" DIFFTEST_DB_NAME="$SCHEMA_DB" php "$SUITE_DIR/schemagatetest.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$pgdatapath"
+}
+
 # --- Trigger tests ----------------------------------------------------------------
 
 run_trigger_tests() {
@@ -407,8 +467,9 @@ case "$WHICH" in
 	triggers) run_trigger_tests ;;
 	rollback) run_rollback_tests ;;
 	filter) run_filter_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter or all)" ;;
+	schema) run_schema_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then
