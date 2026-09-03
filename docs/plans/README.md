@@ -13,7 +13,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | # | Plan | Upstream | Depends on | Size | Status |
 |---|---|---|---|---|---|
 | — | [Database abstraction / PostgreSQL](../../db/pgsql/README.md) | — | — | — | **landed** |
-| 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small | draft |
+| 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small | **landed** (`4174129`…`99ca61b`, 2026-09-02) — `BYTEA` behind `FILE_STORAGE=database` (default stays `filesystem`), `bin/victual-files-import`, sweep **S10** closed; the migration is `0258.pgsql.sql`, not the 0257 the plan text names |
 | 02 | [MCP endpoint](02-mcp-endpoint.md) ([interface spec](../mcp-interface-spec.md)) | — | 11, 13, 14 piece 2, 15-C1 | medium | draft — body superseded by the spec |
 | 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft — may grow a parent column, per 07-Q6 |
 | 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium | draft |
@@ -485,7 +485,7 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 
 ### Wave 1 — platform (four parallel tracks, disjoint files; C is done)
 
-- **Track A: 10 cold start — done** (2026-09-02), then **01 file storage**. 10 first —
+- **Track A: 10 cold start**, then **01 file storage** — **both done** (2026-09-02). 10 first —
   01's importer is easier to reason about once cold start no longer rewrites requests.
   Together they end the PVC. 10 landed the split view-cache path and
   `bin/victual-warm-cache`, the PostgreSQL migration lock, the deletion of the
@@ -503,9 +503,24 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   `/locationcontentsheet` — two `GROUP BY` strictness errors in PHP-built queries and one
   `ifnull()` written into PHP) that belong to no plan yet and become "the application is
   broken" once 0008's retirement lands; they need an owner, 15's table or a hotfix.
-  01 inherits S2's per-group extension allow-list and S10's upload cap when it moves
-  storage into the database — a blob column with no size limit is the same DoS with a
-  different disk.
+  Migration numbers: 18's opt-in table took **0257** (a per-engine pair), so 01 took
+  **0258** rather than the 0257 its text names. 01 inherited S2's per-group extension
+  allow-list and landed **S10** — a streaming upload cap (`FILE_STORAGE_MAX_SIZE_MB`,
+  clamped to PHP's own limits and reported as the effective value by
+  `GET /api/system/config`, 413 above it) and a five-size allow-list for downscaled
+  variants — on both backends, since a blob column with no size limit is the same DoS with
+  a different disk. Together 10 and 01 end the PVC: with `FILE_STORAGE=database` nothing
+  under the data directory is written at runtime, and `bin/victual-files-import` is the
+  one-off Job that runs against the old volume before the volume-less spec is applied. That
+  command decides "already imported" by SHA-256 rather than by file size, and treats a path
+  it cannot read as a failure rather than as an empty one — two review findings with one
+  shape, a failure returning a value that reads as a legitimate answer, in the command an
+  operator deletes a volume on. It carries a `--verify` mode that is the go-ahead for
+  deleting it, and neither mode mentions removing anything when a path went unread.
+  `files` is the first engine-exclusive *table*; the suite's
+  migration phase carries it as a named exemption, `db/pgsql/README.md` records it, and the
+  suite gained a sixth phase (`run-tests.sh files`) for the importer, since a
+  PostgreSQL-only table has no second engine to be compared against.
 - **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
   3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
   is going to be long, pull the ~20 toast sites forward on their own, since they need no

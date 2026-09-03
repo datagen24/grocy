@@ -3,9 +3,9 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|mqtt]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|files|mqtt]
 #
-# Seven kinds of check, for seven reasons. Views are compared by what they return, because
+# Eight kinds of check, for eight reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -39,7 +39,14 @@
 # differently, since SQLite reports nearly every failure as HY000. Nothing else here ever
 # asks the application that question.
 #
-# The seventh is not a differential check at all, and it is here because the alternative
+# The seventh is not a comparison at all, and is here because there is nowhere better. The
+# files table exists on PostgreSQL only — the configuration that reads it cannot exist on
+# SQLite — so the one command that writes to it, bin/victual-files-import, has no engine
+# to be compared against and had no coverage anywhere. What it needs asserting is that it
+# can tell an imported file from a stale one, since an operator deletes the source volume
+# on its say-so. Like the rollback phase it asks one engine a question.
+#
+# The eighth is not a differential check at all, and it is here because the alternative
 # was worse. Plan 18's published-state and outbox probes guard eight defects that produce
 # no error of any kind - a stale retained topic, an event lost after a commit, a
 # redelivered point that duplicates instead of overwriting, an MQTT client id that lost its
@@ -68,6 +75,7 @@
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
 #   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
 #   SUITE_PGSQL_SCHEMA_DB                database for the schema gate   (default victual_schema)
+#   SUITE_PGSQL_FILES_DB                 database for the file import tests (default victual_files)
 #   SUITE_PGSQL_MQTT_DB                  database for the mqtt tests    (default victual_mqtt)
 #   SUITE_MQTT_STANDIN_PORT              port for the stand-in InfluxDB (default 8390)
 #   SUITE_MQTT_BROKER_PORT               port for the recording MQTT stand-in (default 8391)
@@ -103,6 +111,7 @@ MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
 SCHEMA_DB="${SUITE_PGSQL_SCHEMA_DB:-victual_schema}"
+FILES_DB="${SUITE_PGSQL_FILES_DB:-victual_files}"
 MQTT_DB="${SUITE_PGSQL_MQTT_DB:-victual_mqtt}"
 MQTT_STANDIN_PORT="${SUITE_MQTT_STANDIN_PORT:-8390}"
 MQTT_BROKER_PORT="${SUITE_MQTT_BROKER_PORT:-8391}"
@@ -713,6 +722,45 @@ write_influx_config() {
 	PHPCONFIG
 }
 
+# --- File import tests ------------------------------------------------------------
+#
+# PostgreSQL only, because the files table is: ConfigurationValidator refuses
+# FILE_STORAGE = "database" on any other driver, so there is no SQLite side to compare
+# with and nothing for the other phases to have caught. The phase needs a data directory
+# of its own rather than a bare database, because the command under test reads
+# <data path>/storage and the FILE_STORAGE setting lives in the same config.php — which
+# is also why this is the one config.php in this file that sets more than the connection.
+
+run_files_import_tests() {
+	build_pgsql "$FILES_DB"
+
+	local datapath="$SUITE_SCRATCH/files-import"
+	rm -rf "$datapath"
+	mkdir -p "$datapath"
+
+	cat > "$datapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+		Setting('FILE_STORAGE', 'database');
+	PHPCONFIG
+
+	say ""
+
+	# Both variables are exported into the child rather than set here, because the test
+	# starts bin/victual-files-import as a further process and that one reads the same
+	# config.php: an unexported value would reach the test and not the command it drives.
+	if ! VICTUAL_DATAPATH="$datapath" DIFFTEST_DB_NAME="$FILES_DB" php "$SUITE_DIR/files-import-tests.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$datapath"
+}
+
 # Before anything is built: a migration numbering mistake means the two engines are not
 # running the same set of changes, which would make every comparison below meaningless
 # rather than merely wrong. The same script also refuses a hole in the sequence above the
@@ -747,9 +795,10 @@ case "$WHICH" in
 	rollback) run_rollback_tests ;;
 	filter) run_filter_tests ;;
 	schema) run_schema_tests ;;
+	files) run_files_import_tests ;;
 	mqtt) run_mqtt_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_mqtt_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, mqtt or all)" ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_files_import_tests; run_mqtt_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, files, mqtt or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then

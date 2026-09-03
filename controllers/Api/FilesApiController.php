@@ -5,6 +5,8 @@ namespace Victual\Controllers\Api;
 use Victual\Controllers\Users\PermissionMissingException;
 use Victual\Controllers\Users\User;
 use Victual\Services\FilesService;
+use Victual\Services\Storage\FileStorage;
+use Victual\Services\Storage\FileTooLargeException;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Exception\HttpNotFoundException;
@@ -77,6 +79,22 @@ class FilesApiController extends BaseApiController
 	 * so it is never treated as anything else.
 	 */
 	const INLINE_SERVED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+
+	/**
+	 * The picture sizes a downscaled variant may be cached at.
+	 *
+	 * Sweep finding S10: best_fit_height/best_fit_width were only checked with is_numeric,
+	 * and every distinct pair decodes the image again and stores another copy, so a caller
+	 * could ask for a million of them. Only five sizes are actually asked for - 32 and 64
+	 * for the list thumbnails, 250 for a userfield picture, 400 for the detail views - and
+	 * 800 is here as a sane larger default for a client that wants something better than a
+	 * detail view without inventing its own size.
+	 *
+	 * A value outside the list snaps to the nearest one rather than being refused, so an
+	 * existing client asking for 401 keeps getting a picture. It is a cache key, not a
+	 * contract: the response is still an image of about the size that was asked for.
+	 */
+	const ALLOWED_BEST_FIT_SIZES = [32, 64, 250, 400, 800];
 
 	/**
 	 * Throws unless the caller may write to the given group.
@@ -171,8 +189,8 @@ class FilesApiController extends BaseApiController
 	 * with a 30 day Cache-Control header. {fileName} may also be two BASE64 encoded names
 	 * joined by "_" (actual file name + download file name). Query parameters
 	 * force_serve_as=picture with optional best_fit_height/best_fit_width serve a
-	 * downscaled image variant. Any failure (including an invalid group or filename)
-	 * results in a 404 HttpNotFoundException.
+	 * downscaled image variant, at the nearest of ALLOWED_BEST_FIT_SIZES. Any failure
+	 * (including an invalid group or filename) results in a 404 HttpNotFoundException.
 	 */
 	public function ServeFile(Request $request, Response $response, array $args)
 	{
@@ -188,18 +206,21 @@ class FilesApiController extends BaseApiController
 				$fileInfo = explode('_', $args['fileName']);
 				$fileName = $this->CheckFileName($fileInfo[0]);
 				$fileNameOutput = $this->CheckFileName($fileInfo[1]);
-				$filePath = $this->GetFilePath($args['group'], $fileName, $request->getQueryParams());
+				$storedName = $this->GetStoredName($args['group'], $fileName, $request->getQueryParams());
 			}
 			else
 			{
 				$fileName = $this->CheckFileName($args['fileName']);
 				$fileNameOutput = $fileName;
-				$filePath = $this->GetFilePath($args['group'], $fileName, $request->getQueryParams());
+				$storedName = $this->GetStoredName($args['group'], $fileName, $request->getQueryParams());
 			}
 
-			if (file_exists($filePath))
+			$storage = FileStorage::GetInstance();
+			$stream = $storage->Read($args['group'], $storedName);
+
+			if ($stream !== null)
 			{
-				$mimeType = mime_content_type($filePath);
+				$mimeType = $storage->GetMimeType($args['group'], $storedName);
 
 				if (in_array($mimeType, self::INLINE_SERVED_TYPES))
 				{
@@ -222,7 +243,7 @@ class FilesApiController extends BaseApiController
 				$response = $response->withHeader('X-Content-Type-Options', 'nosniff');
 				// RFC 5987 encoded, so a quote in the name cannot end the parameter
 				$response = $response->withHeader('Content-Disposition', $disposition . '; filename*=UTF-8\'\'' . rawurlencode($fileNameOutput));
-				return $response->withBody(new Stream(fopen($filePath, 'rb')));
+				return $response->withBody(new Stream($stream));
 			}
 			else
 			{
@@ -237,10 +258,10 @@ class FilesApiController extends BaseApiController
 
 	/**
 	 * PUT /api/files/{group}/{fileName} - stores the raw request body as a new file,
-	 * written to disk in 1 MB chunks. Fails when the file already exists (exclusive
-	 * "xb" mode), when the extension is not one the group accepts, or when a file
-	 * stored under an image extension is not an image. Returns 204 on success or a
-	 * 400 error response.
+	 * streamed into the configured storage in 1 MB chunks. Fails when the file already
+	 * exists (exclusive create), when the extension is not one the group accepts, or when
+	 * a file stored under an image extension is not an image. Returns 204 on success, 413
+	 * when the body exceeds the effective upload limit, or a 400 error response.
 	 */
 	public function UploadFile(Request $request, Response $response, array $args)
 	{
@@ -256,40 +277,23 @@ class FilesApiController extends BaseApiController
 			$fileName = $this->CheckFileName($args['fileName']);
 			$this->CheckFileExtension($args['group'], $fileName);
 
-			$filePath = FilesService::GetInstance()->GetFilePath($args['group'], $fileName);
-			$fileHandle = fopen($filePath, 'xb');
-			if ($fileHandle === false)
-			{
-				throw new \Exception("Error while creating file $fileName");
-			}
-
-			// Save the file to disk in chunks of 1 MB
-			$requestBody = $request->getBody();
-			while ($data = $requestBody->read(1048576))
-			{
-				if (fwrite($fileHandle, $data) === false)
-				{
-					throw new \Exception("Error while writing file $fileName");
-				}
-			}
-
-			if (fclose($fileHandle) === false)
-			{
-				throw new \Exception("Error while closing file $fileName");
-			}
+			$storage = FileStorage::GetInstance();
+			$storage->Create($args['group'], $fileName, $this->GetRequestBodyStream($request));
 
 			// A name ending in .png that holds a script is the whole of the problem, so
 			// what was stored has to be what the extension said it was.
 			//
-			// Two limits worth knowing. This runs *after* the body is on disk, so it bounds
-			// what can be served, not what can be written - an upload size cap is sweep S10
-			// and belongs to plan 01's track. And it only fires for IMAGE_EXTENSIONS, so the
-			// bmp/tif/tiff/heic that GROUP_ALLOWED_EXTENSIONS admits into userfiles are
-			// stored unvalidated; they are safe because they sniff to a type outside
-			// INLINE_SERVED_TYPES and are therefore downloaded rather than rendered.
-			if (in_array(strtolower(pathinfo($fileName, PATHINFO_EXTENSION)), self::IMAGE_EXTENSIONS) && getimagesize($filePath) === false)
+			// Two limits worth knowing. This runs *after* the body is stored, so it bounds
+			// what can be served, not what can be written - what bounds the write is the
+			// FILE_STORAGE_MAX_SIZE_MB cap the storage enforces while streaming (sweep
+			// S10). And it only fires for IMAGE_EXTENSIONS, so the bmp/tif/tiff/heic that
+			// GROUP_ALLOWED_EXTENSIONS admits into userfiles are stored unvalidated; they
+			// are safe because they sniff to a type outside INLINE_SERVED_TYPES and are
+			// therefore downloaded rather than rendered.
+			if (in_array(strtolower(pathinfo($fileName, PATHINFO_EXTENSION)), self::IMAGE_EXTENSIONS)
+				&& !$this->IsStoredFileAnImage($storage, $args['group'], $fileName))
 			{
-				unlink($filePath);
+				$storage->Delete($args['group'], $fileName);
 				throw new \Exception('File is not a valid image');
 			}
 
@@ -298,6 +302,12 @@ class FilesApiController extends BaseApiController
 		catch (PermissionMissingException $ex)
 		{
 			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
+		}
+		catch (FileTooLargeException $ex)
+		{
+			// 413 rather than the 400 every other upload failure gets, because "this one
+			// was too big" is the one refusal a client can act on by sending less
+			return $this->GenericErrorResponse($response, $ex->getMessage(), 413);
 		}
 		catch (\Exception $ex)
 		{
@@ -323,11 +333,73 @@ class FilesApiController extends BaseApiController
 	}
 
 	/**
-	 * Resolves the on-disk path for the given file; when the query parameters request
-	 * force_serve_as=picture, a downscaled variant honoring best_fit_height/best_fit_width
-	 * is created and its path returned instead.
+	 * The request body as a readable stream, for the storage to consume.
+	 *
+	 * detach() hands over the underlying resource, which is php://input for a raw PUT.
+	 * Nothing downstream reads the request body again. When it has already been consumed
+	 * (the body parsing middleware does that for a form encoded or JSON content type) the
+	 * detached resource is at EOF and the stored file is empty, which is what happened
+	 * before this method existed too.
+	 *
+	 * @return resource|string
 	 */
-	protected function GetFilePath(string $group, string $fileName, array $queryParams = [])
+	protected function GetRequestBodyStream(Request $request)
+	{
+		$stream = $request->getBody()->detach();
+
+		return $stream === null ? (string)$request->getBody() : $stream;
+	}
+
+	/**
+	 * Whether what was just stored under $fileName really is an image.
+	 *
+	 * getimagesizefromstring() rather than getimagesize(), which needs a path the database
+	 * backend cannot supply. Same detection code over the same bytes; the difference is
+	 * that this holds the file in memory, bounded by the upload cap.
+	 */
+	protected function IsStoredFileAnImage(FileStorage $storage, string $group, string $fileName): bool
+	{
+		$stream = $storage->Read($group, $fileName);
+		if ($stream === null)
+		{
+			return false;
+		}
+
+		$content = stream_get_contents($stream);
+		fclose($stream);
+
+		return $content !== false && getimagesizefromstring($content) !== false;
+	}
+
+	/**
+	 * Snaps a requested best-fit size to the nearest of ALLOWED_BEST_FIT_SIZES.
+	 *
+	 * Snapping rather than refusing so that a client asking for a size nobody listed keeps
+	 * getting a picture; what it bounds is how many distinct copies of one image can be
+	 * decoded and stored (sweep S10). A tie goes to the smaller size.
+	 */
+	protected function ClampBestFitSize($requested): int
+	{
+		$requested = (int)$requested;
+		$nearest = self::ALLOWED_BEST_FIT_SIZES[0];
+
+		foreach (self::ALLOWED_BEST_FIT_SIZES as $allowed)
+		{
+			if (abs($allowed - $requested) < abs($nearest - $requested))
+			{
+				$nearest = $allowed;
+			}
+		}
+
+		return $nearest;
+	}
+
+	/**
+	 * Resolves which stored file answers this request; when the query parameters ask for
+	 * force_serve_as=picture, a downscaled variant honoring best_fit_height/best_fit_width
+	 * is created and its name returned instead.
+	 */
+	protected function GetStoredName(string $group, string $fileName, array $queryParams = [])
 	{
 		$forceServeAs = null;
 		if (isset($queryParams['force_serve_as']) && !empty($queryParams['force_serve_as']))
@@ -340,22 +412,18 @@ class FilesApiController extends BaseApiController
 			$bestFitHeight = null;
 			if (isset($queryParams['best_fit_height']) && !empty($queryParams['best_fit_height']) && is_numeric($queryParams['best_fit_height']))
 			{
-				$bestFitHeight = $queryParams['best_fit_height'];
+				$bestFitHeight = $this->ClampBestFitSize($queryParams['best_fit_height']);
 			}
 
 			$bestFitWidth = null;
 			if (isset($queryParams['best_fit_width']) && !empty($queryParams['best_fit_width']) && is_numeric($queryParams['best_fit_width']))
 			{
-				$bestFitWidth = $queryParams['best_fit_width'];
+				$bestFitWidth = $this->ClampBestFitSize($queryParams['best_fit_width']);
 			}
 
-			$filePath = FilesService::GetInstance()->DownscaleImage($group, $fileName, $bestFitHeight, $bestFitWidth);
-		}
-		else
-		{
-			$filePath = FilesService::GetInstance()->GetFilePath($group, $fileName);
+			return FilesService::GetInstance()->DownscaleImage($group, $fileName, $bestFitHeight, $bestFitWidth);
 		}
 
-		return $filePath;
+		return $fileName;
 	}
 }

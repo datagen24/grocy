@@ -1,0 +1,458 @@
+#!/usr/bin/env php
+<?php
+
+// Moves the files under <data path>/storage into the database, then exits.
+//
+//   php bin/victual-files-import [--verify] [--quiet]
+//
+// This is the one-off step between "FILE_STORAGE = filesystem" and
+// "FILE_STORAGE = database". Plan 01 answered its open question with an explicit import
+// rather than a read-through fallback: a fallback means a file can live in two places
+// indefinitely, and a filesystem the application still reads is a persistent volume you
+// can never delete with confidence. So this is the moment the bytes move, and until it
+// has run, images 404.
+//
+// On k3s it is a one-off Job mounting the old PVC, run before the Deployment is flipped
+// to the volume-less spec. That is why it is idempotent: a file already in the database
+// with the same content is skipped, so a Job that was killed halfway simply runs again.
+//
+// "Same content" means a digest, not a length. A source file can change while keeping its
+// size, and a row a killed Job wrote halfway can hold the wrong bytes under the right
+// size_bytes - in both cases a length comparison reports "already imported" over stale
+// content, which is the one answer this command must never give, because what happens
+// next is that somebody deletes the old volume. Size survives as the cheap precheck it is
+// good for: unequal lengths settle the question without hashing anything, equal ones
+// settle nothing.
+//
+// The stored side is hashed by PostgreSQL (encode(sha256(content), 'hex')) rather than
+// read from a column. A stored digest is written by the same statement as the bytes, so
+// it agrees with them by construction and could only ever prove a row is self consistent;
+// hashing the column proves what is in it. Hashing in the server also means neither
+// verification nor this command's own re-check moves the bytes back over the wire.
+//
+// Every file it writes is read back and hashed before it is counted, so a single run can
+// stand behind its own result rather than needing a second one to confirm it. --verify
+// runs the same comparison and writes nothing, which is the check to run against the old
+// volume before removing it: every source file is either verified or reported by name.
+//
+// A path it cannot read is a failure, never an absence. That is the same mistake as the
+// size comparison in a different costume: scandir() returning false folded into an empty
+// list made an unreadable directory look like an empty one, so a group holding a file that
+// was never imported reported nothing wrong and exited 0. What an unreadable path means is
+// "this run does not know", and not knowing is counted, named on stderr, and forces a
+// non-zero exit in both modes. An empty directory that could actually be read still means
+// what it says.
+//
+// It imports only. There is deliberately no --delete-after: deleting the source is a
+// decision to make after looking at the result, not a flag on the command that produced
+// it.
+//
+// Exit codes: 0 when everything imported or was already there - under --verify, when
+// every file on disk is in the database with identical content. 1 on any failure, and
+// under --verify also on any file that differs or is missing.
+
+use Victual\Services\Storage\DatabaseStorage;
+use Victual\Services\Storage\FileStorage;
+
+if (PHP_SAPI !== 'cli')
+{
+	exit('This is a command line script');
+}
+
+$arguments = array_slice($argv, 1);
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/victual-files-import [--verify] [--quiet]\n\n";
+	echo "  Imports the files under <data path>/storage into the database, one row per\n";
+	echo "  file, and exits. Requires FILE_STORAGE = \"database\" and DB_DRIVER = \"pgsql\".\n\n";
+	echo "  Safe to run repeatedly: a file whose stored content matches the file on disk\n";
+	echo "  is skipped as verified, and anything else is written again. The comparison is\n";
+	echo "  a SHA-256 of the bytes, not their length - two different files of the same\n";
+	echo "  size are not the same file. Everything written is read back and checked\n";
+	echo "  before it is counted.\n\n";
+	echo "  Nothing is ever deleted from disk - verify the result, then remove the\n";
+	echo "  storage directory yourself.\n\n";
+	echo "  --verify  Compare only, writing nothing, and exit 1 if any file on disk is\n";
+	echo "            missing from the database, differs from it, or could not be read.\n";
+	echo "            This is the check to run before removing the old volume.\n";
+	echo "  --quiet   Only print the summary and any errors.\n";
+	exit(0);
+}
+
+$quiet = in_array('--quiet', $arguments, true);
+$verifyOnly = in_array('--verify', $arguments, true);
+
+// Checked rather than ignored because one of the flags now decides whether this command
+// writes at all: a mistyped --verfiy that silently ran an import would be a surprise in
+// exactly the situation this command is used in.
+$unknown = array_values(array_diff($arguments, ['--quiet', '--verify']));
+
+if (count($unknown) > 0)
+{
+	fwrite(STDERR, 'Unknown argument "' . $unknown[0] . '". Run with --help for the usage.' . PHP_EOL);
+	exit(1);
+}
+
+if (!defined('VICTUAL_DATAPATH'))
+{
+	define('VICTUAL_DATAPATH', getenv('VICTUAL_DATAPATH') ?: __DIR__ . '/../data');
+}
+
+require_once __DIR__ . '/../packages/autoload.php';
+
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
+{
+	require_once VICTUAL_DATAPATH . '/config.php';
+}
+
+require_once __DIR__ . '/../config-dist.php';
+
+// DatabaseService opens a connection the same way it does for a request, and the
+// application's connection setup expects a user context.
+if (!defined('VICTUAL_USER_ID'))
+{
+	define('VICTUAL_USER_ID', 1);
+}
+
+try
+{
+	(new Victual\Helpers\ConfigurationValidator())->validateConfig();
+}
+catch (\Victual\Helpers\EInvalidConfig $ex)
+{
+	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+	exit(1);
+}
+
+// The configuration checks are what make the rest of this script simple: with them
+// passed, FileStorage::GetInstance() is a DatabaseStorage and there is a files table to
+// write into. Running against the filesystem backend would copy the storage directory
+// onto itself.
+if (VICTUAL_FILE_STORAGE !== FileStorage::STORAGE_DATABASE)
+{
+	fwrite(STDERR, 'FILE_STORAGE is "' . VICTUAL_FILE_STORAGE . '", so there is nothing to import into.' . PHP_EOL
+		. 'Set FILE_STORAGE to "database" first - this command moves files from the storage' . PHP_EOL
+		. 'directory into the database, and only that backend reads them afterwards.' . PHP_EOL);
+	exit(1);
+}
+
+if (strtolower(VICTUAL_DB_DRIVER) !== 'pgsql')
+{
+	fwrite(STDERR, 'DB_DRIVER is "' . VICTUAL_DB_DRIVER . '", but the database file storage is PostgreSQL only.' . PHP_EOL);
+	exit(1);
+}
+
+$storagePath = VICTUAL_DATAPATH . '/storage';
+
+if (!is_dir($storagePath))
+{
+	// "There is no storage directory" and "the storage directory could not be stat'd" look
+	// identical from is_dir, and this command must never report the second as the first:
+	// "nothing to import" is the sentence an operator reads before deleting the volume.
+	// Listing the data directory tells them apart, because an entry that is there is there
+	// whether or not anything about it can be read.
+	$dataEntries = ListDirectory(VICTUAL_DATAPATH);
+
+	if ($dataEntries === null)
+	{
+		fwrite(STDERR, VICTUAL_DATAPATH . ' could not be read, so whether there is anything to' . PHP_EOL
+			. 'import is unknown. Nothing has been done.' . PHP_EOL);
+		exit(1);
+	}
+
+	if (in_array('storage', $dataEntries, true))
+	{
+		fwrite(STDERR, $storagePath . ' is there but is not a readable directory.' . PHP_EOL
+			. 'Nothing has been done.' . PHP_EOL);
+		exit(1);
+	}
+
+	echo 'No storage directory at ' . $storagePath . ' - nothing to import.' . PHP_EOL;
+	exit(0);
+}
+
+$storage = FileStorage::GetInstance();
+
+if (!($storage instanceof DatabaseStorage))
+{
+	fwrite(STDERR, 'The configured storage backend is not the database one.' . PHP_EOL);
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'Source: ' . $storagePath . PHP_EOL;
+	echo 'Target: ' . VICTUAL_DB_NAME . ' on ' . VICTUAL_DB_HOST . ':' . VICTUAL_DB_PORT . ' (files table)' . PHP_EOL;
+	echo 'Mode:   ' . ($verifyOnly ? 'verify only, nothing is written' : 'import') . PHP_EOL;
+	echo PHP_EOL;
+}
+
+$imported = 0;
+$replaced = 0;
+$verified = 0;
+$differing = 0;
+$missing = 0;
+$failed = 0;
+
+$groups = ListDirectory($storagePath);
+
+if ($groups === null)
+{
+	// Counted rather than fatal, so the summary and the exit code below are the single
+	// place that decides what a run means. There is nothing left to iterate either way.
+	$failed++;
+	$groups = [];
+	fwrite(STDERR, 'FAILED   ' . $storagePath . ': could not be listed' . PHP_EOL);
+}
+
+foreach ($groups as $group)
+{
+	$groupPath = $storagePath . '/' . $group;
+
+	if (!is_dir($groupPath))
+	{
+		if (is_file($groupPath))
+		{
+			// A stray file directly under storage/ belongs to no group and cannot be named
+			// in a (group, name) pair, so it is reported rather than guessed at. This is
+			// the one benign case here: the entry was read, and what it is is known.
+			if (!$quiet)
+			{
+				echo '  skipping "' . $group . '", which is not a group directory' . PHP_EOL;
+			}
+
+			continue;
+		}
+
+		// Neither a directory nor a file, yet the listing above returned it - so it is
+		// there and something about it could not be read: a group directory under a parent
+		// this process may list but not traverse, or a dangling symlink. Both are counted
+		// as failures rather than skipped, because what they hold is unknown and unknown is
+		// not the same as empty.
+		$failed++;
+		fwrite(STDERR, 'FAILED   ' . $group . ': is neither a readable directory nor a file' . PHP_EOL);
+		continue;
+	}
+
+	if (!$quiet)
+	{
+		echo $group . ':' . PHP_EOL;
+	}
+
+	$names = ListDirectory($groupPath);
+
+	if ($names === null)
+	{
+		// The finding this whole block exists for. Returning an empty list here made an
+		// unreadable group indistinguishable from an empty one, so a group holding a file
+		// that was never imported reported "verified 0, failed 0" and exit 0 - a false
+		// go-ahead to delete the only copy of that file.
+		$failed++;
+		fwrite(STDERR, 'FAILED   ' . $group . ': the group directory could not be listed' . PHP_EOL);
+		continue;
+	}
+
+	foreach ($names as $name)
+	{
+		$filePath = $groupPath . '/' . $name;
+
+		if (!is_file($filePath))
+		{
+			if (is_dir($filePath))
+			{
+				// Storage is two levels deep, so a directory here holds nothing this
+				// command can name as a (group, name) pair. Reported rather than counted:
+				// it was read, and nothing in the layout puts files there.
+				if (!$quiet)
+				{
+					echo '  skipping  ' . $name . '/, a directory inside a group' . PHP_EOL;
+				}
+
+				continue;
+			}
+
+			$failed++;
+			fwrite(STDERR, '  FAILED   ' . $group . '/' . $name . ': is neither a readable file nor a directory' . PHP_EOL);
+			continue;
+		}
+
+		$sizeOnDisk = filesize($filePath);
+
+		// hash_file reads the file in blocks rather than into a string, so a large
+		// equipment manual is never held in memory here any more than it is on the way
+		// into the database.
+		$digestOnDisk = hash_file(DatabaseStorage::CONTENT_DIGEST_ALGORITHM, $filePath);
+
+		if ($sizeOnDisk === false || $digestOnDisk === false)
+		{
+			$failed++;
+			fwrite(STDERR, '  FAILED   ' . $group . '/' . $name . ': could not be read' . PHP_EOL);
+			continue;
+		}
+
+		$sizeInDatabase = $storage->GetSizeBytes($group, $name);
+
+		// The precheck and nothing more: equal lengths are a reason to compare content,
+		// unequal ones a reason not to spend a hash finding out what is already known.
+		$digestInDatabase = $sizeInDatabase === $sizeOnDisk
+			? $storage->GetContentDigest($group, $name)
+			: null;
+
+		if ($digestInDatabase !== null && hash_equals($digestInDatabase, $digestOnDisk))
+		{
+			$verified++;
+
+			if (!$quiet)
+			{
+				echo '  verified ' . $name . ' (already imported, content verified, ' . $sizeOnDisk . ' bytes)' . PHP_EOL;
+			}
+
+			continue;
+		}
+
+		if ($verifyOnly)
+		{
+			if ($sizeInDatabase === null)
+			{
+				$missing++;
+				fwrite(STDERR, '  MISSING  ' . $group . '/' . $name . ': not in the database' . PHP_EOL);
+			}
+			else
+			{
+				$differing++;
+				fwrite(STDERR, '  DIFFERS  ' . $group . '/' . $name . ': the stored bytes are not this file ('
+					. $sizeInDatabase . ' bytes stored, ' . $sizeOnDisk . ' on disk)' . PHP_EOL);
+			}
+
+			continue;
+		}
+
+		$handle = fopen($filePath, 'rb');
+		if ($handle === false)
+		{
+			$failed++;
+			fwrite(STDERR, '  FAILED   ' . $group . '/' . $name . ': could not be opened' . PHP_EOL);
+			continue;
+		}
+
+		try
+		{
+			// Write rather than Create: a row whose content is not this file is a partial
+			// or stale import to finish, not a collision to refuse.
+			$storage->Write($group, $name, $handle);
+
+			// Read back and hashed in the server before this file is counted as done.
+			// "The statement did not throw" is a weaker claim than "the bytes are there",
+			// and the difference between the two is what an operator is relying on when
+			// they delete the volume this file came from.
+			$storedDigest = $storage->GetContentDigest($group, $name);
+
+			if ($storedDigest === null || !hash_equals($storedDigest, $digestOnDisk))
+			{
+				throw new \Exception('the bytes read back from the database are not this file');
+			}
+
+			if ($sizeInDatabase === null)
+			{
+				$imported++;
+				$line = '  imported ' . $name . ' (' . $sizeOnDisk . ' bytes)';
+			}
+			else
+			{
+				$replaced++;
+				$line = '  replaced ' . $name . ' (differs, re-imported, ' . $sizeOnDisk . ' bytes)';
+			}
+
+			if (!$quiet)
+			{
+				echo $line . PHP_EOL;
+			}
+		}
+		catch (\Throwable $ex)
+		{
+			$failed++;
+			fwrite(STDERR, '  FAILED   ' . $group . '/' . $name . ': ' . $ex->getMessage() . PHP_EOL);
+		}
+		finally
+		{
+			if (is_resource($handle))
+			{
+				fclose($handle);
+			}
+		}
+	}
+}
+
+echo PHP_EOL;
+
+// The failed count covers both halves of "this run does not know": a path that could not
+// be read, and a write that did not land. Either forces a non-zero exit in both modes,
+// because the sentence that follows a zero exit is one an operator acts on irreversibly.
+if ($verifyOnly)
+{
+	echo 'Verified ' . $verified . ', differing ' . $differing . ', missing ' . $missing . ', failed ' . $failed . '.' . PHP_EOL;
+
+	if ($failed > 0)
+	{
+		echo $failed . ' path(s) could not be read, so what they hold is unknown. A file that was' . PHP_EOL;
+		echo 'never imported is indistinguishable from an empty directory from here.' . PHP_EOL;
+	}
+
+	if ($differing + $missing + $failed > 0)
+	{
+		echo 'Not every file under ' . $storagePath . ' is known to be in the database.' . PHP_EOL;
+		echo 'Do not remove the storage directory. Fix the above, run the import again, then' . PHP_EOL;
+		echo 'verify again.' . PHP_EOL;
+		exit(1);
+	}
+
+	if (!$quiet)
+	{
+		echo 'Every file under ' . $storagePath . ' is in the database with identical content.' . PHP_EOL;
+	}
+
+	exit(0);
+}
+
+echo 'Imported ' . $imported . ', replaced ' . $replaced . ', verified ' . $verified . ', failed ' . $failed . '.' . PHP_EOL;
+
+if ($failed > 0)
+{
+	echo 'Nothing was deleted from disk, and this run does not know what it did not read.' . PHP_EOL;
+	echo 'Fix the failures above and run this again.' . PHP_EOL;
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'Every file above was read back from the database and matched its bytes on disk.' . PHP_EOL;
+	echo 'Nothing was deleted from disk - run this again with --verify, then remove ' . $storagePath . ' yourself.' . PHP_EOL;
+}
+
+exit(0);
+
+/**
+ * The entries of a directory in a stable order, without "." and "..", or null when the
+ * directory could not be read.
+ *
+ * The null is the point. scandir() returns false on failure, and folding that into an
+ * empty array - which this function used to do - makes an unreadable directory look
+ * exactly like an empty one. Every other answer this command gives is downstream of a
+ * directory listing, so that one substitution turned "I could not look" into "there is
+ * nothing there", and the command's whole job is to tell an operator when the source can
+ * be deleted. An empty array still means what it says: read successfully, nothing in it.
+ *
+ * @return string[]|null
+ */
+function ListDirectory(string $path): ?array
+{
+	$entries = scandir($path);
+
+	if ($entries === false)
+	{
+		return null;
+	}
+
+	return array_values(array_filter($entries, fn($entry) => $entry !== '.' && $entry !== '..'));
+}

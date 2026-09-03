@@ -31,32 +31,36 @@ have recorded it.
 |---|---|---|
 | 0256 | dual-engine hazard fix (`products_view` `qu_factor_*` cast) | in `master` |
 | 0257 | [plan 18](../docs/plans/18-mqtt-state-publication.md) — `mqtt_product_entities`, `mqtt_published_entities` | in this tree |
-| 0258 | [plan 01](../docs/plans/01-file-storage.md) — the files table (PR #34) | **claimed, still unmerged** |
+| 0258 | [plan 01](../docs/plans/01-file-storage.md) — the files table | in `master` (PR #39) |
 | 0259 | [plan 18](../docs/plans/18-mqtt-state-publication.md) — `outbox` | in this tree |
 
-## The merge order this implies
+## The merge order this implies — discharged
 
-    #33 (boot check)  →  #34 (0258, files)  →  #36 (0257 + 0259, plan 18)
+    #33 (boot check)  →  #34/#39 (0258, files)  →  #36 (0257 + 0259, plan 18)
 
-**#33 has landed** (merged to `master` 2026-09-03), so the first step of that order is done:
-the boot check now verifies the complete required migration set instead of the maximum
-recorded number, and a database that did slip through with a hole is refused rather than
-reported current. That was always going to be enforced by review rather than from here —
-nothing in `migrations/` can check a property of the checking code.
+**All of it has happened.** #33 landed first, so the boot check verifies the complete
+required migration set rather than the highest recorded number. #34's work reached `master`
+through #39 — #34 had merged into a branch that was itself already consumed, which is why
+0258 appeared to be in `master` before it was — and `migrations/0258.pgsql.sql` is there now.
+#36 merged `master` afterwards, so this tree has 0256 through 0259 with no hole, and
+`check-migrations.php` passes without `--allow-reserved-holes`.
 
-**#34 has not landed.** `migrations/0258.pgsql.sql` is on its branch and not in `master`, so
-the hole is still open and `check-migrations.php` still refuses this tree without
-`--allow-reserved-holes`. That refusal is the enforcement working, not a problem with it: the
-number is spoken for, the file is elsewhere, and merging #36 first would produce exactly the
-database this file exists to prevent.
+The next migration takes **0260** and claims it here first.
+
+**The waiver stays.** `--allow-reserved-holes` (and `SUITE_ALLOW_RESERVED_HOLES=1`) is not
+scaffolding for this one branch: the situation recurs by construction, because parallel plan
+branches each need a number before any of them merges, and the roadmap has several waves of
+those left. Removing it would not make the check any stricter — a tree with a hole still
+fails without it — it would only take away the thing that let this branch run its own suite
+for the three rounds it spent waiting, which is the difference between an enforcement and a
+wall. It is opt-in, it prints what it waived, and CI does not set it.
 
 Note that 0257 and 0259 are both plan 18's while 0258 is not. That is not a mistake and is
 not fixable by renumbering within one branch: 0258 was claimed by plan 01 while plan 18's
 first migration was already written, and moving plan 18's second migration down to 0258
 would collide rather than close the hole.
 
-[Plan 01](../docs/plans/01-file-storage.md) still calls its migration `0257.pgsql.sql` in its
-own body, written before plan 18 took 0257. The number it actually ships is 0258, and this
-table is the authority on that. The [roadmap](../docs/plans/README.md) carries the same
-correction as a note; plan 01's own text is left to the branch that carries the file, so the
-correction and the file land together.
+[Plan 01](../docs/plans/01-file-storage.md) was written calling its migration
+`0257.pgsql.sql`, before plan 18 took 0257; what it ships is `0258.pgsql.sql`, which is now
+in `master` and settles the question. Whether that plan's own body still says otherwise is
+for a reader of it to check — this table is the authority on the number either way.
