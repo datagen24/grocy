@@ -46,7 +46,11 @@ use Victual\Services\Outbox\OutboxService;
  * **A payload this version cannot read is set aside, never acknowledged.** DescribeUnreadable()
  * decides that before anything is built, and Drain() dead-letters those rows individually
  * with the reason. Skipping them inside a batch that was then marked delivered - the earlier
- * behaviour - discarded committed events silently.
+ * behaviour - discarded committed events silently. "Cannot read" is decided over the whole
+ * nested shape, not just the version and the presence of the two arrays: every key
+ * BuildLines() reads is required with its type, because a value missing from a booking or a
+ * stock entry would otherwise be cast to product 0, amount 0.0 or an empty timestamp and
+ * written as a point that looks like data.
  *
  * That property is load-bearing rather than tidy. A point in InfluxDB is identified by its
  * measurement, tag set and timestamp, and writing the same identity again overwrites rather
@@ -454,9 +458,34 @@ class BookingEventPublisher
 	 * aside individually rather than to skip it silently inside a batch that is then
 	 * acknowledged whole. Skipping was the earlier behaviour and it discarded committed
 	 * events without a trace.
+	 *
+	 * **The nested shape is checked, not only the top level.** The version check and a
+	 * present-and-an-array test for `bookings` and `stock` used to be the whole of it, which
+	 * made a payload "readable" whenever the two arrays merely existed. BuildLines() then
+	 * cast whatever was inside them: a missing product_id became product 0, a missing amount
+	 * or value became 0.0, a missing timestamp became `ToNanoseconds('')`. That is a corrupt
+	 * point written into a series nothing will ever correct, on a row then marked delivered -
+	 * the exact failure the dead-letter state exists to prevent, arriving through the gap
+	 * between "the arrays are there" and "the arrays say something".
+	 *
+	 * So every key BuildLines() reads is required here, with its type, and the answer names
+	 * the element and the field that failed. Delivery is at-least-once and every point's
+	 * identity is derived from the payload, so a value this method lets through is a value
+	 * the series is stuck with.
+	 *
+	 * The first element that fails ends the walk: the row is dead-lettered either way, and
+	 * one precise reason is more use to a person reading `last_error` than a list.
 	 */
 	public static function DescribeUnreadable(array $payload): ?string
 	{
+		if (count($payload) === 0)
+		{
+			// OutboxService::GetUndelivered() hands back an empty array for a row whose
+			// payload is not a JSON object at all, so this is the corrupt-row case rather
+			// than a shape question
+			return 'payload is empty or is not a JSON object';
+		}
+
 		$version = $payload['payload_version'] ?? null;
 
 		if ($version === null)
@@ -467,25 +496,250 @@ class BookingEventPublisher
 			return 'payload has no payload_version (the version 1 shape, which this version cannot deliver)';
 		}
 
-		if ((int)$version !== OutboxService::PAYLOAD_VERSION)
+		if (!is_scalar($version) || (int)$version !== OutboxService::PAYLOAD_VERSION)
 		{
-			return 'payload_version ' . $version . ' is not ' . OutboxService::PAYLOAD_VERSION;
+			return 'payload_version ' . self::Describe($version) . ' is not ' . OutboxService::PAYLOAD_VERSION;
 		}
 
-		foreach (['event_id', 'transaction_id', 'occurred_at'] as $required)
+		// The event's identity, which is what makes redelivery overwrite rather than
+		// duplicate. A blank or malformed one would tag every point of the event with the
+		// same nothing, so the collision the UUID was added to prevent comes straight back.
+		$eventId = $payload['event_id'] ?? null;
+
+		if (!is_string($eventId) || !Uuid::isValid($eventId))
 		{
-			if (!isset($payload[$required]) || (string)$payload[$required] === '')
+			return 'event_id is not a UUID (' . self::Describe($eventId) . ')';
+		}
+
+		if (!self::IsNonEmptyString($payload['transaction_id'] ?? null))
+		{
+			return 'transaction_id is missing or is not a non-empty string ('
+				. self::Describe($payload['transaction_id'] ?? null) . ')';
+		}
+
+		$reason = self::DescribeBadTimestamp('occurred_at', $payload['occurred_at'] ?? null);
+
+		if ($reason !== null)
+		{
+			return $reason;
+		}
+
+		foreach (['bookings', 'stock'] as $collection)
+		{
+			if (!is_array($payload[$collection] ?? null))
 			{
-				return 'payload is missing ' . $required;
+				return $collection . ' is missing or is not an array ('
+					. self::Describe($payload[$collection] ?? null) . ')';
 			}
 		}
 
-		if (!is_array($payload['bookings'] ?? null) || !is_array($payload['stock'] ?? null))
+		foreach ($payload['bookings'] as $index => $booking)
 		{
-			return 'payload is missing its bookings or stock arrays';
+			$reason = self::DescribeUnreadableBooking('bookings[' . $index . ']', $booking);
+
+			if ($reason !== null)
+			{
+				return $reason;
+			}
+		}
+
+		foreach ($payload['stock'] as $index => $entry)
+		{
+			$reason = self::DescribeUnreadableStock('stock[' . $index . ']', $entry);
+
+			if ($reason !== null)
+			{
+				return $reason;
+			}
 		}
 
 		return null;
+	}
+
+	/**
+	 * Why one booking element cannot be read, or null when it can.
+	 *
+	 * Every field BuildLines() touches, including the ones it only reads for *some*
+	 * bookings: `transaction_type`, `undone` and `price` decide whether a price_paid point
+	 * exists at all, so a malformed one does not merely produce a wrong number, it silently
+	 * changes how many points the event has.
+	 *
+	 * `price` is the one field allowed to be absent, because null is a fact there rather
+	 * than a gap: a booking with no price is not a booking at a price of nothing, and
+	 * CaptureEvent() preserves that distinction deliberately.
+	 *
+	 * @param mixed $booking
+	 */
+	private static function DescribeUnreadableBooking(string $where, $booking): ?string
+	{
+		if (!is_array($booking))
+		{
+			return $where . ' is not an object (' . self::Describe($booking) . ')';
+		}
+
+		foreach (['booking_id', 'product_id', 'undone'] as $field)
+		{
+			if (!self::IsIntegerLike($booking[$field] ?? null))
+			{
+				return $where . '.' . $field . ' is missing or is not an integer ('
+					. self::Describe($booking[$field] ?? null) . ')';
+			}
+		}
+
+		if (!self::IsNumber($booking['amount'] ?? null))
+		{
+			return $where . '.amount is missing or is not a number ('
+				. self::Describe($booking['amount'] ?? null) . ')';
+		}
+
+		// Absent and null are the same thing here and both are legal; anything else present
+		// has to be a number, because it becomes a field value in the series
+		$price = $booking['price'] ?? null;
+
+		if ($price !== null && !self::IsNumber($price))
+		{
+			return $where . '.price is neither null nor a number (' . self::Describe($price) . ')';
+		}
+
+		if (!self::IsNonEmptyString($booking['transaction_type'] ?? null))
+		{
+			return $where . '.transaction_type is missing or is not a non-empty string ('
+				. self::Describe($booking['transaction_type'] ?? null) . ')';
+		}
+
+		return self::DescribeBadTimestamp($where . '.row_created_timestamp',
+			$booking['row_created_timestamp'] ?? null);
+	}
+
+	/**
+	 * Why one stock snapshot element cannot be read, or null when it can.
+	 *
+	 * `amount` and `value` are required rather than defaulted, because a product consumed to
+	 * nothing is recorded as an explicit zero by CaptureEvent() - so an absent one is a
+	 * payload that lost something, not a payload saying "none left", and the two must not
+	 * produce the same point.
+	 *
+	 * @param mixed $entry
+	 */
+	private static function DescribeUnreadableStock(string $where, $entry): ?string
+	{
+		if (!is_array($entry))
+		{
+			return $where . ' is not an object (' . self::Describe($entry) . ')';
+		}
+
+		if (!self::IsIntegerLike($entry['product_id'] ?? null))
+		{
+			return $where . '.product_id is missing or is not an integer ('
+				. self::Describe($entry['product_id'] ?? null) . ')';
+		}
+
+		foreach (['amount', 'value'] as $field)
+		{
+			if (!self::IsNumber($entry[$field] ?? null))
+			{
+				return $where . '.' . $field . ' is missing or is not a number ('
+					. self::Describe($entry[$field] ?? null) . ')';
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Why a timestamp field cannot be read, or null when it can.
+	 *
+	 * Both engines hand these back as a local "Y-m-d H:i:s", and InfluxEventWriter's
+	 * ToNanoseconds() turns them into the epoch a point is identified by - so anything else
+	 * is either an exception mid-batch or, worse, a point at a time that is not when the
+	 * thing happened. The shape is checked before DateTimeImmutable sees it, because that
+	 * constructor accepts a great deal that is not a timestamp ("now", "+1 day") and none of
+	 * it belongs in a series.
+	 *
+	 * @param mixed $value
+	 */
+	private static function DescribeBadTimestamp(string $where, $value): ?string
+	{
+		if (!is_string($value) || $value === '')
+		{
+			return $where . ' is missing or is not a string (' . self::Describe($value) . ')';
+		}
+
+		if (preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/', $value) !== 1)
+		{
+			return $where . ' is not a "Y-m-d H:i:s" timestamp (' . self::Describe($value) . ')';
+		}
+
+		try
+		{
+			new \DateTimeImmutable($value);
+		}
+		catch (\Throwable $ex)
+		{
+			return $where . ' is not a valid date and time (' . self::Describe($value) . ')';
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param mixed $value
+	 */
+	private static function IsNonEmptyString($value): bool
+	{
+		return is_string($value) && trim($value) !== '';
+	}
+
+	/**
+	 * A JSON number or a string that is one. Strings are accepted because a driver may hand
+	 * a numeric column back as one, and rejecting that would dead-letter valid events.
+	 *
+	 * @param mixed $value
+	 */
+	private static function IsNumber($value): bool
+	{
+		return (is_int($value) || is_float($value) || is_string($value)) && is_numeric($value);
+	}
+
+	/**
+	 * @param mixed $value
+	 */
+	private static function IsIntegerLike($value): bool
+	{
+		return is_int($value) || (is_string($value) && preg_match('/^-?\d+$/', $value) === 1);
+	}
+
+	/**
+	 * A short rendering of a value for a last_error a person reads.
+	 *
+	 * Bounded, because the value came out of a payload and the column is for a glance at why
+	 * a queue stopped moving rather than for the payload itself.
+	 *
+	 * @param mixed $value
+	 */
+	private static function Describe($value): string
+	{
+		if ($value === null)
+		{
+			return 'null';
+		}
+
+		if (is_bool($value))
+		{
+			return $value ? 'true' : 'false';
+		}
+
+		if (is_array($value))
+		{
+			return 'an array of ' . count($value);
+		}
+
+		if (is_string($value))
+		{
+			return '"' . (strlen($value) > 40 ? substr($value, 0, 40) . '…' : $value) . '"';
+		}
+
+		return is_object($value) ? 'an object' : (string)$value;
 	}
 
 	/**

@@ -8,8 +8,8 @@ use Victual\Services\DatabaseService;
  * Ties the three pieces of MQTT state publication together and owns the two triggers.
  *
  * **Trigger one: the end of a request that changed data.** DatabaseService marks the
- * request dirty when a write statement goes through it and clears the mark when a
- * bookkeeping write restores the changed time, and its shutdown handler calls
+ * request dirty when a write statement goes through it, does not mark it for a write made
+ * under RunAsBookkeeping(), and its shutdown handler calls
  * PublishForRequestEnd() once, after everything else. That seam was chosen over explicit
  * calls at StockService's seven entrypoints for two reasons: it is the same "did anything
  * really change" question GET /api/system/db-changed-time already answers, so chores,

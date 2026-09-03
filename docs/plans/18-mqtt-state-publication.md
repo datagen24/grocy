@@ -942,6 +942,117 @@ exists to provide.
 - **The suite** - `SUITE PASSED` on all six phases, with every outbox probe reported twice:
   `(engine: sqlite)` and `(engine: pgsql)`.
 
+### Review fixes, round 4
+
+Three blocking findings, fixed 2026-09-03. Two are defects in what round 3 built; the third
+is not a defect in the code at all but in this branch's relationship to the two beside it.
+
+**1. This branch is not independently mergeable, and now says so.** Migration 0258 belongs to
+[plan 01](01-file-storage.md) and lives in PR #34; this branch carries 0257 and 0259. A
+deployment migrated through this tree alone records `MAX(migration) = 259` while never having
+run 0258, and 0258 merging afterwards does not fix what has already been decided on that
+number: the migration *runner* is not fooled — it asks per number whether a row exists, so a
+later 0258 is applied — but every gate built on the maximum is, and a gate is what decides
+whether a deployment is allowed to serve. Fixing the gate is PR #33's, which makes the boot
+check verify the complete required migration set instead of the highest recorded number. This
+branch owns the other half: saying which number belongs to whom, and refusing to be green
+while the sequence has a hole in it.
+
+So `migrations/RESERVATIONS.md` is new — the record of every number above the baseline, its
+owning plan, and whether its file is in this tree — and
+`.devtools/pgsql/check-migrations.php` parses it and fails on a gap. It fails on this branch
+today, by design and with the merge order in the message:
+
+    #33 (boot check)  →  #34 (0258, files)  →  #36 (this branch)
+
+Nothing was renumbered. Moving 0259 down to 0258 would collide with plan 01 rather than
+close the hole, and moving *both* of this branch's numbers up leaves the same gap one place
+further along. The check has a `--allow-reserved-holes` waiver, wired to
+`SUITE_ALLOW_RESERVED_HOLES=1` in `run-tests.sh`, so that a branch in this position can still
+run its own suite; CI does not set it, which is what keeps the enforcement real. Two stale
+references to plan 01 shipping `0257.pgsql.sql` — in its own body and in the roadmap's note
+on the engine-exclusive rule — are recorded in `RESERVATIONS.md` rather than edited here, so
+the correction lands with the file it describes.
+
+**2. Bookkeeping writes no longer rewind the global change timestamp.** The publication
+ledger and the outbox both hid their writes with the idiom `SessionService` and
+`ApiKeyService` use for last-used stamps: read `db-changed-time`, write, put the old value
+back. That is safe for a last-used stamp inside one request and not safe here. Another
+request can commit and flush a newer `system_db_changed_time` inside the window, and the
+restore then overwrites it with the stale snapshot — so a client polling
+`GET /api/system/db-changed-time`, which is a timestamp rather than a version, never learns
+of the committed change until something else happens to write. The publication lock does not
+close this: it serializes publishers, not the application writes happening beside them. The
+old code also cleared the request's dirty flag as a side effect, so acknowledging a delivery
+made the request forget it had changed data.
+
+The fix is suppression rather than a monotonic restore, because the honest version of "this
+was not a data change" is not to record one. `DatabaseService::RunAsBookkeeping()` holds a
+reentrant depth counter; while it is above zero the LessQL query callback and
+`ExecuteDbStatement()` skip both halves of change tracking, so nothing shared is written and
+nothing has to be put back. A monotonic update was the alternative and is strictly worse
+here: it still writes a row two requests contend on, to achieve what not writing achieves
+exactly.
+
+**One residual, and it is SQLite's.** There the changed time *is* the database file's
+modification time, which the operating system advances when the write lands with no PHP
+involved to suppress; hiding a write from it means rewinding it, which is the hazard. So it
+is not hidden, and a ledger or outbox row can advance the changed time on SQLite. The cost is
+at worst one redundant client refetch, and almost never even that — these writes happen on
+the back of a request that already changed data, or during a backlog drain, on an engine
+[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) retires from runtime use and which
+has no concurrent writer to be wrong about. The two last-used stamps deliberately keep the
+old idiom and are **not** converted: they fire on every authenticated read, so letting them
+advance the file modification time would make SQLite's changed time useless rather than
+slightly noisy, and their window is one statement inside one request.
+
+**3. A malformed nested payload is dead-lettered instead of being written as zeros.**
+`DescribeUnreadable()` checked the version and that `bookings` and `stock` were arrays, so a
+version 2 payload whose arrays were present but whose contents were missing or the wrong type
+counted as readable. `BuildLines()` then cast what was there: an absent `product_id` became
+product 0, an absent `amount` or `value` became 0.0, an absent `row_created_timestamp` became
+`ToNanoseconds('')`. That is a corrupt point written into a series nothing will ever correct,
+on a row then marked delivered — arriving through the gap between "the arrays are there" and
+"the arrays say something".
+
+Every key `BuildLines()` reads is now required with its type: `event_id` as an actual UUID
+(`Uuid::isValid`, not merely non-empty — a blank identity puts every point of the event under
+the same nothing and brings back the collision the UUID was added to prevent),
+`transaction_id` as a non-empty string, `occurred_at` and each booking's
+`row_created_timestamp` as a `Y-m-d H:i:s` timestamp that `DateTimeImmutable` accepts (shape
+checked first, because that constructor also accepts "now" and "+1 day" and neither belongs
+in a series), each booking's `booking_id`, `product_id` and `undone` as integers, `amount` as
+a number, `price` as null or a number, `transaction_type` as a non-empty string, and each
+stock entry's `product_id`, `amount` and `value`. The failure names the element and the
+field — `bookings[2].row_created_timestamp is not a "Y-m-d H:i:s" timestamp ("")` — because
+`last_error` is read by a person asking what stopped. Dead-lettering is per row and already
+was, so one bad payload never stops the batch. `OutboxService::GetUndelivered()` also stopped
+handing back a decoded scalar for a corrupt row, which would have been a `TypeError` taking
+the whole drain with it.
+
+**Verification**, all inside the suite, on both engines:
+
+- **`payload-validation-check.php`** — fifteen malformed shapes, each refused with the field
+  named, each building **zero** lines (in particular none carrying `product_id=0`), each
+  dead-lettered individually with `attempts` advanced and **not** marked delivered, and a
+  real booking queued behind all fifteen still deliverable afterwards.
+- **`changed-time-check.php`** — a bookkeeping write does not mark the request dirty; a real
+  data change made before one **survives** it; a concurrent writer's newer changed time,
+  committed from a second connection inside a bookkeeping section that has already written
+  its row, is still standing when the section ends; and on PostgreSQL the changed-time row's
+  `xmin` is **unchanged** across ledger and outbox writes, which is the exact assertion a
+  snapshot-and-restore implementation fails even though the value it restores is identical.
+- **The numbering check** — `check-migrations.php` names 0258, its owner and the merge order,
+  and exits 1.
+- **The suite** — `SUITE PASSED` on all six phases with `SUITE_ALLOW_RESERVED_HOLES=1`, the
+  two new probes reported twice each, `(engine: sqlite)` and `(engine: pgsql)`.
+
+One unrelated defect was fixed on the way: `client-id-check.php` called
+`ReflectionMethod::setAccessible()`, a no-op since PHP 8.1 which on 8.5 — the version
+`composer.json` pins and the dev image runs — emits a deprecation notice onto stdout, where
+the parent process read it back as the client id and failed all eight cases with a
+diagnostic. The call is gone.
+
 ### What this changes in the record above
 
 The security notes' third bullet understates the dependency: two packages are installed,

@@ -25,9 +25,11 @@
 # rather than against the other.
 #
 # The sixth is not a differential check at all, and it is here because the alternative was
-# worse. Plan 18's published-state and outbox probes guard four defects that produce no
+# worse. Plan 18's published-state and outbox probes guard six defects that produce no
 # error of any kind - a stale retained topic, an event lost after a commit, a redelivered
-# point that duplicates instead of overwriting, an MQTT client id that lost its randomness.
+# point that duplicates instead of overwriting, an MQTT client id that lost its randomness,
+# a malformed payload written out as zeros and acknowledged, and a rewound
+# db-changed-time that hides a committed change from every polling client.
 # Probes that nothing runs are documentation, so they run here, where the fixes are
 # protected by the same green light everything else is held to.
 #
@@ -57,6 +59,9 @@
 #   SUITE_PGSQL_MQTT_DB                  database for the mqtt tests    (default victual_mqtt)
 #   SUITE_MQTT_STANDIN_PORT              port for the stand-in InfluxDB (default 8390)
 #   SUITE_SCRATCH                        where the throwaway databases go
+#   SUITE_ALLOW_RESERVED_HOLES           set to 1 to waive a migration number that
+#                                        migrations/RESERVATIONS.md says an unmerged branch
+#                                        owns; never set in CI
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
 #   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
 #   SUITE_COVERAGE_CLOVER                also write a Clover XML report to this path
@@ -497,6 +502,11 @@ run_mqtt_tests() {
 	# from under bookings and queue hundreds of rows, so sharing one would make a failure in
 	# the first indistinguishable from contamination of the second.
 	run_mqtt_probe_on_both_engines outbox-check "$mqtt_scratch"
+	# Ahead of backlog-check, which flips the stand-in to accepting and leaves it there:
+	# both of these need the rejecting stand-in, since what they assert is what a row that
+	# was *not* delivered looks like.
+	run_mqtt_probe_on_both_engines payload-validation-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines changed-time-check "$mqtt_scratch"
 	run_mqtt_probe_on_both_engines idempotency-check "$mqtt_scratch"
 	run_mqtt_probe_on_both_engines event-identity-check "$mqtt_scratch"
 	run_mqtt_probe_on_both_engines backlog-check "$mqtt_scratch"
@@ -607,9 +617,26 @@ write_influx_config() {
 
 # Before anything is built: a migration numbering mistake means the two engines are not
 # running the same set of changes, which would make every comparison below meaningless
-# rather than merely wrong.
+# rather than merely wrong. The same script also refuses a hole in the sequence above the
+# baseline — a tree carrying 0259 while 0258 sits in an unmerged branch migrates a database
+# that records 259 and never ran 258 — so this is where the merge order recorded in
+# migrations/RESERVATIONS.md is enforced.
+#
+# SUITE_ALLOW_RESERVED_HOLES=1 passes the script's --allow-reserved-holes waiver, which
+# downgrades exactly one failure - a missing number that RESERVATIONS.md says belongs to a
+# branch that has not merged - to a printed warning. It exists because otherwise a branch
+# holding the higher of two in-flight numbers cannot run its own suite at all, which trades
+# one unverifiable claim for another. CI does not set it, and a branch that needs it is
+# saying out loud that it is not yet mergeable.
 say "checking migration numbering"
-php "$SUITE_DIR/check-migrations.php" || fail 'migration numbering check failed'
+
+migration_check_args=()
+if [ "${SUITE_ALLOW_RESERVED_HOLES:-0}" = "1" ]; then
+	migration_check_args+=(--allow-reserved-holes)
+fi
+
+php "$SUITE_DIR/check-migrations.php" "${migration_check_args[@]+"${migration_check_args[@]}"}" \
+	|| fail 'migration numbering check failed'
 
 say ""
 say "building the pristine SQLite database"

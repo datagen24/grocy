@@ -24,10 +24,9 @@ use Victual\Services\DatabaseService;
  * discovery and state payloads are byte-identical to what the ledger says was last published
  * is skipped entirely.
  *
- * Every write here is bookkeeping rather than a data change, so it restores the changed time
- * afterwards exactly as SessionService and ApiKeyService do for their last-used stamps.
- * Without that, publishing would mark the database changed, which would mark the request
- * dirty, which is the condition that triggered the publish.
+ * Every write here is bookkeeping rather than a data change, so it runs with change tracking
+ * suppressed. Without that, publishing would mark the database changed, which would mark the
+ * request dirty, which is the condition that triggered the publish.
  */
 class PublicationLedger extends BaseService
 {
@@ -127,18 +126,16 @@ class PublicationLedger extends BaseService
 	/**
 	 * Runs a write without letting it count as a data change.
 	 *
-	 * The idiom is the tree's own (SessionService::IsValidSession): read the changed time,
-	 * write, put it back. DatabaseService::SetDbChangedTime() also clears the request's dirty
-	 * flag, which is what stops a publish from marking the request that triggered it as
-	 * having changed data.
+	 * Suppression, not the read-write-restore idiom SessionService and ApiKeyService use for
+	 * their last-used stamps. Restoring writes a shared value back from a snapshot, and the
+	 * publication lock does not make that safe: it serializes publishers, not the
+	 * application writes happening beside them, so another request can commit and flush a
+	 * newer changed time inside the window and have it overwritten with the stale one. See
+	 * DatabaseService::RunAsBookkeeping() for the full reasoning and for what SQLite cannot
+	 * suppress.
 	 */
 	private function AsBookkeeping(callable $work): void
 	{
-		$database = DatabaseService::GetInstance();
-		$changedTime = $database->GetDbChangedTime();
-
-		$work();
-
-		$database->SetDbChangedTime($changedTime);
+		DatabaseService::GetInstance()->RunAsBookkeeping($work);
 	}
 }

@@ -39,8 +39,11 @@ if ($argument !== null)
 	// The real setting, so the real method under test reads the real constant
 	define('VICTUAL_MQTT_CLIENT_ID', $argument);
 
+	// No setAccessible() call: it has had no effect since PHP 8.1, and on 8.5 - which is what
+	// composer.json pins and the dev image runs - it emits a deprecation notice that lands on
+	// stdout and becomes the "client id" the parent process reads back, failing every case
+	// with a diagnostic instead of an answer.
 	$method = new ReflectionMethod(\Victual\Services\Mqtt\MqttPublisher::class, 'BuildClientId');
-	$method->setAccessible(true);
 
 	echo $method->invoke(new \Victual\Services\Mqtt\MqttPublisher()) . PHP_EOL;
 	exit(0);

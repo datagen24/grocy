@@ -89,6 +89,25 @@ numbers while both being fully migrated, so nothing may compare one engine's num
 other's. `DatabaseMigrationService::GetLatestMigrationNumber()` takes a dialect for this
 reason; use it rather than assuming the highest file in `migrations/` applies everywhere.
 
+**Claim the number before you write the file**, in
+[migrations/RESERVATIONS.md](../../migrations/RESERVATIONS.md). Plans are worked in parallel
+branches and each needs a number before any of them merges, so numbers handed out on a branch
+collide or leave holes — and a hole is the worse of the two, because nothing complains. A
+tree carrying 0257 and 0259 but not 0258 migrates a database that records `MAX(migration) =
+259` and never ran 0258, which satisfies every check built on the maximum
+(`GetLatestMigrationNumber()`, `DatabaseImporter`'s two-sided comparison, plan 10's boot
+check) while the schema is missing a table. The runner itself is not fooled — it asks per
+number whether a row exists, so a 0258 merged later is applied — but the checks that decide
+whether a deployment is up to date are, and those are the ones that gate serving.
+
+`check-migrations.php` enforces both halves: the sequence above the baseline has no holes,
+and every number on disk is claimed in that file. A branch holding the higher of two in-flight
+numbers therefore cannot go green until the branch holding the lower one merges, which is the
+point — it is not independently mergeable, and the failure message says which branch it is
+waiting for. `--allow-reserved-holes` (or `SUITE_ALLOW_RESERVED_HOLES=1` for `run-tests.sh`)
+waives exactly that one failure so such a branch can still run its own suite; CI does not set
+it. A number is retired rather than reused once a file has existed under it in `master`.
+
 ## Testing a change
 
 Loading cleanly proves very little. The suite is one command:
@@ -109,12 +128,13 @@ hazard 16 lived in.
 
 `mqtt` is the odd one and is only partly a differential check: it runs plan 18's probes -
 the MQTT client id, the price deny-list, the publication lock, the outbox's durability,
-its event identity, its redelivery idempotency and the CLI's backlog drain - plus the one
+its event identity, its redelivery idempotency, its refusal of a malformed payload, the fact
+that none of its bookkeeping rewinds `db-changed-time`, and the CLI's backlog drain - plus the one
 differential question that feature does raise, which is whether the assembled payload is
 identical on both engines. They live here because every defect they guard fails silently,
 and a probe nothing runs is documentation.
 
-Four of those probes run **twice, once per engine**, from one SQLite database imported into
+Six of those probes run **twice, once per engine**, from one SQLite database imported into
 PostgreSQL through `bin/victual-db-import` so both sides start from identical data. The
 outbox is where this feature turns on transaction semantics - what a rolled back INSERT
 leaves behind, how a driver reports a failure mid-transaction - so asserting it only on the

@@ -103,9 +103,15 @@ class OutboxService extends BaseService
 
 		foreach ($this->DB->outbox()->where('event_type = :1 AND delivered_at IS NULL AND dead_lettered_at IS NULL', $eventType)->orderBy('id')->limit($limit) as $row)
 		{
+			// Anything that is not a JSON object becomes an empty array rather than a scalar
+			// or null, so the consumer's validation - which takes an array - is what decides
+			// what happens to it, and a corrupt row is dead-lettered rather than raising a
+			// TypeError that would take the whole drain with it.
+			$decoded = json_decode((string)$row['payload'], true);
+
 			$rows[] = [
 				'id' => (int)$row['id'],
-				'payload' => json_decode((string)$row['payload'], true) ?: []
+				'payload' => is_array($decoded) ? $decoded : []
 			];
 		}
 
@@ -243,16 +249,17 @@ class OutboxService extends BaseService
 	 * Draining is bookkeeping: it records what was delivered, not what the household did.
 	 * Without this, acknowledging a delivery would mark the database changed, which would
 	 * mark the request dirty, which is the condition that triggered the drain - so every
-	 * drain would schedule another one. The idiom is the tree's own
-	 * (SessionService::IsValidSession).
+	 * drain would schedule another one.
+	 *
+	 * Suppression, not the read-write-restore idiom SessionService and ApiKeyService use for
+	 * their last-used stamps. A drain runs at request end with no lock of its own and can be
+	 * running while another request commits; restoring a snapshot of the changed time would
+	 * then discard that request's newer value, and a client polling
+	 * `GET /api/system/db-changed-time` would never learn of the committed change. See
+	 * DatabaseService::RunAsBookkeeping().
 	 */
 	private function AsBookkeeping(callable $work): void
 	{
-		$database = DatabaseService::GetInstance();
-		$changedTime = $database->GetDbChangedTime();
-
-		$work();
-
-		$database->SetDbChangedTime($changedTime);
+		DatabaseService::GetInstance()->RunAsBookkeeping($work);
 	}
 }

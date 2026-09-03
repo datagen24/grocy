@@ -22,7 +22,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
-| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`6a0d1fb`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7, delivered through a transactional outbox. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant |
+| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`6a0d1fb`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7, delivered through a transactional outbox. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant. Its PR is **held behind #34** by the migration numbering rule below — it owns 0257 and 0259 while 01 owns 0258 |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
@@ -270,10 +270,26 @@ after which the SQLite migration line freezes at its final number and new migrat
 PostgreSQL-only without needing the exemption recorded.
 
 The third case is new. `0256.sqlite.sql` is the first to use it — a SQLite-only cast fix
-that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping
-`0257.pgsql.sql` with no SQLite counterpart rather than a no-op pair that pretends
+that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping a
+PostgreSQL-only migration with no SQLite counterpart rather than a no-op pair that pretends
 otherwise. The rule for it is that the exemption is *recorded*, in the migration itself
-and in `db/pgsql/README.md`, not merely taken.
+and in `db/pgsql/README.md`, not merely taken. (This paragraph and 01's own body both say
+that migration is `0257.pgsql.sql`. Both were written before [18](18-mqtt-state-publication.md)
+took 0257; 01 ships 0258, and
+[migrations/RESERVATIONS.md](../../migrations/RESERVATIONS.md) is the authority. 01's own
+text is corrected by the branch that carries the file, so the correction and the file land
+together.)
+
+**Migration numbers are claimed before they are written**, in
+[migrations/RESERVATIONS.md](../../migrations/RESERVATIONS.md), and
+`.devtools/pgsql/check-migrations.php` fails on a hole in the sequence above the baseline.
+This is a merge-order rule, not paperwork: parallel plan branches each need a number before
+any of them merges, and a tree carrying 0259 while 0258 sits in an unmerged branch migrates a
+database that records 259 and never ran 258 — which every check built on the maximum then
+reads as up to date. The branch owning the lower number merges first. The live case is
+**#33 → #34 → #36**: #33 makes the boot check verify the complete required migration set
+rather than the highest recorded number, #34 brings 01's 0258, and 18's #36 carries 0257 and
+0259 and is knowingly not mergeable until #34 is in.
 
 The consequence turned out to bite immediately rather than later, and is worth stating
 plainly: once a number exists on one engine only, the two engines sit at different

@@ -28,6 +28,18 @@ class DatabaseService
 	private static $DataChanged = false;
 
 	/**
+	 * How many RunAsBookkeeping() calls are currently on the stack. Above zero, writes
+	 * reaching the database are not counted as data changes at all.
+	 *
+	 * A depth rather than a bool because the calls nest: a publish runs the ledger's
+	 * bookkeeping inside its own, and an inner call finishing must not re-arm change
+	 * tracking for the outer one that is still running.
+	 *
+	 * @var int
+	 */
+	private static $BookkeepingDepth = 0;
+
+	/**
 	 * Work to run inside the outermost transaction just before it commits, keyed so that a
 	 * caller reached many times in one transaction registers once. See
 	 * RegisterBeforeOutermostCommit().
@@ -109,7 +121,7 @@ class DatabaseService
 
 		// Raw SQL bypasses LessQL, so the changed time has to be maintained here too
 		$dialect = $this->GetDialect();
-		if ($dialect->IsWriteStatement($sql))
+		if ($dialect->IsWriteStatement($sql) && !$this->IsBookkeeping())
 		{
 			if ($dialect->RequiresChangeTracking())
 			{
@@ -180,7 +192,8 @@ class DatabaseService
 				{
 					$this->LogQuery($query, $params);
 
-					if (($trackChanges || $notifyOnChange) && $dialect->IsWriteStatement($query))
+					if (($trackChanges || $notifyOnChange) && $dialect->IsWriteStatement($query)
+						&& !$this->IsBookkeeping())
 					{
 						if ($trackChanges)
 						{
@@ -401,8 +414,73 @@ class DatabaseService
 	}
 
 	/**
+	 * Runs $work with change tracking suppressed, so the rows it writes never count as a
+	 * data change in the first place.
+	 *
+	 * **This is not the snapshot-and-restore idiom, and the difference is the point.**
+	 * SessionService and ApiKeyService hide their last-used stamps by reading the changed
+	 * time, writing, and putting the old value back. That is safe only while nothing else
+	 * can write between the read and the restore, and for plan 18's publish and drain
+	 * nothing guarantees that: another request can commit real data and flush a newer
+	 * `system_db_changed_time` inside the window, and the restore then overwrites it with a
+	 * stale snapshot. A client polling `GET /api/system/db-changed-time` would never see
+	 * that committed change - it does not poll a version, it polls a timestamp, and the
+	 * timestamp went backwards. The publication lock does not close this: it serializes
+	 * publishers, not the application writes happening beside them.
+	 *
+	 * So nothing shared is touched at all. While the depth is above zero the query callback
+	 * and ExecuteDbStatement skip both halves of change tracking - the dialect's
+	 * MarkDbChanged() and this service's dirty flag - so the changed time is never advanced
+	 * and therefore never has to be put back. A real data change recorded *before* the
+	 * bookkeeping work also survives it, which the restore idiom did not manage:
+	 * SetDbChangedTime() clears the dirty flag outright.
+	 *
+	 * **The residual is SQLite's, and it is the one engine where it costs nothing.** There
+	 * the changed time *is* the database file's modification time, which the operating
+	 * system advances when the write lands, with no PHP involved to suppress. Hiding a write
+	 * from it means rewinding it, which is the hazard above; so it is not hidden, and a
+	 * ledger or outbox row can advance the changed time on SQLite. That is at worst one
+	 * redundant client refetch, and almost never even that: these writes only happen on the
+	 * back of a request that already changed data, or during a backlog drain on an engine
+	 * [ADR-0008](../docs/adr/0008-postgresql-only-runtime-engine.md) retires from runtime
+	 * use and which has no concurrent writer to be wrong about. The two last-used stamps
+	 * deliberately keep the old idiom: they fire on *every* authenticated read, so letting
+	 * them advance the file modification time would make SQLite's changed time useless
+	 * rather than slightly noisy, and their window is a single statement inside one request.
+	 *
+	 * Reentrant: an inner call finishing leaves an outer one still suppressed.
+	 *
+	 * @param callable $work Receives no arguments; its return value is passed through
+	 * @return mixed Whatever $work returns
+	 * @throws \Throwable Whatever $work throws, after suppression is lifted
+	 */
+	public function RunAsBookkeeping(callable $work)
+	{
+		self::$BookkeepingDepth++;
+
+		try
+		{
+			return $work();
+		}
+		finally
+		{
+			self::$BookkeepingDepth--;
+		}
+	}
+
+	/**
+	 * Whether a RunAsBookkeeping() call is currently on the stack, in which case writes
+	 * reaching the database are not data changes.
+	 */
+	public function IsBookkeeping(): bool
+	{
+		return self::$BookkeepingDepth > 0;
+	}
+
+	/**
 	 * Records that this request wrote data, as opposed to having only read or having written
-	 * a bookkeeping row (see SetDbChangedTime(), which clears this again).
+	 * a bookkeeping row (see RunAsBookkeeping(), under which this is not reached at all, and
+	 * SetDbChangedTime(), which clears it again).
 	 *
 	 * Deliberately the same question DatabaseDialect::MarkDbChanged() answers for
 	 * GET /api/system/db-changed-time, and deliberately maintained here rather than on the
