@@ -19,7 +19,7 @@ class GenericEntityController extends BaseController
 	public function UserentitiesList(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'userentities', [
-			'userentities' => $this->DB->userentities()->orderBy('name', 'COLLATE NOCASE')
+			'userentities' => $this->GetDb()->userentities()->orderBy('name', 'COLLATE NOCASE')
 		]);
 	}
 
@@ -40,7 +40,7 @@ class GenericEntityController extends BaseController
 		{
 			return $this->RenderPage($response, 'userentityform', [
 				'mode' => 'edit',
-				'userentity' => $this->DB->userentities($args['userentityId'])
+				'userentity' => $this->GetDb()->userentities($args['userentityId'])
 			]);
 		}
 	}
@@ -90,7 +90,7 @@ class GenericEntityController extends BaseController
 	 */
 	public function UserobjectEditForm(Request $request, Response $response, array $args)
 	{
-		$userentity = $this->DB->userentities()->where('name = :1', $args['userentityName'])->fetch();
+		$userentity = $this->GetDb()->userentities()->where('name = :1', $args['userentityName'])->fetch();
 
 		if ($args['userobjectId'] == 'new')
 		{
@@ -105,7 +105,7 @@ class GenericEntityController extends BaseController
 			return $this->RenderPage($response, 'userobjectform', [
 				'userentity' => $userentity,
 				'mode' => 'edit',
-				'userobject' => $this->DB->userobjects($args['userobjectId']),
+				'userobject' => $this->GetDb()->userobjects($args['userobjectId']),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('userentity-' . $args['userentityName'])
 			]);
 		}
@@ -116,11 +116,11 @@ class GenericEntityController extends BaseController
 	 */
 	public function UserobjectsList(Request $request, Response $response, array $args)
 	{
-		$userentity = $this->DB->userentities()->where('name = :1', $args['userentityName'])->fetch();
+		$userentity = $this->GetDb()->userentities()->where('name = :1', $args['userentityName'])->fetch();
 
 		return $this->RenderPage($response, 'userobjects', [
 			'userentity' => $userentity,
-			'userobjects' => $this->DB->userobjects()->where('userentity_id = :1', $userentity->id),
+			'userobjects' => $this->GetDb()->userobjects()->where('userentity_id = :1', $userentity->id),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('userentity-' . $args['userentityName']),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('userentity-' . $args['userentityName'])
 		]);

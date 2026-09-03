@@ -212,6 +212,15 @@ rename and the registry claims happen at announcement time, not in a commit.
   and except 15-B2 (cookie flags), which the sweep pulls into the hotfix: it is one
   line, nothing reads the cookie from JavaScript, and it is what turns the sweep's two
   stored-XSS findings from "script runs" into "session stolen".
+
+  **And except 15-C15**, which landed 2026-09-03 alongside [10](10-cold-start-statelessness.md)
+  rather than waiting for this plan's slot. It is the one row in 15's table that is a
+  defect rather than tidiness: `BaseController` opened the database in its constructor, so
+  `app.php` could not build the error handler without one, and an unreachable database was
+  a raw PHP fatal under a **200** before any middleware ran — including 10's schema gate,
+  whose whole job is to answer that case legibly. Deferring it would have left 10 shipping
+  a gate that the failure it is about arrives too early to reach. See 15-C15's Executed
+  note and the last paragraph of 10's *Review fix: the gate compares sets*.
 - **The sweep's auth findings ride with wave 2, not ahead of it — except S4.** S5
   (`DEFAULT_PERMISSIONS`), S6 (`USERS_EDIT` escalation), S17 (dead iCal branch,
   cross-instance construction), S18 (`AUTH_CLASS` type check) and S19 all live in the files

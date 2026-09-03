@@ -50,12 +50,12 @@ class StockController extends BaseController
 	public function Consume(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'consume', [
-			'products' => $this->DB->products()->where('active = 1')->where('id IN (SELECT product_id from stock_current WHERE amount_aggregated > 0)')->orderBy('name'),
-			'barcodes' => $this->DB->product_barcodes_comma_separated(),
-			'recipes' => $this->DB->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE'),
-			'locations' => $this->DB->locations()->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved()
+			'products' => $this->GetDb()->products()->where('active = 1')->where('id IN (SELECT product_id from stock_current WHERE amount_aggregated > 0)')->orderBy('name'),
+			'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+			'recipes' => $this->GetDb()->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved()
 		]);
 	}
 
@@ -65,12 +65,12 @@ class StockController extends BaseController
 	public function Inventory(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'inventory', [
-			'products' => $this->DB->products()->where('active = 1 AND no_own_stock = 0')->orderBy('name', 'COLLATE NOCASE'),
-			'barcodes' => $this->DB->product_barcodes_comma_separated(),
-			'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+			'products' => $this->GetDb()->products()->where('active = 1 AND no_own_stock = 0')->orderBy('name', 'COLLATE NOCASE'),
+			'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+			'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('stock')
 		]);
 	}
@@ -93,7 +93,7 @@ class StockController extends BaseController
 		// The cut-off date is computed here and bound as a parameter instead of being
 		// expressed in SQL: SQLite's DATE(x, '-N months') has no PostgreSQL equivalent,
 		// so date arithmetic must not leak into the query (see DatabaseDialect)
-		$stockLog = $this->DB->uihelper_stock_journal()->where('row_created_timestamp > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
+		$stockLog = $this->GetDb()->uihelper_stock_journal()->where('row_created_timestamp > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
 
 		if (isset($request->getQueryParams()['product']) && filter_var($request->getQueryParams()['product'], FILTER_VALIDATE_INT) !== false)
 		{
@@ -104,8 +104,8 @@ class StockController extends BaseController
 
 		return $this->RenderPage($response, 'stockjournal', [
 			'stockLog' => $stockLog->orderBy('row_created_timestamp', 'DESC'),
-			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'locations' => $this->DB->locations()->orderBy('name', 'COLLATE NOCASE'),
+			'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->orderBy('name', 'COLLATE NOCASE'),
 			'users' => $usersService->GetUsersAsDto(),
 			'transactionTypes' => GetClassConstants('\Victual\Services\StockService', 'TRANSACTION_TYPE_'),
 			'userfieldsStock' => UserfieldsService::GetInstance()->GetFields('stock'),
@@ -121,9 +121,9 @@ class StockController extends BaseController
 	public function LocationContentSheet(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'locationcontentsheet', [
-			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityunits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-			'locations' => $this->DB->locations()->orderBy('name', 'COLLATE NOCASE'),
+			'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityunits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->orderBy('name', 'COLLATE NOCASE'),
 			'currentStockLocationContent' => StockService::GetInstance()->GetCurrentStockLocationContent(isset($request->getQueryParams()['include_out_of_stock']))
 		]);
 	}
@@ -145,7 +145,7 @@ class StockController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'locationform', [
-				'location' => $this->DB->locations($args['locationId']),
+				'location' => $this->GetDb()->locations($args['locationId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('locations')
 			]);
@@ -161,11 +161,11 @@ class StockController extends BaseController
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
 		{
-			$locations = $this->DB->locations()->orderBy('name', 'COLLATE NOCASE');
+			$locations = $this->GetDb()->locations()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
-			$locations = $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$locations = $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 		}
 
 		return $this->RenderPage($response, 'locations', [
@@ -193,11 +193,11 @@ class StockController extends BaseController
 		}
 
 		return $this->RenderPage($response, 'stockoverview', [
-			'currentStock' => $this->DB->uihelper_stock_current_overview()->where($where),
-			'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'currentStock' => $this->GetDb()->uihelper_stock_current_overview()->where($where),
+			'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'currentStockLocations' => StockService::GetInstance()->GetCurrentStockLocations(),
 			'nextXDays' => $nextXDays,
-			'productGroups' => $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'productGroups' => $this->GetDb()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('products'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('products')
 		]);
@@ -215,18 +215,18 @@ class StockController extends BaseController
 		$product = null;
 		if (isset($request->getQueryParams()['product']))
 		{
-			$product = $this->DB->products($request->getQueryParams()['product']);
+			$product = $this->GetDb()->products($request->getQueryParams()['product']);
 		}
 
 		if ($args['productBarcodeId'] == 'new')
 		{
 			return $this->RenderPage($response, 'productbarcodeform', [
 				'mode' => 'create',
-				'barcodes' => $this->DB->product_barcodes()->orderBy('barcode'),
+				'barcodes' => $this->GetDb()->product_barcodes()->orderBy('barcode'),
 				'product' => $product,
-				'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+				'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('product_barcodes')
 			]);
 		}
@@ -234,11 +234,11 @@ class StockController extends BaseController
 		{
 			return $this->RenderPage($response, 'productbarcodeform', [
 				'mode' => 'edit',
-				'barcode' => $this->DB->product_barcodes($args['productBarcodeId']),
+				'barcode' => $this->GetDb()->product_barcodes($args['productBarcodeId']),
 				'product' => $product,
-				'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+				'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('product_barcodes')
 			]);
 		}
@@ -256,38 +256,38 @@ class StockController extends BaseController
 	{
 		if ($args['productId'] == 'new')
 		{
-			$quantityunits = $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$quantityunits = $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 
 			return $this->RenderPage($response, 'productform', [
-				'locations' => $this->DB->locations()->where('active = 1')->orderBy('name'),
-				'barcodes' => $this->DB->product_barcodes()->orderBy('barcode'),
+				'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name'),
+				'barcodes' => $this->GetDb()->product_barcodes()->orderBy('barcode'),
 				'quantityunitsAll' => $quantityunits,
 				'quantityunitsReferenced' => $quantityunits,
-				'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'productgroups' => $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'productgroups' => $this->GetDb()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('products'),
-				'products' => $this->DB->products()->where('parent_product_id IS NULL and active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'products' => $this->GetDb()->products()->where('parent_product_id IS NULL and active = 1')->orderBy('name', 'COLLATE NOCASE'),
 				'isSubProductOfOthers' => false,
 				'mode' => 'create'
 			]);
 		}
 		else
 		{
-			$product = $this->DB->products($args['productId']);
+			$product = $this->GetDb()->products($args['productId']);
 
 			return $this->RenderPage($response, 'productform', [
 				'product' => $product,
-				'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'barcodes' => $this->DB->product_barcodes()->orderBy('barcode'),
-				'quantityunitsAll' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'quantityunitsReferenced' => $this->DB->quantity_units()->where('id IN (SELECT to_qu_id FROM cache__quantity_unit_conversions_resolved WHERE product_id = :1) OR NOT EXISTS(SELECT 1 FROM stock_log WHERE product_id = :1)', $product->id)->orderBy('name', 'COLLATE NOCASE'),
-				'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'productgroups' => $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'barcodes' => $this->GetDb()->product_barcodes()->orderBy('barcode'),
+				'quantityunitsAll' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'quantityunitsReferenced' => $this->GetDb()->quantity_units()->where('id IN (SELECT to_qu_id FROM cache__quantity_unit_conversions_resolved WHERE product_id = :1) OR NOT EXISTS(SELECT 1 FROM stock_log WHERE product_id = :1)', $product->id)->orderBy('name', 'COLLATE NOCASE'),
+				'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'productgroups' => $this->GetDb()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('products'),
-				'products' => $this->DB->products()->where('id != :1 AND parent_product_id IS NULL and active = 1', $product->id)->orderBy('name', 'COLLATE NOCASE'),
-				'isSubProductOfOthers' => $this->DB->products()->where('parent_product_id = :1', $product->id)->count() !== 0,
+				'products' => $this->GetDb()->products()->where('id != :1 AND parent_product_id IS NULL and active = 1', $product->id)->orderBy('name', 'COLLATE NOCASE'),
+				'isSubProductOfOthers' => $this->GetDb()->products()->where('parent_product_id = :1', $product->id)->count() !== 0,
 				'mode' => 'edit',
-				'quConversions' => $this->DB->quantity_unit_conversions()->where('product_id', $product->id),
+				'quConversions' => $this->GetDb()->quantity_unit_conversions()->where('product_id', $product->id),
 				'productBarcodeUserfields' => UserfieldsService::GetInstance()->GetFields('product_barcodes'),
 				'productBarcodeUserfieldValues' => UserfieldsService::GetInstance()->GetAllValues('product_barcodes')
 			]);
@@ -320,7 +320,7 @@ class StockController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'productgroupform', [
-				'group' => $this->DB->product_groups($args['productGroupId']),
+				'group' => $this->GetDb()->product_groups($args['productGroupId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('product_groups')
 			]);
@@ -336,16 +336,16 @@ class StockController extends BaseController
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
 		{
-			$productGroups = $this->DB->product_groups()->orderBy('name', 'COLLATE NOCASE');
+			$productGroups = $this->GetDb()->product_groups()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
-			$productGroups = $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$productGroups = $this->GetDb()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 		}
 
 		return $this->RenderPage($response, 'productgroups', [
 			'productGroups' => $productGroups,
-			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('product_groups'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('product_groups')
 		]);
@@ -359,7 +359,7 @@ class StockController extends BaseController
 	 */
 	public function ProductsList(Request $request, Response $response, array $args)
 	{
-		$products = $this->DB->products();
+		$products = $this->GetDb()->products();
 		if (!isset($request->getQueryParams()['include_disabled']))
 		{
 			$products = $products->where('active = 1');
@@ -381,10 +381,10 @@ class StockController extends BaseController
 
 		return $this->RenderPage($response, 'products', [
 			'products' => $products,
-			'locations' => $this->DB->locations()->orderBy('name', 'COLLATE NOCASE'),
-			'quantityunits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-			'productGroups' => $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'shoppingLocations' => $this->DB->shopping_locations()->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->orderBy('name', 'COLLATE NOCASE'),
+			'quantityunits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+			'productGroups' => $this->GetDb()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'shoppingLocations' => $this->GetDb()->shopping_locations()->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('products'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('products')
 		]);
@@ -396,12 +396,12 @@ class StockController extends BaseController
 	public function Purchase(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'purchase', [
-			'products' => $this->DB->products()->where('active = 1 AND no_own_stock = 0')->orderBy('name', 'COLLATE NOCASE'),
-			'barcodes' => $this->DB->product_barcodes_comma_separated(),
-			'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+			'products' => $this->GetDb()->products()->where('active = 1 AND no_own_stock = 0')->orderBy('name', 'COLLATE NOCASE'),
+			'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+			'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('stock')
 		]);
 	}
@@ -419,14 +419,14 @@ class StockController extends BaseController
 		$product = null;
 		if (isset($request->getQueryParams()['product']))
 		{
-			$product = $this->DB->products($request->getQueryParams()['product']);
+			$product = $this->GetDb()->products($request->getQueryParams()['product']);
 		}
 
 		$defaultQuUnit = null;
 
 		if (isset($request->getQueryParams()['qu-unit']))
 		{
-			$defaultQuUnit = $this->DB->quantity_units($request->getQueryParams()['qu-unit']);
+			$defaultQuUnit = $this->GetDb()->quantity_units($request->getQueryParams()['qu-unit']);
 		}
 
 		if ($args['quConversionId'] == 'new')
@@ -434,7 +434,7 @@ class StockController extends BaseController
 			return $this->RenderPage($response, 'quantityunitconversionform', [
 				'mode' => 'create',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('quantity_unit_conversions'),
-				'quantityunits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'quantityunits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 				'product' => $product,
 				'defaultQuUnit' => $defaultQuUnit
 			]);
@@ -442,10 +442,10 @@ class StockController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'quantityunitconversionform', [
-				'quConversion' => $this->DB->quantity_unit_conversions($args['quConversionId']),
+				'quConversion' => $this->GetDb()->quantity_unit_conversions($args['quConversionId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('quantity_unit_conversions'),
-				'quantityunits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'quantityunits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 				'product' => $product,
 				'defaultQuUnit' => $defaultQuUnit
 			]);
@@ -470,7 +470,7 @@ class StockController extends BaseController
 		}
 		else
 		{
-			$quantityUnit = $this->DB->quantity_units($args['quantityunitId']);
+			$quantityUnit = $this->GetDb()->quantity_units($args['quantityunitId']);
 
 			return $this->RenderPage($response, 'quantityunitform', [
 				'quantityUnit' => $quantityUnit,
@@ -478,8 +478,8 @@ class StockController extends BaseController
 				'userfields' => UserfieldsService::GetInstance()->GetFields('quantity_units'),
 				'pluralCount' => LocalizationService::GetInstance()->GetPluralCount(),
 				'pluralRule' => LocalizationService::GetInstance()->GetPluralDefinition(),
-				'defaultQuConversions' => $this->DB->quantity_unit_conversions()->where('from_qu_id = :1 AND product_id IS NULL', $quantityUnit->id),
-				'quantityUnits' => $this->DB->quantity_units()
+				'defaultQuConversions' => $this->GetDb()->quantity_unit_conversions()->where('from_qu_id = :1 AND product_id IS NULL', $quantityUnit->id),
+				'quantityUnits' => $this->GetDb()->quantity_units()
 			]);
 		}
 	}
@@ -490,7 +490,7 @@ class StockController extends BaseController
 	public function QuantityUnitPluralFormTesting(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'quantityunitpluraltesting', [
-			'quantityUnits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE')
+			'quantityUnits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE')
 		]);
 	}
 
@@ -503,11 +503,11 @@ class StockController extends BaseController
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
 		{
-			$quantityUnits = $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE');
+			$quantityUnits = $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
-			$quantityUnits = $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$quantityUnits = $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 		}
 
 		return $this->RenderPage($response, 'quantityunits', [
@@ -531,13 +531,13 @@ class StockController extends BaseController
 		}
 
 		return $this->RenderPage($response, 'shoppinglist', [
-			'listItems' => $this->DB->uihelper_shopping_list()->where('shopping_list_id = :1', $listId)->orderBy('product_name', 'COLLATE NOCASE'),
-			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityunits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+			'listItems' => $this->GetDb()->uihelper_shopping_list()->where('shopping_list_id = :1', $listId)->orderBy('product_name', 'COLLATE NOCASE'),
+			'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityunits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
 			'missingProducts' => StockService::GetInstance()->GetMissingProducts(),
-			'shoppingLists' => $this->DB->shopping_lists_view()->orderBy('name', 'COLLATE NOCASE'),
+			'shoppingLists' => $this->GetDb()->shopping_lists_view()->orderBy('name', 'COLLATE NOCASE'),
 			'selectedShoppingListId' => $listId,
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 			'productUserfields' => UserfieldsService::GetInstance()->GetFields('products'),
 			'productUserfieldValues' => UserfieldsService::GetInstance()->GetAllValues('products'),
 			'productGroupUserfields' => UserfieldsService::GetInstance()->GetFields('product_groups'),
@@ -564,7 +564,7 @@ class StockController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'shoppinglistform', [
-				'shoppingList' => $this->DB->shopping_lists($args['listId']),
+				'shoppingList' => $this->GetDb()->shopping_lists($args['listId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('shopping_lists')
 			]);
@@ -581,25 +581,25 @@ class StockController extends BaseController
 		if ($args['itemId'] == 'new')
 		{
 			return $this->RenderPage($response, 'shoppinglistitemform', [
-				'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'barcodes' => $this->DB->product_barcodes_comma_separated(),
-				'shoppingLists' => $this->DB->shopping_lists()->orderBy('name', 'COLLATE NOCASE'),
+				'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+				'shoppingLists' => $this->GetDb()->shopping_lists()->orderBy('name', 'COLLATE NOCASE'),
 				'mode' => 'create',
-				'quantityUnits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+				'quantityUnits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('shopping_list')
 			]);
 		}
 		else
 		{
 			return $this->RenderPage($response, 'shoppinglistitemform', [
-				'listItem' => $this->DB->shopping_list($args['itemId']),
-				'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'barcodes' => $this->DB->product_barcodes_comma_separated(),
-				'shoppingLists' => $this->DB->shopping_lists()->orderBy('name', 'COLLATE NOCASE'),
+				'listItem' => $this->GetDb()->shopping_list($args['itemId']),
+				'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+				'shoppingLists' => $this->GetDb()->shopping_lists()->orderBy('name', 'COLLATE NOCASE'),
 				'mode' => 'edit',
-				'quantityUnits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+				'quantityUnits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('shopping_list')
 			]);
 		}
@@ -611,7 +611,7 @@ class StockController extends BaseController
 	public function ShoppingListSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'shoppinglistsettings', [
-			'shoppingLists' => $this->DB->shopping_lists()->orderBy('name', 'COLLATE NOCASE')
+			'shoppingLists' => $this->GetDb()->shopping_lists()->orderBy('name', 'COLLATE NOCASE')
 		]);
 	}
 
@@ -632,7 +632,7 @@ class StockController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'shoppinglocationform', [
-				'shoppingLocation' => $this->DB->shopping_locations($args['shoppingLocationId']),
+				'shoppingLocation' => $this->GetDb()->shopping_locations($args['shoppingLocationId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('shopping_locations')
 			]);
@@ -648,11 +648,11 @@ class StockController extends BaseController
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
 		{
-			$shoppingLocations = $this->DB->shopping_locations()->orderBy('name', 'COLLATE NOCASE');
+			$shoppingLocations = $this->GetDb()->shopping_locations()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
-			$shoppingLocations = $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$shoppingLocations = $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 		}
 
 		return $this->RenderPage($response, 'shoppinglocations', [
@@ -668,10 +668,10 @@ class StockController extends BaseController
 	public function StockEntryEditForm(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'stockentryform', [
-			'stockEntry' => $this->DB->stock()->where('id', $args['entryId'])->fetch(),
-			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'stockEntry' => $this->GetDb()->stock()->where('id', $args['entryId'])->fetch(),
+			'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('stock')
 		]);
 	}
@@ -682,7 +682,7 @@ class StockController extends BaseController
 	 */
 	public function StockEntryGrocycodeImage(Request $request, Response $response, array $args)
 	{
-		$stockEntry = $this->DB->stock()->where('id', $args['entryId'])->fetch();
+		$stockEntry = $this->GetDb()->stock()->where('id', $args['entryId'])->fetch();
 		$gc = new Grocycode(Grocycode::PRODUCT, $stockEntry->product_id, [$stockEntry->stock_id]);
 		return $this->ServeGrocycodeImage($request, $response, $gc);
 	}
@@ -693,10 +693,10 @@ class StockController extends BaseController
 	 */
 	public function StockEntryGrocycodeLabel(Request $request, Response $response, array $args)
 	{
-		$stockEntry = $this->DB->stock()->where('id', $args['entryId'])->fetch();
+		$stockEntry = $this->GetDb()->stock()->where('id', $args['entryId'])->fetch();
 		return $this->RenderPage($response, 'stockentrylabel', [
 			'stockEntry' => $stockEntry,
-			'product' => $this->DB->products($stockEntry->product_id),
+			'product' => $this->GetDb()->products($stockEntry->product_id),
 		]);
 	}
 
@@ -706,9 +706,9 @@ class StockController extends BaseController
 	public function StockSettings(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'stocksettings', [
-			'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityunits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'productGroups' => $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE')
+			'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityunits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'productGroups' => $this->GetDb()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE')
 		]);
 	}
 
@@ -721,11 +721,11 @@ class StockController extends BaseController
 		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['stock_due_soon_days'];
 
 		return $this->RenderPage($response, 'stockentries', [
-			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityunits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'shoppinglocations' => $this->DB->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'stockEntries' => $this->DB->uihelper_stock_entries()->orderBy('product_id'),
+			'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityunits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'shoppinglocations' => $this->GetDb()->shopping_locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'stockEntries' => $this->GetDb()->uihelper_stock_entries()->orderBy('product_id'),
 			'currentStockLocations' => StockService::GetInstance()->GetCurrentStockLocations(),
 			'nextXDays' => $nextXDays,
 			'userfieldsProducts' => UserfieldsService::GetInstance()->GetFields('products'),
@@ -742,11 +742,11 @@ class StockController extends BaseController
 	public function Transfer(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'transfer', [
-			'products' => $this->DB->products()->where('active = 1')->where('no_own_stock = 0 AND id IN (SELECT product_id from stock_current WHERE amount_aggregated > 0)')->orderBy('name', 'COLLATE NOCASE'),
-			'barcodes' => $this->DB->product_barcodes_comma_separated(),
-			'locations' => $this->DB->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved()
+			'products' => $this->GetDb()->products()->where('active = 1')->where('no_own_stock = 0 AND id IN (SELECT product_id from stock_current WHERE amount_aggregated > 0)')->orderBy('name', 'COLLATE NOCASE'),
+			'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+			'locations' => $this->GetDb()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved()
 		]);
 	}
 
@@ -757,7 +757,7 @@ class StockController extends BaseController
 	 */
 	public function JournalSummary(Request $request, Response $response, array $args)
 	{
-		$entries = $this->DB->uihelper_stock_journal_summary();
+		$entries = $this->GetDb()->uihelper_stock_journal_summary();
 		if (isset($request->getQueryParams()['product_id']))
 		{
 			$entries = $entries->where('product_id', $request->getQueryParams()['product_id']);
@@ -774,7 +774,7 @@ class StockController extends BaseController
 		$usersService = UsersService::GetInstance();
 		return $this->RenderPage($response, 'stockjournalsummary', [
 			'entries' => $entries,
-			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'users' => $usersService->GetUsersAsDto(),
 			'transactionTypes' => GetClassConstants('\Victual\Services\StockService', 'TRANSACTION_TYPE_')
 		]);
@@ -791,17 +791,17 @@ class StockController extends BaseController
 		$product = null;
 		if (isset($request->getQueryParams()['product']))
 		{
-			$product = $this->DB->products($request->getQueryParams()['product']);
-			$quantityUnitConversionsResolved = $this->DB->cache__quantity_unit_conversions_resolved()->where('product_id', $product->id);
+			$product = $this->GetDb()->products($request->getQueryParams()['product']);
+			$quantityUnitConversionsResolved = $this->GetDb()->cache__quantity_unit_conversions_resolved()->where('product_id', $product->id);
 		}
 		else
 		{
-			$quantityUnitConversionsResolved = $this->DB->cache__quantity_unit_conversions_resolved()->where('product_id IS NULL');
+			$quantityUnitConversionsResolved = $this->GetDb()->cache__quantity_unit_conversions_resolved()->where('product_id IS NULL');
 		}
 
 		return $this->RenderPage($response, 'quantityunitconversionsresolved', [
 			'product' => $product,
-			'quantityUnits' => $this->DB->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnits' => $this->GetDb()->quantity_units()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'quantityUnitConversionsResolved' => $quantityUnitConversionsResolved
 		]);
 	}

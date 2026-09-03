@@ -65,9 +65,9 @@ class GenericEntityApiController extends BaseApiController
 					throw new \Exception('Request body could not be parsed (probably invalid JSON format or missing/wrong Content-Type header)');
 				}
 
-				$newRow = $this->DB->{$args['entity']}()->createRow($requestBody);
+				$newRow = $this->GetDb()->{$args['entity']}()->createRow($requestBody);
 				$newRow->save();
-				$newObjectId = $this->DB->lastInsertId();
+				$newObjectId = $this->GetDb()->lastInsertId();
 
 				// TODO: This should be better done somehow in StockService
 				if ($args['entity'] == 'products' && boolval(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
@@ -132,7 +132,7 @@ class GenericEntityApiController extends BaseApiController
 				User::CheckPermission($request, User::PERMISSION_ADMIN);
 			}
 
-			$row = $this->DB->{$args['entity']}($args['objectId']);
+			$row = $this->GetDb()->{$args['entity']}($args['objectId']);
 			if ($row == null)
 			{
 				return $this->GenericErrorResponse($response, 'Object not found', 400);
@@ -207,7 +207,7 @@ class GenericEntityApiController extends BaseApiController
 					throw new \Exception('Request body could not be parsed (probably invalid JSON format or missing/wrong Content-Type header)');
 				}
 
-				$row = $this->DB->{$args['entity']}($args['objectId']);
+				$row = $this->GetDb()->{$args['entity']}($args['objectId']);
 				if ($row == null)
 				{
 					return $this->GenericErrorResponse($response, 'Object not found', 400);
@@ -246,7 +246,7 @@ class GenericEntityApiController extends BaseApiController
 			return $this->GenericErrorResponse($response, 'Entity does not exist or is not exposed');
 		}
 
-		$object = $this->DB->{$args['entity']}($args['objectId']);
+		$object = $this->GetDb()->{$args['entity']}($args['objectId']);
 		if ($object == null)
 		{
 			return $this->GenericErrorResponse($response, 'Object not found', 404);
@@ -282,7 +282,7 @@ class GenericEntityApiController extends BaseApiController
 		}
 
 		$queryParams = $request->getQueryParams();
-		$objects = $this->MaterialiseFiltered($request, $this->QueryData($request, $this->DB->{$args['entity']}(), $queryParams), $queryParams);
+		$objects = $this->MaterialiseFiltered($request, $this->QueryData($request, $this->GetDb()->{$args['entity']}(), $queryParams), $queryParams);
 
 		$userfields = UserfieldsService::GetInstance()->GetFields($args['entity']);
 		if (count($userfields) > 0)

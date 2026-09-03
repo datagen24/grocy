@@ -118,5 +118,15 @@ $errorMiddleware->setDefaultErrorHandler(new ExceptionController($container, $ap
 
 $app->getRouteCollector()->setCacheFile(CachePaths::RouteCacheFile());
 
-ob_clean(); // No response output before here
+// No response output before here. Guarded because ob_clean() with no buffer open is not a
+// no-op but an E_NOTICE, and output_buffering is off by default on the CLI SAPI - so on
+// the built-in server in dev mode, where notices are displayed, this line was itself the
+// first thing written to every response. Anything written before Slim emits is what makes
+// a response's status unsettable, which is the failure this whole path exists to avoid:
+// the body said 503 and the status line said 200.
+if (ob_get_level() > 0)
+{
+	ob_clean();
+}
+
 $app->run();

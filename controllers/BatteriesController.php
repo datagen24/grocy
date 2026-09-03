@@ -27,11 +27,11 @@ class BatteriesController extends BaseController
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
 		{
-			$batteries = $this->DB->batteries()->orderBy('name', 'COLLATE NOCASE');
+			$batteries = $this->GetDb()->batteries()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
-			$batteries = $this->DB->batteries()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$batteries = $this->GetDb()->batteries()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 		}
 
 		return $this->RenderPage($response, 'batteries', [
@@ -66,7 +66,7 @@ class BatteriesController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'batteryform', [
-				'battery' => $this->DB->batteries($args['batteryId']),
+				'battery' => $this->GetDb()->batteries($args['batteryId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('batteries')
 			]);
@@ -91,7 +91,7 @@ class BatteriesController extends BaseController
 		// The cut-off date is computed here and bound as a parameter instead of being
 		// expressed in SQL: SQLite's DATE(x, '-N months') has no PostgreSQL equivalent,
 		// so date arithmetic must not leak into the query (see DatabaseDialect)
-		$chargeCycles = $this->DB->battery_charge_cycles()->where('tracked_time > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
+		$chargeCycles = $this->GetDb()->battery_charge_cycles()->where('tracked_time > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
 
 		if (isset($request->getQueryParams()['battery']) && filter_var($request->getQueryParams()['battery'], FILTER_VALIDATE_INT) !== false)
 		{
@@ -100,7 +100,7 @@ class BatteriesController extends BaseController
 
 		return $this->RenderPage($response, 'batteriesjournal', [
 			'chargeCycles' => $chargeCycles->orderBy('tracked_time', 'DESC'),
-			'batteries' => $this->DB->batteries()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'batteries' => $this->GetDb()->batteries()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('battery_charge_cycles'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('battery_charge_cycles')
 		]);
@@ -116,7 +116,7 @@ class BatteriesController extends BaseController
 		$usersService = UsersService::GetInstance();
 		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['batteries_due_soon_days'];
 
-		$batteries = $this->DB->batteries()->where('active = 1');
+		$batteries = $this->GetDb()->batteries()->where('active = 1');
 		$currentBatteries = BatteriesService::GetInstance()->GetCurrent();
 		foreach ($currentBatteries as $currentBattery)
 		{
@@ -152,7 +152,7 @@ class BatteriesController extends BaseController
 	public function TrackChargeCycle(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'batterytracking', [
-			'batteries' => $this->DB->batteries()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'batteries' => $this->GetDb()->batteries()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('battery_charge_cycles')
 		]);
 	}

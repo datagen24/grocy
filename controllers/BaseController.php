@@ -16,17 +16,26 @@ use Victual\Services\UsersService;
  * connection, plus the Render()/RenderPage() helpers that populate the
  * template variables common to every Victual page (localization, feature
  * flags, permissions, URL builder etc.).
+ *
+ * The connection is acquired by GetDb() when a controller asks for it, and deliberately
+ * not in the constructor. `app.php` builds the error middleware by constructing
+ * ExceptionController, which is a controller - so a constructor that connected made the
+ * error handler impossible to *build* without a database, and an unreachable one killed
+ * the application while it was still being assembled: an uncaught PDOException rendered
+ * as a raw PHP fatal, before any middleware ran, answered 200 because nothing had set a
+ * status yet. That is the same defect f4d1769b fixed one line above for middlewares (see
+ * middleware/BaseMiddleware.php); a controller that needs the database asks for it when
+ * it runs, not when it is constructed. See docs/plans/15-deliberate-cleanup.md, C15.
  */
 class BaseController
 {
 	/**
-	 * Wires up the view engine and the LessQL database connection from the DI container.
+	 * Wires up the view engine from the DI container. Opens nothing.
 	 */
 	public function __construct(Container $container)
 	{
 		$this->AppContainer = $container;
 		$this->View = $container->get('view');
-		$this->DB = DatabaseService::GetInstance()->GetDbConnection();
 	}
 
 	/** @var Container The application DI container */
@@ -35,8 +44,21 @@ class BaseController
 	/** @var \Victual\Helpers\SlimBladeView The shared Blade view engine */
 	protected $View;
 
-	/** @var \LessQL\Database Fluent database connection (SQLite or PostgreSQL, depending on configuration) */
-	protected $DB;
+	/**
+	 * The shared fluent database connection (SQLite or PostgreSQL, depending on
+	 * configuration), opened on first use.
+	 *
+	 * Nothing is memoized here on purpose: DatabaseService already holds the one
+	 * connection and the one LessQL wrapper for the process, so a copy in every
+	 * controller would only be a second name for the same object - and a controller
+	 * holding a connection it never used is exactly what this method exists to stop.
+	 *
+	 * @return \LessQL\Database
+	 */
+	protected function GetDb()
+	{
+		return DatabaseService::GetInstance()->GetDbConnection();
+	}
 
 	/**
 	 * Renders the given view with the globally needed template variables set
@@ -129,7 +151,7 @@ class BaseController
 	 */
 	protected function RenderPage($response, $viewName, $data = [])
 	{
-		$this->View->set('userentitiesForSidebar', $this->DB->userentities()->where('show_in_sidebar_menu = 1')->orderBy('name'));
+		$this->View->set('userentitiesForSidebar', $this->GetDb()->userentities()->where('show_in_sidebar_menu = 1')->orderBy('name'));
 		try
 		{
 			$usersService = UsersService::GetInstance();

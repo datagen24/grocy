@@ -28,7 +28,7 @@ class OpenApiController extends BaseApiController
 			$selectedKeyId = $request->getQueryParams()['key'];
 		}
 
-		$apiKeys = $this->DB->api_keys();
+		$apiKeys = $this->GetDb()->api_keys();
 		if (!User::HasPermissions(User::PERMISSION_ADMIN))
 		{
 			$apiKeys = $apiKeys->where('user_id', VICTUAL_USER_ID);
@@ -36,7 +36,7 @@ class OpenApiController extends BaseApiController
 
 		return $this->RenderPage($response, 'manageapikeys', [
 			'apiKeys' => $apiKeys,
-			'users' => $this->DB->users(),
+			'users' => $this->GetDb()->users(),
 			'selectedKeyId' => $selectedKeyId
 		]);
 	}

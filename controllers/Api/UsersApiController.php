@@ -26,7 +26,7 @@ class UsersApiController extends BaseApiController
 			User::CheckPermission($request, User::PERMISSION_ADMIN);
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-			$this->DB->user_permissions()->createRow([
+			$this->GetDb()->user_permissions()->createRow([
 				'user_id' => $args['userId'],
 				'permission_id' => $requestBody['permission_id']
 			])->save();
@@ -211,7 +211,7 @@ class UsersApiController extends BaseApiController
 
 			return $this->ApiResponse(
 				$response,
-				$this->DB->user_permissions()->where('user_id', $args['userId'])
+				$this->GetDb()->user_permissions()->where('user_id', $args['userId'])
 			);
 		}
 		catch (\Slim\Exception\HttpSpecializedException $ex)
@@ -238,7 +238,7 @@ class UsersApiController extends BaseApiController
 			User::CheckPermission($request, User::PERMISSION_ADMIN);
 
 			$requestBody = $request->getParsedBody();
-			$db = $this->DB;
+			$db = $this->GetDb();
 			$db->user_permissions()
 				->where('user_id', $args['userId'])
 				->delete();

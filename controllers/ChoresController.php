@@ -36,19 +36,19 @@ class ChoresController extends BaseController
 				'userfields' => UserfieldsService::GetInstance()->GetFields('chores'),
 				'assignmentTypes' => GetClassConstants('\Victual\Services\ChoresService', 'CHORE_ASSIGNMENT_TYPE_'),
 				'users' => $users,
-				'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE')
+				'products' => $this->GetDb()->products()->orderBy('name', 'COLLATE NOCASE')
 			]);
 		}
 		else
 		{
 			return $this->RenderPage($response, 'choreform', [
-				'chore' => $this->DB->chores($args['choreId']),
+				'chore' => $this->GetDb()->chores($args['choreId']),
 				'periodTypes' => GetClassConstants('\Victual\Services\ChoresService', 'CHORE_PERIOD_TYPE_'),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('chores'),
 				'assignmentTypes' => GetClassConstants('\Victual\Services\ChoresService', 'CHORE_ASSIGNMENT_TYPE_'),
 				'users' => $users,
-				'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE')
+				'products' => $this->GetDb()->products()->orderBy('name', 'COLLATE NOCASE')
 			]);
 		}
 	}
@@ -62,11 +62,11 @@ class ChoresController extends BaseController
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
 		{
-			$chores = $this->DB->chores()->orderBy('name', 'COLLATE NOCASE');
+			$chores = $this->GetDb()->chores()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
-			$chores = $this->DB->chores()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$chores = $this->GetDb()->chores()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 		}
 
 		return $this->RenderPage($response, 'chores', [
@@ -102,7 +102,7 @@ class ChoresController extends BaseController
 		// The cut-off date is computed here and bound as a parameter instead of being
 		// expressed in SQL: SQLite's DATE(x, '-N months') has no PostgreSQL equivalent,
 		// so date arithmetic must not leak into the query (see DatabaseDialect)
-		$choresLog = $this->DB->chores_log()->where('tracked_time > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
+		$choresLog = $this->GetDb()->chores_log()->where('tracked_time > :1', date('Y-m-d', strtotime('-' . $months . ' months')));
 
 		if (isset($request->getQueryParams()['chore']) && filter_var($request->getQueryParams()['chore'], FILTER_VALIDATE_INT) !== false)
 		{
@@ -111,8 +111,8 @@ class ChoresController extends BaseController
 
 		return $this->RenderPage($response, 'choresjournal', [
 			'choresLog' => $choresLog->orderBy('tracked_time', 'DESC'),
-			'chores' => $this->DB->chores()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'users' => $this->DB->users()->orderBy('username'),
+			'chores' => $this->GetDb()->chores()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'users' => $this->GetDb()->users()->orderBy('username'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('chores_log'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('chores_log')
 		]);
@@ -128,7 +128,7 @@ class ChoresController extends BaseController
 		$usersService = UsersService::GetInstance();
 		$nextXDays = $usersService->GetUserSettings(VICTUAL_USER_ID)['chores_due_soon_days'];
 
-		$chores = $this->DB->chores()->orderBy('name', 'COLLATE NOCASE');
+		$chores = $this->GetDb()->chores()->orderBy('name', 'COLLATE NOCASE');
 		$currentChores = ChoresService::GetInstance()->GetCurrent();
 		foreach ($currentChores as $currentChore)
 		{
@@ -165,8 +165,8 @@ class ChoresController extends BaseController
 	public function TrackChoreExecution(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'choretracking', [
-			'chores' => $this->DB->chores()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'users' => $this->DB->users()->orderBy('username'),
+			'chores' => $this->GetDb()->chores()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'users' => $this->GetDb()->users()->orderBy('username'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('chores_log'),
 		]);
 	}

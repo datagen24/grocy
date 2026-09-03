@@ -7,7 +7,9 @@ plans one item at a time.
 ordering fix there, the refactor here);
 [14](14-contract-and-regression-scaffolding.md) for anything verified by result-set diff.
 **Status:** draft for review. Deliberately a grab bag — see "Why one plan" below.
-15-B2 (session cookie) landed early, in the wave 0.5 hotfix; see its Executed note.
+15-B2 (session cookie) landed early, in the wave 0.5 hotfix, and 15-C15 (the error handler
+without a database) landed early on [10](10-cold-start-statelessness.md)'s branch; see
+their Executed notes.
 
 > **Read [19](19-rbac.md) before starting C1** — as a consistency check, not as a blocker.
 > It landed as a plan on 2026-08-30, and the sweep's permission findings that were parked
@@ -54,12 +56,21 @@ Grouped by whether they change behaviour anyone can observe.
 | C12 | `DatabaseService::InTransaction`'s docblock points at "`DatabaseDialect` for the per-engine locking used around migrations"; no such method exists there and none is planned before [10](10-cold-start-statelessness.md) builds one. Reword to name 10, or make the `@see` resolve. Rigor review A4 | `services/DatabaseService.php` |
 | C13 | `.gitignore`'s `/.phpdoc` is anchored to the repository root, so a phpDocumentor run in a subdirectory leaves untracked output — `branding/.phpdoc/` is the live case. Unanchor it to `.phpdoc/`. Rigor review H1 | `.gitignore` |
 | C14 | CI lints PHP with `php -l` and never runs the `node --check` sweep over `public/**/*.js` that [14](14-contract-and-regression-scaffolding.md) piece 3 specifies. Add it, or amend 14 — but not neither, which is where it has sat. Rigor review A9 | `.github/workflows/tests.yml` |
+| C15 | `BaseController::__construct` opens the database, so a controller cannot be *built* without one — and `app.php` builds one, `ExceptionController`, while assembling the error middleware. An unreachable database therefore kills the application while it is still being assembled, as a raw PHP fatal with a 200, before any middleware runs. Found while verifying [10](10-cold-start-statelessness.md)'s review fix | `controllers/BaseController.php`, `controllers/ExceptionController.php`, `app.php` |
 
 C11 through C14 arrived from the two 2026-08-29 reviews rather than from the original
 architecture review, and C11 is here for a reason worth recording: both the roadmap and
 the security sweep already stated it *was* here. Neither had checked. Adding the row is
 the fix; the reason it went missing is that a sentence saying where an item lives is
 itself an unverified claim, which is the rigor review's H3 in one line.
+
+C15 arrived on 2026-09-03, from [10](10-cold-start-statelessness.md)'s pull request review,
+and it is here rather than in [11](11-api-error-handling.md) — which owns the error surface
+— because the defect is in how a controller is *constructed* rather than in what the error
+handler answers. It is also larger than the rest of this table, and says so: the fix is a
+lazy accessor on `BaseController`, which touches every controller in the tree. It is the
+one row here that is a defect rather than tidiness, so unlike its neighbours it did not
+wait for a wave; see its Executed note below.
 
 C4's status clamping is worth a sentence: `ExceptionController` sets
 `$status = $exception->getCode()` for any `HttpException`. Slim's own exceptions carry
@@ -170,6 +181,109 @@ Named here so it is on the record and not rediscovered. The seven-fold repetitio
 and a transaction change verified by "the ledger is consistent" stops being verifiable if
 a deduplication rides along. Accepted debt, revisit after 13.
 
+### C15 — the error handler exists before the database does
+
+`BaseController::__construct` calls `DatabaseService::GetInstance()->GetDbConnection()`.
+Every controller is built that way, and one of them is built at a moment when nothing is
+allowed to fail: `app.php` constructs `ExceptionController` to hand to
+`setDefaultErrorHandler`, while the application is still being assembled. So the error
+handler could not be *built* without a reachable database, and when the database was
+unreachable the failure arrived as an uncaught `PDOException` rendered by PHP itself —
+before routing, before authentication, before
+[10](10-cold-start-statelessness.md)'s schema gate, and with a **200** status, because
+nothing had set one.
+
+This is [ADR-0007](../adr/0007-auth-state-outlives-the-process.md)'s neighbour rather than
+its instance: not state kept between requests, but work done at build time that belongs to
+a request. `f4d1769b` fixed exactly this for middlewares — `BaseMiddleware` fetched
+`ApplicationService`, which opens the database, so writing the route cache at image build
+time needed one. The rule that commit states in its docblock is the rule here: *a thing
+that needs the database asks for it when it runs, not when it is constructed.*
+
+The change is three parts:
+
+- **`BaseController` acquires the connection through `GetDb()`**, which returns
+  `DatabaseService::GetInstance()->GetDbConnection()` and memoizes nothing of its own —
+  `DatabaseService` already holds the process's single connection, and a controller that
+  keeps a second reference to it is how the eager version got written in the first place.
+  The constructor keeps the container and the view engine and opens nothing. Mechanical
+  across the tree: 225 `$this->DB->` call sites in `controllers/` become `$this->GetDb()->`.
+- **`ExceptionController` answers in plain text when it cannot render its page.** The
+  error page is the most demanding page in the application — it reads the sidebar entities
+  and `GetSystemInfo()`'s `migrations` row from the database and compiles a template — and
+  an exception thrown out of an error handler has nowhere to go: Slim is already handling
+  one, so it leaves through PHP as a fatal, which is the same 200-with-a-stack-trace as
+  before. The fallback carries the status the page would have carried, is built from a
+  fresh response rather than from the half-written one, and puts both messages in the log
+  and (in `dev` only) in the body, matching the gating
+  `SchemaVersionMiddleware::DatabaseUnavailable` already uses.
+- **`app.php`'s `ob_clean()` is guarded by `ob_get_level()`.** Found while measuring the
+  first two: `ob_clean()` with no buffer open is an `E_NOTICE`, not a no-op, and
+  `output_buffering` is off by default on the CLI SAPI — so on the built-in server in
+  `dev` mode, where notices are displayed, that line was itself the first output of *every*
+  response, which is what makes a status unsettable. It is one line and it is on this
+  path rather than adjacent to it: without it the fix produces the right body under a 200,
+  which is the half of the defect that matters least to a human and most to a client.
+
+**Two things deliberately not changed**, because neither is reachable before the error
+middleware exists and widening the diff would cost the verification its meaning:
+
+- **`BaseService::__construct` still connects.** Services are constructed while a request
+  is being handled, where a failure is an exception the error middleware catches — and
+  since `f4d1769b` nothing constructs a service while the application is being built.
+  Making services lazy too is the same shape of change over another 185 call sites, with
+  no defect behind it today.
+- **`controllers/Users/User.php` still connects in its constructor.** It is not a
+  `BaseController`, it is only ever constructed from `PermissionList()` and its siblings
+  during a request, and [19](19-rbac.md) rewrites it.
+
+> **Executed, 2026-09-03.** Landed ahead of the rest of this plan, on top of
+> [10](10-cold-start-statelessness.md)'s branch — 10's Executed section is where the defect
+> was recorded as out of scope, and its schema gate is what turns the fixed bootstrap into
+> a legible answer rather than merely a different failure. Measured in the repository's own
+> dev image (`docker build --target dev`), on PHP 8.5.10, with the tree mounted at `/app`
+> and `php -S` serving it, against `VICTUAL_DB_DRIVER=pgsql` and a `DB_HOST` that does not
+> resolve.
+>
+> **Before**, on the unmodified branch: `GET /api/stock`, `GET /stockoverview` and
+> `GET /nosuchpage` each answered **200** with a raw `Fatal error: Uncaught PDOException`
+> page, the stack running `public/index.php:45` → `app.php:117` →
+> `ExceptionController::__construct` → `BaseController::__construct:29` →
+> `DatabaseService::GetDbConnection:143` → `GetDbConnectionRaw:179` →
+> `PostgresDialect::CreateConnection`.
+>
+> **After**: all three answer **503** with `Content-Type: text/plain; charset=utf-8` and
+> the schema gate's database-unavailable body (`SQLSTATE: 08006`, "This is not a migration
+> problem"), the driver's own message in the server log and, in `dev`, in the body — in
+> `dev` mode *and* in `production` mode, which is the `ob_clean()` half: before that line
+> was guarded the same run answered 503-in-the-body under a **200** status line with
+> `Content-Type: text/html`.
+>
+> **The plain-text last resort was exercised rather than reasoned about**, by dropping
+> `userentities` from a migrated SQLite database while leaving `migrations` intact — so the
+> schema gate passes, the page fails, and the error page fails on the same missing table.
+> `GET /stockoverview` answers **500** with the plain text body; the log holds both
+> messages (`Victual: 500 for PDOException: … no such table: userentities` and
+> `Victual: the error page could not be rendered: …`). Before this change that request left
+> through PHP as an uncaught fatal.
+>
+> **Nothing regressed on a working database**: all **117** parameterless GET routes in
+> `routes.php` served with **no 5xx** — the check that matters for a 225-site rewrite —
+> and spot checks kept their shapes: `/stockoverview` 200 HTML, `/api/stock` 200
+> `application/json`, `/nosuchpage` the 404 error *page*, `/api/objects/nosuchentity` 400
+> JSON. `php -l` over the tree is clean.
+>
+> **One thing the sweep turned up that is not this change's**, recorded because it was
+> found here: in `dev` and `demo` mode `DemoDataGeneratorService` records that it has run
+> by inserting the sentinel row `migration = -1`, and 10's new set-based schema gate reads
+> the whole `migrations` column — so the sentinel is "applied but unknown to this code" and
+> every request after the first `GET /` is refused with *"The database is ahead of the
+> code"*. It reproduces on 10's branch without any of this change, and it is 10's to fix:
+> `GetRequiredMigrationNumbers()` already excludes the always-run 8888 and 9999, while
+> `GetAppliedMigrationNumbers()` excludes nothing, so a sentinel that is deliberately not a
+> migration is read as one. The verification above avoids `GET /` for that reason and says
+> so where it does.
+
 ### B1 — LDAP removal
 
 Delete `middleware/Auth/LdapAuthMiddleware.php` and the six `LDAP_*` settings from
@@ -230,10 +344,18 @@ report queries must return byte-identical result sets. C3 changes the About *pag
 change. Additive if a `db_version`-style key is added alongside; breaking if
 `sqlite_version` is removed. Q6.
 
+**C15 changes no successful response and every unsuccessful one that used to be a fatal.**
+A client whose server cannot reach its database used to receive `200 OK`,
+`Content-Type: text/html`, and a PHP stack trace; it now receives a 5xx with a plain text
+body. That is the point of the change rather than a side effect of it, and it is additive
+in the only sense that matters here — no status that was already correct moved, and the
+one that moved was moved off 200.
+
 **Client impact, per group.** The non-breaking items are invisible on the wire except
 C3, which is in this section for exactly that reason — a cleanup that reaches
 `/api/system/info` is not a cleanup, and Q6 decides whether `sqlite_version` gains a
-sibling or loses its meaning. The breaking table below *is* the client-impact line for the
+sibling or loses its meaning — and C15, whose whole observable effect is the paragraph
+above. The breaking table below *is* the client-impact line for the
 rest, and B3 is the largest single client break available anywhere on the roadmap: it
 changes response *fields* on `stock`, `stock_log` and `shopping_list`, not just a path,
 which is why both 05-Q4 and 15-Q5 declined it and why
@@ -285,7 +407,15 @@ worthless across a batch this heterogeneous.
    PostgreSQL version. `/api/system/info` compared before and after against Q6's answer.
    A user with a locale setting and a conflicting `Accept-Language` header gets the user
    setting. A forced exception with a nonsense `getCode()` produces a 500, not a crash.
-7. **B3, if it happens — the full contract sweep.**
+7. **C15 — booted, against a database that is not there, and against one that is.** Point
+   `DB_HOST` at a name that does not resolve and assert the *status line* as well as the
+   body: a body that says 503 under a 200 is the defect, not the fix. Then every
+   parameterless GET route on a migrated database, because the accessor rewrite touches
+   every controller and a sweep is the only thing that reads 225 call sites. Then the last
+   resort on its own terms: break the database *after* the schema gate has passed — drop a
+   table the page and the error page both need — and confirm plain text with the right
+   status rather than a fatal. **Done; the measurements are in C15's Executed note.**
+8. **B3, if it happens — the full contract sweep.**
    [14](14-contract-and-regression-scaffolding.md)'s response snapshot on both engines
    before and after, plus `difftest.php` over every view that references the table, plus
    `trigdifftest.php`'s full script set. This one is not verifiable by inspection at any

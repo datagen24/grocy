@@ -22,8 +22,8 @@ class UsersController extends BaseController
 	{
 		User::CheckPermission($request, User::PERMISSION_USERS_READ);
 		return $this->RenderPage($response, 'userpermissions', [
-			'user' => $this->DB->users($args['userId']),
-			'permissions' => $this->DB->uihelper_user_permissions()
+			'user' => $this->GetDb()->users($args['userId']),
+			'permissions' => $this->GetDb()->uihelper_user_permissions()
 				->where('parent IS NULL')->where('user_id', $args['userId'])
 		]);
 	}
@@ -57,7 +57,7 @@ class UsersController extends BaseController
 			}
 
 			return $this->RenderPage($response, 'userform', [
-				'user' => $this->DB->users($args['userId']),
+				'user' => $this->GetDb()->users($args['userId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('users'),
 				'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('users')
@@ -92,7 +92,7 @@ class UsersController extends BaseController
 	{
 		User::CheckPermission($request, User::PERMISSION_USERS_READ);
 		return $this->RenderPage($response, 'users', [
-			'users' => $this->DB->users()->orderBy('username'),
+			'users' => $this->GetDb()->users()->orderBy('username'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('users'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('users')
 		]);

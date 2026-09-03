@@ -862,7 +862,7 @@ class StockApiController extends BaseApiController
 	{
 		try
 		{
-			$stockEntry = $this->DB->stock()->where('id', $args['entryId'])->fetch();
+			$stockEntry = $this->GetDb()->stock()->where('id', $args['entryId'])->fetch();
 			$productDetails = (object)StockService::GetInstance()->GetProductDetails($stockEntry->product_id);
 
 			$webhookData = array_merge([
@@ -946,7 +946,7 @@ class StockApiController extends BaseApiController
 	{
 		try
 		{
-			$stockLogRow = $this->DB->stock_log($args['bookingId']);
+			$stockLogRow = $this->GetDb()->stock_log($args['bookingId']);
 
 			if ($stockLogRow === null)
 			{
@@ -980,7 +980,7 @@ class StockApiController extends BaseApiController
 	{
 		try
 		{
-			$transactionRows = $this->DB->stock_log()->where('transaction_id = :1', $args['transactionId'])->fetchAll();
+			$transactionRows = $this->GetDb()->stock_log()->where('transaction_id = :1', $args['transactionId'])->fetchAll();
 			if (count($transactionRows) === 0)
 			{
 				throw new \Exception('No transaction was found by the given transaction id');
