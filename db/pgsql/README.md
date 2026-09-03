@@ -93,13 +93,15 @@ reason; use it rather than assuming the highest file in `migrations/` applies ev
 
 Loading cleanly proves very little. The suite is one command:
 
-    .devtools/pgsql/run-tests.sh [migrate|views|triggers]
+    .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema]
 
-Four phases. `migratedifftest.php` migrates a database on each engine, touches neither
-afterwards, and compares every table - that is the equivalence claim above, written as a
-test, and it is the phase the missing seed data would have failed. The other three all
-populate PostgreSQL by copying an already-migrated SQLite database, which is why none of
-them could ever have caught it.
+The runner's own header says what each phase asks and why; this list has been wrong twice
+by being maintained separately from it. `migratedifftest.php` is the one to know about
+here: it migrates a database on each engine, touches neither afterwards, and compares
+every table - that is the equivalence claim above, written as a test, and it is the phase
+the missing seed data would have failed. The view and trigger phases both populate
+PostgreSQL by copying an already-migrated SQLite database, which is why neither could ever
+have caught it.
 
 `.devtools/pgsql/difftest.php` puts both engines into an identical table state and
 compares what their views actually return:

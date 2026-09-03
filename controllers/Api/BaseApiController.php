@@ -337,6 +337,35 @@ class BaseApiController extends BaseController
 	private static $htmlPurifierInstance = null;
 
 	/**
+	 * Builds the HTMLPurifier every write request runs its body through.
+	 *
+	 * Public and static because bin/victual-warm-cache builds one too: HTMLPurifier
+	 * serialises its HTML, CSS and URI definitions into Cache.SerializerPath the first
+	 * time it needs them, and on a read-only baked cache directory that first time has
+	 * to happen at build time. The definitions are keyed by the configuration, so the
+	 * warmer generating them with a different one would produce a cache the application
+	 * then ignores and tries to rewrite - which is why there is one construction site
+	 * rather than two that look alike.
+	 */
+	public static function CreateHtmlPurifier(): \HTMLPurifier
+	{
+		$htmlPurifierConfig = \HTMLPurifier_Config::createDefault();
+		$htmlPurifierConfig->set('Cache.SerializerPath', VICTUAL_VIEWCACHE_PATH);
+		// No iframe: HTML.SafeIframe with a "match anything" regexp let a master data
+		// editor embed an arbitrary external page in every other user's stock overview.
+		// No id: it is not needed by anything that writes these columns and DOM
+		// clobbering an element id is a way to confuse the front end. Sweep finding S7.
+		$htmlPurifierConfig->set('HTML.Allowed', 'div,b,strong,i,em,u,a[href|title|target],ul,ol,li,p[style],br,span[style],img[style|width|height|alt|src],table[border|width|style],tbody,tr,td,th,blockquote,*[style|class],h1,h2,h3,h4,h5,h6');
+		$htmlPurifierConfig->set('CSS.AllowedProperties', 'font,font-size,font-weight,font-style,font-family,text-decoration,padding-left,color,background-color,text-align,width,height');
+		// "data" stays: the editor stores a pasted image as a data URI, and HTMLPurifier
+		// only accepts one that really decodes to a JPEG, GIF or PNG.
+		$htmlPurifierConfig->set('URI.AllowedSchemes', ['data' => true, 'http' => true, 'https' => true]);
+		$htmlPurifierConfig->set('CSS.MaxImgLength', null);
+
+		return new \HTMLPurifier($htmlPurifierConfig);
+	}
+
+	/**
 	 * Columns whose stored value is rendered as HTML rather than as text, per entity.
 	 *
 	 * These are the only columns a rich text editor writes to, or that a view or a
@@ -377,20 +406,7 @@ class BaseApiController extends BaseController
 
 		if (self::$htmlPurifierInstance == null)
 		{
-			$htmlPurifierConfig = \HTMLPurifier_Config::createDefault();
-			$htmlPurifierConfig->set('Cache.SerializerPath', VICTUAL_DATAPATH . '/viewcache');
-			// No iframe: HTML.SafeIframe with a "match anything" regexp let a master data
-			// editor embed an arbitrary external page in every other user's stock overview.
-			// No id: it is not needed by anything that writes these columns and DOM
-			// clobbering an element id is a way to confuse the front end. Sweep finding S7.
-			$htmlPurifierConfig->set('HTML.Allowed', 'div,b,strong,i,em,u,a[href|title|target],ul,ol,li,p[style],br,span[style],img[style|width|height|alt|src],table[border|width|style],tbody,tr,td,th,blockquote,*[style|class],h1,h2,h3,h4,h5,h6');
-			$htmlPurifierConfig->set('CSS.AllowedProperties', 'font,font-size,font-weight,font-style,font-family,text-decoration,padding-left,color,background-color,text-align,width,height');
-			// "data" stays: the editor stores a pasted image as a data URI, and HTMLPurifier
-			// only accepts one that really decodes to a JPEG, GIF or PNG.
-			$htmlPurifierConfig->set('URI.AllowedSchemes', ['data' => true, 'http' => true, 'https' => true]);
-			$htmlPurifierConfig->set('CSS.MaxImgLength', null);
-
-			self::$htmlPurifierInstance = new \HTMLPurifier($htmlPurifierConfig);
+			self::$htmlPurifierInstance = self::CreateHtmlPurifier();
 		}
 
 		$htmlColumns = self::HTML_RENDERED_COLUMNS[$entity] ?? [];
