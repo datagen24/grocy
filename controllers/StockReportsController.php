@@ -121,7 +121,7 @@ class StockReportsController extends BaseController
 
 		return $this->RenderPage($response, 'stockreportspendings', [
 			'metrics' => DatabaseService::GetInstance()->ExecuteDbQuery($sql, $whereParams)->fetchAll(\PDO::FETCH_OBJ),
-			'productGroups' => $this->DB->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'productGroups' => $this->GetDb()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'selectedGroup' => isset($request->getQueryParams()['product-group']) ? $request->getQueryParams()['product-group'] : null,
 			'groupBy' => $groupBy
 		]);

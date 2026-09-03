@@ -49,9 +49,9 @@ class RecipesController extends BaseController
 			$startDate->modify(sprintf('%+d days', $days))->format('Y-m-d')
 		];
 
-		$recipes = $this->DB->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE')->fetchAll();
+		$recipes = $this->GetDb()->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE')->fetchAll();
 		$events = [];
-		foreach ($this->DB->meal_plan()->where($mealPlanWhereTimespan, $mealPlanWhereTimespanParams) as $mealPlanEntry)
+		foreach ($this->GetDb()->meal_plan()->where($mealPlanWhereTimespan, $mealPlanWhereTimespanParams) as $mealPlanEntry)
 		{
 			$recipe = FindObjectInArrayByPropertyValue($recipes, 'id', $mealPlanEntry['recipe_id']);
 			$title = '';
@@ -81,7 +81,7 @@ class RecipesController extends BaseController
 
 		// The week recipe name is built in PHP for the same reason (STRFTIME is SQLite only);
 		// see RecipesService::GetMealPlanWeekRecipeName() for why it is not date('Y-W')
-		$weekRecipe = $this->DB->recipes()->where('type = ? AND name = ?', [RecipesService::RECIPE_TYPE_MEALPLAN_WEEK, RecipesService::GetMealPlanWeekRecipeName($start)])->fetch();
+		$weekRecipe = $this->GetDb()->recipes()->where('type = ? AND name = ?', [RecipesService::RECIPE_TYPE_MEALPLAN_WEEK, RecipesService::GetMealPlanWeekRecipeName($start)])->fetch();
 		$weekRecipeId = 0;
 		if ($weekRecipe != null)
 		{
@@ -91,13 +91,13 @@ class RecipesController extends BaseController
 		return $this->RenderPage($response, 'mealplan', [
 			'fullcalendarEventSources' => $events,
 			'recipes' => $recipes,
-			'internalRecipes' => $this->DB->recipes()->where("id IN (SELECT recipe_id FROM meal_plan_internal_recipe_relation WHERE $mealPlanWhereTimespan) OR id = ?", array_merge($mealPlanWhereTimespanParams, [$weekRecipeId]))->fetchAll(),
+			'internalRecipes' => $this->GetDb()->recipes()->where("id IN (SELECT recipe_id FROM meal_plan_internal_recipe_relation WHERE $mealPlanWhereTimespan) OR id = ?", array_merge($mealPlanWhereTimespanParams, [$weekRecipeId]))->fetchAll(),
 			'recipesResolved' => RecipesService::GetInstance()->GetRecipesResolved("recipe_id IN (SELECT recipe_id FROM meal_plan_internal_recipe_relation WHERE $mealPlanWhereTimespan) OR recipe_id = ?", array_merge($mealPlanWhereTimespanParams, [$weekRecipeId])),
-			'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
-			'mealplanSections' => $this->DB->meal_plan_sections()->orderBy('sort_number'),
-			'usedMealplanSections' => $this->DB->meal_plan_sections()->where("id IN (SELECT section_id FROM meal_plan WHERE $mealPlanWhereTimespan)", $mealPlanWhereTimespanParams)->orderBy('sort_number'),
+			'products' => $this->GetDb()->products()->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
+			'mealplanSections' => $this->GetDb()->meal_plan_sections()->orderBy('sort_number'),
+			'usedMealplanSections' => $this->GetDb()->meal_plan_sections()->where("id IN (SELECT section_id FROM meal_plan WHERE $mealPlanWhereTimespan)", $mealPlanWhereTimespanParams)->orderBy('sort_number'),
 			'weekRecipe' => $weekRecipe
 		]);
 	}
@@ -111,13 +111,13 @@ class RecipesController extends BaseController
 	 */
 	public function Overview(Request $request, Response $response, array $args)
 	{
-		$recipes = $this->DB->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE');
+		$recipes = $this->GetDb()->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE');
 		$recipesResolved = RecipesService::GetInstance()->GetRecipesResolved('recipe_id > 0');
 
 		$selectedRecipe = null;
 		if (isset($request->getQueryParams()['recipe']))
 		{
-			$selectedRecipe = $this->DB->recipes($request->getQueryParams()['recipe']);
+			$selectedRecipe = $this->GetDb()->recipes($request->getQueryParams()['recipe']);
 		}
 		else
 		{
@@ -144,7 +144,7 @@ class RecipesController extends BaseController
 				$totalCalories = $selectedRecipeResolved->calories;
 			}
 
-			$recipePositionsResolved = $this->DB->recipes_pos_resolved()->where('recipe_id', $selectedRecipe->id);
+			$recipePositionsResolved = $this->GetDb()->recipes_pos_resolved()->where('recipe_id', $selectedRecipe->id);
 		}
 
 		$viewData = [
@@ -152,19 +152,19 @@ class RecipesController extends BaseController
 			'recipesResolved' => $recipesResolved,
 			'recipePositionsResolved' => $recipePositionsResolved,
 			'selectedRecipe' => $selectedRecipe,
-			'products' => $this->DB->products(),
-			'quantityUnits' => $this->DB->quantity_units(),
+			'products' => $this->GetDb()->products(),
+			'quantityUnits' => $this->GetDb()->quantity_units(),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('recipes'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('recipes'),
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved(),
 			'selectedRecipeTotalCosts' => $totalCosts,
 			'selectedRecipeTotalCalories' => $totalCalories,
-			'mealplanSections' => $this->DB->meal_plan_sections()->orderBy('sort_number')
+			'mealplanSections' => $this->GetDb()->meal_plan_sections()->orderBy('sort_number')
 		];
 
 		if ($selectedRecipe)
 		{
-			$selectedRecipeSubRecipes = $this->DB->recipes()->where('id IN (SELECT includes_recipe_id FROM recipes_nestings_resolved WHERE recipe_id = :1 AND includes_recipe_id != :1)', $selectedRecipe->id)->orderBy('name', 'COLLATE NOCASE')->fetchAll();
+			$selectedRecipeSubRecipes = $this->GetDb()->recipes()->where('id IN (SELECT includes_recipe_id FROM recipes_nestings_resolved WHERE recipe_id = :1 AND includes_recipe_id != :1)', $selectedRecipe->id)->orderBy('name', 'COLLATE NOCASE')->fetchAll();
 
 			$includedRecipeIdsAbsolute = [];
 			$includedRecipeIdsAbsolute[] = $selectedRecipe->id;
@@ -178,12 +178,12 @@ class RecipesController extends BaseController
 			$allRecipePositions = [];
 			foreach ($includedRecipeIdsAbsolute as $id)
 			{
-				$allRecipePositions[$id] = $this->DB->recipes_pos_resolved()->where('recipe_id = :1 AND is_nested_recipe_pos = 0', $id)->orderBy('ingredient_group', 'ASC', 'product_group', 'ASC');
+				$allRecipePositions[$id] = $this->GetDb()->recipes_pos_resolved()->where('recipe_id = :1 AND is_nested_recipe_pos = 0', $id)->orderBy('ingredient_group', 'ASC', 'product_group', 'ASC');
 				foreach ($allRecipePositions[$id] as $pos)
 				{
 					if ($id != $selectedRecipe->id)
 					{
-						$pos2 = $this->DB->recipes_pos_resolved()->where('recipe_id = :1  AND recipe_pos_id = :2 AND is_nested_recipe_pos = 1', $selectedRecipe->id, $pos->recipe_pos_id)->fetch();
+						$pos2 = $this->GetDb()->recipes_pos_resolved()->where('recipe_id = :1  AND recipe_pos_id = :2 AND is_nested_recipe_pos = 1', $selectedRecipe->id, $pos->recipe_pos_id)->fetch();
 						$pos->recipe_amount = $pos2->recipe_amount;
 						$pos->missing_amount = $pos2->missing_amount;
 					}
@@ -208,15 +208,15 @@ class RecipesController extends BaseController
 		$recipeId = $args['recipeId'];
 
 		return $this->RenderPage($response, 'recipeform', [
-			'recipe' => $this->DB->recipes($recipeId),
-			'recipePositions' => $this->DB->recipes_pos()->where('recipe_id', $recipeId),
+			'recipe' => $this->GetDb()->recipes($recipeId),
+			'recipePositions' => $this->GetDb()->recipes_pos()->where('recipe_id', $recipeId),
 			'mode' => $recipeId == 'new' ? 'create' : 'edit',
-			'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE'),
-			'quantityunits' => $this->DB->quantity_units(),
-			'recipes' => $this->DB->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE'),
-			'recipeNestings' => $this->DB->recipes_nestings()->where('recipe_id', $recipeId),
+			'products' => $this->GetDb()->products()->orderBy('name', 'COLLATE NOCASE'),
+			'quantityunits' => $this->GetDb()->quantity_units(),
+			'recipes' => $this->GetDb()->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE'),
+			'recipeNestings' => $this->GetDb()->recipes_nestings()->where('recipe_id', $recipeId),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('recipes'),
-			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved()
+			'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved()
 		]);
 	}
 
@@ -232,24 +232,24 @@ class RecipesController extends BaseController
 		{
 			return $this->RenderPage($response, 'recipeposform', [
 				'mode' => 'create',
-				'recipe' => $this->DB->recipes($args['recipeId']),
+				'recipe' => $this->GetDb()->recipes($args['recipeId']),
 				'recipePos' => new \stdClass(),
-				'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'barcodes' => $this->DB->product_barcodes_comma_separated(),
-				'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved()
+				'products' => $this->GetDb()->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+				'quantityUnits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved()
 			]);
 		}
 		else
 		{
 			return $this->RenderPage($response, 'recipeposform', [
 				'mode' => 'edit',
-				'recipe' => $this->DB->recipes($args['recipeId']),
-				'recipePos' => $this->DB->recipes_pos($args['recipePosId']),
-				'products' => $this->DB->products()->orderBy('name', 'COLLATE NOCASE'),
-				'barcodes' => $this->DB->product_barcodes_comma_separated(),
-				'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
-				'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved()
+				'recipe' => $this->GetDb()->recipes($args['recipeId']),
+				'recipePos' => $this->GetDb()->recipes_pos($args['recipePosId']),
+				'products' => $this->GetDb()->products()->orderBy('name', 'COLLATE NOCASE'),
+				'barcodes' => $this->GetDb()->product_barcodes_comma_separated(),
+				'quantityUnits' => $this->GetDb()->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
+				'quantityUnitConversionsResolved' => $this->GetDb()->cache__quantity_unit_conversions_resolved()
 			]);
 		}
 	}
@@ -278,7 +278,7 @@ class RecipesController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'mealplansectionform', [
-				'mealplanSection' => $this->DB->meal_plan_sections($args['sectionId']),
+				'mealplanSection' => $this->GetDb()->meal_plan_sections($args['sectionId']),
 				'mode' => 'edit'
 			]);
 		}
@@ -290,7 +290,7 @@ class RecipesController extends BaseController
 	public function MealPlanSectionsList(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'mealplansections', [
-			'mealplanSections' => $this->DB->meal_plan_sections()->where('id > 0')->orderBy('sort_number')
+			'mealplanSections' => $this->GetDb()->meal_plan_sections()->where('id > 0')->orderBy('sort_number')
 		]);
 	}
 

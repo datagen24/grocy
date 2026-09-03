@@ -32,7 +32,7 @@ class EquipmentController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'equipmentform', [
-				'equipment' => $this->DB->equipment($args['equipmentId']),
+				'equipment' => $this->GetDb()->equipment($args['equipmentId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('equipment')
 			]);
@@ -45,7 +45,7 @@ class EquipmentController extends BaseController
 	public function Overview(Request $request, Response $response, array $args)
 	{
 		return $this->RenderPage($response, 'equipment', [
-			'equipment' => $this->DB->equipment()->orderBy('name', 'COLLATE NOCASE'),
+			'equipment' => $this->GetDb()->equipment()->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('equipment'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('equipment')
 		]);

@@ -29,7 +29,7 @@ class TasksController extends BaseController
 
 		if (isset($request->getQueryParams()['include_done']))
 		{
-			$tasks = $this->DB->tasks()->orderBy('name', 'COLLATE NOCASE');
+			$tasks = $this->GetDb()->tasks()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
@@ -59,7 +59,7 @@ class TasksController extends BaseController
 		return $this->RenderPage($response, 'tasks', [
 			'tasks' => $tasks,
 			'nextXDays' => $nextXDays,
-			'taskCategories' => $this->DB->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+			'taskCategories' => $this->GetDb()->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'users' => $usersService->GetUsersAsDto(),
 			'userfields' => UserfieldsService::GetInstance()->GetFields('tasks'),
 			'userfieldValues' => UserfieldsService::GetInstance()->GetAllValues('tasks')
@@ -75,11 +75,11 @@ class TasksController extends BaseController
 	{
 		if (isset($request->getQueryParams()['include_disabled']))
 		{
-			$categories = $this->DB->task_categories()->orderBy('name', 'COLLATE NOCASE');
+			$categories = $this->GetDb()->task_categories()->orderBy('name', 'COLLATE NOCASE');
 		}
 		else
 		{
-			$categories = $this->DB->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
+			$categories = $this->GetDb()->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE');
 		}
 
 		return $this->RenderPage($response, 'taskcategories', [
@@ -106,7 +106,7 @@ class TasksController extends BaseController
 		else
 		{
 			return $this->RenderPage($response, 'taskcategoryform', [
-				'category' => $this->DB->task_categories($args['categoryId']),
+				'category' => $this->GetDb()->task_categories($args['categoryId']),
 				'mode' => 'edit',
 				'userfields' => UserfieldsService::GetInstance()->GetFields('task_categories')
 			]);
@@ -124,18 +124,18 @@ class TasksController extends BaseController
 		{
 			return $this->RenderPage($response, 'taskform', [
 				'mode' => 'create',
-				'taskCategories' => $this->DB->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'users' => $this->DB->users()->orderBy('username'),
+				'taskCategories' => $this->GetDb()->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'users' => $this->GetDb()->users()->orderBy('username'),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('tasks')
 			]);
 		}
 		else
 		{
 			return $this->RenderPage($response, 'taskform', [
-				'task' => $this->DB->tasks($args['taskId']),
+				'task' => $this->GetDb()->tasks($args['taskId']),
 				'mode' => 'edit',
-				'taskCategories' => $this->DB->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-				'users' => $this->DB->users()->orderBy('username'),
+				'taskCategories' => $this->GetDb()->task_categories()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
+				'users' => $this->GetDb()->users()->orderBy('username'),
 				'userfields' => UserfieldsService::GetInstance()->GetFields('tasks')
 			]);
 		}

@@ -751,6 +751,17 @@ response above is reachable for every failure after the connection is open — a
 goes away mid-process, a revoked grant, a timeout — which is what the finding is about; the
 bootstrap case is recorded here rather than quietly left as though it were covered.
 
+**It has since been fixed, as [15](15-deliberate-cleanup.md)'s C15**, which is where a
+change touching every controller belongs rather than in a review fix. `BaseController`
+acquires its connection through `GetDb()` when a controller asks for it,
+`ExceptionController` answers in plain text when it cannot render its page at all, and
+`app.php`'s `ob_clean()` is guarded — that last one is why this plan's own 503 bodies were
+arriving under a 200 status line on the built-in server in `dev` mode, which nothing here
+had noticed. With it in, the response above *is* what an unreachable database produces at
+bootstrap too, on every route: measured at 503 with the plain text body in both `dev` and
+`production`, where this branch alone measured a raw PHP fatal at 200. The paragraph above
+stands as written; this is what happened next.
+
 ### What this turned up
 
 Three pages return 500 on PostgreSQL, on the unmodified tree as much as on this one, so

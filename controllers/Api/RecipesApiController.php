@@ -118,7 +118,7 @@ class RecipesApiController extends BaseApiController
 	{
 		try
 		{
-			$recipe = $this->DB->recipes()->where('id', $args['recipeId'])->fetch();
+			$recipe = $this->GetDb()->recipes()->where('id', $args['recipeId'])->fetch();
 
 			$webhookData = array_merge([
 				'recipe' => $recipe->name,

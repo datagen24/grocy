@@ -61,7 +61,7 @@ class BatteriesApiController extends BaseApiController
 			}
 
 			$chargeCycleId = BatteriesService::GetInstance()->TrackChargeCycle($args['batteryId'], $trackedTime);
-			return $this->ApiResponse($response, $this->DB->battery_charge_cycles($chargeCycleId));
+			return $this->ApiResponse($response, $this->GetDb()->battery_charge_cycles($chargeCycleId));
 		}
 		catch (\Exception $ex)
 		{
