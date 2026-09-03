@@ -45,11 +45,12 @@ $('#permission-save').click(
 			function(result)
 			{
 				toastr.success(__t("Permissions saved"));
-			},
-			function(xhr)
-			{
-				toastr.error(JSON.parse(xhr.response).error_message);
 			}
+			// No error callback: this hand-rolled toastr.error was one of two in the tree
+			// that re-implemented what Victual.Api.DefaultErrorHandler now does by default -
+			// and did it worse, since it JSON.parses a response that a dropped connection
+			// never produces, and renders a server-supplied message straight into an HTML
+			// sink.
 		);
 	}
 );

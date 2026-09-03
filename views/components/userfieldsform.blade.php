@@ -70,7 +70,8 @@
 	'value' => ''
 	))
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_DATE)
-	@include('components.datetimepicker2', array(
+	@include('components.datetimepicker', array(
+	'instance' => 'secondary',
 	'id' => $userfield->name,
 	'label' => str_replace('%', '%%', $userfield->caption), // Escape % (there are placeholders in Gettext translation strings)
 	'noNameAttribute' => true,
@@ -78,13 +79,14 @@
 	'initWithNow' => false,
 	'limitEndToNow' => false,
 	'limitStartToNow' => false,
-	'additionalGroupCssClasses' => 'date-only-datetimepicker2',
+	'additionalGroupCssClasses' => 'date-only-datetimepicker-secondary',
 	'isRequired' => $userfield->input_required == 1,
 	'additionalCssClasses' => 'userfield-input',
 	'additionalAttributes' => 'data-userfield-name="' . $userfield->name . '"'
 	))
 	@elseif($userfield->type == \Victual\Services\UserfieldsService::USERFIELD_TYPE_DATETIME)
-	@include('components.datetimepicker2', array(
+	@include('components.datetimepicker', array(
+	'instance' => 'secondary',
 	'id' => $userfield->name,
 	'label' => str_replace('%', '%%', $userfield->caption), // Escape % (there are placeholders in Gettext translation strings)
 	'noNameAttribute' => true,

@@ -144,7 +144,9 @@ $('#quantityunit-form input').keydown(function(event)
 		}
 		else
 		{
-			$('#save-quantityunit-button').click();
+			// Both save buttons carry the class, not an id - this used to click
+			// "#save-quantityunit-button", which does not exist, so Enter did nothing
+			$('.save-quantityunit-button').first().click();
 		}
 	}
 });
@@ -196,10 +198,6 @@ $(document).on('click', '.qu-conversion-delete-button', function(e)
 					function(result)
 					{
 						window.location.reload();
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
@@ -214,7 +212,9 @@ $("#test-quantityunit-plural-forms-button").on("click", function(e)
 	e.preventDefault();
 
 	Victual.QuantityUnitEditFormRedirectUri = "stay";
-	$("#save-quantityunit-button").click();
+	// Class, not an id - see the Enter handler above; the redirect override means either
+	// button does, so this takes the first
+	$(".save-quantityunit-button").first().click();
 
 	bootbox.alert({
 		message: '<iframe class="embed-responsive" src="' + U("/quantityunitpluraltesting?embedded&qu=") + Victual.EditObjectId.toString() + '"></iframe>',

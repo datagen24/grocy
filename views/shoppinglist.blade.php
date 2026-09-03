@@ -13,10 +13,6 @@
 </style>
 @endpush
 
-@push('pageScripts')
-<script src="{{ $U('/viewjs/purchase.js?v=', true) }}{{ $version }}"></script>
-@endpush
-
 @section('content')
 <div class="row d-print-none hide-on-fullscreen-card">
 	<div class="col">

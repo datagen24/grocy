@@ -74,7 +74,7 @@ $('#save-purchase-button').on('click', function (e)
 
 			if (BoolVal(Victual.UserSettings.show_purchased_date_on_purchase))
 			{
-				jsonData.purchased_date = Victual.Components.DateTimePicker2.GetValue();
+				jsonData.purchased_date = Victual.Components.SecondaryDateTimePicker.GetValue();
 			}
 
 			if (Victual.Components.DateTimePicker)
@@ -148,7 +148,10 @@ $('#save-purchase-button').on('click', function (e)
 					{
 						amountMessage = Number.parseFloat(jsonForm.amount) - productDetails.stock_amount - productDetails.product.tare_weight;
 					}
-					var successMessage = __t('Added %1$s of %2$s to stock', amountMessage + " " + __n(amountMessage, productDetails.quantity_unit_stock.name, productDetails.quantity_unit_stock.name_plural, true), productDetails.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+					// Product and quantity unit names are text columns rendered into a
+					// toastr message, which is an HTML sink - escaped at the point of use
+					// (sweep finding S29).
+					var successMessage = __t('Added %1$s of %2$s to stock', amountMessage + " " + __n(amountMessage, Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(productDetails.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(productDetails.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + result[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 
 					// Fire the configured label printer webhook (Victual.Webhooks.labelprinter), either once per
 					// purchase (single label) or once per individual stock entry created (label per unit)
@@ -185,10 +188,6 @@ $('#save-purchase-button').on('click', function (e)
 
 											Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, webhookData);
 										});
-									},
-									function (xhr)
-									{
-										console.error(xhr);
 									}
 								);
 							}
@@ -272,14 +271,14 @@ $('#save-purchase-button').on('click', function (e)
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("purchase-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("purchase-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -467,10 +466,6 @@ if (Victual.Components.ProductPicker !== undefined)
 
 								// Barcode has a defined amount, so don't force it back to a single unit
 								ScanModeSubmit(false);
-							},
-							function (xhr)
-							{
-								console.error(xhr);
 							}
 						);
 					}
@@ -482,10 +477,6 @@ if (Victual.Components.ProductPicker !== undefined)
 					}
 
 					$('#display_amount').trigger("keyup");
-				},
-				function (xhr)
-				{
-					console.error(xhr);
 				}
 			);
 		}
@@ -674,19 +665,19 @@ if (Victual.Components.DateTimePicker)
 }
 
 // Purchased date picker (only rendered when show_purchased_date_on_purchase is enabled): same re-validation, plus an initial input trigger
-if (Victual.Components.DateTimePicker2)
+if (Victual.Components.SecondaryDateTimePicker)
 {
-	Victual.Components.DateTimePicker2.GetInputElement().on('change', function (e)
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().on('change', function (e)
 	{
 		Victual.FrontendHelpers.ValidateForm('purchase-form');
 	});
 
-	Victual.Components.DateTimePicker2.GetInputElement().on('keypress', function (e)
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().on('keypress', function (e)
 	{
 		Victual.FrontendHelpers.ValidateForm('purchase-form');
 	});
 
-	Victual.Components.DateTimePicker2.GetInputElement().trigger("input");
+	Victual.Components.SecondaryDateTimePicker.GetInputElement().trigger("input");
 }
 
 // Recompute the "means X per Y" price hint whenever the price, its type (unit/total) or the amount changes
@@ -748,68 +739,6 @@ function RefreshPriceHint()
 	{
 		$('#price-hint').text("");
 	}
-};
-
-/**
- * Undoes a single stock booking (stock/bookings/{id}/undo) and notifies the parent window/other
- * views that the affected product changed. Invoked from inline onclick handlers built server-side
- * (not used directly in this file, e.g. see stock journal "Undo" buttons).
- * @param {number|string} bookingId The stock booking id to undo
- */
-function UndoStockBooking(bookingId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Booking successfully undone"));
-
-			Victual.Api.Get('stock/bookings/' + bookingId.toString(),
-				function (result)
-				{
-					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result.product_id)), Victual.BaseUrl);
-				},
-				function (xhr)
-				{
-					console.error(xhr);
-				}
-			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
-		}
-	);
-};
-
-/**
- * Undoes a whole stock transaction (stock/transactions/{id}/undo, e.g. a purchase composed of
- * multiple bookings) and notifies the parent window/other views that the affected product
- * changed. Called from the "Undo" link embedded in the purchase success toast.
- * @param {number|string} transactionId The stock transaction id to undo
- */
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-
-			Victual.Api.Get('stock/transactions/' + transactionId.toString(),
-				function (result)
-				{
-					Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", result[0].product_id)), Victual.BaseUrl);
-				},
-				function (xhr)
-				{
-					console.error(xhr);
-				}
-			);
-		},
-		function (xhr)
-		{
-			console.error(xhr);
-		}
-	);
 };
 
 // Requesting the notification-sound permission the first time scan mode gets enabled

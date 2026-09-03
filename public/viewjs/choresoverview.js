@@ -186,7 +186,10 @@ $(document).on('click', '.track-chore-button', function(e)
 							$('#chore-' + choreId + '-reassigned-icon').remove();
 
 							Victual.FrontendHelpers.EndUiBusy();
-							toastr.success(__t('Tracked execution of chore %1$s on %2$s', choreName, trackedTime));
+						// choreName came from a data- attribute read back with .attr(), which returns
+						// the decoded string, and this toastr message is rendered as HTML - so it is
+						// escaped here, at the point of use (sweep finding S29).
+						toastr.success(__t('Tracked execution of chore %1$s on %2$s', Victual.FrontendHelpers.EscapeHtml(choreName), trackedTime));
 							RefreshStatistics();
 
 							// Delay due to delayed/animated set of new timestamps above; re-applies the
@@ -203,21 +206,21 @@ $(document).on('click', '.track-chore-button', function(e)
 						function(xhr)
 						{
 							Victual.FrontendHelpers.EndUiBusy();
-							console.error(xhr);
+							Victual.Api.DefaultErrorHandler(xhr);
 						}
 					);
 				},
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("choretracking-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -285,9 +288,11 @@ function RefreshStatistics()
 			$("#info-overdue-chores").html('<span class="d-block d-md-none">' + overdueCount + ' <i class="fa-solid fa-times-circle"></i></span><span class="d-none d-md-block">' + __n(overdueCount, '%s chore is overdue to be done', '%s chores are overdue to be done'));
 			$("#info-assigned-to-me-chores").html('<span class="d-block d-md-none">' + assignedToMeCount + ' <i class="fa-solid fa-exclamation-circle"></i></span><span class="d-none d-md-block">' + __n(assignedToMeCount, '%s chore is assigned to me', '%s chores are assigned to me'));
 		},
-		function(xhr)
+		function()
 		{
-			console.error(xhr);
+			// Deliberately silent: a background statistics refresh, not a user initiated
+			// action - it runs on load and after every tracked execution, and a toast for
+			// it would report a failure the user did not ask for. Plan 12, Q2.
 		}
 	);
 }
@@ -356,10 +361,6 @@ $("#reschedule-chore-save-button").on("click", function(e)
 				function(result)
 				{
 					window.location.reload();
-				},
-				function(xhr)
-				{
-					console.error(xhr);
 				}
 			);
 		},
@@ -382,10 +383,6 @@ $("#reschedule-chore-clear-button").on("click", function(e)
 				function(result)
 				{
 					window.location.reload();
-				},
-				function(xhr)
-				{
-					console.error(xhr);
 				}
 			);
 		},

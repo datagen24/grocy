@@ -90,10 +90,6 @@ $(document).on('click', '.undo-chore-execution-button', function(e)
 			element.closest(".undo-stock-booking-button").addClass("disabled");
 			RefreshContextualTimeago("#chore-execution-" + executionId + "-row");
 			toastr.success(__t("Chore execution successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 });

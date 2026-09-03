@@ -1,0 +1,12 @@
+{
+	"name": "victual-frontend-baseline",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Playwright harness that records what the list and form pages do today (plan 12, verification 1). Deliberately not part of the app's package.json: the repo root package.json is a yarn manifest that installs into public/packages.",
+	"scripts": {
+		"baseline": "node baseline.js"
+	},
+	"dependencies": {
+		"playwright": "1.56.1"
+	}
+}

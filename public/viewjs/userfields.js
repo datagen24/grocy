@@ -1,32 +1,30 @@
-﻿// Powers the custom userfields list view (userfields.blade.php): lists userfields
+// Powers the custom userfields list view (userfields.blade.php): lists userfields
 // (optionally scoped to one entity via the "entity" URI param), with search/entity
-// filters and deletion.
-var userfieldsTable = $('#userfields-table').DataTable({
-	'order': [[1, 'asc']],
-	'columnDefs': [
-		{ 'orderable': false, 'targets': 0 },
-		{ 'searchable': false, "targets": 0 }
-	].concat($.fn.dataTable.defaults.columnDefs)
-});
-$('#userfields-table tbody').removeClass("d-none");
-userfieldsTable.columns.adjust().draw();
+// filters and deletion. The table, the search box and the delete confirmation are the
+// shared list factory (public/js/victual_entity.js); the entity filter is this page's own
+// and is reset alongside the search through the factory's onClear hook.
 
-// Free-text search box, debounced via Delay()
-$("#search").on("keyup", Delay(function()
-{
-	var value = $(this).val();
-	if (value === "all")
+var userfieldsList = Victual.EntityList({
+	table: '#userfields-table',
+	list: '/userfields',
+	onClear: function ()
 	{
-		value = "";
+		$("#entity-filter").val("all");
+		userfieldsList.Table.column(userfieldsList.Table.colReorder.transpose(1)).search("").draw();
+	},
+	delete: {
+		button: '.userfield-delete-button',
+		idAttr: 'data-userfield-id',
+		nameAttr: 'data-userfield-name',
+		endpoint: 'objects/userfields',
+		message: 'Are you sure you want to delete user field "%s"?'
 	}
-
-	userfieldsTable.search(value).draw();
-}, Victual.FormFocusDelay));
+});
 
 // Entity filter, matched against the entity column (index 1); option value/text are both
 // the entity's internal name, so it doubles as the search term and as the "entity" param
 // pre-filled into the "add new userfield" button's link
-$("#entity-filter").on("change", function()
+$("#entity-filter").on("change", function ()
 {
 	var value = $("#entity-filter option:selected").text();
 	if (value === __t("All"))
@@ -34,55 +32,8 @@ $("#entity-filter").on("change", function()
 		value = "";
 	}
 
-	userfieldsTable.column(userfieldsTable.colReorder.transpose(1)).search(value).draw();
+	userfieldsList.Table.column(userfieldsList.Table.colReorder.transpose(1)).search(value).draw();
 	$("#new-userfield-button").attr("href", U("/userfield/new?embedded&entity=" + value));
-});
-
-// Resets the search and entity filters
-$("#clear-filter-button").on("click", function()
-{
-	$("#search").val("");
-	$("#entity-filter").val("all");
-	userfieldsTable.column(userfieldsTable.colReorder.transpose(1)).search("").draw();
-	userfieldsTable.search("").draw();
-});
-
-// Deletes a userfield (DELETE objects/userfields/{id}) after confirmation
-$(document).on('click', '.userfield-delete-button', function(e)
-{
-	var objectName = $(e.currentTarget).attr('data-userfield-name');
-	var objectId = $(e.currentTarget).attr('data-userfield-id');
-
-	bootbox.confirm({
-		message: __t('Are you sure you want to delete user field "%s"?', objectName),
-		closeButton: false,
-		buttons: {
-			confirm: {
-				label: __t('Yes'),
-				className: 'btn-success'
-			},
-			cancel: {
-				label: __t('No'),
-				className: 'btn-danger'
-			}
-		},
-		callback: function(result)
-		{
-			if (result === true)
-			{
-				Victual.Api.Delete('objects/userfields/' + objectId, {},
-					function(result)
-					{
-						window.location.href = U('/userfields');
-					},
-					function(xhr)
-					{
-						console.error(xhr);
-					}
-				);
-			}
-		}
-	});
 });
 
 // Pre-apply the entity filter when opened scoped to one
@@ -90,7 +41,7 @@ if (GetUriParam("entity"))
 {
 	$("#entity-filter").val(GetUriParam("entity"));
 	$("#entity-filter").trigger("change");
-	setTimeout(function()
+	setTimeout(function ()
 	{
 		$("#name").focus();
 	}, Victual.FormFocusDelay);
