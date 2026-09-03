@@ -208,6 +208,19 @@ class PostgresDialect extends DatabaseDialect
 	}
 
 	/**
+	 * Whether the error is PostgreSQL's undefined_table.
+	 *
+	 * 42P01 and nothing else. PostgreSQL gives every error condition its own SQLSTATE, so
+	 * unlike SQLite there is no need to read the message: connection failures (08xxx),
+	 * insufficient_privilege (42501) and query_canceled (57014) all say so in the code,
+	 * and none of them means "nothing has been migrated yet".
+	 */
+	public function IsMissingTableError(\PDOException $ex): bool
+	{
+		return self::SqlStateOf($ex) === '42P01';
+	}
+
+	/**
 	 * Standard SQL double-quote quoting (the only form PostgreSQL accepts).
 	 */
 	public function QuoteIdentifier(string $name): string

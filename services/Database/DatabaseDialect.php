@@ -188,6 +188,42 @@ abstract class DatabaseDialect
 	abstract public function WithMigrationLock(callable $work);
 
 	/**
+	 * Whether the given driver error means "that table does not exist", as opposed to any
+	 * other reason a query can fail.
+	 *
+	 * This exists for one caller and one question: the boot check asks an untouched
+	 * database for its applied migrations, and on a database nobody has migrated yet the
+	 * "migrations" table genuinely is not there. That single condition maps to "nothing
+	 * applied". Everything else a query can fail with - the server being unreachable, the
+	 * role not being allowed to read the table, a statement timeout, a typo in the SQL -
+	 * means the schema version is *unknown*, which is a different answer and needs a
+	 * different response. Catching them all and calling the result zero tells an operator
+	 * whose database is down to run migrations against it.
+	 *
+	 * Per engine because the engines say it differently, and one of them says it badly:
+	 * PostgreSQL has a dedicated SQLSTATE, SQLite reports nearly everything as HY000.
+	 *
+	 * Deliberately strict rather than lenient. A false negative surfaces a genuinely
+	 * missing table as an unavailable database, which is noisy but honest; a false
+	 * positive is the defect this method exists to prevent.
+	 */
+	abstract public function IsMissingTableError(\PDOException $ex): bool;
+
+	/**
+	 * The SQLSTATE the driver reported for an error, or null when it reported none.
+	 *
+	 * PDOException carries it twice - as the exception code and as the first element of
+	 * errorInfo - and the two can disagree when the exception was constructed by
+	 * something other than the driver, so errorInfo wins where it exists.
+	 */
+	final protected static function SqlStateOf(\PDOException $ex): ?string
+	{
+		$sqlState = $ex->errorInfo[0] ?? $ex->getCode();
+
+		return is_string($sqlState) && $sqlState !== '' ? $sqlState : null;
+	}
+
+	/**
 	 * Quotes a single table or column name for safe interpolation into SQL.
 	 */
 	abstract public function QuoteIdentifier(string $name): string;

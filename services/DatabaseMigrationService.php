@@ -68,7 +68,7 @@ class DatabaseMigrationService extends BaseService
 		});
 
 		// Whatever the boot check read before this ran is now wrong
-		self::$AppliedMigrationNumber = null;
+		self::$AppliedMigrationNumbers = null;
 	}
 
 	/**
@@ -109,39 +109,112 @@ class DatabaseMigrationService extends BaseService
 	}
 
 	/**
-	 * The highest migration number this database has recorded, or 0 when it has recorded
-	 * none - which is also the answer for a database that is completely empty and has no
-	 * migrations table yet.
+	 * Every migration number this database has recorded, ascending, with no gaps invented
+	 * and none hidden. Empty when it has recorded none - which is also the answer for a
+	 * database that is completely empty and has no migrations table yet.
+	 *
+	 * The whole set rather than its maximum, because the maximum is not a schema version.
+	 * Migrations reach master in whatever order their pull requests merge, so a database
+	 * can hold 0257 and 0259 and not 0258, and MAX(migration) then reports 259 for a
+	 * schema that never ran 0258 - the gate says "current" while the table 0258 creates
+	 * does not exist. Comparing the sets is the only form of this check that cannot be
+	 * fooled by merge order, and it is also the only one that repairs a database which
+	 * already reached that state.
 	 *
 	 * Memoized for the request: the boot check asks on every request and the answer
 	 * cannot change underneath it, since nothing migrates during a request unless this
 	 * process does it, and the memo is dropped when it does. APCu is the answer if the
 	 * one query per request ever becomes measurable; ADR-0007 is explicit that a cache
 	 * losing its memo on a restart is the acceptable kind of lost state.
+	 *
+	 * Only a missing "migrations" table reads as "nothing applied". Every other database
+	 * failure - unreachable server, a role that may not read the table, a timeout -
+	 * leaves the memo unset and propagates, because the schema version is then *unknown*
+	 * rather than zero, and answering zero would tell an operator whose database is down
+	 * to run migrations at it. See DatabaseDialect::IsMissingTableError().
+	 *
+	 * @return int[]
+	 * @throws \PDOException When the database could not be asked at all
+	 */
+	public function GetAppliedMigrationNumbers(): array
+	{
+		if (self::$AppliedMigrationNumbers === null)
+		{
+			$numbers = [];
+
+			try
+			{
+				$statement = DatabaseService::GetInstance()->ExecuteDbQuery('SELECT migration FROM migrations');
+
+				if ($statement === false)
+				{
+					throw new \Exception('The migrations table could not be read.');
+				}
+
+				$numbers = array_map('intval', $statement->fetchAll(\PDO::FETCH_COLUMN, 0));
+			}
+			catch (\PDOException $ex)
+			{
+				if (!DatabaseService::GetInstance()->GetDialect()->IsMissingTableError($ex))
+				{
+					throw $ex;
+				}
+
+				// No migrations table at all: an untouched database, which is behind by
+				// every migration there is.
+				$numbers = [];
+			}
+
+			sort($numbers);
+			self::$AppliedMigrationNumbers = $numbers;
+		}
+
+		return self::$AppliedMigrationNumbers;
+	}
+
+	/**
+	 * The highest migration number this database has recorded, or 0 when it has recorded
+	 * none.
+	 *
+	 * A summary for a human reading an error message, not a schema version: two databases
+	 * with the same maximum can hold different sets. Anything deciding whether the schema
+	 * matches has to ask GetMissingMigrationNumbers() / GetUnknownMigrationNumbers().
 	 */
 	public function GetAppliedMigrationNumber(): int
 	{
-		if (self::$AppliedMigrationNumber === null)
-		{
-			try
-			{
-				$value = DatabaseService::GetInstance()->ExecuteDbQuery('SELECT MAX(migration) FROM migrations')->fetchColumn();
-				self::$AppliedMigrationNumber = ($value === null || $value === false) ? 0 : intval($value);
-			}
-			catch (\Exception $ex)
-			{
-				// No migrations table at all: an untouched database, which is behind by
-				// every migration there is. Distinguishing "no table" from "table with no
-				// rows" would not change what the caller does about it.
-				self::$AppliedMigrationNumber = 0;
-			}
-		}
+		$applied = $this->GetAppliedMigrationNumbers();
 
-		return self::$AppliedMigrationNumber;
+		return empty($applied) ? 0 : max($applied);
 	}
 
-	/** @var int|null Memo for GetAppliedMigrationNumber(), for the life of the request */
-	private static $AppliedMigrationNumber = null;
+	/**
+	 * The migrations this engine has files for that this database has not recorded -
+	 * everything bin/victual-migrate would apply if it ran now, ascending.
+	 *
+	 * @return int[]
+	 */
+	public function GetMissingMigrationNumbers(DatabaseDialect $dialect): array
+	{
+		return array_values(array_diff(self::GetRequiredMigrationNumbers($dialect), $this->GetAppliedMigrationNumbers()));
+	}
+
+	/**
+	 * The migrations this database has recorded that this engine has no file for,
+	 * ascending.
+	 *
+	 * That is the rollback case - an older image deployed against a database a newer one
+	 * already migrated - and it is exactly as unserveable as being behind while looking
+	 * much more like everything is fine.
+	 *
+	 * @return int[]
+	 */
+	public function GetUnknownMigrationNumbers(DatabaseDialect $dialect): array
+	{
+		return array_values(array_diff($this->GetAppliedMigrationNumbers(), self::GetRequiredMigrationNumbers($dialect)));
+	}
+
+	/** @var int[]|null Memo for GetAppliedMigrationNumbers(), for the life of the request */
+	private static $AppliedMigrationNumbers = null;
 
 	/**
 	 * Returns the migrations which apply to the given engine, keyed and ordered by
@@ -164,17 +237,39 @@ class DatabaseMigrationService extends BaseService
 	 */
 	public static function GetLatestMigrationNumber(DatabaseDialect $dialect): int
 	{
-		$migrationFiles = self::GetMigrationFiles($dialect);
-
-		// The always-run migrations are fixups rather than schema versions, and they are
-		// deliberately never recorded in the migrations table — counting them would put
-		// every database permanently "behind" a number it can never reach.
-		$numbers = array_filter(
-			array_keys($migrationFiles),
-			fn($number) => $number !== self::DOALWAYS_MIGRATION_ID && $number !== self::EMERGENCY_MIGRATION_ID
-		);
+		$numbers = self::GetRequiredMigrationNumbers($dialect);
 
 		return empty($numbers) ? 0 : max($numbers);
+	}
+
+	/**
+	 * Every migration number a fully migrated database of this engine must have recorded,
+	 * ascending.
+	 *
+	 * Dialect-aware for the reason GetLatestMigrationNumber() is, and the set rather than
+	 * its maximum for the reason GetAppliedMigrationNumbers() explains: merge order can
+	 * put a hole below the maximum, and only a set knows about holes.
+	 *
+	 * The engines legitimately require different sets. On PostgreSQL the numbers up to
+	 * BASELINE_MIGRATION_ID are recorded by the baseline load rather than by running the
+	 * files, so they belong here on both engines; above it, an engine-exclusive migration
+	 * is required on its own engine and on no other.
+	 *
+	 * @return int[]
+	 */
+	public static function GetRequiredMigrationNumbers(DatabaseDialect $dialect): array
+	{
+		// The always-run migrations are fixups rather than schema versions, and they are
+		// deliberately never recorded in the migrations table — requiring them would put
+		// every database permanently "behind" a number it can never reach.
+		$numbers = array_values(array_filter(
+			array_keys(self::GetMigrationFiles($dialect)),
+			fn($number) => $number !== self::DOALWAYS_MIGRATION_ID && $number !== self::EMERGENCY_MIGRATION_ID
+		));
+
+		sort($numbers);
+
+		return $numbers;
 	}
 
 	private static function GetMigrationFiles(DatabaseDialect $dialect): array

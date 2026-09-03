@@ -477,7 +477,9 @@ suite, `run-app`, demo mode — and nothing below breaks it.
   false (Q4). `middleware/SchemaVersionMiddleware.php` compares one memoized
   `SELECT MAX(migration)` against `GetLatestMigrationNumber($dialect)` on every request
   and answers 503 in plain text, naming both numbers, the setting and the command, in
-  either direction (Q6).
+  either direction (Q6). **Both halves of that sentence — the maximum, and what the query
+  was allowed to fail with — were wrong, and are corrected in the second review fix
+  below**; the commit is recorded as it shipped.
 
   **Where it lives, and the ordering problem it has to avoid.** It is app-level
   middleware added after `addRoutingMiddleware()` and before `addErrorMiddleware()`, so it
@@ -664,6 +666,90 @@ backend only exists on PostgreSQL — `ConfigurationValidator` refuses it on SQL
 the spill is a property of the filesystem the container is running on. Finally
 `docker diff` must be empty: every write above landed on a tmpfs, and a tmpfs is not part
 of the container layer, so anything the image wrote to itself shows up there.
+
+### Review fix: the gate compares sets, and stops calling every failure an empty database
+
+The same review found two defects in the boot check itself, both of which make it answer
+confidently and wrongly. They are corrected together because they are the same mistake in
+two places: the check was reading one number and treating it as the whole truth.
+
+**A maximum is not a schema version (P1).** The check compared `MAX(migration)` against
+`GetLatestMigrationNumber($dialect)`, and Q6's response above is where that came from.
+Migrations reach `master` in the order their pull requests merge, not in numeric order, so
+the split of this wave's work makes the hole reachable rather than hypothetical: #36
+applies 0257 and 0259, #34 then introduces 0258. After both have landed the database holds
+{…, 257, 259}, `MAX(migration)` is 259, the code's latest is 259 — and the gate reports the
+schema current although the table 0258 creates was never made. Worse, it reports it
+current *forever*: nothing about the maximum ever changes again, so the check cannot
+notice, and cannot prompt anyone to repair a database that already reached that state.
+
+The check now compares the required set with the applied set.
+`DatabaseMigrationService::GetRequiredMigrationNumbers($dialect)` reads the migration files
+the way `GetLatestMigrationNumber()` already did — dialect-aware, always-run 8888/9999
+excluded, per ADR-0004 — and `GetAppliedMigrationNumbers()` reads the whole `migrations`
+column instead of its maximum. `GetMissingMigrationNumbers()` and
+`GetUnknownMigrationNumbers()` are the two directions, and a request is served only when
+both are empty. It is still one memoized query per request, so Q6's cost argument stands
+unchanged; what it retracts is Q6's `SELECT MAX(migration)`, which cannot answer the
+question it was asked. The 503 names the migrations rather than only the numbers around
+them — *"Missing from the database: 258"*, or *"1-256"* for a database nobody has migrated,
+consecutive runs collapsed into ranges so that "every migration there is" is readable.
+
+**Not every database failure means "nothing has been migrated" (P2).** The old lookup
+caught `\Exception` and answered 0, memoized. That catch is as wide as the database: an
+unreachable server, a role without `SELECT` on `migrations`, a statement timeout and a
+malformed query all became "this database is empty", and the operator was told to run
+migrations at a database that was not the problem. Only the specific condition maps to
+zero now — `DatabaseDialect::IsMissingTableError()`, per engine because the engines say it
+differently. PostgreSQL has a SQLSTATE for it (42P01) and nothing else qualifies; SQLite
+reports a missing table, a missing column and a syntax error alike as `HY000` with driver
+code 1, so its implementation checks the SQLSTATE and then the message, which is the only
+thing that separates them. Everything else propagates, unmemoized, and
+`SchemaVersionMiddleware` turns it into a **distinct** 503 that says the schema version
+could not be read at all and does not mention migrating.
+
+That response is deliberately not the 500 error page. `ExceptionController` renders a
+template and asks `ApplicationService` for system information, both of which reach the
+database that is already failing; a middleware that answers in plain text before routing
+can say what happened without depending on anything that is broken. The driver's own
+message goes to the server log and, in `dev` mode only, to the body — this response is
+emitted before authentication, and a connection failure names the host, port and role. The
+SQLSTATE is in the body either way, because it identifies the condition without describing
+the deployment.
+
+**Neither is an engine question, and both had to be proved on both engines**, so the
+verification is a sixth phase of the differential suite rather than a throwaway script:
+`.devtools/pgsql/schemagatetest.php`, run by `run-tests.sh schema` against SQLite and then
+PostgreSQL. It digs the hole the finding describes (deletes the second-highest applied
+migration, so the maximum does not move), asserts the set-based check finds it *and* that
+the maximum-based check would not have, renames the `migrations` table away and asserts
+that alone reads as an empty database, renames the `migration` column away and asserts that
+propagates instead, and asks each dialect directly whether it can tell a missing table from
+a missing column and from a syntax error. Measured rather than assumed: SQLite answers
+`HY000` to all three, PostgreSQL answers `42P01`, `42703` and `42601`.
+
+**What was run, 2026-09-03, in the repository's own dev image against `postgres:16`:**
+the full suite (`.devtools/pgsql/run-tests.sh`) — **SUITE PASSED**, all six phases,
+`MIGRATION NUMBERING OK`, `MIGRATED STATE IDENTICAL`, both `SCHEMA GATE OK` — and the CI
+syntax sweep. Over HTTP, on a booted instance: a migrated database serves (401 from
+authentication, so the gate let it through); with row 255 deleted and `MAX(migration)`
+still 256 the same request is **503** naming *"Missing from the database: 255"*; with the
+row restored it is 401 again; an unmigrated database is 503 naming *"1-256"*; and a
+PostgreSQL database whose `migration` column was renamed while the server was running is
+**503** with the database-unavailable body and `SQLSTATE: 42703`, with
+`SQLSTATE[42703]: Undefined column …` in the server log and in the dev-mode body.
+
+**One thing this fix does not reach, found while verifying it.** A database that is
+unreachable *at bootstrap* never gets as far as this middleware: `app.php` constructs
+`ExceptionController` while building the error middleware, `BaseController::__construct`
+opens the database, and the request dies with an uncaught `PDOException` rendered as a raw
+PHP fatal error — with a **200** status, on the built-in server. That is the same defect
+`f4d1769b` fixed one line above for middlewares (constructing a service opens the database),
+it predates this plan, and fixing it means making `BaseController` acquire its connection
+lazily, which is a wider change than a review fix should carry. The database-unavailable
+response above is reachable for every failure after the connection is open — a server that
+goes away mid-process, a revoked grant, a timeout — which is what the finding is about; the
+bootstrap case is recorded here rather than quietly left as though it were covered.
 
 ### What this turned up
 

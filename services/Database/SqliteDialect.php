@@ -138,6 +138,31 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
+	 * Whether the error is "no such table", which on SQLite can only be told from the
+	 * message.
+	 *
+	 * PDO_SQLite maps almost every failure onto SQLSTATE HY000 with driver code 1: a
+	 * missing table, a missing column and a syntax error are indistinguishable by code.
+	 * Measured rather than assumed - "no such table: migrations", "no such column: nope"
+	 * and 'near "SELEC": syntax error' all arrive as
+	 * ["HY000", 1, ...] on PHP 8.4's pdo_sqlite. So the message is the only thing that
+	 * separates them, and matching on it is the honest implementation rather than a
+	 * shortcut. The SQLSTATE is still checked first, so an error from some other layer
+	 * that happens to contain the phrase cannot pass.
+	 */
+	public function IsMissingTableError(\PDOException $ex): bool
+	{
+		if (self::SqlStateOf($ex) !== 'HY000')
+		{
+			return false;
+		}
+
+		$message = $ex->errorInfo[2] ?? $ex->getMessage();
+
+		return is_string($message) && stripos($message, 'no such table') !== false;
+	}
+
+	/**
 	 * Standard SQL double-quote quoting, which SQLite supports alongside backticks.
 	 */
 	public function QuoteIdentifier(string $name): string
