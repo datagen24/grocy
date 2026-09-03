@@ -25,8 +25,18 @@
 // --verify cases: the operator's evidence is an exit code, so the exit code is asserted
 // rather than the output alone.
 //
+// A second review finding turned out to be the same mistake in a different costume, and
+// the cases at the end are about it. scandir() returning false was folded into an empty
+// list, which made a source directory that could not be read indistinguishable from one
+// with nothing in it - so a group holding a file that had never been imported reported
+// nothing wrong and exited 0. The pattern both findings share is worth naming, because it
+// is the one to look for in anything added here later: a failure that returns a falsy or
+// empty value takes on the meaning of a legitimate answer, and this command answers a
+// question an operator acts on irreversibly.
+//
 // The command is driven as a subprocess rather than called into, so what is under test is
-// the file that ships, its exit codes included.
+// the file that ships, its exit codes included. One case goes further and re-runs it as an
+// unprivileged user, because mode 000 means nothing to the root this suite runs as.
 
 define('VICTUAL_ROOT_PATH', getenv('VICTUAL_ROOT') ?: dirname(__DIR__, 2));
 
@@ -160,6 +170,93 @@ Check('--verify is clean again, which is the operator go-ahead', $status === 0, 
 $mismatches = StoredDigestsMatchDisk($pdo, $storagePath);
 Check('and every stored digest matches its file', $mismatches === [], 'mismatches: ' . implode(', ', $mismatches));
 
+// --- An empty group directory is still a success ------------------------------------
+//
+// First, because everything after this asserts that unreadable is a failure, and the way
+// to get that wrong is to fail on empty as well. A group with nothing in it is a group
+// that was read.
+
+mkdir($storagePath . '/userpictures', 0755, true);
+
+[$status, $output] = RunImporter(['--verify']);
+Check('an empty but readable group is not a failure', $status === 0, $output);
+Check('an empty but readable group changes no count',
+	str_contains($output, 'Verified 5, differing 0, missing 0, failed 0.'), $output);
+
+// --- A path the command cannot classify ---------------------------------------------
+//
+// A dangling symlink is neither is_dir nor is_file, which used to mean "silently not a
+// group directory" at the top level and "silently not a file" inside one. It is there -
+// the listing returned it - so what it is cannot be established, and unknown is not empty.
+// Runs as whatever user the suite runs as, root included, so this half of the finding is
+// covered even where the unprivileged case below cannot run.
+
+symlink($storagePath . '/nowhere', $storagePath . '/danglinggroup');
+
+[$status, $output] = RunImporter(['--verify']);
+Check('a dangling entry under storage/ fails rather than being skipped', $status === 1, $output);
+Check('and is named on stderr', str_contains($output, 'FAILED   danglinggroup'), $output);
+Check('and is counted as failed', str_contains($output, 'Verified 5, differing 0, missing 0, failed 1.'), $output);
+Check('and the run does not claim the storage directory can go',
+	!str_contains($output, 'is in the database with identical content'), $output);
+
+[$status, $output] = RunImporter();
+Check('the import mode fails on it too', $status === 1, $output);
+Check('the import mode does not offer to let the volume go',
+	str_contains($output, 'this run does not know what it did not read')
+	&& !str_contains($output, 'then remove'), $output);
+
+unlink($storagePath . '/danglinggroup');
+
+// --- The reviewer's scenario: an unreadable group holding an unimported file ---------
+//
+// This is the finding itself. A group directory at mode 000 holding a file that was never
+// imported: scandir() fails, and folding that into an empty list made the run report
+// "Verified 0 ... failed 0" and exit 0 - telling the operator to delete the only copy of
+// a file it had never seen.
+//
+// Mode 000 means nothing to root, and the suite runs as root in the dev image, so the
+// command is re-run as an unprivileged user for this case. --verify rather than an import,
+// exactly as the finding describes, which also means the unprivileged process needs no
+// write access to anything.
+
+$hiddenPath = $storagePath . '/userfiles-locked';
+mkdir($hiddenPath, 0755, true);
+file_put_contents($hiddenPath . '/never-imported.txt', 'the only copy of this is on the volume');
+chmod($hiddenPath, 0000);
+
+$unprivileged = UnprivilegedUser();
+
+if ($unprivileged === null)
+{
+	// Reported rather than passed silently: a case that did not run is not a case that
+	// succeeded, and which of the two happened has to be visible in the log.
+	echo '  skip  the unreadable-directory case needs root and a second user; this process has neither' . PHP_EOL;
+}
+else
+{
+	[$status, $output] = RunImporterAs($unprivileged, ['--verify']);
+	Check('--verify as ' . $unprivileged . ' fails on a mode 000 group', $status === 1, $output);
+	Check('--verify names the group it could not list',
+		str_contains($output, 'FAILED   userfiles-locked'), $output);
+	Check('--verify counts it rather than reporting an empty directory',
+		str_contains($output, 'failed 1.'), $output);
+	Check('--verify does not claim every file is in the database',
+		!str_contains($output, 'is in the database with identical content'), $output);
+	Check('--verify says the storage directory must stay',
+		str_contains($output, 'Do not remove the storage directory'), $output);
+
+	[$status, $output] = RunImporterAs($unprivileged, []);
+	Check('the import mode fails on it as well', $status === 1, $output);
+	Check('the import mode does not offer to let the volume go',
+		!str_contains($output, 'then remove'), $output);
+}
+
+chmod($hiddenPath, 0755);
+unlink($hiddenPath . '/never-imported.txt');
+rmdir($hiddenPath);
+rmdir($storagePath . '/userpictures');
+
 // --- The flag itself ----------------------------------------------------------------
 //
 // A mistyped --verify used to be an argument the command ignored, which would have made
@@ -260,6 +357,61 @@ function RunImporter(array $arguments = []): array
 	$output = [];
 	$status = 0;
 	exec($command . ' 2>&1', $output, $status);
+
+	return [$status, implode(PHP_EOL, $output)];
+}
+
+/**
+ * A user this process can drop to in order to be refused by the filesystem, or null when
+ * this environment cannot do that.
+ *
+ * Three things have to hold: this process is root (nothing else can su), su exists, and
+ * there is an unprivileged account to become. www-data is uid 33 on Debian and is present
+ * in the php images this suite runs in, which is also the user the production image
+ * serves as - so it is the account an operator's import Job would most plausibly run as.
+ */
+function UnprivilegedUser(): ?string
+{
+	if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
+	{
+		return null;
+	}
+
+	if (trim((string)shell_exec('command -v su 2>/dev/null')) === '')
+	{
+		return null;
+	}
+
+	if (trim((string)shell_exec('id -u www-data 2>/dev/null')) === '')
+	{
+		return null;
+	}
+
+	return 'www-data';
+}
+
+/**
+ * Runs the importer as another user.
+ *
+ * su -p keeps the environment, which is the whole reason it is su and not setpriv: the
+ * command reads VICTUAL_DATAPATH and its connection settings from there, and a login
+ * shell would drop them.
+ *
+ * @param string[] $arguments
+ * @return array{0: int, 1: string}
+ */
+function RunImporterAs(string $user, array $arguments): array
+{
+	$inner = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(VICTUAL_ROOT_PATH . '/bin/victual-files-import');
+
+	foreach ($arguments as $argument)
+	{
+		$inner .= ' ' . escapeshellarg($argument);
+	}
+
+	$output = [];
+	$status = 0;
+	exec('su ' . escapeshellarg($user) . ' -p -s /bin/sh -c ' . escapeshellarg($inner) . ' 2>&1', $output, $status);
 
 	return [$status, implode(PHP_EOL, $output)];
 }

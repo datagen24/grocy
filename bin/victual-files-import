@@ -35,6 +35,14 @@
 // runs the same comparison and writes nothing, which is the check to run against the old
 // volume before removing it: every source file is either verified or reported by name.
 //
+// A path it cannot read is a failure, never an absence. That is the same mistake as the
+// size comparison in a different costume: scandir() returning false folded into an empty
+// list made an unreadable directory look like an empty one, so a group holding a file that
+// was never imported reported nothing wrong and exited 0. What an unreadable path means is
+// "this run does not know", and not knowing is counted, named on stderr, and forces a
+// non-zero exit in both modes. An empty directory that could actually be read still means
+// what it says.
+//
 // It imports only. There is deliberately no --delete-after: deleting the source is a
 // decision to make after looking at the result, not a flag on the command that produced
 // it.
@@ -66,8 +74,8 @@ if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
 	echo "  Nothing is ever deleted from disk - verify the result, then remove the\n";
 	echo "  storage directory yourself.\n\n";
 	echo "  --verify  Compare only, writing nothing, and exit 1 if any file on disk is\n";
-	echo "            missing from the database or differs from it. This is the check to\n";
-	echo "            run before removing the old volume.\n";
+	echo "            missing from the database, differs from it, or could not be read.\n";
+	echo "            This is the check to run before removing the old volume.\n";
 	echo "  --quiet   Only print the summary and any errors.\n";
 	exit(0);
 }
@@ -139,6 +147,27 @@ $storagePath = VICTUAL_DATAPATH . '/storage';
 
 if (!is_dir($storagePath))
 {
+	// "There is no storage directory" and "the storage directory could not be stat'd" look
+	// identical from is_dir, and this command must never report the second as the first:
+	// "nothing to import" is the sentence an operator reads before deleting the volume.
+	// Listing the data directory tells them apart, because an entry that is there is there
+	// whether or not anything about it can be read.
+	$dataEntries = ListDirectory(VICTUAL_DATAPATH);
+
+	if ($dataEntries === null)
+	{
+		fwrite(STDERR, VICTUAL_DATAPATH . ' could not be read, so whether there is anything to' . PHP_EOL
+			. 'import is unknown. Nothing has been done.' . PHP_EOL);
+		exit(1);
+	}
+
+	if (in_array('storage', $dataEntries, true))
+	{
+		fwrite(STDERR, $storagePath . ' is there but is not a readable directory.' . PHP_EOL
+			. 'Nothing has been done.' . PHP_EOL);
+		exit(1);
+	}
+
 	echo 'No storage directory at ' . $storagePath . ' - nothing to import.' . PHP_EOL;
 	exit(0);
 }
@@ -166,19 +195,43 @@ $differing = 0;
 $missing = 0;
 $failed = 0;
 
-foreach (ListDirectory($storagePath) as $group)
+$groups = ListDirectory($storagePath);
+
+if ($groups === null)
+{
+	// Counted rather than fatal, so the summary and the exit code below are the single
+	// place that decides what a run means. There is nothing left to iterate either way.
+	$failed++;
+	$groups = [];
+	fwrite(STDERR, 'FAILED   ' . $storagePath . ': could not be listed' . PHP_EOL);
+}
+
+foreach ($groups as $group)
 {
 	$groupPath = $storagePath . '/' . $group;
 
 	if (!is_dir($groupPath))
 	{
-		// A stray file directly under storage/ belongs to no group and cannot be named in
-		// a (group, name) pair, so it is reported rather than guessed at.
-		if (!$quiet)
+		if (is_file($groupPath))
 		{
-			echo '  skipping "' . $group . '", which is not a group directory' . PHP_EOL;
+			// A stray file directly under storage/ belongs to no group and cannot be named
+			// in a (group, name) pair, so it is reported rather than guessed at. This is
+			// the one benign case here: the entry was read, and what it is is known.
+			if (!$quiet)
+			{
+				echo '  skipping "' . $group . '", which is not a group directory' . PHP_EOL;
+			}
+
+			continue;
 		}
 
+		// Neither a directory nor a file, yet the listing above returned it - so it is
+		// there and something about it could not be read: a group directory under a parent
+		// this process may list but not traverse, or a dangling symlink. Both are counted
+		// as failures rather than skipped, because what they hold is unknown and unknown is
+		// not the same as empty.
+		$failed++;
+		fwrite(STDERR, 'FAILED   ' . $group . ': is neither a readable directory nor a file' . PHP_EOL);
 		continue;
 	}
 
@@ -187,12 +240,40 @@ foreach (ListDirectory($storagePath) as $group)
 		echo $group . ':' . PHP_EOL;
 	}
 
-	foreach (ListDirectory($groupPath) as $name)
+	$names = ListDirectory($groupPath);
+
+	if ($names === null)
+	{
+		// The finding this whole block exists for. Returning an empty list here made an
+		// unreadable group indistinguishable from an empty one, so a group holding a file
+		// that was never imported reported "verified 0, failed 0" and exit 0 - a false
+		// go-ahead to delete the only copy of that file.
+		$failed++;
+		fwrite(STDERR, 'FAILED   ' . $group . ': the group directory could not be listed' . PHP_EOL);
+		continue;
+	}
+
+	foreach ($names as $name)
 	{
 		$filePath = $groupPath . '/' . $name;
 
 		if (!is_file($filePath))
 		{
+			if (is_dir($filePath))
+			{
+				// Storage is two levels deep, so a directory here holds nothing this
+				// command can name as a (group, name) pair. Reported rather than counted:
+				// it was read, and nothing in the layout puts files there.
+				if (!$quiet)
+				{
+					echo '  skipping  ' . $name . '/, a directory inside a group' . PHP_EOL;
+				}
+
+				continue;
+			}
+
+			$failed++;
+			fwrite(STDERR, '  FAILED   ' . $group . '/' . $name . ': is neither a readable file nor a directory' . PHP_EOL);
 			continue;
 		}
 
@@ -305,14 +386,24 @@ foreach (ListDirectory($storagePath) as $group)
 
 echo PHP_EOL;
 
+// The failed count covers both halves of "this run does not know": a path that could not
+// be read, and a write that did not land. Either forces a non-zero exit in both modes,
+// because the sentence that follows a zero exit is one an operator acts on irreversibly.
 if ($verifyOnly)
 {
 	echo 'Verified ' . $verified . ', differing ' . $differing . ', missing ' . $missing . ', failed ' . $failed . '.' . PHP_EOL;
 
+	if ($failed > 0)
+	{
+		echo $failed . ' path(s) could not be read, so what they hold is unknown. A file that was' . PHP_EOL;
+		echo 'never imported is indistinguishable from an empty directory from here.' . PHP_EOL;
+	}
+
 	if ($differing + $missing + $failed > 0)
 	{
-		echo 'The database does not hold every file under ' . $storagePath . '.' . PHP_EOL;
-		echo 'Do not remove the storage directory. Run the import again, then verify again.' . PHP_EOL;
+		echo 'Not every file under ' . $storagePath . ' is known to be in the database.' . PHP_EOL;
+		echo 'Do not remove the storage directory. Fix the above, run the import again, then' . PHP_EOL;
+		echo 'verify again.' . PHP_EOL;
 		exit(1);
 	}
 
@@ -328,7 +419,8 @@ echo 'Imported ' . $imported . ', replaced ' . $replaced . ', verified ' . $veri
 
 if ($failed > 0)
 {
-	echo 'Nothing was deleted from disk. Fix the failures and run this again.' . PHP_EOL;
+	echo 'Nothing was deleted from disk, and this run does not know what it did not read.' . PHP_EOL;
+	echo 'Fix the failures above and run this again.' . PHP_EOL;
 	exit(1);
 }
 
@@ -341,17 +433,25 @@ if (!$quiet)
 exit(0);
 
 /**
- * The entries of a directory in a stable order, without "." and "..".
+ * The entries of a directory in a stable order, without "." and "..", or null when the
+ * directory could not be read.
  *
- * @return string[]
+ * The null is the point. scandir() returns false on failure, and folding that into an
+ * empty array - which this function used to do - makes an unreadable directory look
+ * exactly like an empty one. Every other answer this command gives is downstream of a
+ * directory listing, so that one substitution turned "I could not look" into "there is
+ * nothing there", and the command's whole job is to tell an operator when the source can
+ * be deleted. An empty array still means what it says: read successfully, nothing in it.
+ *
+ * @return string[]|null
  */
-function ListDirectory(string $path): array
+function ListDirectory(string $path): ?array
 {
 	$entries = scandir($path);
 
 	if ($entries === false)
 	{
-		return [];
+		return null;
 	}
 
 	return array_values(array_filter($entries, fn($entry) => $entry !== '.' && $entry !== '..'));

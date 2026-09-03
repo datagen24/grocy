@@ -183,9 +183,10 @@ Landed 2026-09-02 in seven commits, in the order this plan argues for: the abstr
 and the filesystem backend as a pure refactor, the setting and its validation, the
 migration and the database backend, the S10 bounds, the importer, the suite exemption,
 and this record. Measured against the working copy at `68d1162` (this plan's branch, off
-`4d9e03b`), on PHP 8.4.19 and PostgreSQL 16. Review then added an eighth, on the
-importer's idempotency key — its own bullet below, with its own measurement, because it
-changes what a passing run of that command means.
+`4d9e03b`), on PHP 8.4.19 and PostgreSQL 16. Review then added two more, both on the
+importer and both about the same thing: what it is entitled to call an absence. They have
+their own bullets below, with their own measurements, because each changes what a passing
+run of that command means.
 
 **The migration is `0258.pgsql.sql`, not `0257`.** 0257 was consumed by another track
 while this was in flight. Nothing else about the schema moved.
@@ -336,6 +337,52 @@ while this was in flight. Nothing else about the schema moved.
   and `Every file above was read back from the database and matched its bytes on disk`
   over content that is not the file. `php -l` on PHP 8.4 is clean on the command — which
   CI's sweep does not reach, having no `.php` extension — and on all 204 `.php` files.
+- **A path that cannot be read is a failure, never an absence — the same finding wearing
+  different clothes, found by review of the fix above.** `ListDirectory()` folded
+  `scandir()`'s `false` into an empty array, so a source directory that could not be read
+  was indistinguishable from one with nothing in it. Reproduced as reported: a group
+  directory at mode 000 holding a file that had never been imported, read as uid 33, and
+  `--verify` answered `Verified 5, differing 0, missing 0, failed 0.` and **exit 0** — a
+  go-ahead to delete the only copy of a file the command had never seen.
+
+  The pattern is worth naming, because it is the one to look for in anything added here
+  later and it is what both findings have in common: **a failure that returns a falsy or
+  empty value takes on the meaning of a legitimate answer**, in a command whose answer an
+  operator acts on irreversibly. Size that cannot establish equality reported "already
+  imported"; a listing that failed reported "nothing there".
+
+  So every filesystem read in the command was audited, not only the `scandir()` review
+  named. `ListDirectory()` now returns `null` on failure and `[]` only for a directory that
+  really was read and really is empty — the distinction requirement, and an empty group
+  stays a success. The three callers count a `null` as a failure and name the path on
+  stderr. The `is_dir($storagePath)` gate no longer answers "nothing to import" for a path
+  it merely could not stat: it lists the *data* directory to tell "absent" from
+  "unreadable", since an entry that is there is there whether or not anything about it can
+  be read. An entry the listing returned but which is neither `is_dir` nor `is_file` — an
+  unreadable group, a dangling symlink — is a failure rather than a silent skip, because
+  what it holds is unknown and unknown is not empty. `filesize()` and `hash_file()`
+  returning `false` were already counted as failures when the digest work landed, and
+  `fopen()` still is; a directory nested inside a group is reported rather than silently
+  passed over, but is not counted, because it *was* read.
+
+  `failed` was already printed in both summaries and already forced exit 1 in both; what
+  changed is that it now actually gets incremented for unreadable paths, and that a
+  non-zero `failed` prints why in the operator's terms. Neither mode says anything about
+  removing the storage directory when any path could not be read: verify prints *"Do not
+  remove the storage directory"*, and import prints *"this run does not know what it did
+  not read"* instead of the sentence that points at the volume.
+
+  **Measured 2026-09-03**, same working copy, image and database as above:
+  **SUITE PASSED**, all six phases, **42 of 42** cases in the files phase — 15 more than
+  before, covering the empty-but-readable group, the unclassifiable entry, and the
+  reviewer's own scenario. The last of those is run as **`www-data` (uid 33) via `su -p`**,
+  because mode 000 means nothing to the root the suite runs as; the probe reports a `skip`
+  line rather than a pass if it is ever run somewhere that cannot drop privileges. Broken
+  twice to check the new cases are load-bearing: restoring `return [];` in `ListDirectory`
+  fails **7**, and it fails them by printing exactly what the review reported —
+  `Verified 5, differing 0, missing 0, failed 0.` over a mode 000 directory holding an
+  unimported file. Restoring the old unconditional "not a group directory" skip fails a
+  further **6**. `php -l` clean on the command and on all 204 `.php` files.
 - **`68d1162` — the suite exemption.** `files` is the first engine-exclusive *table*
   (`0256.sqlite.sql` was a view change), so `migratedifftest.php` — the phase that
   compares table sets — failed on it. It is now excluded by a named

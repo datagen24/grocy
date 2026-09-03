@@ -472,10 +472,12 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   a different disk. Together 10 and 01 end the PVC: with `FILE_STORAGE=database` nothing
   under the data directory is written at runtime, and `bin/victual-files-import` is the
   one-off Job that runs against the old volume before the volume-less spec is applied. That
-  command decides "already imported" by SHA-256 rather than by file size — review found the
-  size check would report stale content as imported, which is the worst possible answer
-  from the command an operator deletes a volume on — and carries a `--verify` mode that is
-  the go-ahead for deleting it. `files` is the first engine-exclusive *table*; the suite's
+  command decides "already imported" by SHA-256 rather than by file size, and treats a path
+  it cannot read as a failure rather than as an empty one — two review findings with one
+  shape, a failure returning a value that reads as a legitimate answer, in the command an
+  operator deletes a volume on. It carries a `--verify` mode that is the go-ahead for
+  deleting it, and neither mode mentions removing anything when a path went unread.
+  `files` is the first engine-exclusive *table*; the suite's
   migration phase carries it as a named exemption, `db/pgsql/README.md` records it, and the
   suite gained a sixth phase (`run-tests.sh files`) for the importer, since a
   PostgreSQL-only table has no second engine to be compared against.
