@@ -11,12 +11,23 @@
 //   1. `window.__xss` is still undefined - nothing executed;
 //   2. the payload is present as visible *text* in the dialog / toast body.
 //
-// Run it against the unfixed head first. There it must report `xss: 1` on every row,
+// One probe seeds nothing: the payload arrives in a *server error message* instead,
+// injected by intercepting the route and answering 500, because
+// `Victual.FrontendHelpers.ShowGenericError` renders the technical details through
+// bootbox - and on PostgreSQL a uniqueness violation quotes the offending value back.
+//
+// Run it against the unfixed head first. There it must report `xss: 1` and exit non-zero,
 // otherwise the check is not capable of failing and proves nothing.
 //
 //   node s29-payload.js --url http://127.0.0.1:8500 --out /tmp/s29-before.json
 //
 // `--only locations,products` limits the run to the named probes.
+//
+// Exits non-zero if any probe is not clean, so it can be run as a gate. A probe counts as
+// failed when the payload executed, when an `<img>` was injected, when the payload is not
+// visible as text, when the sink never appeared, or when the action threw - "the sink was
+// not found" and "the action errored" are failures, not skips, because a run in which
+// every action silently did nothing must not be able to pass.
 
 const fs = require('fs');
 const path = require('path');
@@ -90,15 +101,21 @@ async function newProbePage(context)
 /**
  * Opens `url`, performs `action(page)` - which must make a bootbox dialog or a toastr
  * toast appear - and reports whether the payload executed and whether it is visible as
- * text.
+ * text. `setup`, when given, runs against the fresh page *before* the navigation, which
+ * is where `page.route()` interception has to be registered.
  */
-async function probe(context, name, url, action, sink)
+async function probe(context, name, url, action, sink, setup)
 {
 	const page = await newProbePage(context);
-	const record = { probe: name, url: url, xss: null, visibleText: null, error: null };
+	const record = { probe: name, url: url, xss: null, visibleText: null, sinkFound: false, imgInjected: 0, error: null };
 
 	try
 	{
+		if (setup)
+		{
+			await setup(page);
+		}
+
 		await page.goto(BASE + url, { waitUntil: 'domcontentloaded' });
 		await page.waitForTimeout(900);
 
@@ -108,9 +125,12 @@ async function probe(context, name, url, action, sink)
 		await page.waitForTimeout(1200);
 
 		const selector = sink === 'toast' ? '#toast-container' : '.bootbox';
+		// The last match, not the first: a probe that goes through more than one dialog
+		// leaves the earlier one in the DOM, and it is the newest one that holds the
+		// payload.
 		const visible = await page.evaluate(s =>
 		{
-			const el = document.querySelector(s);
+			const el = Array.from(document.querySelectorAll(s)).pop();
 			return el ? el.innerText : null;
 		}, selector);
 
@@ -119,7 +139,7 @@ async function probe(context, name, url, action, sink)
 		record.xss = await page.evaluate(() => window.__xss);
 		record.imgInjected = await page.evaluate(s =>
 		{
-			const el = document.querySelector(s);
+			const el = Array.from(document.querySelectorAll(s)).pop();
 			return el ? el.querySelectorAll('img[src="x"]').length : 0;
 		}, selector);
 	}
@@ -130,6 +150,52 @@ async function probe(context, name, url, action, sink)
 
 	await page.close();
 	return record;
+}
+
+/**
+ * Turns one probe record into a verdict. Every way a probe can be uninformative is a
+ * failure: a sink that never appeared and an action that threw both mean the assertion
+ * was never made, and a run of those must not be able to report success.
+ * @param {Object} record One entry of `results`
+ * @returns {{ok: boolean, reasons: string[]}}
+ */
+function verdict(record)
+{
+	const reasons = [];
+
+	if (record.seedFailure)
+	{
+		return { ok: false, reasons: ['the record was never created, so nothing could be probed'] };
+	}
+
+	if (record.error)
+	{
+		// Playwright's messages carry a multi-line call log; the first line is what belongs
+		// in a one-line-per-probe summary, and the full text is in the JSON report.
+		reasons.push('the action threw: ' + String(record.error).split('\n')[0]);
+	}
+
+	if (!record.sinkFound)
+	{
+		reasons.push('no dialog or toast appeared - the sink was never reached');
+	}
+
+	if (record.xss)
+	{
+		reasons.push('THE PAYLOAD EXECUTED (window.__xss = ' + JSON.stringify(record.xss) + ')');
+	}
+
+	if (record.imgInjected)
+	{
+		reasons.push(record.imgInjected + ' injected <img> in the sink');
+	}
+
+	if (record.sinkFound && record.visibleText !== true)
+	{
+		reasons.push('the payload is not present as visible text');
+	}
+
+	return { ok: reasons.length === 0, reasons: reasons };
 }
 
 (async () =>
@@ -182,6 +248,27 @@ async function probe(context, name, url, action, sink)
 	ids.product = product.body && product.body.created_object_id;
 	console.log('seed  product -> ' + product.status + ' id ' + ids.product);
 
+	// A recipe and one ingredient on it, whose *note* carries the payload.
+	// `recipes_pos` has no entry in BaseApiController::HTML_RENDERED_COLUMNS, so `note` is
+	// a text column and is stored as a live tag exactly like the names above. The recipe
+	// form writes it into `data-recipe-pos-note` and `recipeform.js` reads it back with
+	// `.attr()`, which decodes it again, before handing it to `bootbox.alert()`.
+	const recipe = await apiPost(seed, '/api/objects/recipes', { name: PAYLOAD_ENCODED, base_servings: 1 });
+	ids.recipe = recipe.body && recipe.body.created_object_id;
+	console.log('seed  recipe -> ' + recipe.status + ' id ' + ids.recipe);
+
+	if (ids.recipe && ids.product)
+	{
+		const recipePos = await apiPost(seed, '/api/objects/recipes_pos', {
+			recipe_id: ids.recipe,
+			product_id: ids.product,
+			amount: 1,
+			note: PAYLOAD_ENCODED
+		});
+		ids.recipepos = recipePos.body && recipePos.body.created_object_id;
+		console.log('seed  recipepos -> ' + recipePos.status + ' id ' + ids.recipepos);
+	}
+
 	// The API key description is not written through the JSON body path (it is a query
 	// parameter on a GET), so the key is created the way the UI creates it and its id is
 	// read out of the redirect target.
@@ -198,7 +285,7 @@ async function probe(context, name, url, action, sink)
 		['shoppinglist', 'shopping_lists'], ['task', 'tasks'], ['battery', 'batteries'],
 		['product', 'products'], ['equipment', 'equipment'],
 		['taskcategory', 'task_categories'], ['productgroup', 'product_groups'],
-		['shoppinglocation', 'shopping_locations']
+		['shoppinglocation', 'shopping_locations'], ['recipe', 'recipes']
 	])
 	{
 		if (!ids[key])
@@ -208,6 +295,12 @@ async function probe(context, name, url, action, sink)
 
 		const row = await apiGet(seed, '/api/objects/' + entity + '/' + ids[key]);
 		stored[key] = row && (row.name || row.description);
+	}
+
+	if (ids.recipepos)
+	{
+		const row = await apiGet(seed, '/api/objects/recipes_pos/' + ids.recipepos);
+		stored.recipepos = row && row.note;
 	}
 
 	await seed.close();
@@ -250,19 +343,59 @@ async function probe(context, name, url, action, sink)
 		['choresoverview', '/choresoverview', async page =>
 		{
 			await page.locator('a.btn.track-chore-button:not(.skip)[data-chore-id="' + ids.chore + '"]').first().click();
-		}, 'toast']
+		}, 'toast'],
+		// The recipe form's "show notes" button: the note round-trips through
+		// `data-recipe-pos-note`, so the Blade template's attribute escaping is undone by
+		// the `.attr()` that reads it back, and bootbox renders the result as HTML.
+		['recipeform-note', '/recipe/' + ids.recipe, clickDelete('.recipe-pos-show-note-button'), 'dialog'],
+		// The technical-details dialog behind the generic error toast. Nothing is seeded
+		// for this one: the payload is the server's *error message*, which is what a
+		// uniqueness violation on PostgreSQL quotes back. The route, the page and the
+		// click-through are forced-failure.js check 1, which is the sequence already known
+		// to reach this dialog; only the body of the 500 differs.
+		['error-details', '/locations', async page =>
+		{
+			await page.locator('.location-delete-button').first().click();
+			await page.waitForTimeout(500);
+			await page.locator('.bootbox .btn-success').first().click();
+			await page.waitForTimeout(900);
+			await page.locator('#toast-container .toast, #toast-container > div').first().click();
+		}, 'dialog', async page =>
+		{
+			await page.route('**/api/objects/locations/*', route => route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error_message: PAYLOAD_LIVE })
+			}));
+		}]
 	];
 
 	const results = [];
 
-	for (const [name, url, action, sink] of probes)
+	// A seed that did not come back with an id is reported as its own failure, so the
+	// summary says "the record was never created" rather than leaving the reader to infer
+	// it from a probe that could not find its button.
+	for (const key of ['location', 'chore', 'quantityunit', 'shoppinglist', 'task', 'battery',
+		'equipment', 'taskcategory', 'productgroup', 'shoppinglocation', 'product', 'apikey',
+		'recipe', 'recipepos'])
+	{
+		if (!ids[key])
+		{
+			results.push({
+				probe: 'seed:' + key, url: null, xss: null, visibleText: null,
+				sinkFound: false, imgInjected: 0, error: null, seedFailure: true
+			});
+		}
+	}
+
+	for (const [name, url, action, sink, setup] of probes)
 	{
 		if (ONLY.length && !ONLY.includes(name))
 		{
 			continue;
 		}
 
-		const record = await probe(context, name, url, action, sink);
+		const record = await probe(context, name, url, action, sink, setup);
 		results.push(record);
 		console.log('probe ' + name.padEnd(22) + ' xss=' + String(record.xss) +
 			' text=' + String(record.visibleText) +
@@ -272,7 +405,19 @@ async function probe(context, name, url, action, sink)
 
 	await browser.close();
 
-	const report = { base: BASE, when: new Date().toISOString(), runToken: RUN_TOKEN, payloadSent: PAYLOAD_ENCODED, ids, stored, results };
+	for (const record of results)
+	{
+		const outcome = verdict(record);
+		record.ok = outcome.ok;
+		record.reasons = outcome.reasons;
+	}
+
+	const failed = results.filter(r => !r.ok);
+	const report = {
+		base: BASE, when: new Date().toISOString(), runToken: RUN_TOKEN,
+		payloadSent: PAYLOAD_ENCODED, ids, stored, results,
+		passed: results.length - failed.length, failed: failed.length
+	};
 	fs.writeFileSync(OUT, JSON.stringify(report, null, '\t'));
 
 	console.log('\nStored values read back from the API:');
@@ -281,5 +426,33 @@ async function probe(context, name, url, action, sink)
 		console.log('  ' + key.padEnd(18) + JSON.stringify(stored[key]));
 	}
 
+	console.log('\nVerdict per probe:');
+	for (const record of results)
+	{
+		console.log((record.ok ? 'PASS  ' : 'FAIL  ') + record.probe.padEnd(24) + record.reasons.join('; '));
+	}
+
 	console.log('\nwrote ' + OUT);
-})();
+
+	if (!results.length)
+	{
+		// An empty run is a failure: it is what a mistyped --only produces, and reporting
+		// "0 failed" for it would be the same lie as passing on a run where nothing fired.
+		console.log('\nFAIL  no probe ran at all' + (ONLY.length ? ' - --only matched nothing: ' + ONLY.join(',') : ''));
+		process.exitCode = 1;
+		return;
+	}
+
+	console.log('\n' + (results.length - failed.length) + '/' + results.length + ' probes clean');
+
+	if (failed.length)
+	{
+		process.exitCode = 1;
+	}
+})().catch(e =>
+{
+	// Seeding or the browser launch itself falling over is a failed run, not a silent one:
+	// without this the harness would report nothing and exit on Node's default handling.
+	console.error('\nFAIL  the run itself threw before any verdict: ' + e.message);
+	process.exitCode = 1;
+});

@@ -57,7 +57,7 @@ them are routing sentences in *this file* that were never true.
 |---|---|---|---|---|---|
 | 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0); **shortened by ADR-0008's acceptance — re-read before track A starts** |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
-| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | **landed** in three PRs, 2026-09-02 (`98a4c93`…`3cbf5c0`, `c7555fc`…`112a090`, `b88b5c9`…`cd487e1`): the `request()` core, `Victual.EntityList`/`EntityForm`, all 157 silent `console.error` handlers gone (six documented survivors), **S29 closed** and proved with a stored payload, `purchase.js` no longer a library by `@push`, `datetimepicker2` deleted. No longer gates 05, 06 or 08 |
+| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | **landed** in three PRs, 2026-09-02 (`98a4c93`…`3cbf5c0`, `c7555fc`…`112a090`, `b88b5c9`…`cd487e1`): the `request()` core, `Victual.EntityList`/`EntityForm`, all 157 silent `console.error` handlers gone (six documented survivors), **S29 closed** and proved with a stored payload, `purchase.js` no longer a library by `@push`, `datetimepicker2` deleted. No longer gates 05, 06 or 08. **S29 needed a second pass, 2026-09-03**: review found one missed sink (`recipeform.js`'s ingredient note), two more of the same class in error-message sinks, and a payload probe that could not fail — all fixed, and the probe now runs on every pull request as the `frontend-security` job |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
@@ -469,7 +469,9 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   plan asked (six documented survivors per Q2), moved the one divergent reload convention,
   and **closed sweep S29** — structurally in the factories and by hand across the ~20
   sites no factory reaches — proved with a stored `<img onerror>` payload on 16 probes
-  that all fired on the unfixed head and none after. The third finished steps 5 and 6:
+  that all fired on the unfixed head and none after. (Review of that PR found the sweep
+  had missed `recipeform.js`'s ingredient note and that the probe could not fail; both
+  were fixed on 2026-09-03 and the probe is now a CI gate.) The third finished steps 5 and 6:
   the stock-booking Undo helpers became one shared file, so `stockoverview`,
   `stockentries` and `shoppinglist` stop importing symbols by `@push`ing `purchase.js`;
   `datetimepicker2` was deleted after its diff confirmed Q4's naming-only claim; and the

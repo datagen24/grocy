@@ -532,13 +532,16 @@ $(document).on("click", "#print-shopping-list-button", function (e)
 								validResponse = false;
 							}
 
+							// Both branches interpolate a server response into .html(), and a
+							// <pre> does not neutralise a tag inside it - so the message is
+							// escaped as the text it is (sweep finding S29)
 							if (validResponse)
 							{
-								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + jsonError.error_message + '</pre></code>');
+								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + Victual.FrontendHelpers.EscapeHtml(jsonError.error_message) + '</pre></code>');
 							}
 							else
 							{
-								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + xhr.responseText + '</pre></code>');
+								thermalPrintDialog.find('.bootbox-body').html(__t('Unable to print') + '<br><pre><code>' + Victual.FrontendHelpers.EscapeHtml(xhr.responseText) + '</pre></code>');
 							}
 						}
 					);

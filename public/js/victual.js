@@ -482,9 +482,14 @@ Victual.FrontendHelpers.ShowGenericError = function (message, exception)
 				errorDetails = exception.error_message;
 			}
 
+			// The details are a server error message, which is not markup and is not
+			// trusted: a uniqueness violation on PostgreSQL quotes the offending value
+			// back ("Key (name)=(...) already exists"), so a stored payload reaches this
+			// bootbox message, and bootbox renders its message with .html()
+			// (sweep finding S29).
 			bootbox.alert({
 				title: __t('Error details'),
-				message: '<p class="text-monospace my-0">' + errorDetails + '</p>',
+				message: '<p class="text-monospace my-0">' + Victual.FrontendHelpers.EscapeHtml(errorDetails) + '</p>',
 				closeButton: false,
 				className: "wider"
 			});

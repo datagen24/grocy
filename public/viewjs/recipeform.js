@@ -225,7 +225,11 @@ $(document).on('click', '.recipe-include-delete-button', function(e)
 // Show an ingredient's note (from data-recipe-pos-note) in an alert dialog
 $(document).on('click', '.recipe-pos-show-note-button', function(e)
 {
-	var note = $(e.currentTarget).attr('data-recipe-pos-note');
+	// recipes_pos.note is a text column, so the API stores what was typed - markup
+	// included. The Blade template escapes it into the attribute, but .attr() returns the
+	// *decoded* string and bootbox renders its message with .html(), so the escaping has
+	// to happen here, at the point of use (sweep finding S29).
+	var note = Victual.FrontendHelpers.EscapeHtml($(e.currentTarget).attr('data-recipe-pos-note'));
 
 	bootbox.alert(note);
 });

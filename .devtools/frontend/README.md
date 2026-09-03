@@ -59,6 +59,27 @@ no page executes it. Run it against an unfixed tree first — there it must repo
 on every probe, or it is not capable of failing and proves nothing. It leaves its seeded
 records behind, named with a per-run token, so it needs a throwaway database too.
 
+**`s29-payload.js` is a gate, and it is the one this repository runs on every pull
+request** — the `frontend-security` job in `.github/workflows/tests.yml` boots a demo
+instance and runs it. It prints a `PASS`/`FAIL` line per probe with the reason, and exits
+non-zero if any probe is not clean. Everything that makes a probe uninformative counts as
+a failure, deliberately: a payload that executed, an injected `<img>`, a payload not
+visible as text, a record that was never seeded, a **sink that never appeared** and an
+**action that threw**. A run in which every action silently did nothing must not be able
+to report success, which is what treating those last two as skips would allow.
+
+One probe seeds nothing. `error-details` takes the payload from a *server error message*
+instead, injected by intercepting the route and answering 500 — because `ShowGenericError`
+renders the technical details through bootbox, and a uniqueness violation on PostgreSQL
+quotes the offending value back into that message.
+
+**One fixed sink has no probe**: the "Unable to print" body in `shoppinglist.js`, which
+interpolates the thermal printer's error response into `.html()`. It sits behind
+`VICTUAL_FEATURE_FLAG_THERMAL_PRINTER`, which the demo instance does not set, so reaching
+it from here would mean the probe forcing a feature flag on in the page — a probe that
+asserts against a state no real instance is in. It is escaped the same way as the others
+and covered by reading the diff, which is the weaker evidence and is recorded as such.
+
 `forced-failure.js` exits non-zero if any assertion fails, so it can be run as a gate.
 
 `undo-toasts.js` books stock on each of the seven pages that show an Undo toast, clicks

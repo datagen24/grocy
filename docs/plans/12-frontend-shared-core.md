@@ -13,6 +13,10 @@ carried no security content. See
 [Executed — steps 1 and 2](#executed--steps-1-and-2-and-the-baseline),
 [Executed — steps 3, 3a and 4](#executed--steps-3-3a-and-4) and
 [Executed — steps 5 and 6](#executed--steps-5-and-6) below.
+**S29's closure needed a second pass**: review of the landing PR found one sink the by-hand
+sweep had missed, and the probe that was meant to be the evidence could not fail. Both are
+fixed, and the probe now runs on every pull request rather than once — see
+[Executed — S29, second pass](#executed--s29-second-pass).
 
 ## Today
 
@@ -1134,3 +1138,95 @@ away:
 Two that held exactly: **Q4**'s "the diff has effectively been run… naming-only differences"
 was right to the line, and **Q6**'s no-bundler decision cost one more `<script>` tag in the
 layout and nothing else.
+
+## Executed — S29, second pass
+
+Landed 2026-09-03 on `fix/pr35`, against the head of the plan-12 landing PR. Review of that
+PR raised two findings, and both were right. The record above stays as it was written on
+2026-09-02: its 16-of-16 payload table is what that run measured, and this section is what
+the run did not cover.
+
+**The by-hand sweep missed a sink.** `public/viewjs/recipeform.js` read a stored recipe
+ingredient note out of `data-recipe-pos-note` with `.attr()` and passed it straight to
+`bootbox.alert()`. That is S29 exactly: `recipes_pos` has no entry in
+`BaseApiController::HTML_RENDERED_COLUMNS`, so `note` is a text column and the sanitiser's
+entity encoding is undone before it is stored; the Blade template escapes it into the
+attribute, `.attr()` decodes it again, and bootbox renders its message with `.html()`. The
+step-3a sweep edited the two *other* handlers in that same file — the ingredient and
+included-recipe delete confirmations — and stopped at the one that took no `objectName`
+variable. That is the shape of the miss worth remembering: the sweep was looking for a name,
+and this sink carries a note.
+
+**Two more sinks of the same class, found auditing for it.** Neither comes from a `data-`
+attribute; both interpolate a *server error message* into HTML, which matters on this fork
+specifically because a uniqueness violation on PostgreSQL quotes the offending value back
+into the message it returns — so a stored payload reaches them:
+
+| Sink | What reaches it |
+|---|---|
+| `public/js/victual.js` — `ShowGenericError`'s "Error details" `bootbox.alert` | `error_message`, or `JSON.stringify(exception)` |
+| `public/viewjs/shoppinglist.js` — the "Unable to print" body | the thermal printer route's `error_message`, or the raw `responseText` |
+
+All three are escaped at the point of use with `Victual.FrontendHelpers.EscapeHtml`, which is
+where step 3a decided this escaping lives.
+
+**The probe could not fail.** `s29-payload.js` recorded `xss`, `visibleText`, `imgInjected`,
+a missing sink and a caught error, and then evaluated none of them: it wrote its JSON and
+exited 0. A run in which every action errored — a selector that had moved, an instance that
+never booted — was indistinguishable from a clean one. It now derives a verdict per probe and
+sets a non-zero exit status, and **"the sink was never reached" and "the action threw" are
+failures, not skips**, which is the specific way the old script could have reported success
+for a run that proved nothing. A seed that came back without an id is its own `FAIL` row, so
+the summary says the record was never created rather than leaving the reader to infer it.
+
+**Two probes added**, and one sink deliberately left unprobed:
+
+- `recipeform-note` seeds a recipe and one ingredient whose note is the payload, opens
+  `.recipe-pos-show-note-button` and asserts the note renders as text with no injected
+  `<img>`.
+- `error-details` seeds nothing: it intercepts `DELETE /api/objects/locations/*`, answers
+  500 with the payload as the `error_message`, and clicks through the error toast to the
+  details dialog. Route, page and click-through are `forced-failure.js` check 1 — the
+  sequence already recorded as reaching that dialog; only the body of the 500 differs.
+- The `shoppinglist.js` print-error body is **fixed but not probed**. It is behind
+  `VICTUAL_FEATURE_FLAG_THERMAL_PRINTER`, which a demo instance does not set, so probing it
+  would mean forcing a feature flag on in the page and asserting against a state no real
+  instance is in. Read-the-diff is weaker evidence and is recorded here as such.
+
+**The probe is now a gate.** `.github/workflows/tests.yml` gains a `frontend-security` job:
+PHP 8.5 (this job boots the application, and `PrerequisiteChecker` hard-fails below 8.5.0),
+`composer install`, `yarn install` — without `public/packages` there is no bootbox and no
+toastr, which is to say none of the sinks under test — a demo instance on 8500, and
+`node s29-payload.js`. The report is uploaded on failure as well as success. This is the
+answer to the thing that made the miss possible: the 2026-09-02 evidence was a single
+run, by hand, on the day of the fix.
+
+It boots **SQLite demo mode**, and that is recorded as a dated choice. ADR-0008 is
+Accepted, so PostgreSQL is the sole runtime engine by decision — but that record says the
+retirement work is not yet scheduled, `DB_DRIVER` still accepts `sqlite`, and demo mode is
+what the `run-app` skill and the whole `.devtools/frontend` harness are written against.
+What this job asserts is a fact about the browser; the engine underneath serves the same
+pages either way. Moving it is part of the retirement, not ahead of it.
+
+### Verification
+
+Run on 2026-09-03 against the working copy on `fix/pr35`.
+
+- **`node --check`** on the four changed JavaScript files — `public/viewjs/recipeform.js`,
+  `public/viewjs/shoppinglist.js`, `public/js/victual.js`,
+  `.devtools/frontend/s29-payload.js` — clean. No `.php` file changed.
+
+- **The new exit status, exercised.** Against a stub HTTP server that answers 200 with an
+  empty page for every request — every seed returns no id and every action times out —
+  the probe reports `0/15 probes clean`, one `FAIL` line per seed and per probe with the
+  reason, and exits **1**. That is the case the P2 finding named: a run where every action
+  errors used to exit 0.
+
+- **Not run: the payload itself.** The machine this change was made on has no PHP and no
+  container runtime, so no demo instance could be booted and the `recipeform-note` and
+  `error-details` probes have **not** been run against the application. They are written
+  against the same page, route and selectors that `forced-failure.js` check 1 and the
+  existing seeded probes use, but that is an argument, not evidence. The first CI run of
+  the `frontend-security` job is what will actually prove them — and if either probe is
+  wrong, that job goes red, which is the correct failure mode for a gate that has never
+  been observed passing.

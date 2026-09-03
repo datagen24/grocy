@@ -112,3 +112,86 @@ jobs:
           name: coverage-clover
           path: clover.xml
           if-no-files-found: warn
+
+  # Sweep finding S29 - the stored-XSS class plan 12 closed - proved with the payload on
+  # every pull request rather than once, by hand, on the day it was fixed. A fix nobody
+  # re-checks is a fix that comes back: the finding was already re-opened once in review,
+  # by a sink (`recipeform.js`'s ingredient note) that the by-hand sweep missed.
+  #
+  # It boots in SQLite demo mode, and that is a dated choice, not a preference.
+  # ADR-0008 is Accepted, so PostgreSQL is the sole runtime engine by decision - but that
+  # record says the retirement work is not yet scheduled, `DB_DRIVER` still accepts
+  # `sqlite`, and demo mode is what .agents/skills/run-app/SKILL.md and the whole
+  # .devtools/frontend harness are written against. What this job asserts is a fact about
+  # the *browser*: the engine underneath serves the same pages either way. When the
+  # retirement lands, this job moves with the harness rather than ahead of it.
+  frontend-security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 8.5 rather than the suite's 8.4: this job *boots the application*, and
+      # helpers/PrerequisiteChecker.php hard-fails below REQUIRED_PHP_VERSION ('8.5.0').
+      # That is also what composer.json declares, so no --ignore-platform-req is needed.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_sqlite, gd, intl, zip, mbstring, fileinfo, ctype, zlib
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: packages
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --no-scripts
+
+      # The views load their CSS and JS from /packages/..., and .yarnrc already points
+      # yarn at public/packages. Without this the pages boot unstyled and with no bootbox
+      # and no toastr at all - which is to say, with none of the sinks under test.
+      - name: Install frontend packages
+        run: yarn install --frozen-lockfile
+
+      - name: Install the probe harness
+        working-directory: .devtools/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # A throwaway data directory, exactly as .agents/skills/run-app/SKILL.md describes.
+      # The probe leaves its seeded records behind by design, so the database it runs
+      # against has to be disposable.
+      - name: Boot a demo instance
+        run: |
+          VDATA=$(mktemp -d)
+          cp config-dist.php "$VDATA/config.php"
+          VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" \
+            nohup php -S 127.0.0.1:8500 -t public > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8500/ || true)
+            if [ "$code" != "000" ]; then echo "booted, GET / -> $code"; exit 0; fi
+            sleep 1
+          done
+          echo "the instance never answered"; cat server.log; exit 1
+
+      # Exits non-zero if any probe is not clean, and treats "the sink was never reached"
+      # and "the action threw" as failures rather than skips - so a run in which nothing
+      # happened cannot report success.
+      - name: Prove S29 stays closed
+        working-directory: .devtools/frontend
+        run: node s29-payload.js --url http://127.0.0.1:8500 --out s29-payload.json
+
+      # Uploaded even when the probe fails: which probe went red, and what the payload
+      # actually rendered as, is the whole of reading the failure. The server log goes
+      # with it because a failure that is really a 500 looks like a missing sink here.
+      - name: Upload the probe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s29-payload
+          path: |
+            .devtools/frontend/s29-payload.json
+            server.log
+          if-no-files-found: warn
