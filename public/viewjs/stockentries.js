@@ -93,7 +93,10 @@ $(document).on('click', '.stock-consume-button', function(e)
 			Victual.Api.Get('stock/products/' + productId,
 				function(result)
 				{
-					var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name);
+					// The product and quantity unit names are text columns rendered into a
+					// toastr message, which is an HTML sink - escaped at the point of use
+					// (sweep finding S29). The Undo anchor appended below is deliberate markup.
+					var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(result.product.name));
 					if (wasSpoiled)
 					{
 						toastMessage += "<br>(" + __t("Spoiled") + ")";
@@ -108,14 +111,14 @@ $(document).on('click', '.stock-consume-button', function(e)
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -142,11 +145,11 @@ $(document).on('click', '.product-open-button', function(e)
 				{
 					button.addClass("disabled");
 					Victual.FrontendHelpers.EndUiBusy();
-					toastr.success(__t('Marked %1$s of %2$s as opened', openAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(openAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockBookingEntry(' + bookingResponse[0].id + ',' + stockRowId + ', ' + productId + ')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
+					toastr.success(__t('Marked %1$s of %2$s as opened', openAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Victual.UserSettings.stock_decimal_places_amounts }) + " " + __n(openAmount, Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name_plural), true), Victual.FrontendHelpers.EscapeHtml(result.product.name)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockBookingEntry(' + bookingResponse[0].id + ',' + stockRowId + ', ' + productId + ')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>');
 
 					if (result.product.move_on_open == 1 && result.default_consume_location != null)
 					{
-						toastr.info('<span>' + __t("Moved to %1$s", result.default_consume_location.name) + "</span> <i class='fa-solid fa-exchange-alt'></i>");
+						toastr.info('<span>' + __t("Moved to %1$s", Victual.FrontendHelpers.EscapeHtml(result.default_consume_location.name)) + "</span> <i class='fa-solid fa-exchange-alt'></i>");
 					}
 
 					RefreshStockEntryRow(stockRowId);
@@ -155,14 +158,14 @@ $(document).on('click', '.product-open-button', function(e)
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -254,10 +257,6 @@ function RefreshStockEntryRow(stockRowId)
 
 						$('#stock-' + stockRowId + '-location').attr('data-location-id', result.location_id);
 						$('#stock-' + stockRowId + '-location').text(locationName);
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -276,10 +275,6 @@ function RefreshStockEntryRow(stockRowId)
 						{
 							$(".product-open-button[data-stockrow-id='" + stockRowId + "']").addClass("disabled");
 						}
-					},
-					function(xhr)
-					{
-						console.error(xhr);
 					}
 				);
 
@@ -297,10 +292,6 @@ function RefreshStockEntryRow(stockRowId)
 
 							$('#stock-' + stockRowId + '-shopping-location').attr('data-shopping-location-id', result.location_id);
 							$('#stock-' + stockRowId + '-shopping-location').text(shoppingLocationName);
-						},
-						function(xhr)
-						{
-							console.error(xhr);
 						}
 					);
 				}
@@ -330,7 +321,7 @@ function RefreshStockEntryRow(stockRowId)
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 }
@@ -352,26 +343,3 @@ $(window).on("message", function(e)
 
 // Apply the initial product filter (from the product picker's pre-filled value, if any)
 Victual.Components.ProductPicker.GetPicker().trigger('change');
-
-/**
- * Undoes a stock booking (consume/open) via stock/bookings/{id}/undo, then broadcasts
- * a "ProductChanged" message so all views showing this product refresh themselves.
- * Invoked from the inline "Undo" link injected into the consume/open toast messages.
- * @param {number} bookingId - id of the booking to undo
- * @param {number} stockRowId - unused by the undo call itself, kept for the caller's context
- * @param {number} productId - product id, broadcast to trigger refreshes elsewhere
- */
-function UndoStockBookingEntry(bookingId, stockRowId, productId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function(result)
-		{
-			Victual.GetTopmostWindow().postMessage(WindowMessageBag("BroadcastMessage", WindowMessageBag("ProductChanged", productId)), Victual.BaseUrl);
-			toastr.success(__t("Booking successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
-		}
-	);
-};

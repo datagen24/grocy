@@ -92,6 +92,11 @@
 							data-apikey-id="{{ $apiKey->id }}"
 							data-apikey-key="{{ $apiKey->api_key }}"
 							data-apikey-description="{{ $apiKey->description }}"
+							{{-- What the delete confirmation names the key: its description when it has
+							one, the key itself otherwise. Resolved here rather than in the view script
+							so the shared delete confirmation can read one attribute like every other
+							list does. --}}
+							data-apikey-name="{{ empty($apiKey->description) ? $apiKey->api_key : $apiKey->description }}"
 							data-toggle="tooltip"
 							title="{{ $__t('Delete this item') }}">
 							<i class="fa-solid fa-trash"></i>

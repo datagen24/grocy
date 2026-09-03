@@ -1,15 +1,14 @@
 ﻿// View script for the equipment overview (views/equipment.blade.php):
 // master/detail page - a DataTable of all equipment on the left, the selected item's
 // description and instruction manual PDF (plus file type userfields) on the right.
+//
+// A partial clone rather than a pure one (plan 12, Q5): it takes the shared list pieces
+// for the table, the search box and the delete confirmation, and keeps the master/detail
+// behaviour, which no other list has.
 
 // DataTables setup with single row selection; selecting a row loads its details,
 // the first row is selected initially
-var equipmentTable = $('#equipment-table').DataTable({
-	'order': [[1, 'asc']],
-	'columnDefs': [
-		{ 'orderable': false, 'targets': 0 },
-		{ 'searchable': false, "targets": 0 }
-	].concat($.fn.dataTable.defaults.columnDefs),
+var equipmentTable = Victual.EntityList.Table('#equipment-table', {
 	select: {
 		style: 'single',
 		selector: 'tr td:not(:first-child)'
@@ -20,8 +19,6 @@ var equipmentTable = $('#equipment-table').DataTable({
 		DisplayEquipment($('#equipment-table tbody tr:eq(0)').data("equipment-id"));
 	}
 });
-$('#equipment-table tbody').removeClass("d-none");
-equipmentTable.columns.adjust().draw();
 
 // Row selection -> show that equipment item (rows carry data-equipment-id from the Blade template)
 equipmentTable.on('select', function (e, dt, type, indexes)
@@ -96,76 +93,26 @@ function DisplayEquipment(id)
 								$("#file-userfield-" + userfield.name + "-empty-hint").removeClass("d-none");
 							}
 						});
-					},
-					function (xhr)
-					{
-						console.error(xhr);
 					}
 				);
 			}
-		},
-		function (xhr)
-		{
-			console.error(xhr);
 		}
 	);
 }
 
-// Debounced free text search over the table
-$("#search").on("keyup", Delay(function ()
-{
-	var value = $(this).val();
-	if (value === "all")
-	{
-		value = "";
-	}
-
-	equipmentTable.search(value).draw();
-}, Victual.FormFocusDelay));
-
-$("#clear-filter-button").on("click", function ()
-{
-	$("#search").val("");
-	equipmentTable.search("").draw();
-});
+// Search box and "clear filters", from the shared list pieces
+Victual.EntityList.SearchFilter(equipmentTable);
 
 // Delete an equipment item after confirmation (DELETE /api/objects/equipment/{id});
-// the buttons carry data-equipment-id/-name from the Blade template
-$(document).on('click', '.equipment-delete-button', function (e)
-{
-	var objectName = $(e.currentTarget).attr('data-equipment-name');
-	var objectId = $(e.currentTarget).attr('data-equipment-id');
-
-	bootbox.confirm({
-		message: __t('Are you sure you want to delete equipment "%s"?', objectName),
-		closeButton: false,
-		buttons: {
-			confirm: {
-				label: __t('Yes'),
-				className: 'btn-success'
-			},
-			cancel: {
-				label: __t('No'),
-				className: 'btn-danger'
-			}
-		},
-		callback: function (result)
-		{
-			if (result === true)
-			{
-				Victual.Api.Delete('objects/equipment/' + objectId, {},
-					function (result)
-					{
-						window.location.href = U('/equipment');
-					},
-					function (xhr)
-					{
-						console.error(xhr);
-					}
-				);
-			}
-		}
-	});
+// the buttons carry data-equipment-id/-name from the Blade template, and the shared
+// confirmation escapes the name into its message
+Victual.EntityList.ConfirmDelete({
+	button: '.equipment-delete-button',
+	idAttr: 'data-equipment-id',
+	nameAttr: 'data-equipment-name',
+	endpoint: 'objects/equipment',
+	message: 'Are you sure you want to delete equipment "%s"?',
+	list: '/equipment'
 });
 
 // Toggle fullscreen display of the instruction manual / userfield file card

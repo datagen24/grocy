@@ -214,16 +214,15 @@ Victual.Components.ProductCard.Refresh = function(productId)
 							$("#productcard-no-price-data-hint").removeClass("d-none");
 						}
 					},
-					function(xhr)
+					function()
 					{
-						console.error(xhr);
+						// Deliberately silent: the price history is a decoration on a card the
+						// user opened for something else, and having no price data is the
+						// ordinary case - the branch just above draws the "no price data" hint
+						// for it. A toast here would fire behind the card. Plan 12, Q2.
 					}
 				);
 			}
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

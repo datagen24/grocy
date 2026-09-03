@@ -51,7 +51,7 @@ $('#save-inventory-button').on('click', function (e)
 			}
 			if (Victual.UserSettings.show_purchased_date_on_purchase)
 			{
-				jsonData.purchased_date = Victual.Components.DateTimePicker2.GetValue();
+				jsonData.purchased_date = Victual.Components.SecondaryDateTimePicker.GetValue();
 			}
 
 			jsonData.price = price;
@@ -125,10 +125,6 @@ $('#save-inventory-button').on('click', function (e)
 
 											Victual.FrontendHelpers.RunWebhook(Victual.Webhooks.labelprinter, webhookData);
 										});
-									},
-									function (xhr)
-									{
-										console.error(xhr);
 									}
 								);
 							}
@@ -142,7 +138,10 @@ $('#save-inventory-button').on('click', function (e)
 					Victual.Api.Get('stock/products/' + jsonForm.product_id,
 						function (result)
 						{
-							var successMessage = __t('Stock amount of %1$s is now %2$s', result.product.name, result.stock_amount + " " + __n(result.stock_amount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+							// Product and quantity unit names are text columns rendered into a
+							// toastr message, which is an HTML sink - escaped at the point of
+							// use (sweep finding S29).
+							var successMessage = __t('Stock amount of %1$s is now %2$s', Victual.FrontendHelpers.EscapeHtml(result.product.name), result.stock_amount + " " + __n(result.stock_amount, Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name), Victual.FrontendHelpers.EscapeHtml(result.quantity_unit_stock.name_plural), true)) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
 
 							if (GetUriParam("embedded") !== undefined)
 							{
@@ -194,21 +193,21 @@ $('#save-inventory-button').on('click', function (e)
 						function (xhr)
 						{
 							Victual.FrontendHelpers.EndUiBusy();
-							console.error(xhr);
+							Victual.Api.DefaultErrorHandler(xhr);
 						}
 					);
 				},
 				function (xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy("inventory-form");
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy("inventory-form");
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -324,10 +323,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 									RefreshLocaleNumberInput();
 								}
 							}
-						},
-						function (xhr)
-						{
-							console.error(xhr);
 						}
 					);
 				}
@@ -341,10 +336,6 @@ Victual.Components.ProductPicker.GetPicker().on('change', function (e)
 				}, Victual.FormFocusDelay);
 				$('#display_amount').trigger('keyup');
 				RefreshPriceHint();
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -535,10 +526,6 @@ $('#display_amount,#qu_id').on('keyup change', function (e)
 
 				RefreshPriceHint();
 				Victual.FrontendHelpers.ValidateForm('inventory-form');
-			},
-			function (xhr)
-			{
-				console.error(xhr);
 			}
 		);
 	}
@@ -548,43 +535,6 @@ $('#qu_id').on('change', function (e)
 {
 	RefreshPriceHint();
 });
-
-/**
- * Reverts a single stock booking (POST /api/stock/bookings/{id}/undo).
- * @param {number|string} bookingId - Id of the stock booking to undo
- */
-function UndoStockBooking(bookingId)
-{
-	Victual.Api.Post('stock/bookings/' + bookingId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Booking successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
-		}
-	);
-};
-
-/**
- * Reverts a whole stock transaction (POST /api/stock/transactions/{id}/undo);
- * used by the undo link inside the success toast after booking.
- * @param {string} transactionId - Id of the stock transaction to undo
- */
-function UndoStockTransaction(transactionId)
-{
-	Victual.Api.Post('stock/transactions/' + transactionId.toString() + '/undo', {},
-		function (result)
-		{
-			toastr.success(__t("Transaction successfully undone"));
-		},
-		function (xhr)
-		{
-			console.error(xhr);
-		}
-	);
-};
 
 $("#display_amount").attr("min", "0");
 

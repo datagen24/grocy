@@ -34,7 +34,8 @@
 			))
 
 			@if(boolval($userSettings['show_purchased_date_on_purchase']))
-			@include('components.datetimepicker2', array(
+			@include('components.datetimepicker', array(
+			'instance' => 'secondary',
 			'id' => 'purchased_date',
 			'label' => 'Purchased date',
 			'format' => 'YYYY-MM-DD',
@@ -44,7 +45,7 @@
 			'limitStartToNow' => false,
 			'invalidFeedback' => $__t('A purchased date is required'),
 			'nextInputSelector' => '#best_before_date',
-			'additionalCssClasses' => 'date-only-datetimepicker2',
+			'additionalCssClasses' => 'date-only-datetimepicker-secondary',
 			'activateNumberPad' => VICTUAL_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_FIELD_NUMBER_PAD
 			))
 			@endif

@@ -105,21 +105,24 @@ $(document).on('click', '.track-charge-cycle-button', function(e)
 					}
 
 					Victual.FrontendHelpers.EndUiBusy();
-					toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', batteryName, trackedTime));
+						// batteryName came from a data- attribute read back with .attr(), which
+						// returns the decoded string, and this toastr message is rendered as HTML -
+						// so it is escaped here, at the point of use (sweep finding S29).
+						toastr.success(__t('Tracked charge cycle of battery %1$s on %2$s', Victual.FrontendHelpers.EscapeHtml(batteryName), trackedTime));
 					RefreshContextualTimeago("#battery-" + batteryId + "-row");
 					RefreshStatistics();
 				},
 				function(xhr)
 				{
 					Victual.FrontendHelpers.EndUiBusy();
-					console.error(xhr);
+					Victual.Api.DefaultErrorHandler(xhr);
 				}
 			);
 		},
 		function(xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -180,9 +183,11 @@ function RefreshStatistics()
 			$("#info-due-soon-batteries").html('<span class="d-block d-md-none">' + dueSoonCount + ' <i class="fa-solid fa-clock"></i></span><span class="d-none d-md-block">' + __n(dueSoonCount, '%s battery is due to be charged', '%s batteries are due to be charged') + ' ' + __n(nextXDays, 'within the next day', 'within the next %s days'));
 			$("#info-overdue-batteries").html('<span class="d-block d-md-none">' + overdueCount + ' <i class="fa-solid fa-times-circle"></i></span><span class="d-none d-md-block">' + __n(overdueCount, '%s battery is overdue to be charged', '%s batteries are overdue to be charged'));
 		},
-		function(xhr)
+		function()
 		{
-			console.error(xhr);
+			// Deliberately silent: a background statistics refresh, not a user initiated
+			// action - it runs on load and after every tracked charge cycle, and a toast
+			// for it would report a failure the user did not ask for. Plan 12, Q2.
 		}
 	);
 }
