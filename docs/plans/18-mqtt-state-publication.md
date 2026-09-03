@@ -1053,6 +1053,95 @@ One unrelated defect was fixed on the way: `client-id-check.php` called
 the parent process read it back as the client id and failed all eight cases with a
 diagnostic. The call is gone.
 
+### Review fixes, round 5
+
+Two blocking findings, fixed 2026-09-03. Both are the same mistake in two places: trusting a
+record of what *this application did* as if it were a fact about *the system it was talking
+to*.
+
+**1. A write was acknowledged by things that were not acknowledgements.**
+`InfluxEventWriter::Write()` discarded the response and returned true whenever Guzzle did not
+throw — and Guzzle's `http_errors` raises for 4xx and 5xx but not for 3xx, while
+`allow_redirects` is on by default. So a bare HTTP 302 came back as an ordinary response
+nobody looked at, and a 302 followed to a login page came back as an HTTP 200 written by
+something that is not InfluxDB. Both reported success. Through the real drain the bare 302 set
+`delivered_at` with zero attempts and no `last_error`, so the event was never retried: a
+committed event discarded silently, which is the one failure the whole outbox exists to
+prevent, arriving at the last step.
+
+The client now sets `ALLOW_REDIRECTS => false` and `HTTP_ERRORS => false`, and one place
+decides what an acknowledgement is: a 2xx, from the address the request was sent to, with no
+body. The empty body is part of the contract rather than fussiness — InfluxDB's v2 write API
+answers `204 No Content`, so a 2xx carrying a page was answered by a proxy or a portal in
+front of it. Every other outcome goes through `Reject()`, which records the status and a
+bounded, single-line rendering of the body in `last_error` and leaves the row pending. If a
+deployment ever puts something in front of InfluxDB that answers 2xx with a body, that is the
+check to loosen deliberately, with the endpoint named.
+
+**This was the only instance in this plan's code**, checked rather than assumed: the tree has
+three Guzzle clients (`grep -rn "new Client("` over `services/`, `helpers/`, `controllers/`,
+`bin/`), and the other two — `WebhookRunner` and `StockService`'s barcode-plugin image fetch
+— are untouched by this plan and are not the same shape. Neither has a delivery ledger, so
+neither can mark anything delivered on a non-acknowledgement; `WebhookRunner` is a label
+printer fired and forgotten by design. The MQTT path shares no builder with any of them: it
+is `php-mqtt/client` over TCP, not HTTP.
+
+**2. A full refresh skipped the per-product topics the ledger said it had already sent.**
+`PublishLocked()` compared each product's payload hash with `mqtt_published_entities` and
+skipped a match — on every path, including the boot and CLI publish. But the ledger records
+what this application last *sent*, and a full refresh exists to answer a different question:
+what does the broker still *retain*? Everything here is QoS 0, so a message can simply be
+lost, and a broker can be restarted without persistence, replaced, or have its retained
+messages cleared by hand. In all of those the ledger still says "sent", so the product's
+discovery and state topics stayed missing from Home Assistant until that particular product's
+payload happened to change — which for a product nobody buys is never. The ambient topics
+never had this problem because they are resent every time; the recovery this design promises
+for QoS 0 losses simply did not cover the per-product half.
+
+The parameter that already distinguished the two paths was named `$includeDiscovery`, which
+described one of its consequences rather than what it means. It is now `$fullRefresh`, and the
+ledger comparison is `!$fullRefresh && …`. The incremental path keeps the diff, because there
+the ledger is answering the question it is good for — nothing has changed since we last sent
+this — and resending hundreds of identical discovery payloads on every purchase is the cost
+the diff exists to avoid. No other topic had the same skip: the ambient state topics are
+rebuilt and published unconditionally on both paths, and the ambient discovery payloads are
+already unconditional on a full refresh.
+
+**Verification**, all inside the suite, on both engines:
+
+- **`write-ack-check.php`** — a bare 302, a 200 carrying a login page, and a 500, each driven
+  through the real `Drain()`: the row stays **undelivered and not dead-lettered**, `attempts`
+  advances, and `last_error` names the status. **`/login` is never requested**, which is what
+  proves the redirect was refused rather than followed. Then a 204 from the write endpoint,
+  which *is* delivered. Then the same four cases against `Write()` directly.
+- **`full-refresh-check.php`** — two consecutive `PublishDiscoveryAndState()` calls emit
+  **13 topics, 4 of them per-product, both times** (the reviewer's two-then-zero, inverted),
+  and the same topics rather than merely as many. A following `PublishState()` emits **8
+  ambient topics and 0 per-product**, so the fix did not turn every write into a full resend.
+  A booking then puts exactly that product's two topics back on the incremental path.
+- **The suite** — `SUITE PASSED` on all six phases with `SUITE_ALLOW_RESERVED_HOLES=1`; the
+  migration gap check still fails by design without the waiver, unchanged from round 4.
+
+Two pieces of tooling made that possible and are worth naming, because both are stand-ins and
+neither proves anything about the real thing. **`broker-standin.php`** is a PHP stream socket
+speaking the CONNECT/PUBLISH/DISCONNECT subset `MqttPublisher` uses, recording each topic —
+the "recording publisher" the finding asks for, and the first thing in this tree to exercise
+`MqttPublisher` end to end. **`influx-standin.php`** grew `redirect` and `ok-with-body` modes
+and a `/login` page that is always served, so "the redirect was not followed" is an assertion
+about a request that was never made rather than about a response.
+
+The first version of the full-refresh probe read the broker log as soon as `PublishBatch()`
+returned, which races the stand-in still draining buffered packets. It failed *quietly*: the
+SQLite leg reported 4 ambient topics where PostgreSQL reported 8, and a short topic list is
+exactly the shape this probe treats as the defect. The stand-in now writes `=== end` when the
+connection closes and the probe waits for it. Recorded because the near miss is the lesson: a
+probe whose failure mode is indistinguishable from its finding is worse than no probe.
+
+**What is still not covered.** Neither stand-in is the real system. There is no Mosquitto, no
+Home Assistant and no InfluxDB in the suite, so "Home Assistant creates the entity", "the
+broker retains the payload across a restart" and "InfluxDB accepts this line protocol" remain
+hand verifications — the same three the Executed section already lists as outstanding.
+
 ### What this changes in the record above
 
 The security notes' third bullet understates the dependency: two packages are installed,

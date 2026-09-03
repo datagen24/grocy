@@ -20,8 +20,9 @@ use Victual\Services\DatabaseService;
  * **Trigger two: bin/victual-publish-state.** PHP has no boot event, so "publish on boot"
  * is a command the deployment runs, from a postStart hook or a Job alongside the
  * initContainer that runs bin/victual-migrate. It publishes the discovery payloads as well
- * as the state, which is what makes an out-of-band change - a migration, an import, someone
- * in psql - self-heal rather than silently diverge.
+ * as the state, and every per-product topic whatever the ledger says was last sent, which is
+ * what makes an out-of-band change - a migration, an import, someone in psql - and a broker
+ * that lost its retained messages self-heal rather than silently diverge.
  *
  * Nothing here throws. A broker is not allowed to affect a write that has already
  * committed, so every failure is logged inside MqttPublisher and reported as a bool.
@@ -82,9 +83,13 @@ class MqttStatePublicationService
 	}
 
 	/**
-	 * Publishes the discovery payloads and then the full state snapshot - what
-	 * bin/victual-publish-state does, and what a fresh deployment needs so that Home
-	 * Assistant learns the entities exist before it is told their values.
+	 * The full refresh: every discovery payload and every state topic this version owns,
+	 * including each per-product entity, whatever the ledger says was last sent.
+	 *
+	 * What bin/victual-publish-state does, and what a fresh deployment needs so that Home
+	 * Assistant learns the entities exist before it is told their values. It is also the
+	 * repair path, which is the part the ledger must not be allowed to shorten - see
+	 * PublishLocked().
 	 */
 	public static function PublishDiscoveryAndState(): bool
 	{
@@ -93,20 +98,24 @@ class MqttStatePublicationService
 
 	/**
 	 * Assembles and publishes: the ambient state topics always, the ambient discovery
-	 * payloads when asked, and whichever per-product entities have appeared, changed or gone
-	 * since the last publish.
+	 * payloads on a full refresh, and the per-product entities - all of them on a full
+	 * refresh, and only the ones that have appeared, changed or gone since the last publish
+	 * otherwise.
 	 *
 	 * The ambient half is unconditional because a whole snapshot every time is the design -
 	 * a publish lost to a broker restart is repaired by the next write with no
-	 * reconciliation logic. The per-product half is a diff because it cannot be: retracting
-	 * a removed entity means knowing it was there, and republishing hundreds of unchanged
-	 * discovery payloads on every purchase would be a real cost rather than a theoretical
-	 * one.
+	 * reconciliation logic. The per-product half is a diff on the incremental path because
+	 * it cannot be unconditional there: retracting a removed entity means knowing it was
+	 * there, and republishing hundreds of unchanged discovery payloads on every purchase
+	 * would be a real cost rather than a theoretical one. On a full refresh it is not a diff
+	 * at all, for the reason PublishLocked() gives.
 	 *
 	 * The ledger is only updated after the broker has accepted the batch, so a failed publish
 	 * is retried by the next one rather than being recorded as done.
+	 *
+	 * @param bool $fullRefresh True for the boot/CLI publish, which resends everything
 	 */
-	private static function Publish(bool $includeDiscovery): bool
+	private static function Publish(bool $fullRefresh): bool
 	{
 		if (!self::IsEnabled())
 		{
@@ -119,16 +128,34 @@ class MqttStatePublicationService
 		// topics carry no ordering. The assembly is inside the lock, not just the publish:
 		// a lock around the publish alone lets both requests read before either writes,
 		// which is the same lost update with a smaller window.
-		return DatabaseService::GetInstance()->GetDialect()->WithPublicationLock(function () use ($includeDiscovery)
+		return DatabaseService::GetInstance()->GetDialect()->WithPublicationLock(function () use ($fullRefresh)
 		{
-			return self::PublishLocked($includeDiscovery);
+			return self::PublishLocked($fullRefresh);
 		});
 	}
 
 	/**
 	 * The body of Publish(), called with the publication lock held.
+	 *
+	 * **A full refresh ignores the ledger for the per-product topics.** The ledger records
+	 * what this application last *sent*, which is not the same question as what the broker
+	 * still *retains* - and the second question is the one a full refresh exists to answer.
+	 * Everything here is published at QoS 0, so a message can simply be lost; a broker can
+	 * also be restarted without persistence, replaced, or have its retained messages cleared
+	 * by hand. In every one of those cases the ledger still says "sent", so an incremental
+	 * publish skips the product and the entity stays missing from Home Assistant until that
+	 * particular product's payload happens to change - which for a product nobody buys is
+	 * never. The ambient topics never had this problem because they are resent every time;
+	 * the per-product ones did, and a boot publish that skipped them was the recovery path
+	 * quietly not recovering.
+	 *
+	 * The incremental path keeps the diff, because there the ledger is answering the question
+	 * it is good for: nothing has changed since we last sent this, and resending hundreds of
+	 * identical discovery payloads on every purchase is the cost the diff exists to avoid.
+	 *
+	 * @param bool $fullRefresh True for the boot/CLI publish
 	 */
-	private static function PublishLocked(bool $includeDiscovery): bool
+	private static function PublishLocked(bool $fullRefresh): bool
 	{
 		$builder = new DiscoveryPayloadBuilder();
 		$ledger = new PublicationLedger();
@@ -137,7 +164,7 @@ class MqttStatePublicationService
 		{
 			$topics = self::BuildStateTopics();
 
-			if ($includeDiscovery)
+			if ($fullRefresh)
 			{
 				$topics = array_merge($builder->BuildDiscoveryPayloads(), $topics);
 			}
@@ -164,10 +191,12 @@ class MqttStatePublicationService
 			$state = StateSnapshotAssembler::EncodePayload($entity);
 			$hash = hash('sha256', $discovery . "\n" . $state);
 
-			if (($publishedBefore[$objectId] ?? null) === $hash)
+			if (!$fullRefresh && ($publishedBefore[$objectId] ?? null) === $hash)
 			{
-				// Byte-identical to what the ledger says is already retained: publishing it
-				// again would change nothing a subscriber can see
+				// Byte-identical to what the ledger says was last sent, on the path where
+				// that is the right question: nothing has changed since, so publishing it
+				// again would change nothing a subscriber can see. A full refresh does not
+				// get this shortcut - see the docblock.
 				continue;
 			}
 

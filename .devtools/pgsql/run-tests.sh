@@ -58,6 +58,7 @@
 #   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
 #   SUITE_PGSQL_MQTT_DB                  database for the mqtt tests    (default victual_mqtt)
 #   SUITE_MQTT_STANDIN_PORT              port for the stand-in InfluxDB (default 8390)
+#   SUITE_MQTT_BROKER_PORT               port for the recording MQTT stand-in (default 8391)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #   SUITE_ALLOW_RESERVED_HOLES           set to 1 to waive a migration number that
 #                                        migrations/RESERVATIONS.md says an unmerged branch
@@ -91,6 +92,7 @@ ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
 MQTT_DB="${SUITE_PGSQL_MQTT_DB:-victual_mqtt}"
 MQTT_STANDIN_PORT="${SUITE_MQTT_STANDIN_PORT:-8390}"
+MQTT_BROKER_PORT="${SUITE_MQTT_BROKER_PORT:-8391}"
 
 WHICH="${1:-all}"
 
@@ -424,12 +426,22 @@ run_trigger_tests() {
 #   idempotency-check a redelivered event writing a second point instead of overwriting the
 #                     first, or a drained backlog giving every queued transaction the same
 #                     latest stock snapshot
+#   write-ack-check   an event marked delivered on something that was not an acknowledgement
+#                     from the write endpoint - a redirect to a login page, a proxy's own
+#                     200 - which sets delivered_at with no attempt and no retry, ever
+#   full-refresh-check a boot or CLI publish skipping the per-product topics because the
+#                     ledger says they were sent, so entities stay missing from Home
+#                     Assistant after the broker loses its retained messages
 #   engine-diff       the assembled payload differing between SQLite and PostgreSQL, which
 #                     is the one differential question this feature raises
 #
-# No broker and no node: the state probes need neither, the lock needs only PostgreSQL, and
-# InfluxDB is stood in for by PHP's own built-in server (influx-standin.php). A probe that
-# only runs where somebody installed extra software is a probe CI skips.
+# No real broker and no node: the lock needs only PostgreSQL, InfluxDB is stood in for by
+# PHP's own built-in server (influx-standin.php), and the broker by a PHP stream socket that
+# speaks the little of MQTT 3.1.1 MqttPublisher uses and records what was published
+# (broker-standin.php). A probe that only runs where somebody installed extra software is a
+# probe CI skips. What is *not* covered by either stand-in is stated plainly: no real Mosquitto
+# or Home Assistant, and no real InfluxDB, so protocol-level acceptance by those two is still
+# only verified by hand.
 
 run_mqtt_tests() {
 	local mqtt_scratch="$SUITE_SCRATCH/mqtt"
@@ -438,7 +450,8 @@ run_mqtt_tests() {
 
 	MQTT_STANDIN_LOG="$mqtt_scratch/standin.log"
 	MQTT_STANDIN_CONTROL="$mqtt_scratch/standin-control.txt"
-	export MQTT_STANDIN_LOG MQTT_STANDIN_CONTROL
+	MQTT_BROKER_LOG="$mqtt_scratch/broker.log"
+	export MQTT_STANDIN_LOG MQTT_STANDIN_CONTROL MQTT_BROKER_LOG
 
 	# Rejecting to start with: most of the probes exercise the failure path, and an address
 	# that times out would spend the configured timeout doing it on every run. The control
@@ -453,13 +466,30 @@ run_mqtt_tests() {
 		> "$mqtt_scratch/standin-server.log" 2>&1 &
 	standin_pid=$!
 
-	# Killed however this function ends, including a probe exiting non-zero
-	trap '[ -n "$standin_pid" ] && kill "$standin_pid" 2>/dev/null || true' RETURN
+	# The recording broker stand-in, which is how full-refresh-check.php can see which topics
+	# a publish actually put on the wire. It has no control file and no failure modes: the
+	# question it answers is what was sent, not what happens when sending fails.
+	: > "$MQTT_BROKER_LOG"
 
-	# The built-in server takes a moment to bind, and a probe that raced it would report a
-	# connection failure as an outbox defect
+	local broker_pid=""
+
+	php "$VICTUAL_ROOT/.devtools/mqtt/broker-standin.php" "$MQTT_BROKER_PORT" "$MQTT_BROKER_LOG" \
+		> "$mqtt_scratch/broker-server.log" 2>&1 &
+	broker_pid=$!
+
+	# Both killed however this function ends, including a probe exiting non-zero
+	trap '[ -n "$standin_pid" ] && kill "$standin_pid" 2>/dev/null; [ -n "$broker_pid" ] && kill "$broker_pid" 2>/dev/null; true' RETURN
+
+	# Both take a moment to bind, and a probe that raced one would report a connection
+	# failure as an outbox or publication defect
 	local waited=0
 	while [ "$waited" -lt 50 ] && ! php -r 'exit(@fsockopen("127.0.0.1", (int)$argv[1], $e, $m, 0.2) ? 0 : 1);' "$MQTT_STANDIN_PORT"; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+
+	waited=0
+	while [ "$waited" -lt 50 ] && ! php -r 'exit(@fsockopen("127.0.0.1", (int)$argv[1], $e, $m, 0.2) ? 0 : 1);' "$MQTT_BROKER_PORT"; do
 		sleep 0.1
 		waited=$((waited + 1))
 	done
@@ -507,6 +537,8 @@ run_mqtt_tests() {
 	# was *not* delivered looks like.
 	run_mqtt_probe_on_both_engines payload-validation-check "$mqtt_scratch"
 	run_mqtt_probe_on_both_engines changed-time-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines write-ack-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines full-refresh-check "$mqtt_scratch"
 	run_mqtt_probe_on_both_engines idempotency-check "$mqtt_scratch"
 	run_mqtt_probe_on_both_engines event-identity-check "$mqtt_scratch"
 	run_mqtt_probe_on_both_engines backlog-check "$mqtt_scratch"
@@ -538,6 +570,7 @@ run_mqtt_probe_on_both_engines() {
 	say ""
 	if ! VICTUAL_DATAPATH="$scratch/sqlite" \
 		VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
+		VICTUAL_BROKER_STANDIN_PORT="$MQTT_BROKER_PORT" VICTUAL_BROKER_STANDIN_LOG="$MQTT_BROKER_LOG" \
 		php "$VICTUAL_ROOT/.devtools/mqtt/$probe.php"; then
 		failures=$((failures + 1))
 	fi
@@ -561,6 +594,7 @@ run_mqtt_probe_on_both_engines() {
 	say ""
 	if ! VICTUAL_DATAPATH="$scratch/pgsql" DIFFTEST_DB_NAME="$dbname" \
 		VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
+		VICTUAL_BROKER_STANDIN_PORT="$MQTT_BROKER_PORT" VICTUAL_BROKER_STANDIN_LOG="$MQTT_BROKER_LOG" \
 		php "$VICTUAL_ROOT/.devtools/mqtt/$probe.php"; then
 		failures=$((failures + 1))
 	fi

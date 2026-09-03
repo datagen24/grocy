@@ -4,6 +4,7 @@ namespace Victual\Services\Influx;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\RequestOptions;
 
 /**
  * Writes events to InfluxDB over its v2 HTTP line-protocol endpoint.
@@ -27,6 +28,9 @@ use GuzzleHttp\Exception\GuzzleException;
  *   down, slow or misconfigured cannot turn a successful write into an error response.
  * - **Short timeouts**, so an unreachable endpoint bounds the delay rather than hanging the
  *   request.
+ * - **A write counts only when the write endpoint acknowledged it.** Redirects are refused
+ *   rather than followed and the status is checked explicitly, because this class's return
+ *   value is what the outbox turns into `delivered_at` - see Write().
  *
  * Unlike the broker there is no wall-tablet test to pass: InfluxDB is queried with
  * credentials rather than subscribed to, which is exactly why question 8's "no prices on
@@ -54,8 +58,31 @@ class InfluxEventWriter
 	/**
 	 * Writes a batch of line-protocol lines, with nanosecond timestamps.
 	 *
+	 * **Success means the write endpoint acknowledged the batch, and nothing weaker.** This
+	 * bool is what the outbox drain turns into `delivered_at`, so anything it reports as true
+	 * without an acknowledgement is a committed event discarded silently - the one failure
+	 * the whole outbox exists to prevent, arriving at the last step.
+	 *
+	 * Guzzle's defaults are not that check, in two ways that both looked like success:
+	 *
+	 * - **`http_errors` only throws for 4xx and 5xx.** A 3xx that is not followed - a bare
+	 *   302, say - comes back as an ordinary response, and the discarded return value meant
+	 *   nothing ever looked at its status. Through the real drain that set `delivered_at`
+	 *   with zero attempts and no error, so the event was never retried.
+	 * - **`allow_redirects` is on by default.** A POST redirected to a login page finishes as
+	 *   an HTTP 200 from somewhere that is not the write endpoint, which is indistinguishable
+	 *   from an acknowledgement unless the redirect is refused.
+	 *
+	 * So redirects are off, every status comes back as a response rather than an exception,
+	 * and the acknowledgement is asserted here: a 2xx, from the address the request was sent
+	 * to, with no body. The empty body is part of the contract rather than fussiness -
+	 * InfluxDB's v2 write API answers `204 No Content`, so a 2xx carrying a page is a proxy
+	 * or a portal answering on the endpoint's behalf. If a real deployment ever puts
+	 * something in front of InfluxDB that returns a body on success, this is the check to
+	 * loosen, deliberately and with the endpoint named.
+	 *
 	 * @param string[] $lines
-	 * @return bool True when InfluxDB accepted the batch
+	 * @return bool True when the write endpoint acknowledged the batch
 	 */
 	public function Write(array $lines): bool
 	{
@@ -65,26 +92,58 @@ class InfluxEventWriter
 		}
 
 		$timeout = max(1, (int)VICTUAL_INFLUXDB_TIMEOUT_SECONDS);
+		$url = rtrim((string)VICTUAL_INFLUXDB_URL, '/') . '/api/v2/write';
 
 		try
 		{
 			$client = new Client([
-				'timeout' => $timeout,
-				'connect_timeout' => $timeout
+				RequestOptions::TIMEOUT => $timeout,
+				RequestOptions::CONNECT_TIMEOUT => $timeout,
+				// Never follow one. A redirect is not an acknowledgement, and following it
+				// means the 200 that comes back was written by whatever the redirect pointed
+				// at - a login page, an SSO portal, an error page on a proxy - rather than by
+				// the endpoint this batch was addressed to.
+				RequestOptions::ALLOW_REDIRECTS => false,
+				// Every status arrives as a response so that one place decides what counts as
+				// an acknowledgement. Left on, 4xx and 5xx would throw while 3xx would not,
+				// which is the split that hid this.
+				RequestOptions::HTTP_ERRORS => false
 			]);
 
-			$client->request('POST', rtrim((string)VICTUAL_INFLUXDB_URL, '/') . '/api/v2/write', [
-				'query' => [
+			$response = $client->request('POST', $url, [
+				RequestOptions::QUERY => [
 					'org' => VICTUAL_INFLUXDB_ORG,
 					'bucket' => VICTUAL_INFLUXDB_BUCKET,
 					'precision' => 'ns'
 				],
-				'headers' => [
+				RequestOptions::HEADERS => [
 					'Authorization' => 'Token ' . VICTUAL_INFLUXDB_TOKEN,
 					'Content-Type' => 'text/plain; charset=utf-8'
 				],
-				'body' => implode("\n", $lines)
+				RequestOptions::BODY => implode("\n", $lines)
 			]);
+
+			$status = $response->getStatusCode();
+
+			if ($status < 200 || $status > 299)
+			{
+				$where = $response->getHeaderLine('Location');
+
+				return $this->Reject('the write endpoint answered HTTP ' . $status
+					. ($where === '' ? '' : ', redirecting to ' . $where)
+					. ($status >= 300 && $status <= 399 ? ' (not followed: a redirect is not an acknowledgement)' : '')
+					. self::DescribeBody($response->getBody()));
+			}
+
+			$body = trim((string)$response->getBody());
+
+			if ($body !== '')
+			{
+				return $this->Reject('the write endpoint answered HTTP ' . $status
+					. ' with a body, where InfluxDB\'s write API answers 204 with none - so this'
+					. ' was answered by something in front of it rather than by InfluxDB'
+					. self::DescribeBody($body));
+			}
 
 			$this->LastError = null;
 
@@ -95,21 +154,49 @@ class InfluxEventWriter
 		// or a connect timeout would otherwise escape - and those are the likely failures here
 		catch (GuzzleException $ex)
 		{
-			$this->LastError = $ex->getMessage();
-
-			error_log('Victual: writing events to InfluxDB at ' . VICTUAL_INFLUXDB_URL
-				. ' failed, the events stay in the outbox for the next drain: ' . $ex->getMessage());
-
-			return false;
+			return $this->Reject($ex->getMessage());
 		}
 		catch (\Throwable $ex)
 		{
-			$this->LastError = $ex->getMessage();
-
-			error_log('Victual: writing events to InfluxDB failed, the events stay in the outbox for the next drain: ' . $ex->getMessage());
-
-			return false;
+			return $this->Reject($ex->getMessage());
 		}
+	}
+
+	/**
+	 * Records why the batch was not acknowledged and reports the failure.
+	 *
+	 * One place, so that every way of not being acknowledged - a refused connection, a
+	 * timeout, a redirect, a 500, a 200 from a login page - leaves the same evidence: a
+	 * LastError the drain writes onto the rows it could not deliver, and one log line.
+	 */
+	private function Reject(string $reason): bool
+	{
+		$this->LastError = $reason;
+
+		error_log('Victual: writing events to InfluxDB at ' . VICTUAL_INFLUXDB_URL
+			. ' was not acknowledged, the events stay in the outbox for the next drain: ' . $reason);
+
+		return false;
+	}
+
+	/**
+	 * A bounded, single-line rendering of a response body for the error column.
+	 *
+	 * Bounded because the body may be an entire HTML login page and `last_error` is for a
+	 * person glancing at why a queue stopped moving.
+	 *
+	 * @param mixed $body Anything castable to string, including a PSR-7 stream
+	 */
+	private static function DescribeBody($body): string
+	{
+		$text = trim(preg_replace('/\s+/', ' ', (string)$body));
+
+		if ($text === '')
+		{
+			return '';
+		}
+
+		return ': ' . (strlen($text) > 200 ? substr($text, 0, 200) . '…' : $text);
 	}
 
 	/**

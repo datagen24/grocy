@@ -17,8 +17,23 @@
 //   VICTUAL_STANDIN_CONTROL=<path>  read the mode from that file on every request, so a
 //                                   test can flip a running server between rejecting and
 //                                   accepting without restarting it. The file holds
-//                                   "reject", "accept", or "fail-after:N"; it wins over the
-//                                   variables above, and a missing file means accept.
+//                                   "reject", "accept", "fail-after:N", "redirect" or
+//                                   "ok-with-body"; it wins over the variables above, and a
+//                                   missing file means accept.
+//
+// The last two modes exist for one defect. A write is only delivered when the *write
+// endpoint* acknowledged it, and two shapes used to pass for an acknowledgement:
+//
+//   redirect       302 to /login, which is what an expired session or an SSO portal in front
+//                  of InfluxDB answers with. Guzzle follows redirects by default and does not
+//                  raise for a 3xx it cannot follow, so both a bare 302 and a 302 followed to
+//                  a 200 login page came back as success.
+//   ok-with-body   200 with an HTML page, which is what a proxy that answers everything with
+//                  its own page looks like. InfluxDB's write API answers 204 with no body.
+//
+// GET /login always answers a 200 login page, whatever the mode - so a probe can assert not
+// only that the write failed but that /login was never requested at all, which is what proves
+// the redirect was refused rather than followed.
 //
 // The counts come from the log file rather than from memory: the built-in server runs the
 // router script afresh per request, so there is nowhere else to keep them.
@@ -34,6 +49,17 @@ file_put_contents($log, '=== ' . ($_SERVER['REQUEST_METHOD'] ?? '?') . ' ' . ($_
 	. 'authorization: ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? '') . "\n"
 	. $body . "\n", FILE_APPEND);
 
+// Whatever the mode, this path is the login page a redirect would point at. It is served
+// before any mode is read, so a probe asserting "/login was never requested" is asserting
+// something this script would happily have answered.
+if (str_starts_with((string)($_SERVER['REQUEST_URI'] ?? ''), '/login'))
+{
+	http_response_code(200);
+	echo '<html><body><h1>Sign in</h1><form method="post"></form></body></html>';
+
+	return true;
+}
+
 $reject = getenv('VICTUAL_STANDIN_REJECT') === '1';
 $failAfter = getenv('VICTUAL_STANDIN_FAIL_AFTER');
 
@@ -44,6 +70,26 @@ $control = getenv('VICTUAL_STANDIN_CONTROL');
 if ($control !== false && $control !== '' && file_exists($control))
 {
 	$mode = trim((string)file_get_contents($control));
+
+	if ($mode === 'redirect')
+	{
+		// A bare 302 with a Location. Followed, it ends at the login page above; not
+		// followed, it is a 302 that never wrote anything. Neither is an acknowledgement.
+		http_response_code(302);
+		header('Location: /login');
+
+		return true;
+	}
+
+	if ($mode === 'ok-with-body')
+	{
+		// The shape that is hardest to tell from success: a 2xx, from the right address,
+		// carrying a page instead of the empty body InfluxDB's write API answers with.
+		http_response_code(200);
+		echo '<html><body><h1>Sign in</h1></body></html>';
+
+		return true;
+	}
 
 	if ($mode === 'reject')
 	{
