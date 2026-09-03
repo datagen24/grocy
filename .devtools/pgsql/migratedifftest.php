@@ -24,6 +24,19 @@ require_once (getenv('VICTUAL_ROOT') ?: '/app') . '/packages/autoload.php';
 use Victual\Services\Database\DatabaseImporter;
 use Victual\Services\Database\ValueComparison;
 
+/**
+ * Tables an @engine-exclusive migration created on PostgreSQL and deliberately not on
+ * SQLite, so that the two engines legitimately hold different table sets.
+ *
+ * "files" (migrations/0258.pgsql.sql) is the first. It holds uploaded files as BYTEA when
+ * FILE_STORAGE is "database", and ConfigurationValidator refuses that setting on any
+ * driver but pgsql - so a SQLite counterpart would be a table nothing could ever read.
+ * Adding it here rather than letting the table set comparison pass by accident: this
+ * phase exists to make a missing table loud, and an exemption it does not know about is a
+ * missing table wearing a different hat. See db/pgsql/README.md.
+ */
+const ENGINE_EXCLUSIVE_TABLES = ['files'];
+
 $sqlitePath = getenv('MIGRATEDIFF_SQLITE_PATH');
 $pgsqlDsn = getenv('MIGRATEDIFF_PGSQL_DSN');
 
@@ -53,7 +66,8 @@ echo '== freshly migrated databases' . PHP_EOL;
 
 $problems = CompareTableSets($sqlite, $pg) + CompareRows($sqlite, $pg);
 
-echo PHP_EOL . 'Excluded from comparison: the migrations table (per engine by design), '
+echo PHP_EOL . 'Excluded from comparison: the migrations table (per engine by design), the '
+	. 'engine-exclusive tables (' . implode(', ', ENGINE_EXCLUSIVE_TABLES) . '), '
 	. 'row_created_timestamp everywhere (clock) and users.password (hashed with a fresh '
 	. 'salt per installation).' . PHP_EOL;
 
@@ -65,15 +79,21 @@ exit($problems === 0 ? 0 : 1);
  * version of the defect this phase exists for, and it would otherwise be invisible:
  * comparing only the tables both sides have makes a table nobody created look like
  * agreement.
+ *
+ * Which is exactly why the exemptions below are a list rather than a skip: every name in
+ * one is a table somebody decided one engine should not have, and the decision is written
+ * down here next to the check it silences.
  */
 function CompareTableSets(PDO $sqlite, PDO $pg): int
 {
 	$problems = 0;
 
-	// The two the PostgreSQL schema owns outright: user_settings_defaults resolves
-	// settings in SQL where SQLite uses a PHP callback, and system_db_changed_time
-	// replaces SQLite's file mtime. Same list DatabaseImporter works from.
-	foreach (array_diff(PgTables($pg), SqliteTables($sqlite), DatabaseImporter::TARGET_ONLY_TABLES) as $table)
+	// Two families of PostgreSQL-only table. TARGET_ONLY_TABLES is what the baseline owns
+	// outright - user_settings_defaults resolves settings in SQL where SQLite uses a PHP
+	// callback, and system_db_changed_time replaces SQLite's file mtime; same list
+	// DatabaseImporter works from. ENGINE_EXCLUSIVE_TABLES is what an @engine-exclusive
+	// migration created on one engine on purpose.
+	foreach (array_diff(PgTables($pg), SqliteTables($sqlite), DatabaseImporter::TARGET_ONLY_TABLES, ENGINE_EXCLUSIVE_TABLES) as $table)
 	{
 		echo "  DIFF  table $table exists on PostgreSQL only\n";
 		$problems++;
