@@ -13,3 +13,7 @@ embedded.txt
 # Local-only files: per-machine Claude settings (skills under .claude/ are tracked) and macOS metadata
 **/.claude/settings.local.json
 .DS_Store
+
+# Nix build results
+/result
+/result-*

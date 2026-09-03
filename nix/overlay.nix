@@ -1,0 +1,78 @@
+# The one overlay this flake exports. Everything the flake builds hangs off
+# `pkgs.victual`, so a consumer who wants one piece — the PHP build, say, or the
+# webroot — gets it by adding this overlay rather than by importing files by path.
+final: prev:
+
+let
+  inherit (final) lib;
+
+  # The image tag and the derivation versions come from the same place the application
+  # reports at /api/system/info. One version, one source.
+  version = (builtins.fromJSON (builtins.readFile ../version.json)).Version;
+
+  hashes = import ./hashes.nix;
+  sources = import ./source.nix { inherit lib; };
+in
+{
+  victual = lib.makeScope final.newScope (self: {
+    inherit version hashes sources;
+
+    # PHP 8.5 with exactly the extensions the application asks for and nothing else.
+    # The serving images get no pdo_sqlite: plan 10 made the prerequisite check
+    # driver-aware, so a PostgreSQL deployment no longer loads it to satisfy a check.
+    php = self.callPackage ./php.nix { };
+
+    # The migrate image's interpreter. bin/victual-db-import reads SQLite as an import
+    # format, which is the one thing ADR-0008 keeps it for.
+    phpMigrate = self.php.override { withSqlite = true; };
+
+    # The application tree with its Composer dependencies resolved.
+    app = self.callPackage ./app.nix { };
+
+    # public/packages — the yarn-installed frontend libraries the Blade layout links.
+    frontend = self.callPackage ./frontend.nix { };
+
+    # What the web tier serves: the static half of public/, plus the frontend packages.
+    webroot = self.callPackage ./webroot.nix { };
+
+    # Where the application root is inside every image. It is a store path rather than a
+    # chosen name like /app, because the baked view cache's compiled file names hash the
+    # absolute path of the views directory — so the path the warmer saw and the path
+    # php-fpm serves from have to be the same one, and a store path is the only way to
+    # get that by construction. See nix/app.nix.
+    appRoot = self.app.root;
+
+    # Runtime configuration files, generated rather than hand-maintained so that a
+    # change to a path is a change in one place.
+    runtime = {
+      # php-ini.nix is a bare string rather than a derivation: it is baked into the PHP
+      # build (nix/php.nix) so that every SAPI in every image reads the same settings.
+      fpmConf = self.callPackage ./runtime/fpm-conf.nix { };
+      nginxConf = self.callPackage ./runtime/nginx-conf.nix { };
+      entrypoint = ./runtime/entrypoint.php;
+      healthcheck = ./runtime/healthcheck.php;
+      configPhp = ./runtime/config.php;
+    };
+
+    # /etc/victual/config.php, as an image layer. Both PHP images carry it; the
+    # entrypoint copies it into the data directory when nothing is mounted there.
+    configSeed = self.callPackage ./config-seed.nix { };
+
+    # /opt/victual/healthcheck — what the pod manifest's exec probe runs. See the file.
+    healthcheckBin = self.callPackage ./healthcheck.nix { };
+
+    imageLib = self.callPackage ./images/lib.nix { };
+
+    image-app = self.callPackage ./images/app.nix { };
+    image-web = self.callPackage ./images/web.nix { };
+    image-migrate = self.callPackage ./images/migrate.nix { };
+
+    loadImages = self.callPackage ./images/load.nix { };
+
+    checks = self.callPackage ./checks.nix {
+      # Passed explicitly: `runtime` is a plain attrset rather than a scope, so
+      # callPackage cannot resolve `runtime.nginxConf` on its own.
+      runtimeNginxConf = self.runtime.nginxConf;
+    };
+  });
+}
