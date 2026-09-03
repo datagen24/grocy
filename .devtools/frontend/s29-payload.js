@@ -198,9 +198,14 @@ function verdict(record)
 	return { ok: reasons.length === 0, reasons: reasons };
 }
 
+// Module scope, not a local of the run below, so the catch at the bottom can close it. A
+// browser left open holds the event loop open, and the process then hangs instead of
+// exiting - which in CI is a job that runs to its timeout rather than a gate that fails.
+let browser = null;
+
 (async () =>
 {
-	const browser = await chromium.launch({ args: ['--no-sandbox'] });
+	browser = await chromium.launch({ args: ['--no-sandbox'] });
 	const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
 
 	// One page just for seeding; hitting / first establishes the demo session.
@@ -449,10 +454,23 @@ function verdict(record)
 	{
 		process.exitCode = 1;
 	}
-})().catch(e =>
+})().catch(async e =>
 {
 	// Seeding or the browser launch itself falling over is a failed run, not a silent one:
 	// without this the harness would report nothing and exit on Node's default handling.
 	console.error('\nFAIL  the run itself threw before any verdict: ' + e.message);
 	process.exitCode = 1;
+
+	// And the browser has to be closed on this path too, or the process never exits.
+	if (browser)
+	{
+		try
+		{
+			await browser.close();
+		}
+		catch (closeError)
+		{
+			console.error('and the browser would not close either: ' + closeError.message);
+		}
+	}
 });

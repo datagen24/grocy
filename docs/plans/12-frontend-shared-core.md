@@ -1222,6 +1222,17 @@ Run on 2026-09-03 against the working copy on `fix/pr35`.
   reason, and exits **1**. That is the case the P2 finding named: a run where every action
   errors used to exit 0.
 
+- **A hang, found by verifying rather than by reasoning.** The first version of the
+  non-zero exit left `browser` a local of the run, so the top-level `catch` could not close
+  it — and an open browser holds Node's event loop open. Pointed at a URL it could not
+  reach, the probe printed its `FAIL` line and then **never exited**: in CI that is a job
+  that runs to its timeout, which reads as infrastructure trouble rather than as the gate
+  failing. `browser` is now module-scoped and closed on that path too. Measured: against an
+  unreachable URL the probe exits **1 in 0s** with no orphaned Chromium, where before it
+  was still alive after 300s. Worth recording because the bug was in the failure handling
+  itself — the path that only ever runs when something else has already gone wrong, and
+  therefore the one least likely to be exercised by a passing run.
+
 - **Not run: the payload itself.** The machine this change was made on has no PHP and no
   container runtime, so no demo instance could be booted and the `recipeform-note` and
   `error-details` probes have **not** been run against the application. They are written
