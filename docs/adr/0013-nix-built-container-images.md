@@ -92,8 +92,19 @@ Concretely:
 5. **One workload, one image, one credential.** The application splits into `victual-app`
    (php-fpm, holds the database credential, no document root), `victual-web` (nginx,
    holds the document root, no credential and no PHP interpreter) and `victual-migrate`
-   (the only image carrying `migrations/`, `db/` and `bin/`, and the only one that should
-   ever hold a role able to run DDL).
+   (the only image carrying `bin/victual-migrate` and `bin/victual-db-import`, and the
+   only one that should ever hold a role able to run DDL).
+
+   **What separates them is the credential, not the bytes.** This record's first draft
+   claimed the migrate image was also the only one carrying `migrations/` and `db/`, and
+   review found that false: `SystemController::Root` still calls `MigrateDatabase()`,
+   whose `GetMigrationFiles()` opens a `FilesystemIterator` over `migrations/` that
+   throws when the directory is absent, and PostgreSQL's baseline resolves to
+   `db/pgsql/baseline` on the same path. The corpus therefore ships in every image until
+   [plan 10](../plans/10-cold-start-statelessness.md) takes migration off the request
+   path. The claim is downgraded rather than defended: the DDL is read-only text whose
+   presence is not itself exploitable, and least privilege here is enforced by the role
+   the workload holds.
 
 6. **The deploy tree lives in `deploy/`**, in this repository, carrying the manifests for
    fork-shipped workloads and saying nothing about ingress, storage classes or secret
@@ -239,3 +250,13 @@ for free, and assertions about the artifact rather than about the file that desc
   is what prerequisite 1 exists for.
 - The writable-path inventory this record's images have to live with is
   [plan 10](../plans/10-cold-start-statelessness.md)'s table, not a fresh survey.
+- **The scaffolding's first review (2026-09-03) found six defects, and they are the best
+  available evidence for how much prerequisite 1 is worth.** Five were packaging or
+  configuration errors that reading could in principle have caught and did not — an
+  omitted `victual.openapi.json`, a stripped `migrations/`, a config stub declared but
+  never installed in an image, nginx temporary paths whose parent no volume creates, and
+  a document root with no index file behind a `try_files` that needs one. The sixth was
+  a Kubernetes semantics error: a `tcpSocket` probe cannot reach a loopback-bound
+  php-fpm, because the kubelet resolves the target to the pod IP. All six are fixed in
+  the branch. None of them changes a decision in this record; the pattern they make —
+  five of six invisible until something ran — is why prerequisite 1 is a gate.

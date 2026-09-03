@@ -65,7 +65,10 @@ password is `victual`.
 this order: a file in `$VICTUAL_DATAPATH/settingoverrides`, then a `VICTUAL_`-prefixed
 environment variable, then the shipped default. So a container needs no `config.php`
 with anything in it, and the image seeds a near-empty one purely because
-`PrerequisiteChecker` refuses to start without the file existing.
+`PrerequisiteChecker` refuses to start without the file existing. Both PHP images carry
+that stub at `/etc/victual/config.php` (`nix/config-seed.nix`); the entrypoint copies it
+into `$VICTUAL_DATAPATH` only when nothing is already there, so a deployment that would
+rather mount a real `config.php` over that path can.
 
 The minimum for a PostgreSQL deployment:
 
@@ -91,6 +94,16 @@ not say what it is:
 - `readOnlyRootFilesystem: true` — the images are built to run this way. If it has to be
   turned off to get a green pod, something wrote where it should not have, and that is a
   finding rather than a workaround.
+
+**The app container's probe is an `exec`, not a `tcpSocket`, and it must stay one.**
+php-fpm binds `127.0.0.1:9000` so that nothing outside the pod's own containers can
+reach it, and the kubelet resolves a TCP probe's target to the *pod IP* — so a
+`tcpSocket` probe fails against a perfectly healthy pool and restarts it on every
+failure threshold. Setting the probe's `host` to `127.0.0.1` does not help either: that
+names the node's loopback. The probe runs `/app/php /app/healthcheck.php` inside the
+container instead, which is the one place the right answer is available. What it cannot
+see — a pool accepting connections whose workers are all wedged — is covered by the web
+container's readiness probe, which renders a page through PHP.
 
 **Signals.** The images set `StopSignal=SIGQUIT`, which is php-fpm's graceful stop and
 nginx's graceful shutdown. Kubernetes ignores the image's `StopSignal` and sends

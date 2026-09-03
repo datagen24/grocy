@@ -19,16 +19,20 @@ run, so treat the first `nix build` as part of the work rather than as a formali
 |---|---|---|
 | `.#image-app` | php-fpm on loopback:9000 | PHP 8.5 + the extensions in `php.nix`, the application at `/app` |
 | `.#image-web` | nginx on :8080 | nginx, `public/` and the yarn-built `packages/`, no PHP at all |
-| `.#image-migrate` | `bin/victual-migrate`, a Job | PHP CLI, the application, `migrations/`, `db/`, `bin/` |
+| `.#image-migrate` | `bin/victual-migrate`, a Job | PHP CLI, the application, and the `bin/` CLI entry points |
 
 All three run as uid 65532, contain no shell and no package manager, and are built from
 `scratch` — there is no base image and therefore no base image's CVEs.
 
 The split is not decoration. The web tier holds the document root and no credential; the
 app tier holds the credential and no document root; the migrate tier is the only one
-that carries DDL and the only one that should ever hold a role able to run it. That is
-ADR-0010's "its own credential, its own database role, least privilege for the one job
-it does", made structural rather than aspirational.
+that should ever hold a role able to run DDL. That is ADR-0010's "its own credential,
+its own database role, least privilege for the one job it does".
+
+**What separates them is the credential, not the bytes.** `migrations/` and `db/` ship in
+every image, because `SystemController::Root` still calls `MigrateDatabase()` and
+`GetMigrationFiles()` throws on a missing directory. The first draft of this tree
+stripped them and turned `/` into a 500; plan 10 is what makes stripping them possible.
 
 ## Building it
 
@@ -126,13 +130,20 @@ nix/
     load.nix           `nix run .#load`
 ```
 
-## Two things worth knowing before you change something here
+## Three things worth knowing before you change something here
 
 **`/app` is a chosen name, not an inherited one.** nginx tells php-fpm which file to run
 by absolute path, and the two run in different containers with different filesystems.
 They have to agree, so both images take the layout from `approot.nix`. Changing the path
 means changing it in `nginx-conf.nix` too, and the failure mode if you forget is a blank
 502 rather than an error that says what happened.
+
+**Everything the request path opens by `__DIR__`-relative path has to be in the
+allowlist, and `nix/checks.nix` check 4 is the list of what that turned out to mean.**
+The first review found three files missing from it — `victual.openapi.json`,
+`migrations/`, `db/pgsql/baseline` — each of which fails at request time rather than at
+build time. Adding a `file_get_contents(__DIR__ . '/…')` to the application is therefore
+a change to `nix/source.nix` as well.
 
 **The application is copied to `/app`, not symlinked.** PHP resolves `__DIR__` through
 the realpath cache, so a symlinked `public/index.php` reports its store path and

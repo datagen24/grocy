@@ -106,18 +106,26 @@ spec:
         allowPrivilegeEscalation: false
         capabilities:
           drop: ["ALL"]
-      # php-fpm speaks FastCGI, not HTTP, so the probe is a connect rather than a GET.
-      # A real readiness probe — one that proves the database answers — belongs on the
-      # web container, where an HTTP request can reach the application.
+      # An exec probe, not tcpSocket, and the reason is not stylistic. The kubelet
+      # resolves a TCP probe's target to the *pod IP*, while the pool binds 127.0.0.1
+      # only (nix/runtime/fpm-conf.nix) so that nothing outside this pod's containers
+      # can reach it. A tcpSocket probe would therefore fail against a perfectly
+      # healthy php-fpm and restart it on every failure threshold — and setting the
+      # probe's `host` to 127.0.0.1 would not fix it, because that names the *node's*
+      # loopback. Only a probe running inside the container is in the right network
+      # namespace to ask the question.
+      #
+      # /app/php and /app/healthcheck.php are placed by nix/approot.nix.
       startupProbe:
-        tcpSocket:
-          port: 9000
+        exec:
+          command: ["/app/php", "/app/healthcheck.php"]
         periodSeconds: 2
         failureThreshold: 30
       livenessProbe:
-        tcpSocket:
-          port: 9000
+        exec:
+          command: ["/app/php", "/app/healthcheck.php"]
         periodSeconds: 10
+        timeoutSeconds: 5
       resources:
         requests:
           cpu: 100m
@@ -161,7 +169,9 @@ spec:
         periodSeconds: 10
       # Readiness goes through the whole stack: nginx, FastCGI, PHP, the database.
       # /api/system/info requires an API key, so this uses the login page instead —
-      # which is a real render through Blade rather than a static file.
+      # which is a real render through Blade rather than a static file. This is also
+      # what covers the case the app container's probe cannot see: a pool that is
+      # accepting connections but whose workers are all wedged.
       readinessProbe:
         httpGet:
           path: /login

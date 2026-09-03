@@ -1,9 +1,11 @@
 # The migration tier: a Job or initContainer, not a server.
 #
-# It is the only image carrying migrations/, db/ and bin/, and it is the only workload
-# that should ever hold a database role able to run DDL. ADR-0010's third property is
-# "its own credential, its own database role, least privilege for the one job it does";
-# splitting the image is what makes that possible to enforce rather than merely intend.
+# It is the only image carrying bin/victual-migrate and bin/victual-db-import, and it is
+# the only workload that should ever hold a database role able to run DDL. ADR-0010's
+# third property is "its own credential, its own database role, least privilege for the
+# one job it does"; the credential split is what makes that enforceable rather than
+# merely intended — the image split alone does not, because `migrations/` and `db/` are
+# still read on the request path and so ship in every image (see nix/approot.nix).
 #
 # Overriding Cmd runs a different tool from the same image — bin/victual-db-import for a
 # grocy SQLite migration, for instance — and the entrypoint's preparation still happens.
@@ -12,6 +14,7 @@
   dockerTools,
   php,
   appRoot,
+  configSeed,
   imageLib,
   version,
 
@@ -19,8 +22,8 @@
 }:
 
 let
-  # The one place migrations/, db/ and bin/ survive the trip out of the app derivation.
-  migrateRoot = appRoot.override { withMigrations = true; };
+  # The one application root that carries bin/victual-migrate and bin/victual-db-import.
+  migrateRoot = appRoot.override { withCliTools = true; };
 in
 dockerTools.streamLayeredImage (
   imageLib.common
@@ -29,6 +32,7 @@ dockerTools.streamLayeredImage (
 
     contents = [
       migrateRoot
+      configSeed
       imageLib.passwd
       imageLib.certificates
     ];

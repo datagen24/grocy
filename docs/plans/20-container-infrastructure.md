@@ -40,8 +40,8 @@ The framework, not a build. Six things exist that did not:
 
 **A flake that builds three images.** `victual-app` (php-fpm on loopback, holds the
 database credential, no document root), `victual-web` (nginx, holds the document root, no
-PHP interpreter at all) and `victual-migrate` (the only image carrying `migrations/`,
-`db/` and `bin/`). No base image, no shell, no package manager, uid 65532, empty `/bin`.
+PHP interpreter at all) and `victual-migrate` (the only image carrying the `bin/` CLI
+entry points). No base image, no shell, no package manager, uid 65532, empty `/bin`.
 
 **An allowlisted source.** `nix/source.nix` names what goes into an image. `docs/`,
 `.devtools/`, `.github/`, `.agents/`, `changelog/`, `branding/`, `.git` and the working
@@ -62,7 +62,9 @@ one manifest instead of two.
 **Assertions instead of greps.** `nix flake check` asserts that the image config declares
 a non-root uid, that the runtime closure contains no shell or foreign interpreter, that
 the web tier's document root contains no PHP, that the serving images do not carry the
-DDL corpus, and that the image tag matches `version.json`. ADR-0010's open question 2
+`bin/` CLI entry points, that every file the request path opens by `__DIR__`-relative
+path is present, that the entrypoint's config seed is actually installed in an image
+layer, and that the image tag matches `version.json`. ADR-0010's open question 2
 leans towards "start with the cheap greps"; these are the cheap greps, made about the
 artifact rather than about the file that describes it.
 
@@ -72,6 +74,33 @@ artifact rather than about the file that describes it.
 is PHP rather than shell because the images contain no shell and adding one so six lines
 of setup can run would put a shell in every production container for the life of the
 deployment. Its header names plan 10 as the thing that deletes it.
+
+## What the first review corrected
+
+The scaffolding was reviewed on 2026-09-03, before any of it had been built, and six
+defects came back. They are recorded here rather than silently fixed, because the shape
+of the set is an argument about this plan's sequencing:
+
+| # | Defect | Where |
+|---|---|---|
+| 1 | `victual.openapi.json` was not in the source allowlist. `BaseApiController::GetOpenApispec()` and `UserfieldsService` read it on the request path; without it every generic entity request answers 500. | `nix/source.nix` |
+| 2 | `migrations/` and `db/` were stripped from the serving images. `SystemController::Root` still calls `MigrateDatabase()`, and `GetMigrationFiles()` opens a `FilesystemIterator` that throws on a missing directory — `/` answered 500 instead of its 302. | `nix/approot.nix` |
+| 3 | The config stub the entrypoint seeds was declared in the overlay and installed in no image, so the migrate initContainer exited 1 on a fresh data directory and the pod never started. | `nix/config-seed.nix` (new) |
+| 4 | nginx's temporary paths were nested under `/tmp/nginx`. nginx creates the leaves it is configured with but not their parents, and an image layer creating the parent is hidden by the volume mount. | `nix/runtime/nginx-conf.nix` |
+| 5 | `GET /` ended in a 403. `try_files`' directory candidate matches the document root, and `nix/webroot.nix` deliberately removes the `index.php` nginx then looks for. | `nix/runtime/nginx-conf.nix` |
+| 6 | The app container's `tcpSocket` probes could never pass: the kubelet resolves a TCP probe to the **pod IP**, while php-fpm binds loopback only. A healthy pool would have been restarted on every failure threshold. | `deploy/podman/victual.yaml` |
+
+All six are fixed. Five of the six were invisible to reading and visible the moment
+something ran, which is the case for piece 1 being a gate rather than a formality — and
+defect 2 in particular is the one that would have been most expensive to find later,
+because it only shows on the request path rather than at build time.
+
+Two claims this plan made are downgraded rather than defended as a result. The migrate
+image is not "the only image carrying DDL" — `migrations/` and `db/` ship everywhere
+until plan 10 lands, and what separates the workloads is the credential each holds, not
+the bytes each carries. And the checks in `nix/checks.nix` are now written to catch
+these specific regressions, which is an admission that the first set was checking the
+easy properties.
 
 ## Proposed change
 
@@ -117,6 +146,10 @@ should change in one pull request:
 - `pdo_sqlite` comes out of the serving images once the prerequisite check is
   driver-aware, and stays only in `victual-migrate`, which needs it for
   `bin/victual-db-import`.
+- `migrations/` and `db/` can finally come out of the serving images, which is what the
+  first review established they cannot do today. The schema-version check plan 10's Q6
+  specifies has to read metadata generated at build time rather than counting files in
+  a directory, or this seam does not open.
 
 The `/data` `emptyDir` disappears at the same time, which is the point at which the pod
 has no writable mount at all.
@@ -248,7 +281,9 @@ no volume, and this plan is what there is to mount the volume onto in the meanti
 3. **Should `victual-migrate` be a separate image at all, or the app image with a
    different `Cmd`?** They differ by three directories. A single image is one build, one
    push and one thing to keep patched; two images are what makes "the request path does
-   not carry the DDL corpus" true rather than merely conventional.
+   not carry the CLI entry points" true rather than merely conventional. Note what it
+   does *not* prove, after the first review corrected this plan: `migrations/` and `db/`
+   are in every image, because the request path still reads them.
 
    *Lean: keep them separate,* on the ADR-0010 argument that a workload's identity is its
    credential and its blast radius, not its bytes. But the honest counter is that the

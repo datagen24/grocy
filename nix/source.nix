@@ -22,6 +22,11 @@ let
     (root + "/version.json")
     (root + "/composer.json")
     (root + "/composer.lock")
+    # A runtime dependency, not a build artefact: BaseApiController::GetOpenApispec()
+    # and UserfieldsService both read it on the request path to validate exposed
+    # entities, permitted operations and file groups. Without it, every generic entity
+    # request answers 500 rather than JSON.
+    (root + "/victual.openapi.json")
     (fs.fileFilter (f: f.hasExt "php") (root + "/controllers"))
     (fs.fileFilter (f: f.hasExt "php") (root + "/helpers"))
     (fs.fileFilter (f: f.hasExt "php") (root + "/middleware"))
@@ -41,18 +46,24 @@ let
     (root + "/public/.htaccess")
   ]);
 
-  # The migration corpus, the PostgreSQL baseline and the CLI entry points. They are
-  # part of `application` above because there is one Composer build and splitting it
-  # would mean two; nix/approot.nix drops them again for the serving images, which have
-  # no business carrying a directory full of DDL.
-  migrationPaths = [
+  # The CLI entry points. `bin/victual-migrate` and `bin/victual-db-import` are the
+  # migrate image's whole reason for existing and nothing on the request path invokes
+  # them, so nix/approot.nix drops them from the serving images.
+  #
+  # `migrations/` and `db/` are NOT in this list, and the first draft of this file was
+  # wrong to put them here. The request path still reads both: `SystemController::Root`
+  # calls `MigrateDatabase()`, whose `GetMigrationFiles()` opens a `FilesystemIterator`
+  # over `migrations/` and throws when the directory is absent, and PostgreSQL's
+  # baseline path resolves to `db/pgsql/baseline`. Stripping them turned `/` from a 302
+  # into a 500. They come out when plan 10 takes migration off the request path and the
+  # schema-version check can read metadata generated at build time instead of counting
+  # files — not before.
+  cliPaths = [
     "bin"
-    "migrations"
-    "db"
   ];
 in
 {
-  inherit application migrationPaths;
+  inherit application cliPaths;
 
   # Composer resolves from these two files alone; keeping the vendor derivation's src
   # this narrow means editing a controller does not invalidate the dependency fetch.

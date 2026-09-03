@@ -20,6 +20,7 @@
   php,
   appRoot,
   webroot,
+  configSeed,
   imageLib,
   version,
 }:
@@ -95,27 +96,43 @@ in
     echo "no .php under the document root" > "$out"
   '';
 
-  # 4. The application tree assembled and the pieces the front controller needs are
-  #    where it expects them. This is the smoke test for nix/approot.nix's copy.
+  # 4. Everything the request path opens by absolute or __DIR__-relative path is in the
+  #    application root. This list is not decoration: every entry below is a file some
+  #    part of the tree reads at runtime, and three of them were missing from the first
+  #    version of nix/source.nix and nix/approot.nix.
+  #
+  #    victual.openapi.json — BaseApiController::GetOpenApispec() and UserfieldsService.
+  #      Absent, every generic entity request answers 500.
+  #    migrations/, db/ — SystemController::Root -> MigrateDatabase ->
+  #      GetMigrationFiles(), which opens a FilesystemIterator that throws on a missing
+  #      directory, and PostgresDialect::GetBaselineSchemaPath.
+  #    healthcheck.php, php — what the pod manifest's exec probe runs.
   approot-is-complete = runCommand "victual-check-approot" { } ''
     for required in \
       app/public/index.php \
       app/app.php \
       app/config-dist.php \
       app/version.json \
+      app/victual.openapi.json \
       app/entrypoint.php \
+      app/healthcheck.php \
+      app/php \
       app/packages/autoload.php \
-      app/views/layout/default.blade.php
+      app/views/layout/default.blade.php \
+      app/migrations \
+      app/db/pgsql/baseline
     do
-      if [ ! -e "${appRoot}/$required" ]; then
+      # -L as well as -e: app/php is a symlink into the store, and testing only -e
+      # would make this check depend on the target being resolvable here.
+      if [ ! -e "${appRoot}/$required" ] && [ ! -L "${appRoot}/$required" ]; then
         echo "missing from the application root: $required" >&2
+        echo "see nix/source.nix's allowlist and nix/approot.nix's strip list" >&2
         exit 1
       fi
     done
 
-    # The serving images must not carry the DDL corpus or the CLI entry points; the
-    # migrate image is the only one that gets those.
-    for forbidden in app/migrations app/db app/bin; do
+    # The CLI entry points belong to the migrate image alone.
+    for forbidden in app/bin; do
       if [ -e "${appRoot}/$forbidden" ]; then
         echo "the serving application root should not contain $forbidden" >&2
         exit 1
@@ -125,7 +142,28 @@ in
     echo ok > "$out"
   '';
 
-  # 5. The image tag and the version the API reports are the same string. A deployment
+  # 5. The entrypoint's seed path exists as an image layer. Declaring the file in the
+  #    overlay and never putting it in an image is what the first version of this tree
+  #    did, and it made the migrate initContainer exit 1 on a fresh data directory —
+  #    which, being an initContainer, kept the whole pod from starting.
+  config-seed-is-installed = runCommand "victual-check-config-seed" { } ''
+    seeded=${configSeed}/etc/victual/config.php
+    if [ ! -f "$seeded" ]; then
+      echo "no config.php at /etc/victual/config.php in the seed layer" >&2
+      exit 1
+    fi
+
+    # The path is written down in two places and they have to agree.
+    if ! grep -q "'/etc/victual/config.php'" ${appRoot}/app/entrypoint.php; then
+      echo "nix/runtime/entrypoint.php no longer seeds from /etc/victual/config.php" >&2
+      echo "nix/config-seed.nix installs it there; one of the two has moved" >&2
+      exit 1
+    fi
+
+    echo ok > "$out"
+  '';
+
+  # 6. The image tag and the version the API reports are the same string. A deployment
   #    whose tag and /api/system/info disagree is one nobody can reason about.
   version-matches-the-application = runCommand "victual-check-version" { } ''
     reported=$(${jq}/bin/jq -r .Version ${appRoot}/app/version.json)

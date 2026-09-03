@@ -2,12 +2,15 @@
 #
 # It serves `${webroot}` — css, js, images, and the yarn-installed frontend packages —
 # and hands everything else to php-fpm over loopback. It never reads a PHP file: the
-# `.php` location matches before `try_files` gets a chance to stat anything, so the web
+# FastCGI locations match before `try_files` gets a chance to stat anything, so the web
 # image contains no application code at all. That is the whole reason the split exists.
 #
-# Every path nginx would otherwise want to write to is pointed at /tmp, which is a
-# tmpfs/emptyDir in the deployment. With those set, the image's root filesystem can be
-# mounted read-only.
+# Every path nginx would otherwise want to write to is a leaf directly under /tmp, which
+# is a tmpfs/emptyDir in the deployment. Directly under, not nested: nginx creates the
+# temporary directories it was configured with, but it does not create their parents, so
+# a `/tmp/nginx/client-body` under a freshly mounted empty /tmp fails at startup with
+# `mkdir() "/tmp/nginx/client-body" failed (2: No such file or directory)`. Creating the
+# parent in an image layer does not help either — the volume mounts over it.
 {
   writeText,
   lib,
@@ -18,6 +21,20 @@
   fpmPort ? 9000,
 }:
 
+let
+  # The front controller, in one place. Two locations need it — the exact-match `/` and
+  # the `/index.php` that `try_files` falls back to — and a copy that drifts is a 502
+  # nobody can explain.
+  frontController = ''
+    fastcgi_pass 127.0.0.1:${toString fpmPort};
+    include ${nginx}/conf/fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME ${appRootPath}/public/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+    fastcgi_param DOCUMENT_ROOT ${appRootPath}/public;
+    fastcgi_read_timeout 60s;
+    fastcgi_buffering on;
+  '';
+in
 writeText "victual-nginx.conf" ''
   # PID 1 is nginx itself; it must not fork away.
   daemon off;
@@ -35,13 +52,12 @@ writeText "victual-nginx.conf" ''
 
     access_log /dev/stdout combined;
 
-    # Everything nginx writes, in one place, so the root filesystem does not have to be
-    # writable for any of it.
-    client_body_temp_path /tmp/nginx/client-body;
-    proxy_temp_path /tmp/nginx/proxy;
-    fastcgi_temp_path /tmp/nginx/fastcgi;
-    uwsgi_temp_path /tmp/nginx/uwsgi;
-    scgi_temp_path /tmp/nginx/scgi;
+    # Leaves of /tmp, not of /tmp/nginx — see the header comment.
+    client_body_temp_path /tmp/nginx-client-body;
+    proxy_temp_path /tmp/nginx-proxy;
+    fastcgi_temp_path /tmp/nginx-fastcgi;
+    uwsgi_temp_path /tmp/nginx-uwsgi;
+    scgi_temp_path /tmp/nginx-scgi;
 
     sendfile on;
     tcp_nopush on;
@@ -64,7 +80,11 @@ writeText "victual-nginx.conf" ''
       # container; this is only the assets half, and it is deliberately a different
       # store path.
       root ${webroot};
-      index index.php;
+
+      # No `index` directive, deliberately. nix/webroot.nix removes index.php from the
+      # document root because the web image has no interpreter to run it with, so there
+      # is no index file to find and nginx's index handling can only end in a 403.
+      # Requests reach the front controller through the locations below instead.
 
       # TLS termination, HSTS and the rest belong to the ingress. What is set here is
       # what only the origin can know.
@@ -76,6 +96,15 @@ writeText "victual-nginx.conf" ''
         access_log off;
       }
 
+      # The root URL, routed explicitly. An exact-match location beats every prefix and
+      # regex location, which is what this needs: `try_files $uri` on a request for `/`
+      # resolves to the document root itself, matches as a directory, and hands the
+      # request to nginx's index handling — which, with no index file present, answers
+      # 403 rather than reaching PHP.
+      location = / {
+        ${frontController}
+      }
+
       # Frontend libraries and application assets are content-addressed by the ?v=
       # query the Blade layout appends, so they can be cached hard.
       location ~* ^/(packages|css|js|viewjs|img|uisounds)/ {
@@ -84,23 +113,21 @@ writeText "victual-nginx.conf" ''
         try_files $uri =404;
       }
 
+      # Everything else: serve it if it is a file in the document root, otherwise the
+      # front controller. No `$uri/` candidate — a directory in the document root has
+      # nothing to serve without an index file, and including it is what turns an
+      # application route that happens to end in a slash into a 403.
       location / {
-        try_files $uri $uri/ /index.php$is_args$args;
+        try_files $uri /index.php$is_args$args;
       }
 
-      # The only PHP that ever runs. SCRIPT_FILENAME names a path inside the *app*
-      # container, which is why both images agree on ${appRootPath}: nginx does not open
-      # this file, php-fpm does.
+      # Where the try_files fallback lands. SCRIPT_FILENAME names a path inside the
+      # *app* container, which is why both images agree on ${appRootPath}: nginx does
+      # not open this file, php-fpm does.
       location ~ ^/index\.php(/|$) {
-        fastcgi_pass 127.0.0.1:${toString fpmPort};
         fastcgi_split_path_info ^(.+\.php)(/.*)$;
-        include ${nginx}/conf/fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME ${appRootPath}/public/index.php;
-        fastcgi_param SCRIPT_NAME /index.php;
+        ${frontController}
         fastcgi_param PATH_INFO $fastcgi_path_info;
-        fastcgi_param DOCUMENT_ROOT ${appRootPath}/public;
-        fastcgi_read_timeout 60s;
-        fastcgi_buffering on;
       }
 
       # Anything else ending in .php is not ours. Without this a future asset called

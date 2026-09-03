@@ -41,8 +41,13 @@ in
       fpmConf = self.callPackage ./runtime/fpm-conf.nix { };
       nginxConf = self.callPackage ./runtime/nginx-conf.nix { };
       entrypoint = ./runtime/entrypoint.php;
+      healthcheck = ./runtime/healthcheck.php;
       configPhp = ./runtime/config.php;
     };
+
+    # /etc/victual/config.php, as an image layer. Both PHP images carry it; the
+    # entrypoint copies it into the data directory when nothing is mounted there.
+    configSeed = self.callPackage ./config-seed.nix { };
 
     imageLib = self.callPackage ./images/lib.nix { };
 

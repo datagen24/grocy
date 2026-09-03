@@ -5,7 +5,8 @@
 # database credential, with neither able to do the other's job.
 #
 # What is in the image: the PHP interpreter with the extensions nix/php.nix names, the
-# application at /app, /etc/passwd for uid 65532, and CA roots. There is no shell, no
+# application at /app, the config stub at /etc/victual/config.php, /etc/passwd for
+# uid 65532, and CA roots. There is no shell, no
 # package manager, no composer, no git. `kubectl exec … sh` will not work here, which is
 # the intended cost — see docs/adr/0013-nix-built-container-images.md, "Consequences".
 {
@@ -13,6 +14,7 @@
   dockerTools,
   php,
   appRoot,
+  configSeed,
   imageLib,
   runtime,
   version,
@@ -28,6 +30,7 @@ dockerTools.streamLayeredImage (
 
     contents = [
       appRoot
+      configSeed
       imageLib.passwd
       imageLib.certificates
     ];
