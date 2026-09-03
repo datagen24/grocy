@@ -55,7 +55,7 @@ them are routing sentences in *this file* that were never true.
 
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
-| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0); **shortened by ADR-0008's acceptance — re-read before track A starts** |
+| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | **landed** (`cced9e8`, `6b46fdf`, `258aadf`, `841c4f6`, `5ec3e72`, `5a3ab76`, 2026-09-02) — shortened in flight by ADR-0008's acceptance: Q7's `dialect` column dropped unbuilt, one lock implementation, Q3 moot; sweep **S25** closed with it |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
 | 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | draft — **carries a High finding** since 2026-08-30 |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
@@ -459,14 +459,27 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 
 ### Wave 1 — platform (four parallel tracks, disjoint files; C is done)
 
-- **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
-  easier to reason about once cold start no longer rewrites requests. Together they end
-  the PVC. 10 is the first plan to publish an image from the Dockerfile, so sweep S25
-  (`.dockerignore`, non-root `USER`) is 10's — settled there, and in the sweep, after
-  spending a day assigned to 10 by this file and to 15 by the sweep and carried by
-  neither — and 01 inherits S2's per-group
-  extension allow-list and S10's upload cap when it moves storage into the database —
-  a blob column with no size limit is the same DoS with a different disk.
+- **Track A: 10 cold start — done** (2026-09-02), then **01 file storage**. 10 first —
+  01's importer is easier to reason about once cold start no longer rewrites requests.
+  Together they end the PVC. 10 landed the split view-cache path and
+  `bin/victual-warm-cache`, the PostgreSQL migration lock, the deletion of the
+  version-hash redirect, `MIGRATE_ON_ROOT_REQUEST` (default off) with an unconditional
+  503 boot check, the driver-conditional prerequisite check, and the production image that
+  closes sweep **S25** (`.dockerignore`, non-root `USER`, a baked and unwritable view
+  cache, no baked credentials) — settled there, and in the sweep, after spending a day
+  assigned to 10 by this file and to 15 by the sweep and carried by neither.
+  ADR-0008's acceptance shortened 10 in flight: one lock implementation rather than two,
+  Q3 moot, Q7's `dialect` column not built. Two things its Executed section records that
+  the plan did not predict: the container-level read-only-filesystem check could not run
+  where it was built (no Docker), so the production image and its CI job are reviewed
+  rather than proven until CI runs them; and browsing every page on PostgreSQL turned up
+  **three pre-existing PostgreSQL-only 500s** (`/shoppinglist`, `/mealplan`,
+  `/locationcontentsheet` — two `GROUP BY` strictness errors in PHP-built queries and one
+  `ifnull()` written into PHP) that belong to no plan yet and become "the application is
+  broken" once 0008's retirement lands; they need an owner, 15's table or a hotfix.
+  01 inherits S2's per-group extension allow-list and S10's upload cap when it moves
+  storage into the database — a blob column with no size limit is the same DoS with a
+  different disk.
 - **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
   3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
   is going to be long, pull the ~20 toast sites forward on their own, since they need no

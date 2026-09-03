@@ -1,0 +1,41 @@
+# What the build context does not need, and what it must not carry.
+#
+# Two reasons, and the second is the one that matters now that this Dockerfile publishes
+# a production image (sweep S25): a build context is copied into a layer, and a layer is
+# world-readable to anyone who can pull the image. ".git" is the whole history including
+# whatever was ever committed to it, and "data" is a live installation - its config.php,
+# its database, its uploaded files.
+
+.git
+.gitattributes
+.github
+.vscode
+.tx
+
+# A real installation's data directory: configuration, database, uploaded files.
+data/
+
+# Composer and yarn output. Both are produced inside the build from the lock files, and
+# copying a host's copy over them would replace a deterministic install with whatever
+# that machine happened to have.
+packages
+public/packages
+node_modules
+
+# Coverage reports from a local suite run.
+.devtools/coverage/*.xml
+.devtools/coverage/html
+
+# The Nix build of the production images and the deploy manifests. Nothing in either
+# Docker target reads them, and this file's own second reason applies: a build context is
+# copied into a layer, and an image that is trying to carry only what it needs has no use
+# for a Kubernetes manifest or for the flake that builds a different image entirely.
+# See docs/adr/0013-nix-built-container-images.md and nix/README.md.
+flake.nix
+flake.lock
+nix/
+deploy/
+
+# Local editor and OS noise.
+.DS_Store
+*.tgz

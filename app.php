@@ -1,9 +1,11 @@
 <?php
 
 use Victual\Controllers\ExceptionController;
+use Victual\Helpers\CachePaths;
 use Victual\Helpers\SlimBladeView;
 use Victual\Helpers\UrlManager;
 use Victual\Middleware\LocaleMiddleware;
+use Victual\Middleware\SchemaVersionMiddleware;
 use Psr\Container\ContainerInterface as Container;
 use Slim\Factory\AppFactory;
 
@@ -39,6 +41,18 @@ if (VICTUAL_DISABLE_AUTH === true)
 	}
 }
 
+// The prerequisites which depend on the configured database engine. public/index.php
+// checks everything else before this file is even loaded; the driver is only known here,
+// once the configuration has been read.
+try
+{
+	(new Victual\Helpers\PrerequisiteChecker())->checkDatabaseRequirements(VICTUAL_DB_DRIVER);
+}
+catch (\Victual\Helpers\ERequirementNotMet $ex)
+{
+	exit('Unable to run Victual: ' . $ex->getMessage());
+}
+
 // Check if any invalid entries in config.php have been made
 try
 {
@@ -49,31 +63,12 @@ catch (\Victual\Helpers\EInvalidConfig $ex)
 	exit('Invalid setting in config.php: ' . $ex->getMessage());
 }
 
-// Create data/viewcache folder if it doesn't exist
-$viewcachePath = VICTUAL_DATAPATH . '/viewcache';
-if (!file_exists($viewcachePath))
+// Create the view cache folder if it doesn't exist. A baked, read-only cache directory
+// already exists and is not writable, so a failure here is not one: whatever is missing
+// surfaces where it is used, with a message about that file rather than about mkdir.
+if (!file_exists(VICTUAL_VIEWCACHE_PATH))
 {
-	mkdir($viewcachePath);
-}
-
-// Empty data/viewcache when and trigger database migrations when:
-// The version changed (so when an update was done)
-// VICTUAL_BASE_URL OR VICTUAL_BASE_PATH changed
-$hash = hash('sha256', file_get_contents(__DIR__ . '/version.json') . VICTUAL_BASE_URL . VICTUAL_BASE_PATH);
-$hashCacheFile = $viewcachePath . "/$hash.txt";
-if (!file_exists($hashCacheFile))
-{
-	EmptyFolder($viewcachePath);
-	touch($hashCacheFile);
-
-	if (function_exists('opcache_reset'))
-	{
-		opcache_reset();
-	}
-
-	// Schema migration happens on the root route, so redirect to there
-	header('Location: ' . (new UrlManager(VICTUAL_BASE_URL))->ConstructUrl('/'));
-	exit();
+	@mkdir(VICTUAL_VIEWCACHE_PATH, 0755, true);
 }
 
 // Setup base application
@@ -83,7 +78,7 @@ $app = AppFactory::create();
 $container = $app->getContainer();
 $container->set('view', function (Container $container)
 {
-	return new SlimBladeView(__DIR__ . '/views', VICTUAL_DATAPATH . '/viewcache');
+	return new SlimBladeView(__DIR__ . '/views', VICTUAL_VIEWCACHE_PATH);
 });
 
 $container->set('UrlManager', function (Container $container)
@@ -112,12 +107,16 @@ $app->add(new $authMiddlewareClass($container, $app->getResponseFactory()));
 // Add default middleware
 $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
+// Outside routing and authentication on purpose: a database whose schema does not match
+// this code cannot be trusted to resolve a route or identify a user, and the answer is
+// the same for every route anyway
+$app->add(new SchemaVersionMiddleware($container, $app->getResponseFactory()));
 // Error details (including stack traces) are only displayed in dev mode
 // (arguments are displayErrorDetails, logErrors, logErrorDetails)
 $errorMiddleware = $app->addErrorMiddleware(VICTUAL_MODE === 'dev', false, false);
 $errorMiddleware->setDefaultErrorHandler(new ExceptionController($container, $app->getResponseFactory()));
 
-$app->getRouteCollector()->setCacheFile(VICTUAL_DATAPATH . '/viewcache/route_cache.php');
+$app->getRouteCollector()->setCacheFile(CachePaths::RouteCacheFile());
 
 ob_clean(); // No response output before here
 $app->run();

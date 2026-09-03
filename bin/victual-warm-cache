@@ -1,0 +1,224 @@
+#!/usr/bin/env php
+<?php
+
+// Builds everything in the view cache directory, then exits.
+//
+//   php bin/victual-warm-cache [--quiet]
+//
+// Three derived things live in VICTUAL_VIEWCACHE_PATH, and all three are otherwise
+// written by the first request that happens to need them: the compiled Blade templates,
+// the Slim route cache, and the HTMLPurifier definition cache. Writing them here instead
+// is what lets that directory be baked into a container image and mounted read-only -
+// the point of docs/plans/10-cold-start-statelessness.md.
+//
+// Run it as the last step of an image build, and after updating a mutable installation
+// (update.sh does). It is a pure function of the source tree plus VICTUAL_BASE_PATH, so
+// the result is a layer rather than state.
+//
+// It fails rather than warning when a template does not compile. On a read-only cache
+// directory a template the warmer missed is a 500 at the moment somebody opens that page,
+// which is the worst possible time to find out; failing the build is the same information,
+// delivered when it can still be acted on (plan 10, question 2).
+//
+// Exit codes: 0 when everything compiled, 1 on any failure.
+
+use Jenssegers\Blade\Blade;
+use Slim\Factory\AppFactory;
+use Slim\Routing\Dispatcher;
+use Victual\Controllers\Api\BaseApiController;
+use Victual\Helpers\CachePaths;
+
+if (PHP_SAPI !== 'cli')
+{
+	exit('This is a command line script');
+}
+
+$arguments = array_slice($argv, 1);
+$quiet = in_array('--quiet', $arguments, true);
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/victual-warm-cache [--quiet]\n\n";
+	echo "  Compiles every Blade template, writes the route cache and pre-generates the\n";
+	echo "  HTMLPurifier definition cache into VICTUAL_VIEWCACHE_PATH, then exits.\n\n";
+	echo "  Nothing it writes is data: the whole directory can be deleted and rebuilt by\n";
+	echo "  running this again. Run it after updating, or as the last step of an image\n";
+	echo "  build so that the directory can be mounted read-only.\n\n";
+	echo "  The route cache depends on BASE_PATH, and the compiled templates are keyed by\n";
+	echo "  the absolute path of the views directory, so warm the cache with the same\n";
+	echo "  BASE_PATH and at the same path the application will be served from.\n\n";
+	echo "  --quiet  Only print errors.\n";
+	exit(0);
+}
+
+if (!defined('VICTUAL_DATAPATH'))
+{
+	define('VICTUAL_DATAPATH', getenv('VICTUAL_DATAPATH') ?: __DIR__ . '/../data');
+}
+
+require_once __DIR__ . '/../packages/autoload.php';
+
+// config.php is optional here for the same reason it is in bin/victual-migrate: warming
+// the cache of an otherwise untouched checkout is a normal thing to want, and at image
+// build time the configuration is not in the image at all - it arrives with the
+// deployment. Only VIEWCACHE_PATH and BASE_PATH matter, and both have defaults.
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
+{
+	require_once VICTUAL_DATAPATH . '/config.php';
+}
+
+require_once __DIR__ . '/../config-dist.php';
+
+if (!is_dir(VICTUAL_VIEWCACHE_PATH) && !@mkdir(VICTUAL_VIEWCACHE_PATH, 0755, true) && !is_dir(VICTUAL_VIEWCACHE_PATH))
+{
+	fwrite(STDERR, 'Could not create the view cache directory: ' . VICTUAL_VIEWCACHE_PATH . PHP_EOL);
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'View cache: ' . VICTUAL_VIEWCACHE_PATH . PHP_EOL;
+}
+
+$failures = [];
+
+// 1. Blade templates.
+//
+// Every .blade.php under views/, including the components/, layout/ and errors/
+// subdirectories - a partial is compiled separately from the page that includes it, so
+// "the pages compile" is not the same claim as "everything compiles".
+// realpath(), not the "bin/../views" spelling, and this is load-bearing rather than
+// tidiness: Blade names a compiled file after a hash of the absolute path of its source,
+// so "…/bin/../views/stockoverview.blade.php" and "…/views/stockoverview.blade.php"
+// compile to two different file names. Warming under the first spelling leaves the
+// application - which asks for the second - to compile everything again at runtime, which
+// on a read-only cache directory means every page is a 500. That is exactly the failure
+// this warmer exists to prevent, and it is invisible while the directory is writable.
+$viewsPath = realpath(__DIR__ . '/../views');
+$compiler = (new Blade($viewsPath, VICTUAL_VIEWCACHE_PATH, null))->compiler();
+
+$templates = [];
+foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($viewsPath, FilesystemIterator::SKIP_DOTS)) as $file)
+{
+	if (str_ends_with($file->getFilename(), '.blade.php'))
+	{
+		$templates[] = $file->getPathname();
+	}
+}
+
+sort($templates);
+
+foreach ($templates as $template)
+{
+	try
+	{
+		$compiler->compile($template);
+
+		// compile() is silent about what it did, so the check is that the file it should
+		// have written exists. Without it a compiler which changes how it names or skips
+		// files would turn this whole script into a no-op that still exits 0.
+		if (!file_exists($compiler->getCompiledPath($template)))
+		{
+			$failures[] = $template . ': compiled file was not written';
+		}
+	}
+	catch (\Throwable $ex)
+	{
+		$failures[] = $template . ': ' . $ex->getMessage();
+	}
+}
+
+if (!$quiet)
+{
+	echo 'Compiled ' . (count($templates) - count($failures)) . ' of ' . count($templates) . ' templates.' . PHP_EOL;
+}
+
+// 2. The route cache.
+//
+// FastRoute only writes the cache file when it is missing, so a stale one has to go
+// first. Any file matching the route cache name belongs to a base path or a routing
+// table that no longer applies, which is exactly what should not be left behind in a
+// directory about to be baked into an image.
+foreach (glob(CachePaths::RouteCacheGlob()) as $staleRouteCache)
+{
+	unlink($staleRouteCache);
+}
+
+try
+{
+	AppFactory::setContainer(new DI\Container());
+	$app = AppFactory::create();
+	$container = $app->getContainer();
+
+	// Route registration only names controller classes and never resolves them, so the
+	// container needs nothing in it here. The application's middleware stack is likewise
+	// irrelevant: what FastRoute compiles is the methods, the patterns and the base path.
+	require_once __DIR__ . '/../routes.php';
+
+	if (!empty(VICTUAL_BASE_PATH))
+	{
+		$app->setBasePath(VICTUAL_BASE_PATH);
+	}
+
+	$routeCollector = $app->getRouteCollector();
+	$routeCollector->setCacheFile(CachePaths::RouteCacheFile());
+
+	// Dispatching anything at all is what makes FastRoute compile and write the table.
+	(new Dispatcher($routeCollector))->dispatch('GET', '/');
+
+	if (!file_exists(CachePaths::RouteCacheFile()))
+	{
+		$failures[] = 'route cache: ' . CachePaths::RouteCacheFile() . ' was not written';
+	}
+	elseif (!$quiet)
+	{
+		echo 'Wrote the route cache for ' . count($routeCollector->getRoutes()) . ' routes'
+			. (empty(VICTUAL_BASE_PATH) ? '' : ' under base path "' . VICTUAL_BASE_PATH . '"') . '.' . PHP_EOL;
+	}
+}
+catch (\Throwable $ex)
+{
+	$failures[] = 'route cache: ' . $ex->getMessage();
+}
+
+// 3. The HTMLPurifier definition cache.
+//
+// This is the one the review did not list and the one that fails first: every JSON write
+// request purifies its body, and HTMLPurifier serialises its HTML, CSS and URI definitions
+// into the cache directory the first time it builds them. Without this step, a read-only
+// cache directory survives being browsed and falls over on the first POST.
+//
+// The definitions depend on the library version and on the configuration, so they are
+// generated through the same configuration the API uses rather than a fresh default one.
+try
+{
+	BaseApiController::CreateHtmlPurifier()->purify('<b>warming the definition cache</b>');
+
+	if (!$quiet)
+	{
+		echo 'Generated the HTMLPurifier definition cache.' . PHP_EOL;
+	}
+}
+catch (\Throwable $ex)
+{
+	$failures[] = 'HTMLPurifier definition cache: ' . $ex->getMessage();
+}
+
+if (!empty($failures))
+{
+	fwrite(STDERR, PHP_EOL . 'Cache warming failed:' . PHP_EOL);
+
+	foreach ($failures as $failure)
+	{
+		fwrite(STDERR, '  ' . $failure . PHP_EOL);
+	}
+
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'Cache is warm.' . PHP_EOL;
+}
+
+exit(0);
