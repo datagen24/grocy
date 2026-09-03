@@ -142,13 +142,17 @@ in
   #    application derivation is what makes the two paths the same by construction; this
   #    check is what notices if that ever stops being true.
   viewcache-is-warm = runCommand "victual-check-viewcache" { } ''
-    compiled=$(find ${appRoot}/viewcache -name '*.php' | wc -l)
-    echo "compiled files in the baked cache: $compiled"
+    # Counted rather than hardcoded. A partial is compiled separately from the page that
+    # includes it, so the number is "every .blade.php under views/", and it moves whenever
+    # anyone adds or removes one — plan 12 changed it from 96 to 97 while this branch was
+    # open. A literal here would have been a check that silently stopped meaning anything.
+    templates=$(find ${appRoot}/views -name '*.blade.php' | wc -l)
+    compiled=$(find ${appRoot}/viewcache -name '*.php' -not -name 'route_cache*' | wc -l)
+    echo "templates: $templates, compiled: $compiled"
 
-    # 96 templates live under views/ and each compiles separately; the route cache is a
-    # further file. The CI job for the Docker image asserts 97 for the same reason.
-    if [ "$compiled" -lt 97 ]; then
-      echo "the baked view cache has $compiled files, which is too few to be complete" >&2
+    if [ "$compiled" -lt "$templates" ]; then
+      echo "the baked view cache has $compiled compiled templates for $templates sources" >&2
+      echo "a template the warmer missed is a 500 the first time somebody opens that page" >&2
       exit 1
     fi
 
