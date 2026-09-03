@@ -188,6 +188,39 @@ abstract class DatabaseDialect
 	abstract public function WithMigrationLock(callable $work);
 
 	/**
+	 * Runs $work with a cross process lock held, so that only one process at a time
+	 * assembles and publishes the retained MQTT state.
+	 *
+	 * It takes a key of its own rather than sharing one with WithMigrationLock() above,
+	 * because two locks that guard unrelated things should not make callers of one wait on
+	 * the other - a publish at the end of a request has no reason to queue behind a
+	 * migration run, and vice versa.
+	 *
+	 * The race it closes is a lost update with no error anywhere. Publishing is
+	 * read-then-write across a network: request A assembles the snapshot, request B commits
+	 * a later change and publishes it, then A publishes the state it read earlier. Retained
+	 * topics have no version and no ordering, so the broker simply keeps whatever arrived
+	 * last - and A's stale snapshot stands until the next write, which on a pod that sleeps
+	 * for days is exactly the failure this whole plan exists to prevent. Nothing logs it,
+	 * because nothing failed.
+	 *
+	 * **The assembly has to be inside the lock, not just the publish.** A lock around the
+	 * publish alone still lets both requests read before either writes, which is the same
+	 * lost update with a smaller window. Holding it across assemble, diff, publish and the
+	 * ledger update makes the loser re-read after the winner released, so it publishes
+	 * state that is at least as new.
+	 *
+	 * It lives on the dialect for the same reason WithMigrationLock() does, and has the
+	 * same single real implementation: PostgreSQL's advisory lock, with SqliteDialect's
+	 * version a deliberate no-op.
+	 *
+	 * @param callable $work Receives no arguments; its return value is passed through
+	 * @return mixed Whatever $work returns
+	 * @throws \Throwable Whatever $work throws, after the lock is released
+	 */
+	abstract public function WithPublicationLock(callable $work);
+
+	/**
 	 * Whether the given driver error means "that table does not exist", as opposed to any
 	 * other reason a query can fail.
 	 *

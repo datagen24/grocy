@@ -108,19 +108,54 @@ numbers while both being fully migrated, so nothing may compare one engine's num
 other's. `DatabaseMigrationService::GetLatestMigrationNumber()` takes a dialect for this
 reason; use it rather than assuming the highest file in `migrations/` applies everywhere.
 
+**Claim the number before you write the file**, in
+[migrations/RESERVATIONS.md](../../migrations/RESERVATIONS.md). Plans are worked in parallel
+branches and each needs a number before any of them merges, so numbers handed out on a branch
+collide or leave holes — and a hole is the worse of the two, because nothing complains. A
+tree carrying 0257 and 0259 but not 0258 migrates a database that records `MAX(migration) =
+259` and never ran 0258, which satisfies every check built on the maximum
+(`GetLatestMigrationNumber()`, `DatabaseImporter`'s two-sided comparison, plan 10's boot
+check) while the schema is missing a table. The runner itself is not fooled — it asks per
+number whether a row exists, so a 0258 merged later is applied — but the checks that decide
+whether a deployment is up to date are, and those are the ones that gate serving.
+
+`check-migrations.php` enforces both halves: the sequence above the baseline has no holes,
+and every number on disk is claimed in that file. A branch holding the higher of two in-flight
+numbers therefore cannot go green until the branch holding the lower one merges, which is the
+point — it is not independently mergeable, and the failure message says which branch it is
+waiting for. `--allow-reserved-holes` (or `SUITE_ALLOW_RESERVED_HOLES=1` for `run-tests.sh`)
+waives exactly that one failure so such a branch can still run its own suite; CI does not set
+it. A number is retired rather than reused once a file has existed under it in `master`.
+
 ## Testing a change
 
 Loading cleanly proves very little. The suite is one command:
 
-    .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema]
+    .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|files|mqtt]
 
-The runner's own header says what each phase asks and why; this list has been wrong twice
-by being maintained separately from it. `migratedifftest.php` is the one to know about
-here: it migrates a database on each engine, touches neither afterwards, and compares
-every table - that is the equivalence claim above, written as a test, and it is the phase
-the missing seed data would have failed. The view and trigger phases both populate
-PostgreSQL by copying an already-migrated SQLite database, which is why neither could ever
-have caught it.
+The runner's own header says what each phase asks and why; this list has been wrong three
+times now by being maintained separately from it, so it is deliberately not repeated here -
+and even the one line above is worth checking against `run-tests.sh` rather than trusted.
+`migratedifftest.php` is the one to know about at this point: it migrates a database on each
+engine, touches neither afterwards, and compares every table - that is the equivalence claim
+above, written as a test, and it is the phase the missing seed data would have failed. The
+view and trigger phases both populate PostgreSQL by copying an already-migrated SQLite
+database, which is why neither could ever have caught it.
+
+One thing about the `mqtt` phase does belong here, because it is a claim about coverage
+rather than a description of a phase: **it runs against stand-ins, not against the real
+systems.** InfluxDB is a PHP built-in server whose control file flips it between accepting,
+rejecting, redirecting and answering with a page; the broker is a PHP stream socket speaking
+the little of MQTT 3.1.1 `MqttPublisher` uses and recording what was published. That is what
+keeps the phase free of a broker, a node install and an InfluxDB, and it is also the limit
+of what a green run means: a real Mosquitto retaining the payload across a restart, Home
+Assistant creating the entity, and InfluxDB accepting the line protocol are hand
+verifications and stay so. Eight of the phase's probes run **twice, once per engine**, from
+one SQLite database imported into PostgreSQL through `bin/victual-db-import`, because the
+outbox is where this feature turns on transaction semantics - what a rolled back INSERT
+leaves behind, how a driver reports a failure mid-transaction - and asserting that only on
+the development engine would leave the deployment engine untested for the properties the
+mechanism exists to provide.
 
 `.devtools/pgsql/difftest.php` puts both engines into an identical table state and
 compares what their views actually return:

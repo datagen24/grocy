@@ -3,9 +3,9 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|files]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|files|mqtt]
 #
-# Six kinds of check, for six reasons. Views are compared by what they return, because
+# Eight kinds of check, for eight reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -32,12 +32,32 @@
 # itself, with an identical response shape either way. The filter phase asks both engines
 # the same question through the dialects and compares the rows.
 #
-# The sixth is not a comparison at all, and is here because there is nowhere better. The
+# The sixth asks what the application believes about the schema it is sitting on. The boot
+# check refuses to serve when the migrations the code ships and the migrations the database
+# recorded are not the same set, and it has to tell a database that has never been migrated
+# apart from a database it cannot reach — a distinction the two engines spell completely
+# differently, since SQLite reports nearly every failure as HY000. Nothing else here ever
+# asks the application that question.
+#
+# The seventh is not a comparison at all, and is here because there is nowhere better. The
 # files table exists on PostgreSQL only — the configuration that reads it cannot exist on
 # SQLite — so the one command that writes to it, bin/victual-files-import, has no engine
 # to be compared against and had no coverage anywhere. What it needs asserting is that it
 # can tell an imported file from a stale one, since an operator deletes the source volume
 # on its say-so. Like the rollback phase it asks one engine a question.
+#
+# The eighth is not a differential check at all, and it is here because the alternative
+# was worse. Plan 18's published-state and outbox probes guard eight defects that produce
+# no error of any kind - a stale retained topic, an event lost after a commit, a
+# redelivered point that duplicates instead of overwriting, an MQTT client id that lost its
+# randomness, a malformed payload written out as zeros and acknowledged, a rewound
+# db-changed-time that hides a committed change from every polling client, an event marked
+# delivered on a redirect to a login page, and a boot publish that skips the per-product
+# topics the broker no longer has. Probes that nothing runs are documentation, so they run
+# here, where the fixes are protected by the same green light everything else is held to.
+# Two of them run against stand-ins rather than the real thing - a PHP built-in server for
+# InfluxDB, a PHP stream socket for the broker - which is what keeps the phase dependency
+# free, and is also the limit of what it proves.
 #
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
@@ -54,8 +74,15 @@
 #   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default victual_migrate)
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
 #   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
+#   SUITE_PGSQL_SCHEMA_DB                database for the schema gate   (default victual_schema)
 #   SUITE_PGSQL_FILES_DB                 database for the file import tests (default victual_files)
+#   SUITE_PGSQL_MQTT_DB                  database for the mqtt tests    (default victual_mqtt)
+#   SUITE_MQTT_STANDIN_PORT              port for the stand-in InfluxDB (default 8390)
+#   SUITE_MQTT_BROKER_PORT               port for the recording MQTT stand-in (default 8391)
 #   SUITE_SCRATCH                        where the throwaway databases go
+#   SUITE_ALLOW_RESERVED_HOLES           set to 1 to waive a migration number that
+#                                        migrations/RESERVATIONS.md says an unmerged branch
+#                                        owns; never set in CI
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
 #   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
 #   SUITE_COVERAGE_CLOVER                also write a Clover XML report to this path
@@ -83,7 +110,11 @@ TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-victual_trig}"
 MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
+SCHEMA_DB="${SUITE_PGSQL_SCHEMA_DB:-victual_schema}"
 FILES_DB="${SUITE_PGSQL_FILES_DB:-victual_files}"
+MQTT_DB="${SUITE_PGSQL_MQTT_DB:-victual_mqtt}"
+MQTT_STANDIN_PORT="${SUITE_MQTT_STANDIN_PORT:-8390}"
+MQTT_BROKER_PORT="${SUITE_MQTT_BROKER_PORT:-8391}"
 
 WHICH="${1:-all}"
 
@@ -451,6 +482,246 @@ run_trigger_tests() {
 	fi
 }
 
+# --- MQTT and outbox probes -------------------------------------------------------
+#
+# The one phase that is not a comparison between engines. Everything it runs guards a
+# defect that fails silently, which is exactly the kind a suite has to hold rather than a
+# reviewer:
+#
+#   client-id-check   a client id that lost its random suffix as the configured prefix
+#                     grew, so two overlapping requests knock each other off the broker
+#   price-guard       a price, cost or value field reaching a retained topic anything on
+#                     the broker can read without authenticating to Victual
+#   lock-check        two requests interleaving a read of the published state with a write
+#                     of it, leaving the older snapshot retained until the next write
+#   outbox-check      an event lost after its booking committed, or surviving a booking
+#                     that rolled back
+#   idempotency-check a redelivered event writing a second point instead of overwriting the
+#                     first, or a drained backlog giving every queued transaction the same
+#                     latest stock snapshot
+#   write-ack-check   an event marked delivered on something that was not an acknowledgement
+#                     from the write endpoint - a redirect to a login page, a proxy's own
+#                     200 - which sets delivered_at with no attempt and no retry, ever
+#   full-refresh-check a boot or CLI publish skipping the per-product topics because the
+#                     ledger says they were sent, so entities stay missing from Home
+#                     Assistant after the broker loses its retained messages
+#   engine-diff       the assembled payload differing between SQLite and PostgreSQL, which
+#                     is the one differential question this feature raises
+#
+# No real broker and no node: the lock needs only PostgreSQL, InfluxDB is stood in for by
+# PHP's own built-in server (influx-standin.php), and the broker by a PHP stream socket that
+# speaks the little of MQTT 3.1.1 MqttPublisher uses and records what was published
+# (broker-standin.php). A probe that only runs where somebody installed extra software is a
+# probe CI skips. What is *not* covered by either stand-in is stated plainly: no real Mosquitto
+# or Home Assistant, and no real InfluxDB, so protocol-level acceptance by those two is still
+# only verified by hand.
+
+run_mqtt_tests() {
+	local mqtt_scratch="$SUITE_SCRATCH/mqtt"
+	rm -rf "$mqtt_scratch"
+	mkdir -p "$mqtt_scratch"
+
+	MQTT_STANDIN_LOG="$mqtt_scratch/standin.log"
+	MQTT_STANDIN_CONTROL="$mqtt_scratch/standin-control.txt"
+	MQTT_BROKER_LOG="$mqtt_scratch/broker.log"
+	export MQTT_STANDIN_LOG MQTT_STANDIN_CONTROL MQTT_BROKER_LOG
+
+	# Rejecting to start with: most of the probes exercise the failure path, and an address
+	# that times out would spend the configured timeout doing it on every run. The control
+	# file lets backlog-check.php flip a running server to accepting without restarting it,
+	# which it has to do because restarting would lose the request log it counts.
+	echo reject > "$MQTT_STANDIN_CONTROL"
+
+	local standin_pid=""
+
+	VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
+		php -S "127.0.0.1:$MQTT_STANDIN_PORT" "$VICTUAL_ROOT/.devtools/mqtt/influx-standin.php" \
+		> "$mqtt_scratch/standin-server.log" 2>&1 &
+	standin_pid=$!
+
+	# The recording broker stand-in, which is how full-refresh-check.php can see which topics
+	# a publish actually put on the wire. It has no control file and no failure modes: the
+	# question it answers is what was sent, not what happens when sending fails.
+	: > "$MQTT_BROKER_LOG"
+
+	local broker_pid=""
+
+	php "$VICTUAL_ROOT/.devtools/mqtt/broker-standin.php" "$MQTT_BROKER_PORT" "$MQTT_BROKER_LOG" \
+		> "$mqtt_scratch/broker-server.log" 2>&1 &
+	broker_pid=$!
+
+	# Both killed however this function ends, including a probe exiting non-zero
+	trap '[ -n "$standin_pid" ] && kill "$standin_pid" 2>/dev/null; [ -n "$broker_pid" ] && kill "$broker_pid" 2>/dev/null; true' RETURN
+
+	# Both take a moment to bind, and a probe that raced one would report a connection
+	# failure as an outbox or publication defect
+	local waited=0
+	while [ "$waited" -lt 50 ] && ! php -r 'exit(@fsockopen("127.0.0.1", (int)$argv[1], $e, $m, 0.2) ? 0 : 1);' "$MQTT_STANDIN_PORT"; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+
+	waited=0
+	while [ "$waited" -lt 50 ] && ! php -r 'exit(@fsockopen("127.0.0.1", (int)$argv[1], $e, $m, 0.2) ? 0 : 1);' "$MQTT_BROKER_PORT"; do
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+
+	say ""
+	say "MQTT and outbox probes"
+	say ""
+
+	# --- No database at all -------------------------------------------------------
+	if ! php "$VICTUAL_ROOT/.devtools/mqtt/client-id-check.php"; then
+		failures=$((failures + 1))
+	fi
+
+	if ! php "$VICTUAL_ROOT/.devtools/mqtt/price-guard.php"; then
+		failures=$((failures + 1))
+	fi
+
+	# --- PostgreSQL: the publication lock -----------------------------------------
+	build_pgsql "$MQTT_DB"
+
+	local lock_data="$mqtt_scratch/lock"
+	write_pgsql_config "$lock_data"
+
+	say ""
+	if ! VICTUAL_DATAPATH="$lock_data" DIFFTEST_DB_NAME="$MQTT_DB" \
+		php "$VICTUAL_ROOT/.devtools/mqtt/lock-check.php"; then
+		failures=$((failures + 1))
+	fi
+
+	# --- The outbox, on both engines ----------------------------------------------
+	#
+	# Run twice rather than once, because the outbox is the one part of this feature whose
+	# behaviour could plausibly differ between engines: it turns on transaction semantics,
+	# on what a rolled back INSERT leaves behind, and on how each driver reports a failure
+	# mid-transaction. Asserting it only on SQLite - which ADR-0008 makes a development
+	# engine - would leave the deployment engine untested for exactly the properties this
+	# whole mechanism exists to provide.
+	#
+	# Each probe gets its own database on each engine. They book stock, rename tables out
+	# from under bookings and queue hundreds of rows, so sharing one would make a failure in
+	# the first indistinguishable from contamination of the second.
+	run_mqtt_probe_on_both_engines outbox-check "$mqtt_scratch"
+	# Ahead of backlog-check, which flips the stand-in to accepting and leaves it there:
+	# both of these need the rejecting stand-in, since what they assert is what a row that
+	# was *not* delivered looks like.
+	run_mqtt_probe_on_both_engines payload-validation-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines changed-time-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines write-ack-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines full-refresh-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines idempotency-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines event-identity-check "$mqtt_scratch"
+	run_mqtt_probe_on_both_engines backlog-check "$mqtt_scratch"
+
+	# --- Both engines: the assembled payload --------------------------------------
+	say ""
+	if ! SUITE_SCRATCH="$mqtt_scratch" MQTTDIFF_PGSQL_DB="${MQTT_DB}_diff" \
+		bash "$VICTUAL_ROOT/.devtools/mqtt/engine-diff.sh"; then
+		failures=$((failures + 1))
+	fi
+}
+
+# Runs one probe against a fresh SQLite database and a fresh PostgreSQL one.
+#
+# The SQLite side is a copy of the pristine database, which already has the fixture rows the
+# probes book against. The PostgreSQL side is built from that same copy through
+# bin/victual-db-import - the real migration command - so both engines start from identical
+# data rather than from two independently seeded databases that might not be.
+run_mqtt_probe_on_both_engines() {
+	local probe="$1"
+	local scratch="$2/$1"
+
+	rm -rf "$scratch"
+	mkdir -p "$scratch/sqlite"
+
+	cp "$PRISTINE" "$scratch/sqlite/victual.db" || fail "could not copy the pristine database for $probe"
+	write_influx_config "$scratch/sqlite"
+
+	say ""
+	if ! VICTUAL_DATAPATH="$scratch/sqlite" \
+		VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
+		VICTUAL_BROKER_STANDIN_PORT="$MQTT_BROKER_PORT" VICTUAL_BROKER_STANDIN_LOG="$MQTT_BROKER_LOG" \
+		php "$VICTUAL_ROOT/.devtools/mqtt/$probe.php"; then
+		failures=$((failures + 1))
+	fi
+
+	local dbname="${MQTT_DB}_$(printf '%s' "$probe" | tr -c 'a-z0-9' '_')"
+
+	dropdb --if-exists "$dbname" || fail "could not drop $dbname"
+	createdb "$dbname" || fail "could not create $dbname"
+
+	write_pgsql_config "$scratch/pgsql"
+
+	VICTUAL_DATAPATH="$scratch/pgsql" DIFFTEST_DB_NAME="$dbname" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
+		|| fail "could not migrate $dbname"
+	VICTUAL_DATAPATH="$scratch/pgsql" DIFFTEST_DB_NAME="$dbname" \
+		php "$VICTUAL_ROOT/bin/victual-db-import" "$scratch/sqlite/victual.db" --force > /dev/null \
+		|| fail "could not import into $dbname"
+
+	# The InfluxDB settings on top of the connection ones, appended so the file keeps both
+	write_influx_config "$scratch/pgsql" append
+
+	say ""
+	if ! VICTUAL_DATAPATH="$scratch/pgsql" DIFFTEST_DB_NAME="$dbname" \
+		VICTUAL_STANDIN_LOG="$MQTT_STANDIN_LOG" VICTUAL_STANDIN_CONTROL="$MQTT_STANDIN_CONTROL" \
+		VICTUAL_BROKER_STANDIN_PORT="$MQTT_BROKER_PORT" VICTUAL_BROKER_STANDIN_LOG="$MQTT_BROKER_LOG" \
+		php "$VICTUAL_ROOT/.devtools/mqtt/$probe.php"; then
+		failures=$((failures + 1))
+	fi
+}
+
+# The PostgreSQL connection settings, read from the environment rather than interpolated for
+# the reason build_pgsql() gives: a password with a quote in it would otherwise produce a
+# config.php that is either broken or executing something it should not be.
+write_pgsql_config() {
+	mkdir -p "$1"
+
+	cat > "$1/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+}
+
+# The probes need InfluxDB switched on to do anything at all - RecordTransaction() writes
+# nothing when it is off, which is deliberate (an outbox nobody drains is a leak). The
+# endpoint is the stand-in, which rejects, so the failure path is what gets exercised.
+write_influx_config() {
+	mkdir -p "$1"
+
+	# Appended when asked, so a PostgreSQL data directory keeps its connection settings and
+	# gains these; the opening tag comes from the file it is appended to.
+	if [ "${2:-}" = "append" ]; then
+		cat >> "$1/config.php" <<-PHPCONFIG
+			Setting('INFLUXDB_ENABLED', true);
+			Setting('INFLUXDB_URL', 'http://127.0.0.1:$MQTT_STANDIN_PORT');
+			Setting('INFLUXDB_TOKEN', 'suite');
+			Setting('INFLUXDB_ORG', 'suite');
+			Setting('INFLUXDB_BUCKET', 'suite');
+			Setting('INFLUXDB_TIMEOUT_SECONDS', 2);
+		PHPCONFIG
+
+		return 0
+	fi
+
+	cat > "$1/config.php" <<-PHPCONFIG
+		<?php
+		Setting('INFLUXDB_ENABLED', true);
+		Setting('INFLUXDB_URL', 'http://127.0.0.1:$MQTT_STANDIN_PORT');
+		Setting('INFLUXDB_TOKEN', 'suite');
+		Setting('INFLUXDB_ORG', 'suite');
+		Setting('INFLUXDB_BUCKET', 'suite');
+		Setting('INFLUXDB_TIMEOUT_SECONDS', 2);
+	PHPCONFIG
+}
+
 # --- File import tests ------------------------------------------------------------
 #
 # PostgreSQL only, because the files table is: ConfigurationValidator refuses
@@ -492,9 +763,26 @@ run_files_import_tests() {
 
 # Before anything is built: a migration numbering mistake means the two engines are not
 # running the same set of changes, which would make every comparison below meaningless
-# rather than merely wrong.
+# rather than merely wrong. The same script also refuses a hole in the sequence above the
+# baseline — a tree carrying 0259 while 0258 sits in an unmerged branch migrates a database
+# that records 259 and never ran 258 — so this is where the merge order recorded in
+# migrations/RESERVATIONS.md is enforced.
+#
+# SUITE_ALLOW_RESERVED_HOLES=1 passes the script's --allow-reserved-holes waiver, which
+# downgrades exactly one failure - a missing number that RESERVATIONS.md says belongs to a
+# branch that has not merged - to a printed warning. It exists because otherwise a branch
+# holding the higher of two in-flight numbers cannot run its own suite at all, which trades
+# one unverifiable claim for another. CI does not set it, and a branch that needs it is
+# saying out loud that it is not yet mergeable.
 say "checking migration numbering"
-php "$SUITE_DIR/check-migrations.php" || fail 'migration numbering check failed'
+
+migration_check_args=()
+if [ "${SUITE_ALLOW_RESERVED_HOLES:-0}" = "1" ]; then
+	migration_check_args+=(--allow-reserved-holes)
+fi
+
+php "$SUITE_DIR/check-migrations.php" "${migration_check_args[@]+"${migration_check_args[@]}"}" \
+	|| fail 'migration numbering check failed'
 
 say ""
 say "building the pristine SQLite database"
@@ -507,8 +795,10 @@ case "$WHICH" in
 	rollback) run_rollback_tests ;;
 	filter) run_filter_tests ;;
 	schema) run_schema_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema or all)" ;;
+	files) run_files_import_tests ;;
+	mqtt) run_mqtt_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_files_import_tests; run_mqtt_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, files, mqtt or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then

@@ -1,0 +1,218 @@
+#!/usr/bin/env php
+<?php
+
+// Publishes the ambient state snapshot and the Home Assistant discovery payloads to the
+// configured MQTT broker, then exits.
+//
+//   php bin/victual-publish-state [--retract] [--drain] [--quiet]
+//
+// This is the "publish on boot" half of docs/plans/18-mqtt-state-publication.md. PHP has no
+// boot event, so it is a command the deployment runs rather than something the application
+// does to itself: a postStart hook, or a Job alongside the initContainer that runs
+// bin/victual-migrate. It is what makes the design self-healing - a migration, a
+// bin/victual-db-import or someone in psql all get picked up here rather than silently
+// diverging from what the broker still holds.
+//
+// Which database and which broker come from config.php, exactly as they do for the web
+// application.
+//
+// Exit codes: 0 when everything was published (or when MQTT is disabled, which is not a
+// failure), 1 when the broker could not be reached or the snapshot could not be assembled.
+
+use Victual\Services\DatabaseService;
+use Victual\Services\Influx\BookingEventPublisher;
+use Victual\Services\Influx\InfluxEventWriter;
+use Victual\Services\Mqtt\MqttStatePublicationService;
+use Victual\Services\Outbox\OutboxService;
+
+if (PHP_SAPI !== 'cli')
+{
+	exit('This is a command line script');
+}
+
+$arguments = array_slice($argv, 1);
+$quiet = in_array('--quiet', $arguments, true);
+$retract = in_array('--retract', $arguments, true);
+$drain = in_array('--drain', $arguments, true);
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/victual-publish-state [--retract] [--drain] [--quiet]\n\n";
+	echo "  Publishes the Home Assistant discovery payloads and the full state snapshot as\n";
+	echo "  retained MQTT topics. Run it once after every deployment, from a postStart hook\n";
+	echo "  or a Job next to the bin/victual-migrate initContainer.\n\n";
+	echo "  Does nothing (and succeeds) when MQTT_ENABLED is false.\n\n";
+	echo "  --retract  Clear every retained topic this version owns instead of publishing,\n";
+	echo "             by sending an empty retained payload to each. An empty payload on a\n";
+	echo "             discovery config topic is how Home Assistant is told to remove the\n";
+	echo "             entity. Both discovery modes' topics are cleared, not just the\n";
+	echo "             configured one.\n";
+	echo "  --drain    Deliver every undelivered InfluxDB event sitting in the outbox and\n";
+	echo "             exit, without publishing anything to MQTT. Drains the whole backlog,\n";
+	echo "             in batches, stopping at the first failure with a non-zero exit.\n";
+	echo "             A request that books something drains one batch on its way out\n";
+	echo "             anyway, so this is for a household that stopped shopping while\n";
+	echo "             InfluxDB was down - run it from a CronJob, or by hand after fixing\n";
+	echo "             the endpoint.\n";
+	echo "  --quiet    Only print errors.\n";
+	exit(0);
+}
+
+if (!defined('VICTUAL_DATAPATH'))
+{
+	define('VICTUAL_DATAPATH', getenv('VICTUAL_DATAPATH') ?: __DIR__ . '/../data');
+}
+
+require_once __DIR__ . '/../packages/autoload.php';
+
+// Same shape as bin/victual-migrate: config.php is optional so that a checkout with only
+// environment variables set still works
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
+{
+	require_once VICTUAL_DATAPATH . '/config.php';
+}
+
+require_once __DIR__ . '/../config-dist.php';
+
+// The views this reads resolve user settings on some engines, so they need a user context
+if (!defined('VICTUAL_USER_ID'))
+{
+	define('VICTUAL_USER_ID', 1);
+}
+
+try
+{
+	(new Victual\Helpers\ConfigurationValidator())->validateConfig();
+}
+catch (\Victual\Helpers\EInvalidConfig $ex)
+{
+	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+	exit(1);
+}
+
+// --drain is about InfluxDB, so it is answered before the MQTT gate below rather than
+// behind it - the two are independently configurable and a broker being off is no reason
+// to leave committed events undelivered.
+if ($drain)
+{
+	if (!InfluxEventWriter::IsEnabled())
+	{
+		if (!$quiet)
+		{
+			echo 'INFLUXDB_ENABLED is false, there is nothing to drain.' . PHP_EOL;
+		}
+
+		exit(0);
+	}
+
+	// A CLI run is one request as far as both triggers are concerned
+	MqttStatePublicationService::SuppressRequestEndPublish();
+	BookingEventPublisher::SuppressRequestEndDrain();
+	DatabaseService::GetInstance()->SetCurrentUserId(VICTUAL_USER_ID);
+
+	// The whole backlog, not one batch of it. A drain takes a bounded batch so that one
+	// request never turns into an unbounded write, but this command is the thing an
+	// operator runs *because* a backlog exists - stopping after the first 200 events and
+	// reporting success would be the least useful possible behaviour.
+	//
+	// The loop stops on the first failed delivery rather than continuing: whatever made one
+	// batch fail will make the next one fail too, and the point of stopping is that the
+	// exit code says the queue is not empty.
+	//
+	// CountUndelivered() rather than HasBookings(), and this is the whole difference: it
+	// throws where the database cannot answer, so this command cannot exit 0 on a queue
+	// nobody managed to look at. HasBookings() swallows, because its caller is a shutdown
+	// handler that must not throw.
+	$batches = 0;
+
+	try
+	{
+		while (BookingEventPublisher::CountUndelivered() > 0)
+		{
+			if (!BookingEventPublisher::Drain())
+			{
+				fwrite(STDERR, 'Draining the outbox failed after ' . $batches . ' batch(es); the rest is still queued - see the log and the outbox table\'s last_error column for why.' . PHP_EOL);
+				exit(1);
+			}
+
+			$batches++;
+		}
+
+		$deadLettered = BookingEventPublisher::CountDeadLettered();
+	}
+	catch (\Throwable $ex)
+	{
+		fwrite(STDERR, 'Could not read the outbox after ' . $batches . ' batch(es): ' . $ex->getMessage() . PHP_EOL);
+		exit(1);
+	}
+
+	if (!$quiet)
+	{
+		if ($batches === 0)
+		{
+			echo 'The outbox is empty.' . PHP_EOL;
+		}
+		else
+		{
+			echo 'Delivered the queued events to ' . VICTUAL_INFLUXDB_URL . ' in ' . $batches . ' batch(es) of up to '
+				. OutboxService::DRAIN_BATCH_SIZE . '.' . PHP_EOL;
+		}
+
+		// Reported whether or not anything was delivered: a queue that is empty only because
+		// some rows stopped counting is not the same as a queue that drained
+		if ($deadLettered > 0)
+		{
+			echo $deadLettered . ' event(s) are set aside as undeliverable and were not sent - see the outbox table\'s last_error column.' . PHP_EOL;
+		}
+	}
+
+	exit(0);
+}
+
+if (!MqttStatePublicationService::IsEnabled())
+{
+	if (!$quiet)
+	{
+		echo 'MQTT_ENABLED is false, nothing to publish.' . PHP_EOL;
+	}
+
+	exit(0);
+}
+
+// A CLI run is one request as far as the publish trigger is concerned. Without this the
+// shutdown handler in DatabaseService would publish a second time on the way out of any run
+// that happened to write (the always-run migration fixups do), and the two would race for
+// the same retained topics.
+MqttStatePublicationService::SuppressRequestEndPublish();
+
+DatabaseService::GetInstance()->SetCurrentUserId(VICTUAL_USER_ID);
+
+if ($retract)
+{
+	if (!MqttStatePublicationService::Retract())
+	{
+		fwrite(STDERR, 'Retracting the MQTT topics failed, see the log for why.' . PHP_EOL);
+		exit(1);
+	}
+
+	if (!$quiet)
+	{
+		echo 'Retracted every retained topic under ' . VICTUAL_MQTT_TOPIC_PREFIX . '/ and the discovery topics under ' . VICTUAL_MQTT_DISCOVERY_PREFIX . '/.' . PHP_EOL;
+	}
+
+	exit(0);
+}
+
+if (!MqttStatePublicationService::PublishDiscoveryAndState())
+{
+	fwrite(STDERR, 'Publishing the state snapshot failed, see the log for why.' . PHP_EOL);
+	exit(1);
+}
+
+if (!$quiet)
+{
+	echo 'Published the discovery payloads (' . VICTUAL_MQTT_DISCOVERY_MODE . ' mode) and the state snapshot to '
+		. VICTUAL_MQTT_HOST . ':' . VICTUAL_MQTT_PORT . ' under ' . VICTUAL_MQTT_TOPIC_PREFIX . '/.' . PHP_EOL;
+}
+
+exit(0);

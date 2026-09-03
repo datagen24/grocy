@@ -90,6 +90,35 @@ row ids exactly. See [db/pgsql/README.md](db/pgsql/README.md) for the porting ru
 seventeen documented porting hazards — fifteen type-coercion ones and two case-sensitivity
 ones — and the two accepted behavioural differences between the engines.
 
+### Home Assistant
+
+Victual can push the household's ambient state to an MQTT broker as retained topics, with
+Home Assistant discovery payloads alongside them, so nothing has to poll: a consumer holds
+the last snapshot across its own restarts and arbitrarily long server absences. Off by
+default — set `MQTT_ENABLED` and the `MQTT_*` connection settings in `data/config.php`; the
+block there documents each one.
+
+Run `bin/victual-publish-state` once after every deployment (a postStart hook, or a Job
+alongside the `bin/victual-migrate` initContainer). It publishes the discovery payloads and
+the full snapshot, which is what makes a migration, an import or someone in `psql` get
+picked up rather than silently diverging from what the broker still holds.
+`bin/victual-publish-state --retract` clears every retained topic again.
+
+Seven summary sensors are published by default. A product also gets its own sensor when it
+is opted in — `POST /api/objects/mqtt_product_entities` with `{"product_id": <id>}`, and
+`DELETE` to remove it, which retracts that product's topics.
+
+Optionally, `INFLUXDB_ENABLED` and the `INFLUXDB_*` settings write price and stock-value
+*events* to InfluxDB on the same after-commit path. That channel, not MQTT, is where
+spending history lives: anything holding broker credentials reads the MQTT topics without
+authenticating to Victual, so no price, cost or value field is published there.
+
+Both publishes happen after the request is finished, bounded by
+`MQTT_CONNECT_TIMEOUT_SECONDS` and `INFLUXDB_TIMEOUT_SECONDS`, and a failure of either is
+logged and never reaches the write that triggered it. The delay is off the response under
+php-fpm and on it under mod_php — so on mod_php an unreachable broker and an unreachable
+InfluxDB cost the caller the sum of those two timeouts.
+
 ### Platform support
 
 - PHP 8.5 — the declared floor; the real language floor is 8.4 and reconciling the two is

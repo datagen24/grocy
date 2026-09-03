@@ -22,7 +22,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
-| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | draft — from [17](17-ecosystem-clients.md)'s Q2; **Q1–Q8 answered 2026-08-31** |
+| 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`6a0d1fb`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7, delivered through a transactional outbox. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant. Its PR is **held behind #34** by the migration numbering rule below — it owns 0257 and 0259 while 01 owns 0258 |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
 
@@ -294,10 +294,26 @@ after which the SQLite migration line freezes at its final number and new migrat
 PostgreSQL-only without needing the exemption recorded.
 
 The third case is new. `0256.sqlite.sql` is the first to use it — a SQLite-only cast fix
-that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping
-`0257.pgsql.sql` with no SQLite counterpart rather than a no-op pair that pretends
+that PostgreSQL never needed — and [01](01-file-storage.md) is the second, shipping a
+PostgreSQL-only migration with no SQLite counterpart rather than a no-op pair that pretends
 otherwise. The rule for it is that the exemption is *recorded*, in the migration itself
-and in `db/pgsql/README.md`, not merely taken.
+and in `db/pgsql/README.md`, not merely taken. (This paragraph and 01's own body both say
+that migration is `0257.pgsql.sql`. Both were written before [18](18-mqtt-state-publication.md)
+took 0257; 01 ships 0258, and
+[migrations/RESERVATIONS.md](../../migrations/RESERVATIONS.md) is the authority. 01's own
+text is corrected by the branch that carries the file, so the correction and the file land
+together.)
+
+**Migration numbers are claimed before they are written**, in
+[migrations/RESERVATIONS.md](../../migrations/RESERVATIONS.md), and
+`.devtools/pgsql/check-migrations.php` fails on a hole in the sequence above the baseline.
+This is a merge-order rule, not paperwork: parallel plan branches each need a number before
+any of them merges, and a tree carrying 0259 while 0258 sits in an unmerged branch migrates a
+database that records 259 and never ran 258 — which every check built on the maximum then
+reads as up to date. The branch owning the lower number merges first. The live case is
+**#33 → #34 → #36**: #33 makes the boot check verify the complete required migration set
+rather than the highest recorded number, #34 brings 01's 0258, and 18's #36 carries 0257 and
+0259 and is knowingly not mergeable until #34 is in.
 
 The consequence turned out to bite immediately rather than later, and is worth stating
 plainly: once a number exists on one engine only, the two engines sit at different
@@ -517,12 +533,25 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 - **Track C: 13 write-path transactions** — **done**, ahead of the rest of this wave
   (`7abfd2fa`, `782289b8`, `96f9ec99`, 2026-08-29). All seven entrypoints, webhook after
   commit, and the importer made atomic. Tracks A and B are still open.
-- **Track D: 18 MQTT state publication.** New, from 17's Q2. Disjoint from A, B and C: it
-  adds a service and a call at the end of the write paths 13 already centralised, and
-  touches no file the other tracks open. It belongs in this wave rather than later because
-  track A's whole point is a pod that sleeps, and until 18 exists the household's Home
-  Assistant is the reason it will not. 13 is its prerequisite and is already in — the
-  publish hangs off the same after-commit seam the label-printer webhook uses.
+- **Track D: 18 MQTT state publication — done** (`e794ea8`…`6a0d1fb`, 2026-09-02), three
+  rounds of review fixes included: they turned the after-commit publish into a transactional
+  outbox (`migrations/0259`, a per-engine pair) with per-event identity, dead-lettering and
+  a CLI drain. New, from 17's Q2. Disjoint from A, B and C, as planned: a service, a CLI and
+  one seam. The seam turned out to be `DatabaseService`'s request end rather than 13's seven
+  `StockService` entrypoints — the dirty flag is the same "did anything really change"
+  question `db-changed-time` answers, so chores, batteries, tasks, the shopping list and
+  generic CRUD are covered without being named, and it fires once per request rather than
+  once per commit (Q3). It belongs in this wave rather than later because track A's whole
+  point is a pod that sleeps, and until 18 existed the household's Home Assistant was the
+  reason it would not. Q7 reversed its lean on the maintainer's answer: price and
+  stock-value *events* go to InfluxDB on the same seam, with their own credentials. Q2's
+  per-product entities landed as an opt-in flag in a side table (`migrations/0257`, a
+  per-engine pair — a column on `products` would have changed every products response and
+  diverged the two engines' `products_view`), exposed through `/api/objects`; **the
+  product-form checkbox for that flag is deferred** because track B owns those files this
+  wave, and is a follow-on. `bin/victual-publish-state` is the "publish on boot" half and
+  runs from a postStart hook or a Job beside the `bin/victual-migrate` initContainer. The
+  verifications that need a real Home Assistant (2, 4, 8) are outstanding.
 
   **18 takes [19](19-rbac.md)'s Q5 here rather than 19 waiting on 18.** 19 asked 18 to
   record whether published state carries prices, and gated itself on 18 to make sure — but

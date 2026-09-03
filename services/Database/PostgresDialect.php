@@ -29,6 +29,18 @@ class PostgresDialect extends DatabaseDialect
 	 */
 	const MIGRATION_ADVISORY_LOCK_KEY = 1986947956;
 
+	/**
+	 * The key WithPublicationLock() takes its advisory lock on.
+	 *
+	 * A number of its own rather than one shared with MIGRATION_ADVISORY_LOCK_KEY above,
+	 * since two locks that guard unrelated things should not make callers of one wait on
+	 * the other: a publish at the end of a request has no reason to queue behind a
+	 * migration run. It is the ASCII bytes of "vic" followed by "P" for publish
+	 * (0x766963 50), chosen on the same principle - recognisable in pg_locks rather than
+	 * meaningful.
+	 */
+	const PUBLICATION_ADVISORY_LOCK_KEY = 1986943824;
+
 	/** @var bool True while a data change has been recorded but not yet written to the changed time table */
 	private $DbChangedPending = false;
 
@@ -204,6 +216,42 @@ class PostgresDialect extends DatabaseDialect
 		finally
 		{
 			$pdo->prepare('SELECT pg_advisory_unlock(?)')->execute([self::MIGRATION_ADVISORY_LOCK_KEY]);
+		}
+	}
+
+	/**
+	 * A session level advisory lock on PUBLICATION_ADVISORY_LOCK_KEY, held across the whole
+	 * assemble-publish-record cycle so two requests cannot interleave a read of the state
+	 * with a write of it.
+	 *
+	 * Taken on the raw connection, because a session level lock lives on the connection
+	 * that took it - which is also what makes a crash safe, since a dying process closes
+	 * its connection and PostgreSQL releases the lock with nobody having to clean up.
+	 * pg_advisory_lock() blocks until it can be taken and is reentrant within one session,
+	 * so nesting cannot deadlock against itself.
+	 *
+	 * **This lock requires a direct connection, or a pool in session mode**, for exactly
+	 * the reason WithMigrationLock() above gives, with a different consequence: a leaked
+	 * publication lock makes every later publish block in a shutdown handler until the
+	 * connect timeout, on every request that writes. ADR-0009's finding F1 records the
+	 * mechanism. The transaction-scoped pg_advisory_xact_lock() is the safe form where the
+	 * work fits in one transaction, and this one deliberately does not: it runs at the end
+	 * of a request with every transaction already closed, which is the whole point of the
+	 * seam it is called from.
+	 */
+	public function WithPublicationLock(callable $work)
+	{
+		$pdo = \Victual\Services\DatabaseService::GetInstance()->GetDbConnectionRaw();
+
+		$pdo->prepare('SELECT pg_advisory_lock(?)')->execute([self::PUBLICATION_ADVISORY_LOCK_KEY]);
+
+		try
+		{
+			return $work();
+		}
+		finally
+		{
+			$pdo->prepare('SELECT pg_advisory_unlock(?)')->execute([self::PUBLICATION_ADVISORY_LOCK_KEY]);
 		}
 	}
 
