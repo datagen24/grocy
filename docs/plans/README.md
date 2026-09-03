@@ -69,7 +69,7 @@ them are routing sentences in *this file* that were never true.
 |---|---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
-| 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision; 10 for its stated goal | medium, front-loaded | draft — **scaffolding landed, never built**; piece 1 is the first build |
+| 20 | [The deploy tree](20-deploy-tree.md) | — | the `Dockerfile`'s production target, which 10 landed | small | draft — **the manifest landed, never applied**; piece 1 is running it |
 
 ## Decisions
 
@@ -98,18 +98,24 @@ one is now decided:
   **proposed**; its dependency on 0008 is now satisfied. Claims on
   [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and [19](19-rbac.md).
 
-One more was written on 2026-09-03, ahead of there being any deployment for it to
-constrain:
+One more was written on 2026-09-03 and rejected the same day:
 
 - **[ADR-0013](../adr/0013-nix-built-container-images.md)** — production container images
   are built by Nix from a flake in this repository, one image per workload, on no base
-  image. Still **proposed**, and its acceptance prerequisites are unusually literal: it
-  was written from the interfaces nixpkgs exposes, read rather than run, and nothing it
-  describes has been built. [Plan 20](20-container-infrastructure.md) carries the
-  scaffolding and the first build. It supplies the *how* for
-  [ADR-0010](../adr/0010-workload-standard.md)'s fourth property and makes its third
-  structural, but it does not assume 0010 — the build-system argument stands on its own,
-  and 0010's open question 1 about where the deploy tree lives is still 0010's to answer.
+  image. **Rejected 2026-09-03.** It was written against a repository whose only image
+  was, by its own header, a development one running as root; while it was in review,
+  [10](10-cold-start-statelessness.md) landed a `production` target in that same
+  `Dockerfile` — non-root, baked view cache, read-only root filesystem, CI-asserted — and
+  the load-bearing part of the case went with it. The record keeps its number and its
+  file and now carries the reasoning for *not* doing it, including what Nix would still
+  have added and what would reopen the question: the first fork-owned workload that is
+  not PHP has no Debian-and-Apache answer to inherit.
+
+  What survived is [plan 20](20-deploy-tree.md), the deploy tree, which was never coupled
+  to how the image gets built. It answers [ADR-0010](../adr/0010-workload-standard.md)'s
+  fourth property; 0010's own open question 1, about whether that tree belongs to the
+  fork or to the operator's infrastructure repository, is still 0010's to answer and this
+  does not pre-empt it.
 
 Two findings recorded in 0009 apply to [10](10-cold-start-statelessness.md) and
 [18](18-mqtt-state-publication.md) **whether or not 0009 is accepted**: 10's

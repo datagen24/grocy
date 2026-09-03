@@ -26,14 +26,9 @@ node_modules
 .devtools/coverage/*.xml
 .devtools/coverage/html
 
-# The Nix build of the production images and the deploy manifests. Nothing in either
-# Docker target reads them, and this file's own second reason applies: a build context is
-# copied into a layer, and an image that is trying to carry only what it needs has no use
-# for a Kubernetes manifest or for the flake that builds a different image entirely.
-# See docs/adr/0013-nix-built-container-images.md and nix/README.md.
-flake.nix
-flake.lock
-nix/
+# The deploy manifests. Nothing in either target reads them, and this file's own second
+# reason applies: a build context is copied into a layer, and an image trying to carry
+# only what it needs has no use for a Kubernetes manifest describing how to run it.
 deploy/
 
 # Local editor and OS noise.

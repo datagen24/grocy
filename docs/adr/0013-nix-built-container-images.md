@@ -1,10 +1,21 @@
 # ADR-0013: Production images are built by Nix from a flake in this repository
 
-- **Status: Proposed.** Written to be argued with.
-- **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
-  lifecycle rule in [the index](README.md).
-- **Recorded:** 2026-09-03. The decision was made when this was written; nothing has been
-  built from it yet, which is what the acceptance prerequisites below are about.
+- **Status: Rejected (2026-09-03).** Superseded in fact rather than by another record:
+  [plan 10](../plans/10-cold-start-statelessness.md) landed a production image from the
+  `Dockerfile` while this was being written, and the case below did not survive that.
+  The number and the file stay, because the reason something was *not* done is what
+  future readers most often need and least often have.
+- **Decider:** datagen24 (maintainer), 2026-09-03.
+- **Recorded:** 2026-09-03, and rejected the same day. It is written here in the past
+  tense of a proposal that was made and declined rather than rewritten into a
+  justification, so that what was actually argued is still legible.
+- **Lifecycle note:** the index's rule is that accepting or rejecting a record is its own
+  pull request carrying bookkeeping only. That rule protects a record which has *stood*
+  as Proposed from being adopted or discarded by momentum. This one never stood: it was
+  written and rejected inside the pull request that introduced it, before it had ever
+  been in the tree as a live proposal, so there is no earlier state for a separate
+  lifecycle PR to review. Recording that here rather than quietly departing from the
+  rule.
 - **Relationship:** supplies the *how* for [ADR-0010](0010-workload-standard.md)'s fourth
   property — a workload "exists in the repository's deploy tree with health probes and
   resource limits, or it does not exist" — and makes its third, non-root with a read-only
@@ -17,10 +28,18 @@
   [02](../plans/02-mcp-endpoint.md) and [18](../plans/18-mqtt-state-publication.md) (whose
   workloads are born into this pattern or outside it),
   [16](../plans/16-project-rename.md) (registry claims).
-- **Referenced by:** [plan 20](../plans/20-container-infrastructure.md), [the deploy
-  tree](../../deploy/README.md), [nix/README.md](../../nix/README.md).
+- **Referenced by:** [plan 20](../plans/20-deploy-tree.md), [the deploy
+  tree](../../deploy/README.md).
 
 ## Context
+
+**The premise below was true when this was written and false within hours.** PR #33
+landed [plan 10](../plans/10-cold-start-statelessness.md) on `master` with a `production`
+target in the same `Dockerfile`: Apache with mod_php, non-root `www-data`, a view cache
+baked at build time, a read-only root filesystem, a `.dockerignore`, and an `images` CI
+job asserting each of those against the built artifact. The paragraph that follows is
+left as it was written, because a record that quietly edits its own premises is worth
+less than one that shows where it was overtaken.
 
 The repository has exactly one image and it is honest about not being a production one.
 `Dockerfile`'s own header says so: it exists so `.devtools/pgsql/difftest.php` and the
@@ -119,6 +138,10 @@ Concretely:
 
 ## Consequences
 
+*Preserved as written, in the present tense of the proposal. It refers to files this
+record's rejection removed from the tree — `nix/README.md`, `nix/hashes.nix`, the flake —
+which is the point: this is what was argued, not a summary written afterwards.*
+
 **`kubectl exec … sh` stops working, forever.** This is the cost that will be felt first
 and most often. Debugging a running pod becomes `kubectl debug --image=…` with an
 ephemeral container, or reproducing the problem locally against the same image. That is
@@ -154,7 +177,8 @@ better, but different, and a bump is now a diff someone reads.
 
 **The images are smaller than the Debian ones by a large factor, and the number is not
 yet known.** No build has run. Any figure in this record would be a guess, so there is
-none; taking the measurement is acceptance prerequisite 2.
+none; taking the measurement was acceptance prerequisite 2, and it was never taken —
+see *Why this was rejected*.
 
 **New workloads are born into this.** A Go or TypeScript sidecar — the MCP one, plan 18's
 publisher, ADR-0011's drainer — is a `buildGoModule`/`buildNpmPackage` away from an image
@@ -163,28 +187,60 @@ roughly the cost of naming it. That is the payoff for deciding this before the f
 exists rather than after, and it is the same argument ADR-0010 makes for the standard
 itself.
 
-## Acceptance prerequisites
+## Why this was rejected
 
-Gates, not suggestions. This record is written from the interfaces `nixos-unstable`
-exposes today, read rather than run, and it should not be accepted on that basis.
+The decision above answers a question that had an answer by the time it was read. Taking
+the case apart against what `master` now ships:
 
-1. **All three images build, and the pod serves.** On the maintainer's Mac, through
-   podman: `nix run .#load`, then `podman kube play deploy/podman/victual.yaml` against a
-   throwaway PostgreSQL, then a rendered `/login` and one authenticated API read
-   (`GET /api/stock`). The accepting pull request records the image sizes and the closure
-   listing (`nix path-info -rSh .#image-app`).
-2. **The comparison against today's image is measured, not asserted.** Size, and whether
-   a shell is present, for the Debian image and for `victual-app`. The claim in
-   *Consequences* that these are "smaller by a large factor" is either replaced by the
-   number or deleted.
-3. **`nix flake check` passes, including `image-has-no-shell`.** If nixpkgs' PHP turns out
-   to drag a shell into its runtime closure after all, this record's "no shell" claim is
-   amended to what is true rather than the check being relaxed.
-4. **The two fixed-output hashes reproduce.** `nix/hashes.nix` filled in on one machine
-   and verified on a second, or on a second architecture. A hash that only holds on the
-   machine that produced it is not a pin.
+**"There is no production image" — gone.** This was the load-bearing argument, and the
+`production` target refutes it directly.
 
-## Open questions
+**"It runs as root, and `COPY .` ships `.git`" — gone.** Both were sweep S25 items and
+plan 10 closed both, with CI asserting them rather than a comment claiming them.
+
+**"A read-only root filesystem needs work the Dockerfile cannot do" — gone,** and this is
+the one this record was most confident about. Plan 10's image runs read-only against
+exactly three writable paths, and verification 4 runs in CI against a live container.
+
+**What Nix would still have added, honestly stated:** an image with no shell and no
+package manager, a dependency graph pinned by hash rather than by `apt-get update`, an
+allowlisted source tree rather than a `.dockerignore` denylist, and credential-separated
+images. Those are real, and the first is the one this record would still argue for.
+
+**Why they did not justify it.** They now buy a *replacement* for something that exists,
+is CI-verified and was built deliberately — the production stage's own header chooses
+"one container rather than two and one fewer thing to get wrong for a household-sized
+deployment", which is a considered answer to the same question, not an omission. Against
+that, the cost side is unchanged and the benefit side is much thinner than section
+*Context* assumed. A second build system earning its place has to beat the first one, not
+merely beat nothing; and this fork's rule is that nothing is adopted by momentum, which
+cuts both ways — an unbuilt flake already written is not an argument for keeping it.
+
+**The four acceptance prerequisites were never met and were never attempted.** They were:
+that all three images build and the pod serves through podman; that image size and shell
+presence be measured against the Debian image rather than asserted; that
+`nix flake check`'s no-shell assertion actually hold; and that the two fixed-output
+hashes reproduce on a second machine. Nothing here was ever built, so this record is
+rejected on its case rather than on its evidence — which is the honest description and
+not a criticism of the gates.
+
+**What was kept.** The deploy tree in [`deploy/`](../../deploy/README.md), retargeted at
+the `Dockerfile`'s production image. It answers [ADR-0010](0010-workload-standard.md)'s
+fourth property — a workload exists in the deploy tree with probes and limits, or it does
+not exist — and that property was never coupled to how the image gets built.
+[Plan 20](../plans/20-deploy-tree.md) is what carries it.
+
+**What would reopen this.** A workload in the family that is not PHP — the MCP sidecar,
+plan 18's publisher, ADR-0011's drainer — has no Debian-and-Apache story to inherit, and
+"how do we build a Go or TypeScript image" is a question this record answers well and the
+`Dockerfile` does not answer at all. That is a new record when it arrives, arguing on the
+new workload's terms, not this one revived.
+
+## Open questions considered moot
+
+These were live while the record was Proposed. They are kept because two of them outlive
+it — 1 and 4 are questions the `Dockerfile`'s production image faces just as squarely,
+and whoever publishes it first will have to answer them.
 
 1. **Where do the images go?** Nothing is published today and
    [16](../plans/16-project-rename.md) parks the registry and domain claims until
@@ -239,7 +295,10 @@ for free, and assertions about the artifact rather than about the file that desc
 
 - Tree facts (`Dockerfile`, `docker-compose.yml`, the absence of `.dockerignore` and of a
   deploy tree, `.yarnrc`'s `--modules-folder public/packages`, the two VCS forks pinned
-  by commit in `composer.lock`) measured against the working copy of 2026-09-03.
+  by commit in `composer.lock`) measured against the working copy of 2026-09-03 — before
+  PR #33 landed, which is what made the first two of those false. "Measured, not assumed"
+  does not protect a measurement from going stale between taking it and acting on it, and
+  that is the transferable lesson here rather than anything about Nix.
 - nixpkgs interfaces read against `nixos-unstable` on 2026-09-03: `php85` exists at
   8.5.10, which satisfies `PrerequisiteChecker::REQUIRED_PHP_VERSION`; `php.buildEnv`
   replaces rather than extends the default extension set; `buildComposerProject2` splits

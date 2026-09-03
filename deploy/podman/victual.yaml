@@ -1,21 +1,19 @@
-# Victual, as one pod: migrate, then php-fpm and nginx side by side.
+# Victual, as one pod: seed the data directory, migrate, then serve.
 #
-# This is a Kubernetes Pod manifest and it is deliberately not a compose file. The
-# deployment target is k3s, the two serving containers talk over loopback, and a pod is
-# the only local shape that reproduces that — `podman kube play` gives the containers a
-# shared network namespace exactly as Kubernetes does, so 127.0.0.1:9000 means the same
-# thing on a laptop as it does in the cluster. A compose file would need
-# `network_mode: service:` to fake it and would then be a second thing to keep true.
+# This targets the production image the `Dockerfile`'s `production` stage builds — Apache
+# with mod_php, `www-data`, port 8080 — and it is a Kubernetes object rather than a
+# compose file so that `podman kube play` on a laptop and k3s in the cluster describe the
+# deployment the same way. One manifest instead of two.
 #
 #   podman kube play deploy/podman/victual.yaml
 #   podman kube down deploy/podman/victual.yaml
 #
 # PostgreSQL is not in here. Per ADR-0010's boundary — the fork declares what its
 # workloads need, the operator decides where they run — the database is the operator's,
-# and deploy/README.md says how to stand a throwaway one up for the bootstrap.
+# and deploy/README.md says how to stand a throwaway one up.
 #
-# Status: this manifest has been written but not yet run. See
-# docs/plans/20-container-infrastructure.md, "Verification".
+# Status: written against the image the `images` CI job builds and asserts, but this
+# manifest has not itself been run. See docs/plans/20-deploy-tree.md, "Verification".
 apiVersion: v1
 kind: Pod
 metadata:
@@ -27,41 +25,79 @@ spec:
 
   securityContext:
     runAsNonRoot: true
-    runAsUser: 65532
-    runAsGroup: 65532
-    # Without this the emptyDir volumes below are root:root 0755 and uid 65532 cannot
-    # write to them. It is the single most common reason a correctly built non-root
-    # image fails to start.
-    fsGroup: 65532
+    # www-data is uid/gid 33 on Debian, which is what the image runs as.
+    runAsUser: 33
+    runAsGroup: 33
+    # Without this the emptyDir volumes below are root:root 0755 and uid 33 cannot write
+    # to them. It is the single most common reason a correctly built non-root image fails
+    # to start; the CI check that exercises this image passes `uid=33,gid=33` to its
+    # tmpfs mounts for the same reason.
+    fsGroup: 33
     seccompProfile:
       type: RuntimeDefault
 
+  # Exactly the three paths the Dockerfile names as writable, and nothing else. The
+  # image's own header is the authority on this list; verification 4 of plan 10 is what
+  # keeps it honest.
   volumes:
-    # The scratch directory the entrypoint prepares: config.php and the Blade view
-    # cache. Ephemeral on purpose — nothing in it survives a restart and nothing needs
-    # to. Plan 10 removes the need for it entirely.
+    # config.php is read from here, and uploaded files are written here when file storage
+    # is on disk rather than in the database. In-memory means no durable state outside
+    # PostgreSQL — see deploy/README.md before turning on file attachments.
     - name: data
       emptyDir:
         medium: Memory
         sizeLimit: 64Mi
-    # /tmp is per-container: PHP's temporary files and nginx's buffer paths have no
-    # business sharing a directory.
-    - name: tmp-app
+    # PHP's temporary directory: thumbnail re-encoding, DatabaseStorage's spill over
+    # 2 MiB, and multipart uploads.
+    - name: tmp
       emptyDir:
         medium: Memory
         sizeLimit: 64Mi
-    - name: tmp-web
+    # Apache's pid file. apache2-foreground removes it at startup and apache2 writes it.
+    - name: apache-run
       emptyDir:
         medium: Memory
-        sizeLimit: 64Mi
+        sizeLimit: 1Mi
 
   initContainers:
-    # Migrations are something you do, not something that happens to whoever sends the
-    # first request after a deployment — bin/victual-migrate's own header, and plan 10's
-    # reason for existing. It exits 0 when the database is already current.
-    - name: migrate
-      image: localhost/victual-migrate:4.6.0
+    # `PrerequisiteChecker::checkForConfigFile` refuses to start unless config.php exists
+    # inside VICTUAL_DATAPATH, and /data is a fresh emptyDir on every start. The image
+    # does not seed it, so this does — the same copy the `images` CI job makes before it
+    # can serve a request.
+    #
+    # Every actual setting arrives as a VICTUAL_* environment variable, which
+    # config-dist.php's Setting() already prefers over its own defaults, so the copied
+    # file needs no edits. A household that would rather keep a real config.php can mount
+    # one over /data/config.php instead and drop this container; `cp -n` is deliberate so
+    # that a mounted file is never overwritten.
+    - name: seed-config
+      image: localhost/victual:production
       imagePullPolicy: Never
+      command: ["sh", "-c", "cp -n /app/config-dist.php /data/config.php"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+      securityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+
+    # Since plan 10, nothing migrates inside a request and the application answers 503
+    # until the schema matches the code. Migrating here is what turns that from a failure
+    # mode into a startup step: bin/victual-migrate is a no-op against an up-to-date
+    # database and exits non-zero on failure, so a bad migration keeps the pod from
+    # starting rather than letting it start and fail per request.
+    - name: migrate
+      image: localhost/victual:production
+      imagePullPolicy: Never
+      command: ["php", "/app/bin/victual-migrate"]
       envFrom:
         - configMapRef:
             name: victual-config
@@ -70,7 +106,7 @@ spec:
       volumeMounts:
         - name: data
           mountPath: /data
-        - name: tmp-app
+        - name: tmp
           mountPath: /tmp
       securityContext:
         readOnlyRootFilesystem: true
@@ -85,12 +121,13 @@ spec:
           memory: 256Mi
 
   containers:
-    - name: app
-      image: localhost/victual-app:4.6.0
+    - name: victual
+      image: localhost/victual:production
       imagePullPolicy: Never
       ports:
-        - name: fastcgi
-          containerPort: 9000
+        - name: http
+          containerPort: 8080
+          hostPort: 8080
       envFrom:
         - configMapRef:
             name: victual-config
@@ -99,63 +136,21 @@ spec:
       volumeMounts:
         - name: data
           mountPath: /data
-        - name: tmp-app
+        - name: tmp
           mountPath: /tmp
+        - name: apache-run
+          mountPath: /var/run/apache2
       securityContext:
+        # The image is built to run this way and CI asserts that it does. If this has to
+        # be turned off to get a green pod, something wrote where it should not have, and
+        # that is a finding rather than a workaround.
         readOnlyRootFilesystem: true
         allowPrivilegeEscalation: false
         capabilities:
           drop: ["ALL"]
-      # An exec probe, not tcpSocket, and the reason is not stylistic. The kubelet
-      # resolves a TCP probe's target to the *pod IP*, while the pool binds 127.0.0.1
-      # only (nix/runtime/fpm-conf.nix) so that nothing outside this pod's containers
-      # can reach it. A tcpSocket probe would therefore fail against a perfectly
-      # healthy php-fpm and restart it on every failure threshold — and setting the
-      # probe's `host` to 127.0.0.1 would not fix it, because that names the *node's*
-      # loopback. Only a probe running inside the container is in the right network
-      # namespace to ask the question.
-      #
-      # /app/php and /app/healthcheck.php are placed by nix/approot.nix.
-      startupProbe:
-        exec:
-          command: ["/app/php", "/app/healthcheck.php"]
-        periodSeconds: 2
-        failureThreshold: 30
-      livenessProbe:
-        exec:
-          command: ["/app/php", "/app/healthcheck.php"]
-        periodSeconds: 10
-        timeoutSeconds: 5
-      resources:
-        requests:
-          cpu: 100m
-          memory: 256Mi
-        limits:
-          memory: 512Mi
-      # The image sets StopSignal=SIGQUIT (php-fpm's graceful stop). Kubernetes ignores
-      # the image's StopSignal, so it is said again here. Older clusters without the
-      # lifecycle.stopSignal field get SIGTERM, which php-fpm treats as "stop now" —
-      # acceptable for a stateless request handler, but not the same thing.
-      lifecycle:
-        stopSignal: SIGQUIT
 
-    - name: web
-      image: localhost/victual-web:4.6.0
-      imagePullPolicy: Never
-      ports:
-        - name: http
-          containerPort: 8080
-          hostPort: 8080
-      volumeMounts:
-        - name: tmp-web
-          mountPath: /tmp
-      securityContext:
-        readOnlyRootFilesystem: true
-        allowPrivilegeEscalation: false
-        capabilities:
-          drop: ["ALL"]
-      # robots.txt is a static file the web tier serves without involving PHP, so this
-      # proves nginx is up and its document root is mounted — and nothing more.
+      # robots.txt is served by Apache without involving PHP, so this proves the server
+      # is up and its document root is mounted, and nothing more.
       startupProbe:
         httpGet:
           path: /robots.txt
@@ -167,22 +162,30 @@ spec:
           path: /robots.txt
           port: 8080
         periodSeconds: 10
-      # Readiness goes through the whole stack: nginx, FastCGI, PHP, the database.
-      # /api/system/info requires an API key, so this uses the login page instead —
-      # which is a real render through Blade rather than a static file. This is also
-      # what covers the case the app container's probe cannot see: a pool that is
-      # accepting connections but whose workers are all wedged.
+
+      # Readiness goes through the whole stack: Apache, mod_php, Blade, the database.
+      # /login rather than /api/system/info because that one needs an API key, and rather
+      # than /robots.txt because a static file proves none of it. It is also what reports
+      # the schema gate: SchemaVersionMiddleware answers 503 until the database matches
+      # the code, so a pod whose migration has not finished is correctly not ready.
       readinessProbe:
         httpGet:
           path: /login
           port: 8080
         periodSeconds: 5
         failureThreshold: 6
+
       resources:
         requests:
-          cpu: 50m
-          memory: 64Mi
+          cpu: 100m
+          memory: 256Mi
         limits:
-          memory: 128Mi
+          memory: 512Mi
+
+      # Apache treats SIGWINCH as "stop accepting, finish what you have". Kubernetes
+      # ignores an image's StopSignal and sends SIGTERM unless the container says
+      # otherwise; on a cluster too old for this field the pod gets SIGTERM, which Apache
+      # takes as "stop now" — acceptable for a stateless request handler, but not the
+      # same thing, and worth knowing before wondering where a truncated request went.
       lifecycle:
-        stopSignal: SIGQUIT
+        stopSignal: SIGWINCH
