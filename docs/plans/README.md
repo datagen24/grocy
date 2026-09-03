@@ -69,6 +69,7 @@ them are routing sentences in *this file* that were never true.
 |---|---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
+| 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision; builds on 10, which landed | medium, front-loaded | draft — **the flake landed, never built**; piece 1 is the first build |
 
 ## Decisions
 
@@ -96,6 +97,26 @@ one is now decided:
   into views, so the always-awake component can answer without waking the pod. Still
   **proposed**; its dependency on 0008 is now satisfied. Claims on
   [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and [19](19-rbac.md).
+
+One more was written on 2026-09-03:
+
+- **[ADR-0013](../adr/0013-nix-built-container-images.md)** — production container images
+  are built by Nix from a flake in this repository, one image per workload, on no base
+  image. Still **proposed**, and it was revised the same day it was written:
+  [10](10-cold-start-statelessness.md) landed a `production` target in the `Dockerfile`
+  while it was in review, which refuted three of its premises. The record now argues
+  against that image rather than against a vacuum, which is a weaker case honestly stated
+  — reproducibility, image contents, an allowlisted source, and the non-PHP workloads
+  coming, which inherit no Debian-and-Apache answer.
+
+  It **supersedes the `Dockerfile`'s `production` target if accepted**, not its `dev`
+  target, and the accepting change schedules that retirement rather than this record doing
+  it by being written. Its acceptance prerequisites are unusually literal: it is written
+  from interfaces read rather than run, and nothing it describes has been built.
+  [Plan 20](20-container-infrastructure.md) carries the flake and the first build. It
+  supplies the *how* for [ADR-0010](../adr/0010-workload-standard.md)'s fourth property;
+  0010's own open question 1, about whether the deploy tree belongs to the fork or to the
+  operator, is still 0010's to answer.
 
 Two findings recorded in 0009 apply to [10](10-cold-start-statelessness.md) and
 [18](18-mqtt-state-publication.md) **whether or not 0009 is accepted**: 10's
