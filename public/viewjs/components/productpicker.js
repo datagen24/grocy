@@ -125,10 +125,10 @@ if (prefillProduct2)
 }
 if (typeof prefillProduct !== "undefined")
 {
-	var possibleOptionElement = $("#product_id option[data-additional-searchdata*='" + prefillProduct.replace("'", "\\'") + "']").first();
+	var possibleOptionElement = $("#product_id option[data-additional-searchdata*='" + prefillProduct.replace(/'/g, "\\'") + "']").first();
 	if (possibleOptionElement.length === 0)
 	{
-		possibleOptionElement = $("#product_id option:contains('" + prefillProduct.replace("'", "\\'") + "')").first();
+		possibleOptionElement = $("#product_id option:contains('" + prefillProduct.replace(/'/g, "\\'") + "')").first();
 	}
 
 	if (possibleOptionElement.length > 0)
@@ -206,7 +206,7 @@ $('#product_id_text_input').on('blur', function (e)
 	}
 	else // Normal product barcode handling
 	{
-		possibleOptionElement = $("#product_id option[data-additional-searchdata*='" + input.toLowerCase().replace("'", "\\'") + ",']").first();
+		possibleOptionElement = $("#product_id option[data-additional-searchdata*='" + input.toLowerCase().replace(/'/g, "\\'") + ",']").first();
 	}
 
 	if (GetUriParam('flow') === undefined && input.length > 0 && possibleOptionElement.length > 0)

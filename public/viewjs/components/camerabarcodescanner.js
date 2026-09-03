@@ -240,14 +240,17 @@ Victual.Components.CameraBarcodeScanner.Init = function()
 
 	$(".barcodescanner-input:visible").each(function()
 	{
+		// Built as a node rather than concatenated markup so that the input's data-target
+		// is set as an attribute value and can never close it
+		var startButton = $('<a id="camerabarcodescanner-start-button" class="btn btn-sm btn-primary text-white"><i class="fa-solid fa-camera"></i></a>')
+			.attr("data-target", $(this).attr("data-target"));
+
 		if ($(this).hasAttr("disabled"))
 		{
-			$(this).after('<a id="camerabarcodescanner-start-button" class="btn btn-sm btn-primary text-white disabled" data-target="' + $(this).attr("data-target") + '"><i class="fa-solid fa-camera"></i></a>');
+			startButton.addClass("disabled");
 		}
-		else
-		{
-			$(this).after('<a id="camerabarcodescanner-start-button" class="btn btn-sm btn-primary text-white" data-target="' + $(this).attr("data-target") + '"><i class="fa-solid fa-camera"></i></a>');
-		}
+
+		$(this).after(startButton);
 
 		Victual.Components.CameraBarcodeScanner.InitDone = true;
 	});

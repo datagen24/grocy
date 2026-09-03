@@ -36,10 +36,10 @@ if (typeof recipe !== "undefined")
 {
 	$("#recipes-table tr").removeClass("selected");
 	var rowId = "#recipe-row-" + recipe;
-	$(rowId).addClass("selected")
+	$(document).find(rowId).addClass("selected")
 
 	var cardId = "#RecipeGalleryCard-" + recipe;
-	$(cardId).addClass("border-primary");
+	$(document).find(cardId).addClass("border-primary");
 
 	if ($(window).width() < 768)
 	{
