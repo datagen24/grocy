@@ -10,8 +10,17 @@
 -- flipping the setting is a configuration change rather than a migration.
 --
 -- file_group rather than "group", which is reserved. size_bytes is stored rather than
--- derived so that bin/victual-files-import can decide what it has already imported
--- without pulling every file's content back out of the database.
+-- derived so that bin/victual-files-import has a cheap first answer about what it has
+-- already imported, without pulling every file's content back out of the database.
+--
+-- There is deliberately no digest column beside it. That command establishes equality with
+-- a SHA-256, because a source file can change while keeping its length - but it takes that
+-- digest from encode(sha256(content), 'hex') over this column rather than from a column of
+-- its own. A stored digest is written by the same statement as the bytes, so it agrees
+-- with them by construction: it can say a row is self consistent and never that the row
+-- holds the file. Hashing content is the only comparison that reads what is actually
+-- stored, it keeps every write path free of a field to maintain, and sha256(bytea) has
+-- been built in since PostgreSQL 11.
 --
 -- is_derivative marks the cached downscaled copies, which are ordinary rows under today's
 -- exact "<name>__downscaledto<h>x<w>.<ext>" naming. They are all regenerable, so the flag

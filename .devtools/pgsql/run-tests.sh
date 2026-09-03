@@ -3,9 +3,9 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|files]
 #
-# Five kinds of check, for five reasons. Views are compared by what they return, because
+# Six kinds of check, for six reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -32,6 +32,13 @@
 # itself, with an identical response shape either way. The filter phase asks both engines
 # the same question through the dialects and compares the rows.
 #
+# The sixth is not a comparison at all, and is here because there is nowhere better. The
+# files table exists on PostgreSQL only — the configuration that reads it cannot exist on
+# SQLite — so the one command that writes to it, bin/victual-files-import, has no engine
+# to be compared against and had no coverage anywhere. What it needs asserting is that it
+# can tell an imported file from a stale one, since an operator deletes the source volume
+# on its say-so. Like the rollback phase it asks one engine a question.
+#
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
 # difftest.php, trigdifftest.php and migratedifftest.php, which share their normalisation
@@ -47,6 +54,7 @@
 #   SUITE_PGSQL_MIGRATE_DB               database for the migration test (default victual_migrate)
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
 #   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
+#   SUITE_PGSQL_FILES_DB                 database for the file import tests (default victual_files)
 #   SUITE_SCRATCH                        where the throwaway databases go
 #   SUITE_COVERAGE                       set to 1 to measure line coverage of the run
 #   SUITE_COVERAGE_DIR                   where the coverage data goes (default under SUITE_SCRATCH)
@@ -75,6 +83,7 @@ TRIGGER_DB="${SUITE_PGSQL_TRIGGER_DB:-victual_trig}"
 MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
+FILES_DB="${SUITE_PGSQL_FILES_DB:-victual_files}"
 
 WHICH="${1:-all}"
 
@@ -391,6 +400,45 @@ run_trigger_tests() {
 	fi
 }
 
+# --- File import tests ------------------------------------------------------------
+#
+# PostgreSQL only, because the files table is: ConfigurationValidator refuses
+# FILE_STORAGE = "database" on any other driver, so there is no SQLite side to compare
+# with and nothing for the other phases to have caught. The phase needs a data directory
+# of its own rather than a bare database, because the command under test reads
+# <data path>/storage and the FILE_STORAGE setting lives in the same config.php — which
+# is also why this is the one config.php in this file that sets more than the connection.
+
+run_files_import_tests() {
+	build_pgsql "$FILES_DB"
+
+	local datapath="$SUITE_SCRATCH/files-import"
+	rm -rf "$datapath"
+	mkdir -p "$datapath"
+
+	cat > "$datapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+		Setting('FILE_STORAGE', 'database');
+	PHPCONFIG
+
+	say ""
+
+	# Both variables are exported into the child rather than set here, because the test
+	# starts bin/victual-files-import as a further process and that one reads the same
+	# config.php: an unexported value would reach the test and not the command it drives.
+	if ! VICTUAL_DATAPATH="$datapath" DIFFTEST_DB_NAME="$FILES_DB" php "$SUITE_DIR/files-import-tests.php"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$datapath"
+}
+
 # Before anything is built: a migration numbering mistake means the two engines are not
 # running the same set of changes, which would make every comparison below meaningless
 # rather than merely wrong.
@@ -407,8 +455,9 @@ case "$WHICH" in
 	triggers) run_trigger_tests ;;
 	rollback) run_rollback_tests ;;
 	filter) run_filter_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter or all)" ;;
+	files) run_files_import_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_files_import_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, files or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then

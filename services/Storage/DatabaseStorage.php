@@ -25,6 +25,16 @@ class DatabaseStorage extends FileStorage
 	 */
 	const TEMP_STREAM_MEMORY_LIMIT = 2097152;
 
+	/**
+	 * The digest GetContentDigest() computes, spelled as PHP's hash() names it.
+	 *
+	 * Named once so that the two halves of a comparison cannot drift apart: the caller
+	 * hashes a file with this, the server hashes the column with the SQL function of the
+	 * same name, and changing one without the other is a compile-time-visible edit rather
+	 * than a silent mismatch.
+	 */
+	const CONTENT_DIGEST_ALGORITHM = 'sha256';
+
 	/** @var \PDO The raw connection, shared with the rest of the application */
 	private $Pdo;
 
@@ -156,9 +166,9 @@ class DatabaseStorage extends FileStorage
 	 * The stored size of a file in bytes, or null when there is no such row.
 	 *
 	 * Not part of the FileStorage contract - nothing in the request path asks how big a
-	 * stored file is. bin/victual-files-import does, because "already imported" is the
-	 * question that makes it re-runnable, and size_bytes is stored precisely so that
-	 * answering it does not mean pulling every file's content back out of the database.
+	 * stored file is. bin/victual-files-import does, as the cheap half of deciding whether
+	 * a file is already imported: unequal lengths settle it without hashing anything, and
+	 * equal ones settle nothing, which is what GetContentDigest() is for.
 	 */
 	public function GetSizeBytes(string $group, string $name): ?int
 	{
@@ -168,6 +178,36 @@ class DatabaseStorage extends FileStorage
 		$size = $statement->fetchColumn();
 
 		return $size === false ? null : (int)$size;
+	}
+
+	/**
+	 * The digest of a stored file's bytes as lowercase hex, or null when there is no row.
+	 *
+	 * Not part of the FileStorage contract either, and for the same reason: nothing in the
+	 * request path asks. bin/victual-files-import asks, because length is not identity - a
+	 * source file can change while keeping its length, and a row killed halfway can hold
+	 * the wrong bytes under the right size_bytes - and a command whose whole purpose is to
+	 * let an operator delete the old volume has to be able to prove the bytes arrived.
+	 *
+	 * Computed by the server over the column, deliberately, rather than kept in a column
+	 * of its own. A stored digest is written by the same statement as the bytes, so it
+	 * agrees with them by construction: it can prove a row is self consistent and never
+	 * that the row holds the file. Hashing content proves what is actually in it. It also
+	 * costs the schema nothing and every write path nothing, and because the hashing
+	 * happens in the server, verification moves no bytes over the wire and buffers none in
+	 * PHP - the same streaming discipline Read() and BufferSource() keep.
+	 *
+	 * sha256(bytea) is a built-in function from PostgreSQL 11 on and needs no extension;
+	 * this table is PostgreSQL-only by construction, so there is no portability cost.
+	 */
+	public function GetContentDigest(string $group, string $name): ?string
+	{
+		$statement = $this->Pdo->prepare("SELECT encode(sha256(content), 'hex') FROM files WHERE file_group = ? AND name = ?");
+		$statement->execute([$group, $name]);
+
+		$digest = $statement->fetchColumn();
+
+		return $digest === false ? null : (string)$digest;
 	}
 
 	/**

@@ -471,9 +471,14 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   variants — on both backends, since a blob column with no size limit is the same DoS with
   a different disk. Together 10 and 01 end the PVC: with `FILE_STORAGE=database` nothing
   under the data directory is written at runtime, and `bin/victual-files-import` is the
-  one-off Job that runs against the old volume before the volume-less spec is applied.
-  `files` is the first engine-exclusive *table*; the suite's migration phase carries it as
-  a named exemption and `db/pgsql/README.md` records it.
+  one-off Job that runs against the old volume before the volume-less spec is applied. That
+  command decides "already imported" by SHA-256 rather than by file size — review found the
+  size check would report stale content as imported, which is the worst possible answer
+  from the command an operator deletes a volume on — and carries a `--verify` mode that is
+  the go-ahead for deleting it. `files` is the first engine-exclusive *table*; the suite's
+  migration phase carries it as a named exemption, `db/pgsql/README.md` records it, and the
+  suite gained a sixth phase (`run-tests.sh files`) for the importer, since a
+  PostgreSQL-only table has no second engine to be compared against.
 - **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
   3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
   is going to be long, pull the ~20 toast sites forward on their own, since they need no

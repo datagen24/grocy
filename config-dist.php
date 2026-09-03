@@ -57,7 +57,10 @@ Setting('VIEWCACHE_PATH', VICTUAL_DATAPATH . '/viewcache');
 // it together rather than in two backup streams that can disagree. It requires
 // DB_DRIVER = "pgsql" and is refused in demo/prerelease mode; both are checked at
 // startup. Files already on disk are NOT read after the switch - run
-// "php bin/victual-files-import" once to move them in
+// "php bin/victual-files-import" once to move them in, and
+// "php bin/victual-files-import --verify" before you remove the old storage directory:
+// that compares every file on disk against the bytes stored for it and exits non-zero if
+// any of them is missing or different
 Setting('FILE_STORAGE', 'filesystem');
 
 // The largest file that may be uploaded, in megabytes, for both storage backends.

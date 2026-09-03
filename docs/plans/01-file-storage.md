@@ -183,7 +183,9 @@ Landed 2026-09-02 in seven commits, in the order this plan argues for: the abstr
 and the filesystem backend as a pure refactor, the setting and its validation, the
 migration and the database backend, the S10 bounds, the importer, the suite exemption,
 and this record. Measured against the working copy at `68d1162` (this plan's branch, off
-`4d9e03b`), on PHP 8.4.19 and PostgreSQL 16.
+`4d9e03b`), on PHP 8.4.19 and PostgreSQL 16. Review then added an eighth, on the
+importer's idempotency key — its own bullet below, with its own measurement, because it
+changes what a passing run of that command means.
 
 **The migration is `0258.pgsql.sql`, not `0257`.** 0257 was consumed by another track
 while this was in flight. Nothing else about the schema moved.
@@ -268,14 +270,72 @@ while this was in flight. Nothing else about the schema moved.
 - **`49eba3f` — `bin/victual-files-import`,** Q1 answered (a). Walks
   `<data path>/storage/<group>/<name>` into the table, refuses to run unless
   `FILE_STORAGE` is `database` and `DB_DRIVER` is `pgsql`, reports every file, exits 0/1.
-  Idempotent by size, as the response asks, and one step further: a row present at a
-  *different* size is re-imported, because a half written row from a killed Job is the one
-  case where "already there" is not "already done". No `--delete-after`.
+  Idempotent, so a killed Job simply runs again. No `--delete-after`.
 
-  `DatabaseStorage` gained `GetSizeBytes()` for it. **That is one method more than this
-  plan's interface lists, and deliberately not on `FileStorage`:** nothing in the request
-  path asks how big a stored file is, so it is a backend method the importer uses, not a
-  widening of the seam. It is what the `size_bytes` column is for.
+  `DatabaseStorage` gained `GetSizeBytes()` and `GetContentDigest()` for it. **That is two
+  methods more than this plan's interface lists, and deliberately not on `FileStorage`:**
+  nothing in the request path asks how big a stored file is or what it hashes to, so they
+  are backend methods the importer uses, not a widening of the seam.
+- **The idempotency key is a content digest, not a size — a review finding, and Q1's
+  response is superseded on this point.** As first written the command did what Q1's
+  response asks in as many words: "skip rows that already exist with identical size". That
+  is not an identity. A source file can change while keeping its length, and a row a
+  killed Job wrote halfway can hold the wrong bytes under a right `size_bytes` — the very
+  case the original text claimed to handle. In both, a length comparison reports "already
+  imported" over stale content, and what happens next is that an operator deletes the old
+  volume on the strength of that report.
+
+  Equality is now a SHA-256. Size survives as the cheap precheck it is good for: unequal
+  lengths settle the question without hashing anything, equal ones settle nothing. The
+  source side is `hash_file()`, which reads in blocks rather than into a string, so a large
+  equipment manual is no more buffered here than it is on the way in.
+
+  **The digest is recomputed from the stored bytes, not persisted beside them, and that is
+  the deliberate half of this.** A column would be written by the same statement as the
+  content, so it would agree with the content by construction: it can prove a row is self
+  consistent and never that the row holds the file — which is exactly the claim this
+  command has to make. `encode(sha256(content), 'hex')` reads what is actually stored.
+  `sha256(bytea)` has been built in since PostgreSQL 11 and this table is PostgreSQL-only
+  by construction, so there is no extension and no portability cost; hashing in the server
+  means neither verification nor the re-check below moves the bytes back over the wire; and
+  no write path acquires a field it must maintain forever for one one-off command's sake.
+  Migration **0258 stays as it is** — the reasoning is recorded in it, as a comment saying
+  why the column is absent.
+
+  Three things follow. The skip path distinguishes **`verified … (already imported,
+  content verified)`** from **`replaced … (differs, re-imported)`**, so the log says which
+  claim was made about each file. Every file the command writes is **read back and hashed
+  before it is counted**, so one run stands behind its own result rather than needing a
+  second to confirm it. And **`--verify`** runs the same comparison writing nothing, exiting
+  1 with `DIFFERS` or `MISSING` per file — the check to run against the old volume before
+  removing it, since the operator's evidence there is an exit code. An unrecognised argument
+  is now refused rather than ignored, because a mistyped `--verify` that silently imported
+  would be a surprise in precisely that situation.
+- **A suite phase, `run-tests.sh files`.** The gap the section below recorded — that no
+  test in the repository covered any of this — is now closed for the importer, which is the
+  piece the finding was about. `.devtools/pgsql/files-import-tests.php` seeds a storage tree,
+  drives the shipped command as a subprocess so its exit codes are what is asserted, and
+  checks the two cases a length comparison gets wrong: a source file rewritten at the same
+  length, and a row whose `content` is replaced while `size_bytes` is left right. It also
+  asserts the stored digests against the files directly rather than against the command's
+  own summary line. PostgreSQL-only and not a comparison, like the rollback phase and for
+  the same reason — the configuration that reads `files` cannot exist on SQLite, so there
+  is no second engine to hold it to.
+
+  **Measured 2026-09-03**, against this working copy on top of `8ed440f5`, in the
+  repository's own `dev` image (PHP 8.5) against `postgres:16`, reproduced with
+  `podman build --target dev -t victual:dev .` and
+  `podman run --rm --network <net> -e PGHOST=… victual:dev .devtools/pgsql/run-tests.sh`:
+  **SUITE PASSED**, all six phases, 27 of 27 cases in the new one. The phase was then
+  checked for being load-bearing rather than decorative, the same way the
+  `ENGINE_EXCLUSIVE_TABLES` exemption was: putting the size comparison back —
+  `if ($sizeInDatabase === $sizeOnDisk)` in place of the digest comparison, and nothing
+  else — fails **11** of the 27, among them *the corrupted row now holds the file* and
+  *every stored digest matches its file*. What that variant prints while failing is the
+  whole finding in one line: it reports `verified … (already imported, content verified)`
+  and `Every file above was read back from the database and matched its bytes on disk`
+  over content that is not the file. `php -l` on PHP 8.4 is clean on the command — which
+  CI's sweep does not reach, having no `.php` extension — and on all 204 `.php` files.
 - **`68d1162` — the suite exemption.** `files` is the first engine-exclusive *table*
   (`0256.sqlite.sql` was a view change), so `migratedifftest.php` — the phase that
   compares table sets — failed on it. It is now excluded by a named
@@ -341,15 +401,22 @@ form that reproduces it.
    count and every `size_bytes` match the files on disk, every stored content `md5` matches
    its file, the downscales carry `is_derivative = 1`, and a deliberately corrupted row is
    *replaced* rather than skipped. Both refusals (filesystem backend, sqlite driver) exit 1.
+
+   **This was measured against the size-based version, and the corrupted row it re-imported
+   was corrupted by changing its length.** Had it been corrupted at the same length, the
+   run would have skipped it and this check would have passed anyway — which is the finding
+   above, visible in the shape of the check that missed it. The replacement for it is the
+   suite phase, and *that* has not been run: see below.
 5. **The configuration rejections.** `FILE_STORAGE=database` with `DB_DRIVER=sqlite`, and
    with `MODE=demo`, are both refused at startup by `bin/victual-migrate` (exit 1) and by
    the web application (which serves the message instead of a page), as is a
    `FILE_STORAGE` that is neither name and a `FILE_STORAGE_MAX_SIZE_MB` of 0.
-6. **The differential suite.** `.devtools/pgsql/run-tests.sh`, all five phases against
-   this working copy: **SUITE PASSED**, including `MIGRATION NUMBERING OK` and
-   `MIGRATED STATE IDENTICAL`. The exemption was checked for being load-bearing rather
+6. **The differential suite.** `.devtools/pgsql/run-tests.sh`, all five phases that existed
+   then, against this working copy: **SUITE PASSED**, including `MIGRATION NUMBERING OK`
+   and `MIGRATED STATE IDENTICAL`. The exemption was checked for being load-bearing rather
    than decorative: emptying `ENGINE_EXCLUSIVE_TABLES` makes the migration phase fail with
-   `DIFF table files exists on PostgreSQL only`.
+   `DIFF table files exists on PostgreSQL only`. The sixth phase, `files`, was added later
+   and is not covered by this run.
 7. **`bin/victual-db-import` into a target carrying the `files` table.** A migrated SQLite
    source into a fresh PostgreSQL database: 37 rows across 36 tables imported, `files`
    reported as *"target table … does not exist in the source and stays empty"*, and a row
@@ -370,11 +437,11 @@ form that reproduces it.
   import Job against the old one — is reasoned about rather than demonstrated. What was
   demonstrated is the property it rests on: with `FILE_STORAGE=database`, a full
   upload/serve/downscale/delete cycle writes nothing under the data directory.
-- **No test in the repository covers any of this.** Every check above is a throwaway
-  script. The files API has no home in the differential suite — it is an application
-  endpoint, not a view — and 14 piece 2's response snapshot is where these headers should
-  eventually be frozen, since the header table in check 1 is exactly the kind of thing
-  that snapshot exists to hold.
+- **No test in the repository covers the files *API*.** Every check above is a throwaway
+  script; the importer now has a suite phase, but the endpoints do not. The files API has
+  no home in the differential suite — it is an application endpoint, not a view — and 14
+  piece 2's response snapshot is where these headers should eventually be frozen, since the
+  header table in check 1 is exactly the kind of thing that snapshot exists to hold.
 - **The `upload_max_filesize` clamp was only exercised downward.** This environment's PHP
   accepts 2 MB, so the 64 MB default is never the binding constraint here and a genuine
   64 MB upload was never made.
