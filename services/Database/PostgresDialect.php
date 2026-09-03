@@ -20,14 +20,24 @@ class PostgresDialect extends DatabaseDialect
 	const CHANGED_TIME_TABLE = 'system_db_changed_time';
 
 	/**
-	 * The key WithPublicationLock() takes its advisory lock on.
+	 * The key WithMigrationLock() takes its advisory lock on.
 	 *
 	 * PostgreSQL keeps advisory locks in one database-wide namespace of arbitrary 64 bit
-	 * integers, so the value only has to be a number nothing else in this database picks -
-	 * and a number of its own rather than one shared with another lock, since two locks that
-	 * guard unrelated things should not make callers of one wait on the other. It is the
-	 * ASCII bytes of "vic" followed by "P" for publish (0x766963 50), chosen to be
-	 * recognisable in pg_locks rather than to mean anything.
+	 * integers, so the value only has to be a number nothing else in this database picks.
+	 * It is the ASCII bytes of "vict" (0x76696374) - a constant chosen to be recognisable
+	 * in pg_locks rather than to mean anything.
+	 */
+	const MIGRATION_ADVISORY_LOCK_KEY = 1986947956;
+
+	/**
+	 * The key WithPublicationLock() takes its advisory lock on.
+	 *
+	 * A number of its own rather than one shared with MIGRATION_ADVISORY_LOCK_KEY above,
+	 * since two locks that guard unrelated things should not make callers of one wait on
+	 * the other: a publish at the end of a request has no reason to queue behind a
+	 * migration run. It is the ASCII bytes of "vic" followed by "P" for publish
+	 * (0x766963 50), chosen on the same principle - recognisable in pg_locks rather than
+	 * meaningful.
 	 */
 	const PUBLICATION_ADVISORY_LOCK_KEY = 1986943824;
 
@@ -66,9 +76,31 @@ class PostgresDialect extends DatabaseDialect
 		// Everything else this dialect needs is created by the baseline schema migration.
 		// The changed time table is the exception: it has no dependencies and has to exist
 		// before the first migration runs, because migrating is itself a data change.
-		$pdo->exec('CREATE TABLE IF NOT EXISTS ' . self::CHANGED_TIME_TABLE . ' ('
-			. 'id INTEGER NOT NULL PRIMARY KEY, '
-			. 'changed_time TIMESTAMP NOT NULL DEFAULT LOCALTIMESTAMP)');
+		//
+		// This is the one piece of schema work that cannot be inside the migration lock -
+		// it happens while the connection the lock would be taken on is being opened - and
+		// PostgreSQL's CREATE TABLE IF NOT EXISTS is documented as not being free of race
+		// conditions: two connections opening against an empty database at the same moment
+		// both find the table missing and one fails on pg_type's unique index. The failure
+		// means the table now exists, which is all this wanted, so it is not an error here.
+		// Without this catch, two pods starting together fail before the lock is reached
+		// and the whole guard below is untestable.
+		try
+		{
+			$pdo->exec('CREATE TABLE IF NOT EXISTS ' . self::CHANGED_TIME_TABLE . ' ('
+				. 'id INTEGER NOT NULL PRIMARY KEY, '
+				. 'changed_time TIMESTAMP NOT NULL DEFAULT LOCALTIMESTAMP)');
+		}
+		catch (\PDOException $ex)
+		{
+			// 42P07 duplicate_table, 23505 unique_violation (the pg_type index), 23P01
+			// exclusion_violation - the three shapes the lost race takes
+			if (!in_array($ex->getCode(), ['42P07', '23505', '23P01'], true))
+			{
+				throw $ex;
+			}
+		}
+
 		$pdo->exec('INSERT INTO ' . self::CHANGED_TIME_TABLE . ' (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
 	}
 
@@ -148,6 +180,46 @@ class PostgresDialect extends DatabaseDialect
 	}
 
 	/**
+	 * Serialises migration runs on a session level advisory lock.
+	 *
+	 * Advisory locks are the right tool because nothing here is a row or a table: what is
+	 * being serialised is "a migration run against this database", which has no object to
+	 * hang a lock on. It is taken on the raw connection because a session level lock lives
+	 * on the connection that took it - which is also what makes a crash safe, since a
+	 * dying process closes its connection and PostgreSQL releases the lock without anyone
+	 * having to clean up.
+	 *
+	 * pg_advisory_lock() blocks until it can be taken, and is reentrant within one
+	 * session, so a nested call cannot deadlock against itself.
+	 *
+	 * **This lock requires a direct connection, or a pool in session mode.** A session
+	 * level advisory lock lives on a backend, and a transaction-mode pooler (pgbouncer's
+	 * default, and the obvious thing to reach for once many short-lived pods each open
+	 * connections) is free to hand the unlock to a different backend than the lock - which
+	 * leaks the lock permanently and wedges every later migration run. ADR-0009's finding
+	 * F1 records this; the transaction-scoped pg_advisory_xact_lock() is the safe form
+	 * where the whole run fits in one transaction, and this one deliberately does not,
+	 * because it wraps a run that opens and commits transactions of its own. So the
+	 * requirement is on the deployment: bin/victual-migrate connects to PostgreSQL
+	 * directly, or through a session-mode pool entry.
+	 */
+	public function WithMigrationLock(callable $work)
+	{
+		$pdo = \Victual\Services\DatabaseService::GetInstance()->GetDbConnectionRaw();
+
+		$pdo->prepare('SELECT pg_advisory_lock(?)')->execute([self::MIGRATION_ADVISORY_LOCK_KEY]);
+
+		try
+		{
+			return $work();
+		}
+		finally
+		{
+			$pdo->prepare('SELECT pg_advisory_unlock(?)')->execute([self::MIGRATION_ADVISORY_LOCK_KEY]);
+		}
+	}
+
+	/**
 	 * A session level advisory lock on PUBLICATION_ADVISORY_LOCK_KEY, held across the whole
 	 * assemble-publish-record cycle so two requests cannot interleave a read of the state
 	 * with a write of it.
@@ -158,16 +230,14 @@ class PostgresDialect extends DatabaseDialect
 	 * pg_advisory_lock() blocks until it can be taken and is reentrant within one session,
 	 * so nesting cannot deadlock against itself.
 	 *
-	 * **This lock requires a direct connection, or a pool in session mode.** The
-	 * consequence falls on the deployment and the failure is quiet, so it is worth stating
-	 * wherever a session level advisory lock is taken. A transaction-mode pooler
-	 * (pgbouncer's default) may hand the unlock to a different backend than the lock, which
-	 * leaks the lock permanently; every later publish then blocks in a shutdown handler
-	 * until the connect timeout, on every request that writes. ADR-0009's finding F1 records
-	 * the mechanism. The transaction-scoped pg_advisory_xact_lock() is the safe form where
-	 * the work fits in one transaction, and this one deliberately does not: it runs at the
-	 * end of a request with every transaction already closed, which is the whole point of
-	 * the seam it is called from.
+	 * **This lock requires a direct connection, or a pool in session mode**, for exactly
+	 * the reason WithMigrationLock() above gives, with a different consequence: a leaked
+	 * publication lock makes every later publish block in a shutdown handler until the
+	 * connect timeout, on every request that writes. ADR-0009's finding F1 records the
+	 * mechanism. The transaction-scoped pg_advisory_xact_lock() is the safe form where the
+	 * work fits in one transaction, and this one deliberately does not: it runs at the end
+	 * of a request with every transaction already closed, which is the whole point of the
+	 * seam it is called from.
 	 */
 	public function WithPublicationLock(callable $work)
 	{
@@ -183,6 +253,19 @@ class PostgresDialect extends DatabaseDialect
 		{
 			$pdo->prepare('SELECT pg_advisory_unlock(?)')->execute([self::PUBLICATION_ADVISORY_LOCK_KEY]);
 		}
+	}
+
+	/**
+	 * Whether the error is PostgreSQL's undefined_table.
+	 *
+	 * 42P01 and nothing else. PostgreSQL gives every error condition its own SQLSTATE, so
+	 * unlike SQLite there is no need to read the message: connection failures (08xxx),
+	 * insufficient_privilege (42501) and query_canceled (57014) all say so in the code,
+	 * and none of them means "nothing has been migrated yet".
+	 */
+	public function IsMissingTableError(\PDOException $ex): bool
+	{
+		return self::SqlStateOf($ex) === '42P01';
 	}
 
 	/**

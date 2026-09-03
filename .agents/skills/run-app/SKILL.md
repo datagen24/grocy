@@ -58,20 +58,20 @@ local `config.php` and database that an unconditional copy would destroy:
 ```bash
 export VDATA=$(mktemp -d)
 cp config-dist.php "$VDATA/config.php"
+VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php bin/victual-migrate
 VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
 sleep 2 && curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8085/
 ```
 
+Migrate first: a request no longer migrates the database unless
+`MIGRATE_ON_ROOT_REQUEST` is on, and an application whose schema is behind
+its code answers **503** with a message saying exactly this (plan 10). The
+alternative is `VICTUAL_MIGRATE_ON_ROOT_REQUEST=true` in the environment of
+both commands, which restores the old "just hit the page" behaviour.
+
 Demo mode seeds a SQLite database (`$VDATA/victual_en.db`) with sample data and
-auto-logs-in as "Demo User" — no credentials needed. First `GET /` runs
-migrations and demo generation, then 302s to the entry page.
-
-**If a page later 500s with `no such table: migrations`** (a race on the
-very first boot), run migrations directly and retry:
-
-```bash
-VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php bin/victual-migrate
-```
+auto-logs-in as "Demo User" — no credentials needed. The first `GET /` generates
+the demo data, then 302s to the entry page.
 
 Smoke check — expect 200 with a large HTML body:
 

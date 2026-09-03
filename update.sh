@@ -32,6 +32,14 @@ echo Unzipping latest release
 unzip -o ./grocy-latest.zip > /dev/null
 rm -f ./grocy-latest.zip > /dev/null
 
+echo Warming the view cache
+# The compiled templates and the route cache are derived from the source tree that was
+# just replaced, and nothing empties or rebuilds them on the next request any more - the
+# version hash redirect that used to do it is gone (docs/plans/10-cold-start-statelessness.md).
+# Failing here is not fatal to the update itself, so it is reported rather than fatal:
+# the previous cache is still valid for everything that did not change.
+php ./bin/victual-warm-cache || echo "WARNING: warming the view cache failed - run php bin/victual-warm-cache by hand"
+
 popd > /dev/null
 
 echo Finished updating Grocy

@@ -55,9 +55,9 @@ them are routing sentences in *this file* that were never true.
 
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
-| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | draft (its `bin/victual-migrate` landed early, in wave 0); **shortened by ADR-0008's acceptance — re-read before track A starts** |
+| 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | **landed** (`cced9e8`, `6b46fdf`, `258aadf`, `841c4f6`, `5ec3e72`, `5a3ab76`, 2026-09-02) — shortened in flight by ADR-0008's acceptance: Q7's `dialect` column dropped unbuilt, one lock implementation, Q3 moot; sweep **S25** closed with it |
 | 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
-| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | draft — **carries a High finding** since 2026-08-30 |
+| 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | **landed** in three PRs, 2026-09-02 (`98a4c93`…`3cbf5c0`, `c7555fc`…`112a090`, `b88b5c9`…`cd487e1`): the `request()` core, `Victual.EntityList`/`EntityForm`, all 157 silent `console.error` handlers gone (six documented survivors), **S29 closed** and proved with a stored payload, `purchase.js` no longer a library by `@push`, `datetimepicker2` deleted. No longer gates 05, 06 or 08. **S29 needed a second pass, 2026-09-03**: review found one missed sink (`recipeform.js`'s ingredient note), two more of the same class in error-message sinks, and a payload probe that could not fail — all fixed, and the probe now runs on every pull request as the `frontend-security` job |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
 | 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
@@ -232,7 +232,10 @@ rename and the registry claims happen at announcement time, not in a commit.
   the confirmations structurally rather than 31 times over. The ordering does not change;
   the reasoning does. "12 before 05/06/08" was about duplication and is now also about
   exposure, since every list/form pair added first is another copy of the vulnerable
-  dialog.
+  dialog. **Closed on 2026-09-02 in 12's step 3a**: the confirmations structurally in
+  `public/js/victual_entity.js`, the toasts by hand, proved with the payload check in
+  `.devtools/frontend/s29-payload.js`. What deferring the rest of 12 would have cost is
+  moot; it landed in full.
 - **Three sweep items are constraints on plans, not work of their own.** S11 (the
   query-string API key path) must not be inherited by [02](02-mcp-endpoint.md)'s bearer
   seam, and S4's trusted-proxy pattern is the model for it; S14 (barcode filename and
@@ -461,14 +464,27 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
 
 ### Wave 1 — platform (four parallel tracks, disjoint files; C is done)
 
-- **Track A: 10 cold start**, then **01 file storage**. 10 first — 01's importer is
-  easier to reason about once cold start no longer rewrites requests. Together they end
-  the PVC. 10 is the first plan to publish an image from the Dockerfile, so sweep S25
-  (`.dockerignore`, non-root `USER`) is 10's — settled there, and in the sweep, after
-  spending a day assigned to 10 by this file and to 15 by the sweep and carried by
-  neither — and 01 inherits S2's per-group
-  extension allow-list and S10's upload cap when it moves storage into the database —
-  a blob column with no size limit is the same DoS with a different disk.
+- **Track A: 10 cold start — done** (2026-09-02), then **01 file storage**. 10 first —
+  01's importer is easier to reason about once cold start no longer rewrites requests.
+  Together they end the PVC. 10 landed the split view-cache path and
+  `bin/victual-warm-cache`, the PostgreSQL migration lock, the deletion of the
+  version-hash redirect, `MIGRATE_ON_ROOT_REQUEST` (default off) with an unconditional
+  503 boot check, the driver-conditional prerequisite check, and the production image that
+  closes sweep **S25** (`.dockerignore`, non-root `USER`, a baked and unwritable view
+  cache, no baked credentials) — settled there, and in the sweep, after spending a day
+  assigned to 10 by this file and to 15 by the sweep and carried by neither.
+  ADR-0008's acceptance shortened 10 in flight: one lock implementation rather than two,
+  Q3 moot, Q7's `dialect` column not built. Two things its Executed section records that
+  the plan did not predict: the container-level read-only-filesystem check could not run
+  where it was built (no Docker), so the production image and its CI job are reviewed
+  rather than proven until CI runs them; and browsing every page on PostgreSQL turned up
+  **three pre-existing PostgreSQL-only 500s** (`/shoppinglist`, `/mealplan`,
+  `/locationcontentsheet` — two `GROUP BY` strictness errors in PHP-built queries and one
+  `ifnull()` written into PHP) that belong to no plan yet and become "the application is
+  broken" once 0008's retirement lands; they need an owner, 15's table or a hotfix.
+  01 inherits S2's per-group extension allow-list and S10's upload cap when it moves
+  storage into the database — a blob column with no size limit is the same DoS with a
+  different disk.
 - **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
   3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
   is going to be long, pull the ~20 toast sites forward on their own, since they need no

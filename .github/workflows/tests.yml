@@ -4,13 +4,23 @@
 # that the application behaves identically on SQLite and PostgreSQL. A view that quietly
 # returns different rows on one engine is invisible in review and obvious here.
 #
-# Deliberately not built on the repository's Dockerfile. That image exists so a
+# The suite is deliberately not run on the repository's Dockerfile. That image exists so a
 # contributor can run the suite locally without installing PHP and PostgreSQL by hand;
 # CI already has both, and building an image on every pull request would add minutes to
 # the feedback loop for no extra coverage. Both paths run the same runner script, so
 # there is one definition of what "the suite" means.
+#
+# The images themselves are built in their own job, because the file now produces a
+# production image as well and an image nobody builds is an image that quietly stops
+# building.
 
 name: tests
+
+# The token needs to read the repository and nothing else: no job here writes to it, and
+# the coverage upload goes through the artifact API, which contents: read covers. Named
+# explicitly so the default grant never applies (CodeQL: actions/missing-workflow-permissions).
+permissions:
+  contents: read
 
 on:
   pull_request:
@@ -112,3 +122,188 @@ jobs:
           name: coverage-clover
           path: clover.xml
           if-no-files-found: warn
+
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both targets, because they diverge: the dev image is what the suite runs in and
+      # the production image is what a deployment runs. Building only one of them means
+      # discovering the other is broken at the worst moment.
+      - name: Build the development image
+        run: docker build --target dev -t victual:dev .
+
+      - name: Build the production image
+        run: docker build --target production -t victual:production .
+
+      # The three claims the production image makes, asserted rather than described.
+      # Sweep S25 is the reason the first one is a test and not a comment.
+      - name: The production image does not run as root
+        run: |
+          user=$(docker run --rm victual:production id -un)
+          echo "runs as: $user"
+          test "$user" = www-data
+
+      - name: The view cache is baked, and the serving user cannot write to it
+        run: |
+          compiled=$(docker run --rm victual:production sh -c 'ls /app/viewcache/*.php | wc -l')
+          echo "compiled files in the baked cache: $compiled"
+          test "$compiled" -ge 97
+          if docker run --rm victual:production sh -c 'touch /app/viewcache/canary' 2>/dev/null; then
+            echo "the serving user can write to the baked cache directory"
+            exit 1
+          fi
+
+      # /app/data is the repository's data directory, which .dockerignore keeps out of the
+      # build context. It is not the /data mount point the image declares - that one is
+      # empty, owned by www-data, and exists so the runtime does not have to invent it.
+      - name: The image carries no data directory and no repository history
+        run: |
+          if docker run --rm victual:production sh -c 'test -e /app/.git -o -e /app/data'; then
+            echo ".git or data/ ended up in the image"
+            exit 1
+          fi
+
+      # Verification 4 of docs/plans/10-cold-start-statelessness.md, which until now could
+      # only be run against a directory rather than a container: the plan's own record says
+      # the container-level check could not run because Docker was unavailable where it was
+      # written. This is that check, and it is also what the review finding on
+      # services/FilesService.php asked for - the thumbnail path needs a writable temporary
+      # directory, and an image that does not provision one fails on the first thumbnail
+      # rather than at boot, which is the worst possible time to find out.
+      #
+      # The tmpfs mounts are exactly the three paths the Dockerfile names as writable, and
+      # nothing else is. www-data is uid/gid 33 on Debian; a bare --tmpfs is owned by root
+      # with mode 755, which the serving user could not write, so /data and
+      # /var/run/apache2 say so explicitly. /tmp gets 1777 like any real /tmp.
+      #
+      # DISABLE_AUTH rather than MODE=demo: demo mode downloads its sample pictures from an
+      # external host while generating data, which would make this check depend on the
+      # network and on somebody else's server. Neither the file paths below nor the pages
+      # need demo data.
+      - name: The production image serves with a read-only root filesystem
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "--- container log ---"
+              docker logs victual-readonly 2>&1 || true
+            fi
+            docker rm -f victual-readonly >/dev/null 2>&1 || true
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          docker run -d --name victual-readonly \
+            --read-only \
+            --tmpfs /tmp:rw,mode=1777 \
+            --tmpfs /var/run/apache2:rw,uid=33,gid=33 \
+            --tmpfs /data:rw,uid=33,gid=33 \
+            -e VICTUAL_DISABLE_AUTH=true \
+            -p 8080:8080 \
+            victual:production
+
+          # config.php is the one thing the data directory must contain, and the mount is
+          # empty. SQLite is the engine here for the same reason DISABLE_AUTH is set: this
+          # check is about the filesystem, and a database service would be a second thing
+          # that can fail in it.
+          docker exec victual-readonly cp /app/config-dist.php /data/config.php
+
+          # Before the first request, because since plan 10 nothing migrates inside one and
+          # the application answers 503 until the schema matches.
+          docker exec victual-readonly php bin/victual-migrate
+
+          ready=
+          for _ in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8080/stockoverview; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "the container never served /stockoverview"
+            exit 1
+          fi
+          echo "served /stockoverview"
+
+          echo "--- PHP temporary directory and upload limits ---"
+          docker exec victual-readonly php -r '
+            $checks = [
+              "sys_get_temp_dir" => sys_get_temp_dir(),
+              "upload_tmp_dir" => ini_get("upload_tmp_dir"),
+              "upload_max_filesize" => ini_get("upload_max_filesize"),
+              "post_max_size" => ini_get("post_max_size"),
+            ];
+            foreach ($checks as $name => $value) { echo "  $name = $value\n"; }
+            if ($checks["sys_get_temp_dir"] !== "/tmp" || $checks["upload_tmp_dir"] !== "/tmp") { exit(1); }
+            if ($checks["upload_max_filesize"] !== "8M" || $checks["post_max_size"] !== "8M") { exit(1); }
+          '
+
+          # The mechanism DatabaseStorage relies on, exercised directly: a stream over the
+          # 2 MiB memory limit has to spill to the temporary directory and read back whole.
+          # Directly rather than through an upload because the database backend only exists
+          # on PostgreSQL (ConfigurationValidator refuses it on SQLite), while the spill is
+          # a property of the filesystem this container is running on.
+          docker exec victual-readonly php -r '
+            $stream = fopen("php://temp/maxmemory:2097152", "w+b");
+            for ($i = 0; $i < 3; $i++) { fwrite($stream, str_repeat("v", 1048576)); }
+            rewind($stream);
+            $read = 0;
+            while (!feof($stream)) { $read += strlen(fread($stream, 262144)); }
+            fclose($stream);
+            if ($read !== 3145728) { fwrite(STDERR, "php://temp spill read back $read bytes\n"); exit(1); }
+            echo "  php://temp spilled and read back 3 MiB\n";
+          '
+
+          # The tempnam path: a picture is uploaded, then asked for downscaled, which is
+          # the request that makes gumlet/php-image-resize write to the temporary directory.
+          docker run --rm victual:production php -r '
+            $image = imagecreatetruecolor(200, 200);
+            imagefilledrectangle($image, 0, 0, 199, 199, imagecolorallocate($image, 20, 140, 90));
+            imagepng($image);
+          ' > probe.png
+          test -s probe.png
+          picture=$(printf 'probe.png' | base64 -w0)
+
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT \
+            -H 'Content-Type: application/octet-stream' --data-binary @probe.png \
+            "http://127.0.0.1:8080/api/files/productpictures/$picture")
+          echo "  PUT productpictures/probe.png -> $status"
+          test "$status" = 204
+
+          status=$(curl -s -o thumb.png -D thumb.headers -w '%{http_code}' \
+            "http://127.0.0.1:8080/api/files/productpictures/$picture?force_serve_as=picture&best_fit_width=64")
+          echo "  GET downscaled -> $status"
+          test "$status" = 200
+          grep -qi '^content-type: image/png' thumb.headers
+          test -s thumb.png
+
+          # A body over 2 MiB, which php.ini-production's 2M upload_max_filesize would have
+          # clamped before the ini in this image raised it.
+          head -c 3145728 /dev/zero | tr '\0' 'x' > big.txt
+          document=$(printf 'probe-big.txt' | base64 -w0)
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT \
+            -H 'Content-Type: application/octet-stream' --data-binary @big.txt \
+            "http://127.0.0.1:8080/api/files/userfiles/$document")
+          echo "  PUT userfiles/probe-big.txt (3 MiB) -> $status"
+          test "$status" = 204
+          curl -fsS -o big-readback.txt "http://127.0.0.1:8080/api/files/userfiles/$document"
+          test "$(wc -c < big-readback.txt)" = 3145728
+
+          # Nothing may have been written outside the tmpfs mounts. docker diff reports the
+          # container layer only, and a tmpfs is not part of it - so every write above shows
+          # up here as nothing at all. The three mount points themselves are filtered: an
+          # entry for a directory something was mounted over is not a write to the image.
+          echo "--- docker diff ---"
+          docker diff victual-readonly || true
+          written=$(docker diff victual-readonly | grep -vE '^C (/data|/tmp|/var/run/apache2)$' || true)
+          if [ -n "$written" ]; then
+            echo "the read-only container wrote outside its tmpfs mounts:"
+            echo "$written"
+            exit 1
+          fi
+          echo "nothing was written outside the tmpfs mounts"

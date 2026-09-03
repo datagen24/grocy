@@ -369,7 +369,9 @@ $('#product_id_text_input').on('blur', function (e)
 							{
 								Victual.Components.ProductPicker.PopupOpen = true;
 								bootbox.dialog({
-									message: __t('"%s" could not be resolved to a product, how do you want to proceed?', input),
+								// `input` is whatever the user typed or scanned, and bootbox renders
+								// its message with .html() (sweep finding S29)
+								message: __t('"%s" could not be resolved to a product, how do you want to proceed?', Victual.FrontendHelpers.EscapeHtml(input)),
 									title: __t('Create or assign product'),
 									onEscape: function ()
 									{
@@ -416,15 +418,20 @@ $('#product_id_text_input').on('blur', function (e)
 								}, Victual.FormFocusDelay);
 							}
 						},
-						function (xhr)
+						function ()
 						{
-							console.error(xhr);
+							// Deliberately silent, twice: this pair resolves whatever was typed
+							// or scanned into the picker, on every blur of the field, and "this
+							// is not a known product or barcode" is the ordinary outcome - it
+							// already has its own UI in the branches above (the create/assign
+							// dialog and the "not in stock" message). A toast here would fire
+							// during ordinary scanning. Plan 12, Q2.
 						}
 					);
 				},
-				function (xhr)
+				function ()
 				{
-					console.error(xhr);
+					// See above - the barcode half of the same lookup pair.
 				}
 			);
 		}

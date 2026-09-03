@@ -22,10 +22,6 @@ Victual.Components.BatteryCard.Refresh = function(batteryId)
 			$('#batterycard-battery-journal-button').removeClass("disabled");
 
 			RefreshContextualTimeago(".batterycard");
-		},
-		function(xhr)
-		{
-			console.error(xhr);
 		}
 	);
 };

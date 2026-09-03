@@ -161,12 +161,40 @@ abstract class DatabaseDialect
 	abstract public function GetOptimizeStatement(): ?string;
 
 	/**
+	 * Runs $work with a cross process lock held, so that only one migration run at a
+	 * time touches this database.
+	 *
+	 * DatabaseMigrationService is check-then-apply from end to end - does this migration
+	 * number exist, is the migrations table empty, does location 1 exist - and two
+	 * processes starting together interleave those checks. The losing one rolls back on
+	 * a primary key violation rather than corrupting anything, but it exits non-zero, and
+	 * an initContainer that fails because a sibling won is an outage rather than a
+	 * no-op. The always-run 8888 fixup is worse: it is outside the per-migration
+	 * try/catch, so its race has nothing to catch it at all.
+	 *
+	 * It lives on the dialect because locking is where engines differ most, but there is
+	 * only one real implementation: PostgreSQL's advisory lock. Under
+	 * ADR-0008 PostgreSQL is the only runtime engine, and SqliteDialect's version is a
+	 * deliberate no-op - see the reasoning there. Engine-neutral composition of work
+	 * belongs on DatabaseService (see InTransaction); this is its counterpart.
+	 *
+	 * It wraps the entire MigrateDatabase() call rather than each migration, baseline
+	 * included, because the checks that race are spread across all of it.
+	 *
+	 * @param callable $work Receives no arguments; its return value is passed through
+	 * @return mixed Whatever $work returns
+	 * @throws \Throwable Whatever $work throws, after the lock is released
+	 */
+	abstract public function WithMigrationLock(callable $work);
+
+	/**
 	 * Runs $work with a cross process lock held, so that only one process at a time
 	 * assembles and publishes the retained MQTT state.
 	 *
-	 * It takes a key of its own rather than sharing one with any other lock this dialect
-	 * grows, because two locks that guard unrelated things should not make callers of one
-	 * wait on the other.
+	 * It takes a key of its own rather than sharing one with WithMigrationLock() above,
+	 * because two locks that guard unrelated things should not make callers of one wait on
+	 * the other - a publish at the end of a request has no reason to queue behind a
+	 * migration run, and vice versa.
 	 *
 	 * The race it closes is a lost update with no error anywhere. Publishing is
 	 * read-then-write across a network: request A assembles the snapshot, request B commits
@@ -182,16 +210,51 @@ abstract class DatabaseDialect
 	 * ledger update makes the loser re-read after the winner released, so it publishes
 	 * state that is at least as new.
 	 *
-	 * It lives on the dialect because locking is where engines differ most, and there is
-	 * only one real implementation: PostgreSQL's advisory lock. Under ADR-0008 PostgreSQL
-	 * is the only runtime engine, and SqliteDialect's version is a deliberate no-op - see
-	 * the reasoning there.
+	 * It lives on the dialect for the same reason WithMigrationLock() does, and has the
+	 * same single real implementation: PostgreSQL's advisory lock, with SqliteDialect's
+	 * version a deliberate no-op.
 	 *
 	 * @param callable $work Receives no arguments; its return value is passed through
 	 * @return mixed Whatever $work returns
 	 * @throws \Throwable Whatever $work throws, after the lock is released
 	 */
 	abstract public function WithPublicationLock(callable $work);
+
+	/**
+	 * Whether the given driver error means "that table does not exist", as opposed to any
+	 * other reason a query can fail.
+	 *
+	 * This exists for one caller and one question: the boot check asks an untouched
+	 * database for its applied migrations, and on a database nobody has migrated yet the
+	 * "migrations" table genuinely is not there. That single condition maps to "nothing
+	 * applied". Everything else a query can fail with - the server being unreachable, the
+	 * role not being allowed to read the table, a statement timeout, a typo in the SQL -
+	 * means the schema version is *unknown*, which is a different answer and needs a
+	 * different response. Catching them all and calling the result zero tells an operator
+	 * whose database is down to run migrations against it.
+	 *
+	 * Per engine because the engines say it differently, and one of them says it badly:
+	 * PostgreSQL has a dedicated SQLSTATE, SQLite reports nearly everything as HY000.
+	 *
+	 * Deliberately strict rather than lenient. A false negative surfaces a genuinely
+	 * missing table as an unavailable database, which is noisy but honest; a false
+	 * positive is the defect this method exists to prevent.
+	 */
+	abstract public function IsMissingTableError(\PDOException $ex): bool;
+
+	/**
+	 * The SQLSTATE the driver reported for an error, or null when it reported none.
+	 *
+	 * PDOException carries it twice - as the exception code and as the first element of
+	 * errorInfo - and the two can disagree when the exception was constructed by
+	 * something other than the driver, so errorInfo wins where it exists.
+	 */
+	final protected static function SqlStateOf(\PDOException $ex): ?string
+	{
+		$sqlState = $ex->errorInfo[0] ?? $ex->getCode();
+
+		return is_string($sqlState) && $sqlState !== '' ? $sqlState : null;
+	}
 
 	/**
 	 * Quotes a single table or column name for safe interpolation into SQL.

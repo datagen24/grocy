@@ -112,42 +112,30 @@ it. A number is retired rather than reused once a file has existed under it in `
 
 Loading cleanly proves very little. The suite is one command:
 
-    .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|mqtt]
+    .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|mqtt]
 
-Six phases; this list was stale at four for a while, which plan 14's Executed section
-noted, so it is worth reading against `run-tests.sh` itself if it looks wrong again.
+The runner's own header says what each phase asks and why; this list has been wrong twice
+by being maintained separately from it, so it is deliberately not repeated here.
+`migratedifftest.php` is the one to know about at this point: it migrates a database on each
+engine, touches neither afterwards, and compares every table - that is the equivalence claim
+above, written as a test, and it is the phase the missing seed data would have failed. The
+view and trigger phases both populate PostgreSQL by copying an already-migrated SQLite
+database, which is why neither could ever have caught it.
 
-`migratedifftest.php` migrates a database on each engine, touches neither afterwards, and
-compares every table - that is the equivalence claim above, written as a test, and it is
-the phase the missing seed data would have failed. `views` and `triggers` both populate
-PostgreSQL by copying an already-migrated SQLite database, which is why neither could ever
-have caught it. `rollback` goes through StockService, fails an operation halfway and checks
-the ledger is where it started, one engine at a time. `filter` asks each dialect for the
-SQL it emits for the API's substring operators and compares the rows, which is the hole
-hazard 16 lived in.
-
-`mqtt` is the odd one and is only partly a differential check: it runs plan 18's probes -
-the MQTT client id, the price deny-list, the publication lock, the outbox's durability,
-its event identity, its redelivery idempotency, its refusal of a malformed payload, its
-refusal to call anything but an acknowledgement from the write endpoint a delivery, the fact
-that none of its bookkeeping rewinds `db-changed-time`, the fact that a full refresh resends
-every per-product topic whatever the ledger says, and the CLI's backlog drain - plus the one
-differential question that feature does raise, which is whether the assembled payload is
-identical on both engines. They live here because every defect they guard fails silently,
-and a probe nothing runs is documentation.
-
-Eight of those probes run **twice, once per engine**, from one SQLite database imported into
-PostgreSQL through `bin/victual-db-import` so both sides start from identical data. The
+One thing about the `mqtt` phase does belong here, because it is a claim about coverage
+rather than a description of a phase: **it runs against stand-ins, not against the real
+systems.** InfluxDB is a PHP built-in server whose control file flips it between accepting,
+rejecting, redirecting and answering with a page; the broker is a PHP stream socket speaking
+the little of MQTT 3.1.1 `MqttPublisher` uses and recording what was published. That is what
+keeps the phase free of a broker, a node install and an InfluxDB, and it is also the limit
+of what a green run means: a real Mosquitto retaining the payload across a restart, Home
+Assistant creating the entity, and InfluxDB accepting the line protocol are hand
+verifications and stay so. Eight of the phase's probes run **twice, once per engine**, from
+one SQLite database imported into PostgreSQL through `bin/victual-db-import`, because the
 outbox is where this feature turns on transaction semantics - what a rolled back INSERT
-leaves behind, how a driver reports a failure mid-transaction - so asserting it only on the
-development engine would leave the deployment engine untested for the properties the
-mechanism exists to provide. The phase needs no broker and no node: InfluxDB is stood in for
-by PHP's own built-in server, which a control file flips between accepting and rejecting so
-the backlog probe can drain 450 events without restarting it, and the broker by a PHP stream
-socket that speaks the little of MQTT 3.1.1 `MqttPublisher` uses and records what was
-published. Both stand-ins are stand-ins: they make the fork's own logic testable and they
-prove nothing about a real Mosquitto, a real Home Assistant or a real InfluxDB accepting what
-is sent, which stays a hand verification.
+leaves behind, how a driver reports a failure mid-transaction - and asserting that only on
+the development engine would leave the deployment engine untested for the properties the
+mechanism exists to provide.
 
 `.devtools/pgsql/difftest.php` puts both engines into an identical table state and
 compares what their views actually return:

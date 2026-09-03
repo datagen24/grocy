@@ -117,15 +117,37 @@ class SqliteDialect extends DatabaseDialect
 	}
 
 	/**
-	 * Runs the publication without taking a lock of its own. Not an oversight.
+	 * Runs the migration without taking a lock of its own.
+	 *
+	 * Not an oversight. Concurrent migration runs are a deployment problem - several pods
+	 * starting at once - and under ADR-0008 SQLite is not a runtime engine: it is what
+	 * bin/victual-db-import reads and what the differential suite and a local dev boot
+	 * migrate one process at a time. Nothing races here.
+	 *
+	 * What protects the case anyway is SQLite's own file locking: a second writer gets
+	 * SQLITE_BUSY and the run fails, which is loud rather than silent and cannot corrupt
+	 * the database. That is a worse experience than waiting and a perfectly acceptable one
+	 * for a path with no concurrent callers.
+	 *
+	 * This makes plan 10's question 3 - where a SQLite lock file should live - moot. It
+	 * was a real question while SQLite was a deployment target.
+	 */
+	public function WithMigrationLock(callable $work)
+	{
+		return $work();
+	}
+
+	/**
+	 * Runs the publication without taking a lock of its own. Not an oversight either, and
+	 * for a different reason than WithMigrationLock() above.
 	 *
 	 * Under ADR-0008 SQLite is not a runtime engine - it is what bin/victual-db-import
 	 * reads, what the differential suite builds, and what a local dev boot uses, and every
 	 * one of those is one process at a time. The built-in server that serves a dev boot is
 	 * single-process, so there is no second request to interleave with.
 	 *
-	 * There is no file locking to fall back on here either, because the race is not
-	 * between two database writers: it is between a read here and a network
+	 * Unlike a migration run there is no file locking to fall back on here, because the
+	 * race is not between two database writers: it is between a read here and a network
 	 * write to a broker, which SQLite knows nothing about. That is an argument for not
 	 * pretending this engine is safe for concurrent publication rather than for inventing a
 	 * lock file - and it costs nothing, because the deployment that publishes runs on
@@ -134,6 +156,31 @@ class SqliteDialect extends DatabaseDialect
 	public function WithPublicationLock(callable $work)
 	{
 		return $work();
+	}
+
+	/**
+	 * Whether the error is "no such table", which on SQLite can only be told from the
+	 * message.
+	 *
+	 * PDO_SQLite maps almost every failure onto SQLSTATE HY000 with driver code 1: a
+	 * missing table, a missing column and a syntax error are indistinguishable by code.
+	 * Measured rather than assumed - "no such table: migrations", "no such column: nope"
+	 * and 'near "SELEC": syntax error' all arrive as
+	 * ["HY000", 1, ...] on PHP 8.4's pdo_sqlite. So the message is the only thing that
+	 * separates them, and matching on it is the honest implementation rather than a
+	 * shortcut. The SQLSTATE is still checked first, so an error from some other layer
+	 * that happens to contain the phrase cannot pass.
+	 */
+	public function IsMissingTableError(\PDOException $ex): bool
+	{
+		if (self::SqlStateOf($ex) !== 'HY000')
+		{
+			return false;
+		}
+
+		$message = $ex->errorInfo[2] ?? $ex->getMessage();
+
+		return is_string($message) && stripos($message, 'no such table') !== false;
 	}
 
 	/**

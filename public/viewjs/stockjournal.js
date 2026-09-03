@@ -2,15 +2,12 @@
 // with product/type/location/user/date-range filters, and lets the user undo a booking
 // or print a product's Grocycode label. Product and date-range filters reload the page
 // (via URI params, since they affect the server-side query); the rest filter client-side.
-var stockJournalTable = $('#stock-journal-table').DataTable({
-	'order': [[3, 'desc']],
-	'columnDefs': [
-		{ 'orderable': false, 'targets': 0 },
-		{ 'searchable': false, "targets": 0 }
-	].concat($.fn.dataTable.defaults.columnDefs)
+//
+// A partial clone rather than a pure one (plan 12, Q5): it takes the shared table piece
+// and keeps its five filters and the undo action, none of which any other list has.
+var stockJournalTable = Victual.EntityList.Table('#stock-journal-table', {
+	order: [[3, 'desc']]
 });
-$('#stock-journal-table tbody').removeClass("d-none");
-stockJournalTable.columns.adjust().draw();
 
 // Product filter is server-side (the journal is queried per-product), so it updates the
 // "product" URI param and reloads
@@ -143,12 +140,11 @@ $(document).on('click', '.undo-stock-booking-button', function(e)
 			correspondingBookingsRoot.find(".undo-stock-booking-button").addClass("disabled");
 			RefreshContextualTimeago("#stock-booking-" + bookingId + "-row");
 			toastr.success(__t("Booking successfully undone"));
-		},
-		function(xhr)
-		{
-			console.error(xhr);
-			toastr.error(__t(JSON.parse(xhr.response).error_message));
 		}
+		// No error callback: this hand-rolled toastr.error was one of two in the tree that
+		// re-implemented what Victual.Api.DefaultErrorHandler now does by default - and
+		// did it worse, since it JSON.parses a response that a dropped connection never
+		// produces, and renders a server-supplied message straight into an HTML sink.
 	);
 });
 

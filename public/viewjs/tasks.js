@@ -1,16 +1,16 @@
 ﻿// Powers the tasks list view (tasks.blade.php): table listing with status/category/user
 // filters, marking tasks done/undone, deletion, the done-tasks toggle, and the due-today/
 // due-soon/overdue summary widgets.
-var tasksTable = $('#tasks-table').DataTable({
-	'order': [[2, 'asc']],
-	'columnDefs': [
-		{ 'orderable': false, 'targets': 0 },
-		{ 'searchable': false, "targets": 0 },
-		{ "type": "html", "targets": 2 }
-	].concat($.fn.dataTable.defaults.columnDefs)
+//
+// A partial clone rather than a pure one (plan 12, Q5): it takes the shared table and
+// delete-confirmation pieces and keeps its four filters and its own delete behaviour,
+// which fades the row out in place rather than reloading the list.
+var tasksTable = Victual.EntityList.Table('#tasks-table', {
+	order: [[2, 'asc']],
+	columnDefs: [
+		{ 'type': 'html', 'targets': 2 }
+	]
 });
-$('#tasks-table tbody').removeClass("d-none");
-tasksTable.columns.adjust().draw();
 
 // Free-text search box, debounced via Delay()
 $("#search").on("keyup", Delay(function ()
@@ -40,9 +40,9 @@ $("#status-filter").on("change", function ()
 	tasksTable.column(tasksTable.colReorder.transpose(5)).search(value).draw();
 });
 
-// Assigned-user filter, matched against the user column (index 4).
-// Note: the anchored-regex expression in the else-branch below is never assigned/used,
-// so it has no effect - the filter always ends up doing a plain (non-regex) substring search.
+// Assigned-user filter, matched against the user column (index 4). The selected name is
+// anchored (and regex-escaped) so a user whose name is a substring of another user's name
+// does not match both.
 $("#user-filter").on("change", function ()
 {
 	var value = $(this).val();
@@ -52,7 +52,7 @@ $("#user-filter").on("change", function ()
 	}
 	else
 	{
-		"^" + $.fn.dataTable.util.escapeRegex(value) + "$"
+		value = "^" + $.fn.dataTable.util.escapeRegex(value) + "$";
 	}
 
 	tasksTable.column(tasksTable.colReorder.transpose(4)).search(value, true, false).draw();
@@ -121,14 +121,17 @@ $(document).on('click', '.do-task-button', function (e)
 			}
 
 			Victual.FrontendHelpers.EndUiBusy();
-			toastr.success(__t('Marked task %s as completed on %s', taskName, doneTime));
+			// taskName goes into a toastr message, which is rendered as HTML - escape it
+			// here, at the point of use, rather than trusting the data- attribute it came
+			// from (sweep finding S29)
+			toastr.success(__t('Marked task %s as completed on %s', Victual.FrontendHelpers.EscapeHtml(taskName), doneTime));
 			RefreshContextualTimeago("#task-" + taskId + "-row");
 			RefreshStatistics();
 		},
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
@@ -152,52 +155,26 @@ $(document).on('click', '.undo-task-button', function (e)
 		function (xhr)
 		{
 			Victual.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
+			Victual.Api.DefaultErrorHandler(xhr);
 		}
 	);
 });
 
-// Deletes a task (DELETE objects/tasks/{id}) after confirmation, fading the row out
-$(document).on('click', '.delete-task-button', function (e)
-{
-	e.preventDefault();
-
-	var objectName = $(e.currentTarget).attr('data-task-name');
-	var objectId = $(e.currentTarget).attr('data-task-id');
-
-	bootbox.confirm({
-		message: __t('Are you sure you want to delete task "%s"?', objectName),
-		closeButton: false,
-		buttons: {
-			confirm: {
-				label: __t('Yes'),
-				className: 'btn-success'
-			},
-			cancel: {
-				label: __t('No'),
-				className: 'btn-danger'
-			}
-		},
-		callback: function (result)
+// Deletes a task (DELETE objects/tasks/{id}) after confirmation, fading the row out.
+// The shared confirmation escapes the task name into its message.
+Victual.EntityList.ConfirmDelete({
+	button: '.delete-task-button',
+	idAttr: 'data-task-id',
+	nameAttr: 'data-task-name',
+	endpoint: 'objects/tasks',
+	message: 'Are you sure you want to delete task "%s"?',
+	after: function (objectId)
+	{
+		animateCSS("#task-" + objectId + "-row", "fadeOut", function ()
 		{
-			if (result === true)
-			{
-				Victual.Api.Delete('objects/tasks/' + objectId, {},
-					function (result)
-					{
-						animateCSS("#task-" + objectId + "-row", "fadeOut", function ()
-						{
-							$("#task-" + objectId + "-row").remove();
-						});
-					},
-					function (xhr)
-					{
-						console.error(xhr);
-					}
-				);
-			}
-		}
-	});
+			$("#task-" + objectId + "-row").remove();
+		});
+	}
 });
 
 // Toggling "show done tasks" reloads the page with/without the include_done query param
@@ -263,9 +240,11 @@ function RefreshStatistics()
 			$("#info-due-soon-tasks").html('<span class="d-block d-md-none">' + dueSoonCount + ' <i class="fa-solid fa-clock"></i></span><span class="d-none d-md-block">' + __n(dueSoonCount, '%s task is due to be done', '%s tasks are due to be done') + ' ' + __n(nextXDays, 'within the next day', 'within the next %s days'));
 			$("#info-overdue-tasks").html('<span class="d-block d-md-none">' + overdueCount + ' <i class="fa-solid fa-times-circle"></i></span><span class="d-none d-md-block">' + __n(overdueCount, '%s task is overdue to be done', '%s tasks are overdue to be done'));
 		},
-		function (xhr)
+		function ()
 		{
-			console.error(xhr);
+			// Deliberately silent: a background statistics refresh, not a user initiated
+			// action - it runs on load and after every completed task, and a toast for it
+			// would report a failure the user did not ask for. Plan 12, Q2.
 		}
 	);
 }

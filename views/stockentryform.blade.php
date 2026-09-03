@@ -36,7 +36,8 @@
 			'additionalCssClasses' => 'locale-number-input locale-number-quantity-amount'
 			))
 
-			@include('components.datetimepicker2', array(
+			@include('components.datetimepicker', array(
+			'instance' => 'secondary',
 			'id' => 'purchase_date',
 			'initialValue' => $stockEntry->purchased_date,
 			'label' => 'Purchased date',
