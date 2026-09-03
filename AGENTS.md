@@ -56,3 +56,10 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
   `.devtools/pgsql/` (see its README), CI runs both engines against `postgres:16`.
 - Business logic lives in `services/`; routes in `routes.php`; permissions are the 30
   constants in `controllers/Users/User.php` resolved through `user_permissions_resolved`.
+- Container images: the root `Dockerfile` is the *development and CI* image and stays
+  that way. Production images are built by Nix from `flake.nix` and `nix/` — see
+  [nix/README.md](nix/README.md) — and the manifests live in
+  [deploy/](deploy/README.md). The decision is
+  [ADR-0013](docs/adr/0013-nix-built-container-images.md) (Proposed) and the work is
+  [plan 20](docs/plans/20-container-infrastructure.md); **none of it has been built
+  yet**, so treat a first build as part of the work.

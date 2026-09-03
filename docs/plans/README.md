@@ -69,6 +69,7 @@ them are routing sentences in *this file* that were never true.
 |---|---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
+| 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision; 10 for its stated goal | medium, front-loaded | draft — **scaffolding landed, never built**; piece 1 is the first build |
 
 ## Decisions
 
@@ -96,6 +97,19 @@ one is now decided:
   into views, so the always-awake component can answer without waking the pod. Still
   **proposed**; its dependency on 0008 is now satisfied. Claims on
   [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and [19](19-rbac.md).
+
+One more was written on 2026-09-03, ahead of there being any deployment for it to
+constrain:
+
+- **[ADR-0013](../adr/0013-nix-built-container-images.md)** — production container images
+  are built by Nix from a flake in this repository, one image per workload, on no base
+  image. Still **proposed**, and its acceptance prerequisites are unusually literal: it
+  was written from the interfaces nixpkgs exposes, read rather than run, and nothing it
+  describes has been built. [Plan 20](20-container-infrastructure.md) carries the
+  scaffolding and the first build. It supplies the *how* for
+  [ADR-0010](../adr/0010-workload-standard.md)'s fourth property and makes its third
+  structural, but it does not assume 0010 — the build-system argument stands on its own,
+  and 0010's open question 1 about where the deploy tree lives is still 0010's to answer.
 
 Two findings recorded in 0009 apply to [10](10-cold-start-statelessness.md) and
 [18](18-mqtt-state-publication.md) **whether or not 0009 is accepted**: 10's

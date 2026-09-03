@@ -1,0 +1,178 @@
+# Victual, as one pod: migrate, then php-fpm and nginx side by side.
+#
+# This is a Kubernetes Pod manifest and it is deliberately not a compose file. The
+# deployment target is k3s, the two serving containers talk over loopback, and a pod is
+# the only local shape that reproduces that — `podman kube play` gives the containers a
+# shared network namespace exactly as Kubernetes does, so 127.0.0.1:9000 means the same
+# thing on a laptop as it does in the cluster. A compose file would need
+# `network_mode: service:` to fake it and would then be a second thing to keep true.
+#
+#   podman kube play deploy/podman/victual.yaml
+#   podman kube down deploy/podman/victual.yaml
+#
+# PostgreSQL is not in here. Per ADR-0010's boundary — the fork declares what its
+# workloads need, the operator decides where they run — the database is the operator's,
+# and deploy/README.md says how to stand a throwaway one up for the bootstrap.
+#
+# Status: this manifest has been written but not yet run. See
+# docs/plans/20-container-infrastructure.md, "Verification".
+apiVersion: v1
+kind: Pod
+metadata:
+  name: victual
+  labels:
+    app.kubernetes.io/name: victual
+spec:
+  restartPolicy: Always
+
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    # Without this the emptyDir volumes below are root:root 0755 and uid 65532 cannot
+    # write to them. It is the single most common reason a correctly built non-root
+    # image fails to start.
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+
+  volumes:
+    # The scratch directory the entrypoint prepares: config.php and the Blade view
+    # cache. Ephemeral on purpose — nothing in it survives a restart and nothing needs
+    # to. Plan 10 removes the need for it entirely.
+    - name: data
+      emptyDir:
+        medium: Memory
+        sizeLimit: 64Mi
+    # /tmp is per-container: PHP's temporary files and nginx's buffer paths have no
+    # business sharing a directory.
+    - name: tmp-app
+      emptyDir:
+        medium: Memory
+        sizeLimit: 64Mi
+    - name: tmp-web
+      emptyDir:
+        medium: Memory
+        sizeLimit: 64Mi
+
+  initContainers:
+    # Migrations are something you do, not something that happens to whoever sends the
+    # first request after a deployment — bin/victual-migrate's own header, and plan 10's
+    # reason for existing. It exits 0 when the database is already current.
+    - name: migrate
+      image: localhost/victual-migrate:4.6.0
+      imagePullPolicy: Never
+      envFrom:
+        - configMapRef:
+            name: victual-config
+        - secretRef:
+            name: victual-secrets
+      volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp-app
+          mountPath: /tmp
+      securityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
+
+  containers:
+    - name: app
+      image: localhost/victual-app:4.6.0
+      imagePullPolicy: Never
+      ports:
+        - name: fastcgi
+          containerPort: 9000
+      envFrom:
+        - configMapRef:
+            name: victual-config
+        - secretRef:
+            name: victual-secrets
+      volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp-app
+          mountPath: /tmp
+      securityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      # php-fpm speaks FastCGI, not HTTP, so the probe is a connect rather than a GET.
+      # A real readiness probe — one that proves the database answers — belongs on the
+      # web container, where an HTTP request can reach the application.
+      startupProbe:
+        tcpSocket:
+          port: 9000
+        periodSeconds: 2
+        failureThreshold: 30
+      livenessProbe:
+        tcpSocket:
+          port: 9000
+        periodSeconds: 10
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
+      # The image sets StopSignal=SIGQUIT (php-fpm's graceful stop). Kubernetes ignores
+      # the image's StopSignal, so it is said again here. Older clusters without the
+      # lifecycle.stopSignal field get SIGTERM, which php-fpm treats as "stop now" —
+      # acceptable for a stateless request handler, but not the same thing.
+      lifecycle:
+        stopSignal: SIGQUIT
+
+    - name: web
+      image: localhost/victual-web:4.6.0
+      imagePullPolicy: Never
+      ports:
+        - name: http
+          containerPort: 8080
+          hostPort: 8080
+      volumeMounts:
+        - name: tmp-web
+          mountPath: /tmp
+      securityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      # robots.txt is a static file the web tier serves without involving PHP, so this
+      # proves nginx is up and its document root is mounted — and nothing more.
+      startupProbe:
+        httpGet:
+          path: /robots.txt
+          port: 8080
+        periodSeconds: 2
+        failureThreshold: 30
+      livenessProbe:
+        httpGet:
+          path: /robots.txt
+          port: 8080
+        periodSeconds: 10
+      # Readiness goes through the whole stack: nginx, FastCGI, PHP, the database.
+      # /api/system/info requires an API key, so this uses the login page instead —
+      # which is a real render through Blade rather than a static file.
+      readinessProbe:
+        httpGet:
+          path: /login
+          port: 8080
+        periodSeconds: 5
+        failureThreshold: 6
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+      lifecycle:
+        stopSignal: SIGQUIT
