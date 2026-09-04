@@ -135,7 +135,7 @@ class DemoDataGeneratorService extends BaseService
 				INSERT INTO products (name, location_id, qu_id_purchase, qu_id_stock, product_group_id) VALUES ('{$this->__t_sql('Ice Cream')}', 6, 14, 14, 1); --27
 				INSERT INTO products (name, location_id, qu_id_purchase, qu_id_stock, product_group_id) VALUES ('{$this->__t_sql('Soda')}', 2, 10, 10, 7); --28
 				INSERT INTO products (name, location_id, qu_id_purchase, qu_id_stock, product_group_id) VALUES ('{$this->__t_sql('Beer')}', 2, 10, 10, 7); --29
-				UPDATE products SET calories = 123 WHERE IFNULL(calories, 0) = 0;
+				UPDATE products SET calories = 123 WHERE COALESCE(calories, 0) = 0;
 			");
 
 			$db->ExecuteDbStatement("

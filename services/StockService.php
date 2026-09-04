@@ -497,7 +497,7 @@ class StockService extends BaseService
 
 		if ($doneOnly)
 		{
-			$this->DB->shopping_list()->where('shopping_list_id = :1 AND IFNULL(done, 0) = 1', $listId)->delete();
+			$this->DB->shopping_list()->where('shopping_list_id = :1 AND COALESCE(done, 0) = 1', $listId)->delete();
 		}
 		else
 		{
@@ -979,7 +979,7 @@ class StockService extends BaseService
 			$leftJoin = 'LEFT';
 		}
 
-		$sql = 'SELECT IFNULL(sclc.location_id, p.location_id) AS location_id, p.id AS product_id, IFNULL(sclc.amount, 0) AS amount, IFNULL(sclc.amount_opened, 0) AS amount_opened FROM products p ' . $leftJoin . ' JOIN stock_current_location_content sclc ON sclc.product_id = p.id WHERE p.active = 1 ORDER BY p.name';
+		$sql = 'SELECT COALESCE(sclc.location_id, p.location_id) AS location_id, p.id AS product_id, COALESCE(sclc.amount, 0) AS amount, COALESCE(sclc.amount_opened, 0) AS amount_opened FROM products p ' . $leftJoin . ' JOIN stock_current_location_content sclc ON sclc.product_id = p.id WHERE p.active = 1 ORDER BY p.name';
 		return DatabaseService::GetInstance()->ExecuteDbQuery($sql)->fetchAll(\PDO::FETCH_OBJ);
 	}
 

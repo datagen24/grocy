@@ -54,6 +54,12 @@ jobs:
             exit 1
           fi
 
+      # SQL assembled inside PHP is invisible to the view/trigger differential suite.
+      # Keep SQLite-only functions out of request-time queries so PostgreSQL does not
+      # discover them as a user-facing 400 or 500.
+      - name: Check runtime SQL portability
+        run: php .devtools/pgsql/check-runtime-sql.php
+
       # Every CI job the documentation names has to exist. The `frontend-security` job
       # below was described in four documents for a day before it was written, and while
       # it did not exist nobody looked for the gate it claimed to be. See
