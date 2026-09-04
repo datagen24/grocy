@@ -47,7 +47,7 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
 
 ## Conventions
 
-- Branches: `claude/<topic>-<suffix>` for agent work, `scp/<topic>` for the maintainer.
+- Branches: `{claude,codex,gemini}/<model>_<topic>-<suffix>` for agent work, `scp/<topic>` for the maintainer.
   PRs are small and single-purpose; lifecycle PRs (ADR acceptance) never mix with
   substantive change.
 - Commit messages: imperative mood, optionally prefixed (`docs:`, `chore:`, `fix:`) as
