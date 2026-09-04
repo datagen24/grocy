@@ -124,7 +124,7 @@
 @endforeach
 
 {{-- Default empty calendar/section when no single meal plan entry is in the given date range --}}
-@if($usedMealplanSections->count() === 0)
+@if($usedMealplanSectionsCount === 0)
 <div class="row">
 	<div class="col">
 		<div class="calendar"

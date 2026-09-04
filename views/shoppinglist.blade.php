@@ -104,12 +104,12 @@
 				</a>
 				<div class="btn-group">
 					<a id="clear-shopping-list"
-						class="btn btn-outline-danger btn-sm mb-1 responsive-button @if($listItems->count() == 0) disabled @endif"
+						class="btn btn-outline-danger btn-sm mb-1 responsive-button @if($listItemsCount == 0) disabled @endif"
 						href="#">
 						{{ $__t('Clear list') }}
 					</a>
 					<a id="clear-done-items"
-						class="btn btn-outline-danger btn-sm mb-1 responsive-button @if($listItems->count() == 0) disabled @endif"
+						class="btn btn-outline-danger btn-sm mb-1 responsive-button @if($listItemsCount == 0) disabled @endif"
 						href="#">
 						{{ $__t('Clear done items') }}
 					</a>
