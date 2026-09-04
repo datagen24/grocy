@@ -12,8 +12,10 @@ parity suite and contract tests are its only guard). Builds on
 **Governed by:** [ADR-0014](../adr/0014-medication-records-never-advises.md) (scope boundary)
 and [ADR-0015](../adr/0015-schedule-expansion-in-the-application.md) (where expansion lives),
 both **Proposed** and written alongside this plan.
-**Consumes:** [ADR-0011](../adr/0011-label-namespace.md) for labels — this plan proposes no
-code format of its own — and answers its Q3 for the medication case.
+**Consumes:** [ADR-0011](../adr/0011-label-namespace.md), **accepted 2026-09-04**, for labels
+— this plan proposes no code format of its own — and answers its still-open Q3 for the
+medication case. Constrained by [ADR-0012](../adr/0012-observations-are-proposals.md), also
+accepted 2026-09-04, wherever an inference about stock would otherwise be written as fact.
 **Affects:** [02](02-mcp-endpoint.md) — the interface spec is still a draft and should decide
 medication exposure now rather than retrofit it.
 **Status:** draft for review.
@@ -113,13 +115,18 @@ source, note. Excursions arrive from outside — the fridge sensor lives in Home
 here — through an inbound API route. Not MQTT: [18](18-mqtt-state-publication.md) is
 publish-only and adding a subscriber is a larger change than this needs.
 
-**How this sits with [ADR-0012](../adr/0012-observations-are-proposals.md).** A thermometer is
-not guessing, so an excursion is not a probabilistic observation and does not become a
-proposal; it also never touches the stock ledger, which is what 0012 and the constitution's
-"the stock ledger is exact history" actually protect. What *would* fall under 0012 is the
-inference built on top of it — "these entries are spoiled" is a confidence-bearing claim about
-stock, and if quarantining ever becomes automatic it must arrive as a proposal a human
-confirms, not as a booking. Q8 keeps v1 on the safe side of that line by flagging only.
+**How this sits with [ADR-0012](../adr/0012-observations-are-proposals.md)**, accepted
+2026-09-04. A thermometer is not guessing, so an excursion is not a probabilistic observation
+and does not become a proposal; it also never touches the stock ledger, which is what 0012 and
+the constitution's "the stock ledger is exact history" actually protect. What *would* fall
+under 0012 is the inference built on top of it — "these entries are spoiled" is a
+confidence-bearing claim about stock, and 0012 now binds: it must arrive as a proposal a human
+confirms, never as a booking.
+
+That is a reason to keep v1 flagging only (Q8) beyond the alarm-fatigue argument. 0012's
+acceptance decided the contract and not the schedule — no `proposals` table exists, no
+endpoint exists, and no plan owns the work — so a v1 that wanted automatic quarantine would
+have to build 0012's machinery first, for one caller, ahead of any plan that owns it.
 
 The application records the excursion, surfaces it against the entries that were resident, and
 stops. Whether a vial is still good is a judgement a person makes —
@@ -199,16 +206,23 @@ Adjacent to [03](03-category-min-stock.md) but not built on it.
 ### Piece 7 — Labels and scanning
 
 **This plan proposes no code format.**
-[ADR-0011](../adr/0011-label-namespace.md) already decides it: opaque `vctl:<uid>` payloads, a
-`labels` table the database owns, QR for new labels, grocycode retained as a read-only input
-symbology, printing through an outbox rather than the fire-and-forget webhook. The
-constitution states the same thing as a standing invariant — physical artifacts are contracts.
-That is the QR migration this household already wants, and a `stock_entry_codes` table
-invented here would be a second, worse version of it.
+[ADR-0011](../adr/0011-label-namespace.md), accepted 2026-09-04, already decides it: opaque
+`vctl:<uid>` payloads, a `labels` table the database owns, grocycode retained as a read-only
+input symbology, printing through an outbox rather than the fire-and-forget webhook. Its Q2
+leans to QR for new labels but is not decided, so the symbology is 0011's to settle and not
+this plan's. The constitution states the same thing as a standing invariant — physical
+artifacts are contracts. A `stock_entry_codes` table invented here would be a second, worse
+version of an accepted record.
 
 What this plan contributes is a consumer and one answer: medication needs stock-entry-granular
-labels (piece 1), which is 0011 Q3 resolved for this case. If 0011 is not accepted, this piece
-waits rather than routing around it.
+labels (piece 1), which is 0011's still-open Q3 resolved for this case — that question
+explicitly defers to the plans that consume labels, and this is one.
+
+**The binding half of 0011 is live; the built half is not.** Its acceptance "decides the
+namespace, not the schedule": there is no `labels` table, no print outbox, and the fork still
+emits Grocycodes through the webhook, with none of that work in the roadmap's wave order. So
+what binds this plan today is the prohibition — no new label payload carries a row id, no new
+Grocycode type — while the machinery piece 7 wants has no owner. Q6 is what to do about that.
 
 Intake stays manual: read the carton, type the expiry and the lot, print a label, and scan
 that label thereafter. GS1 DataMatrix parsing at intake — AI (01) GTIN, (17) expiry, (10) lot —
@@ -255,11 +269,14 @@ Collected because most of them are only visible from inside the existing code.
   [14](14-contract-and-regression-scaffolding.md) piece 2.
 - **Demo data must be transparently fictional.** Plausible-looking prescriptions attached to a
   demo household are a bad thing to have screenshotted.
-- **Migration numbering.** Two pairs, claiming **0262** (medication master data and subjects)
-  and **0263** (regimens, administrations, excursions), with rows added to
+- **Migration numbering.** Two pairs, claiming **0263** (medication master data and subjects)
+  and **0264** (regimens, administrations, excursions), with rows added to
   [RESERVATIONS.md](../../migrations/RESERVATIONS.md) before any file is written, per
-  [ADR-0004](../adr/0004-engine-specific-migrations.md). 0261 belongs to
-  [23](23-storage-classes.md), which lands first.
+  [ADR-0004](../adr/0004-engine-specific-migrations.md). 0262 belongs to
+  [23](23-storage-classes.md), which lands first. These numbers moved once already — the
+  drafts claimed 0261 and 0262 until `master` landed 0261 on 2026-09-04, which is the
+  collision RESERVATIONS.md exists to prevent and a reason to claim before writing rather
+  than before merging.
 
 ## Open questions
 
@@ -269,7 +286,7 @@ Collected because most of them are only visible from inside the existing code.
    > every `/objects/locations` client can see for the sake of a wine cooler and a
    > cheese cave as much as a medication fridge, and a schema change justified only
    > inside a medication plan is one nobody reading `locations` would think to open.
-   > 23 takes migration 0261 and lands first.
+   > 23 takes migration 0262 and lands first.
 
 2. **Where do lot numbers live?** A column on `stock` and `stock_log`, or a side table keyed on
    `stock_id`.
@@ -298,11 +315,17 @@ Collected because most of them are only visible from inside the existing code.
    `MedicationService` and the medication views only, no general mechanism — and state in 19
    that it is a client of whatever 19 builds.*
 
-6. **What happens to this plan if [ADR-0011](../adr/0011-label-namespace.md) is not accepted?**
-   Piece 7 assumes it. *Lean: piece 7 waits rather than inventing a parallel code table, and
-   the rest of the plan is unaffected — pieces 1–6 need no labels at all. Worth stating
-   explicitly because "medication needs QR codes" is exactly the argument that would otherwise
-   be used to route around an unaccepted record.*
+6. **[ADR-0011](../adr/0011-label-namespace.md) is accepted but unbuilt — does piece 7 build
+   it?** The question this asked before 2026-09-04 was what to do if 0011 were rejected; it
+   was accepted that day, and the real question turns out to be the opposite one. Nobody owns
+   the `labels` table or the print outbox, and piece 7 needs both. Three options: this plan
+   builds 0011's machinery as a prerequisite, which makes a medication plan the owner of a
+   general label system; piece 7 waits for a plan that does own it; or medication ships
+   without labels and gains them later. *Lean: the third — pieces 1–6 need no labels at all,
+   so piece 7 is genuinely detachable, and a medication plan quietly becoming the label
+   subsystem's owner is the same mistake Q1 caught with storage classes.* Worth deciding
+   out loud, because "medication needs QR codes" is exactly the argument that would otherwise
+   drag an unscheduled subsystem into this plan's scope.
 
 7. **What is the storage class of a location used at two set points over the year?** The wine
    cooler again. One class per location and a second location for the second use, or a class

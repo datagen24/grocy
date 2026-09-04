@@ -68,8 +68,9 @@ Two things this deliberately does **not** say:
   refill-due lists are projections over stored rows and belong in views like anything else.
   Only the expansion itself is carved out.
 - It does not say the always-awake component may never answer. **Derived read state may be
-  published to a plain table** by a scheduled workload under
-  [ADR-0010](0010-workload-standard.md) — "these are the occurrences for the next N days",
+  published to a plain table** by a scheduled workload of the shape the constitution's
+  workload standard describes — and which [ADR-0010](0010-workload-standard.md), still
+  Proposed, would formalise — "these are the occurrences for the next N days",
   recomputed on a cadence. That keeps 0009's pod-sleep property available without putting the
   recurrence algebra in SQL, and it is the compromise this record offers rather than a
   concession extracted later. Open question 1 is whether plan 22 v1 builds it.

@@ -78,7 +78,7 @@ plan, and the one most likely to surprise someone who has been ticking that box 
 
 ### Migration
 
-One pair, claiming **0261** in [RESERVATIONS.md](../../migrations/RESERVATIONS.md) before any
+One pair, claiming **0262** in [RESERVATIONS.md](../../migrations/RESERVATIONS.md) before any
 file is written, per [ADR-0004](../adr/0004-engine-specific-migrations.md). It is a table, a
 column and a seed — no views, no triggers unless Q2 says otherwise — so the dual-engine tax
 here is the small kind.
