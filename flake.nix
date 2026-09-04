@@ -63,8 +63,8 @@
             app
             frontend
             webroot
-            configSeed
             healthcheckBin
+            webcheckBin
             ;
         }
         // lib.optionalAttrs (builtins.elem system linuxSystems) {

@@ -134,15 +134,14 @@ nix/
   app.nix              the application + Composer dependencies
   frontend.nix         yarn → public/packages
   webroot.nix          the static tree the web tier serves
-  healthcheck.nix      /opt/victual/healthcheck, what the pod's exec probe runs
-  config-seed.nix      /etc/victual/config.php, what the entrypoint copies in
+  healthcheck.nix      /opt/victual/healthcheck, the app tier's exec probe
+  webcheck.nix         /opt/victual/webcheck, the web tier's — statically linked
   checks.nix           what `nix flake check` proves
   runtime/
     php-ini.nix        production php.ini, applied to every SAPI
     fpm-conf.nix       the php-fpm pool
     nginx-conf.nix     the static tier's configuration
-    entrypoint.php     scratch-directory setup, then exec — deleted by plan 10
-    config.php         the near-empty config.php the image seeds
+    webcheck.c         the web tier's probe; see it for why podman forces an exec probe
   images/
     lib.nix            uid, labels, the shared half of the OCI config
     app.nix / web.nix / migrate.nix

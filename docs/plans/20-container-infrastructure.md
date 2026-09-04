@@ -160,16 +160,18 @@ keeping `images/lib.nix` small enough to copy.
 
 ## What this cannot fix
 
-- **File attachments still need a real volume.** `FilesService` writes under
-  `VICTUAL_DATAPATH`, which in this pod is memory that vanishes on restart.
-  [01](01-file-storage.md) moves file storage into the database; until then a deployment
-  using attachments mounts something durable at `/data` and accepts that it is a
-  deliberate exception.
-- **One writable mount remains, and it is not the view cache.**
-  `PrerequisiteChecker::checkForConfigFile()` still refuses to start unless `config.php`
-  exists inside `VICTUAL_DATAPATH`, so the entrypoint seeds it. That check predates
-  environment configuration and now has nothing left to check; removing it is what deletes
-  the entrypoint and the `/data` mount together, and it is not this plan's to do.
+- ~~**File attachments still need a real volume.**~~ **Resolved.** [01](01-file-storage.md)
+  landed, and the pod sets `VICTUAL_FILE_STORAGE=database` rather than treating it as an
+  option — with nothing writable mounted, `filesystem` has nowhere to write.
+- ~~**One writable mount remains, and it is not the view cache.**~~ **Resolved, 2026-09-04,
+  and it *was* this plan's to do after all.** This bullet was right about the cause —
+  `PrerequisiteChecker::checkForConfigFile()`, a check predating environment configuration
+  with nothing left to check — and wrong about the ownership, on the reasoning that a
+  container plan does not change the application. Issue #49 is what corrected that: the
+  seed needed a writable `/data`, `podman kube play` does not honour `fsGroup`, so the
+  mount arrived root-owned and the pod would not start at all. Deferring the removal meant
+  deferring the pod. Removing the check deleted the entrypoint, the seed layer, the mount
+  and the `pcntl` extension together, exactly as predicted.
 - **CI and production still build different images.** The differential suite runs in the
   Debian `dev` image. Piece 2 narrows the gap; only pieces 3 and the tag build close it.
 
@@ -268,7 +270,7 @@ cache.nixos.org, since the derivation is no longer the one Hydra built. That is 
 a laptop, a cached layer thereafter, and the honest price of an image whose closure matches
 what the record claims about it.
 
-**What this piece did *not* establish, and why ADR-0013 stays Proposed.** The images build;
+**What this piece did *not* establish, and why ADR-0013 stayed Proposed.** The images build;
 the pod does not run. `deploy/podman/victual.yaml` fails under `podman kube play` because
 `fsGroup` is not honoured for `emptyDir` volumes, so uid 65532 cannot write `/data` and the
 migrate initContainer exits 1 — which is the failure
@@ -276,3 +278,63 @@ migrate initContainer exits 1 — which is the failure
 reaches it. Two documentation defects in the same bootstrap were found on the way. All of
 it is [issue #49](https://github.com/datagen24/victual/issues/49). The verification section
 above is still the list; this closes the build half of it.
+
+## Executed — the pod runs, 2026-09-04
+
+[Issue #49](https://github.com/datagen24/victual/issues/49) is closed and the verification
+section above is answered. **Everything below was found by running the thing**, which is
+the point the Verification section makes in its first line and which earned it twice more
+here.
+
+**Two ways this manifest meant something different under podman than under Kubernetes.**
+They are the same defect wearing different clothes, and neither is visible in the YAML.
+
+1. **`fsGroup` is not honoured for `emptyDir`** — the reported half of #49. The fix is not
+   a workaround for podman but the removal the roadmap had already identified and
+   misfiled: `config.php` is now optional (`app.php` loads it if it is there), so
+   `PrerequisiteChecker::checkForConfigFile()`, `nix/runtime/entrypoint.php`,
+   `nix/config-seed.nix`, the `/data` emptyDir and the `pcntl` extension the entrypoint
+   needed are all gone. `nix/checks.nix` gained an assertion that `app.php` keeps its
+   `file_exists` guard, because an unguarded `require_once` returning would show up as a
+   pod that will not start rather than as anything naming that file.
+2. **`httpGet` probes are run *inside* the container** — found only because the first
+   fix let the pod get far enough to fail differently. `podman kube play` rewrites the
+   field into `CMD-SHELL curl -f <url> || exit 1`; the web image has no shell and no curl,
+   so its startupProbe failed thirty times and podman killed a container that had been
+   serving every request correctly for eighty seconds. The manifest now uses an `exec`
+   probe naming `/opt/victual/webcheck`, a statically linked C probe
+   ([`nix/webcheck.nix`](../../nix/webcheck.nix)) — static because the web tier's whole
+   argument is that it holds no interpreter, and `image-has-no-shell` now covers that
+   image so an accidental dynamic build fails the check rather than the argument. Cost:
+   1 MB on the web image, 205 → 206 MB.
+
+**A third defect, and the worst of the three, which neither #49 nor any check could have
+found.** `/about` answered 500: `ApplicationService::GetSystemInfo()` opened
+`new PDO('sqlite::memory:')` unconditionally to report a SQLite version, and since plan 10
+the serving images carry no `pdo_sqlite`. `ExceptionController` calls the same method to
+build the 500 page, so **every error page on these images was a fatal error instead of an
+error page**. It is fixed by asking `PDO::getAvailableDrivers()` first and reporting `""`
+where the driver is absent — the key stays, per
+[ADR-0005](../adr/0005-wire-contract-is-the-invariant.md), and under
+[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) the field is vestigial anyway.
+This is what verification check 4 is *for*: it is not reachable by building, by
+`nix flake check`, or by loading a page that works.
+
+### What the verification section now says
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Three images build, twice, on two architectures | aarch64-linux locally; x86_64-linux in the `nix` workflow, same `nix/hashes.nix` |
+| 2 | `nix flake check` passes | 34 assertions, including `image-has-no-shell` now covering the web tier |
+| 3 | The pod serves | `/login` renders; `GET /api/stock` returns JSON; 27 top-level pages all 200 |
+| 4 | Read-only root filesystem holds under real use | Writes to `/opt`, `/etc` and `/data` all refuse; `/tmp` accepts. Create, edit and delete through `/api/objects/locations`. No `EROFS` anywhere |
+| 5 | The baked view cache is the one being used | 99 compiled files, every mtime still the image's `1970-01-01T00:00:01Z`, directory not writable |
+| 6 | The extension list is right, and minimal | No `pcntl`, no `pdo_sqlite`, no `session`; `pdo_pgsql` present |
+| 7 | The web tier really has no PHP | `/index.php`, `/app.php`, `/config-dist.php`, `/css/../index.php` and its encoded form all 404 |
+| 8 | The credential split is real | **Not done.** Needs a role with no DDL rights; the bootstrap uses one superuser |
+| 9 | Signals | `podman kube down` returns in 0.3s with no truncated request. The SIGTERM half is not done |
+
+Checks 8 and 9's second half remain, and they belong to piece 3 rather than here: 8 needs a
+second database role the bootstrap does not create, and 9's point is measuring what a
+cluster too old for `lifecycle.stopSignal` costs. Neither is an
+[ADR-0013](../adr/0013-nix-built-container-images.md) acceptance gate.

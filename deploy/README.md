@@ -34,8 +34,9 @@ podman run -d --name victual-db \
   -e POSTGRES_USER=victual -e POSTGRES_PASSWORD=victual -e POSTGRES_DB=victual \
   -p 5432:5432 postgres:16
 
-# 3. The configuration the pod expects.
-podman kube play --configmap /dev/stdin deploy/podman/victual.yaml <<'YAML'
+# 3. The pod, with the ConfigMap and Secret it references appended to the same stream.
+{ cat deploy/podman/victual.yaml; cat <<'YAML'
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -47,27 +48,52 @@ data:
   VICTUAL_DB_PORT: "5432"
   VICTUAL_DB_NAME: victual
   VICTUAL_DB_USER: victual
+  VICTUAL_FILE_STORAGE: database
   VICTUAL_BASE_URL: http://localhost:8080
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: victual-secrets
+data:
+  # base64, because that is what a Kubernetes Secret's `data` holds. "victual".
+  VICTUAL_DB_PASSWORD: dmljdHVhbA==
 YAML
+} | podman kube play -
 
 # 4. http://localhost:8080/
 ```
 
-The secret (`victual-secrets`) carries `VICTUAL_DB_PASSWORD` and nothing else in this
-shape. Create it however your cluster creates secrets; for the podman bootstrap,
-`podman kube play --secret` or a second ConfigMap will do — it is a laptop, and the
-password is `victual`.
+**Both the ConfigMap and the Secret must be in the stream, and the Secret must be a
+Kubernetes `Secret`.** This is worth stating plainly because two plausible-looking
+alternatives both fail:
+
+- `podman kube play --secret …` takes a *podman* secret (`podman secret create`), which
+  is not the same object. Passing one fails with
+  `secret victual-secrets is not valid JSON/YAML: cannot unmarshal string into Go value of type v1.Secret`.
+- `--configmap /dev/stdin` can only supply the ConfigMap, so the manifest is still
+  rejected with `no secret with name or id "victual-secrets"`.
+
+Concatenating the documents, as above, is the form that works. `VICTUAL_FILE_STORAGE`
+belongs in the ConfigMap rather than being optional: this pod mounts nothing writable, so
+the default `filesystem` backend would fail on the first upload.
 
 ## What a running instance needs
 
 **Configuration is environment variables.** `config-dist.php`'s `Setting()` resolves in
 this order: a file in `$VICTUAL_DATAPATH/settingoverrides`, then a `VICTUAL_`-prefixed
-environment variable, then the shipped default. So a container needs no `config.php`
-with anything in it, and the image seeds a near-empty one purely because
-`PrerequisiteChecker` refuses to start without the file existing. Both PHP images carry
-that stub at `/etc/victual/config.php` (`nix/config-seed.nix`); the entrypoint copies it
-into `$VICTUAL_DATAPATH` only when nothing is already there, so a deployment that would
-rather mount a real `config.php` over that path can.
+environment variable, then the shipped default. So a container needs no `config.php` at
+all, and since 2026-09-04 it does not have one: `app.php` loads the file when it is there
+and carries on when it is not.
+
+That is a change from what this file said until then. The images used to seed a near-empty
+`config.php` into `$VICTUAL_DATAPATH` from `/etc/victual/config.php`, through an
+entrypoint, purely because `PrerequisiteChecker` refused to start without the file
+existing. The seed, the entrypoint, the writable data directory they needed and the
+`pcntl` extension the entrypoint used are all gone together — see issue #49, which is what
+that arrangement cost. A deployment that would rather supply a real `config.php` still
+can: mount one at `$VICTUAL_DATAPATH/config.php`, which is an empty read-only directory in
+the image.
 
 The minimum for a PostgreSQL deployment:
 
@@ -88,9 +114,12 @@ not say what it is:
 - `runAsNonRoot: true` with `runAsUser: 65532` — the images already declare this in
   their OCI config, but a cluster policy that reads the manifest rather than the image
   wants it said here.
-- `fsGroup: 65532` — without it the `emptyDir` volumes are `root:root 0755`, uid 65532
-  cannot write to them, and the entrypoint exits with "could not create /data/viewcache".
-  This is the single most common reason a correctly built non-root image fails to start.
+- `fsGroup: 65532` — an `emptyDir` volume is otherwise `root:root 0755` and uid 65532
+  cannot write to it, which is the single most common reason a correctly built non-root
+  image fails to start. **`podman kube play` does not honour it** (issue #49), so this pod
+  is built not to need it: nothing writable is mounted except the two `/tmp` tmpfs
+  volumes. It stays in the manifest because a real cluster does honour it and the day
+  something writable comes back is not the day to rediscover this.
 - `readOnlyRootFilesystem: true` — the images are built to run this way. If it has to be
   turned off to get a green pod, something wrote where it should not have, and that is a
   finding rather than a workaround.
@@ -128,17 +157,17 @@ readiness probe, which renders `/login` through Blade.
 
 Stated plainly because the gap is the point of tracking it:
 
-- **One writable mount remains, and it is not the view cache.** Since plan 10 the cache
-  is baked into the image and mounted read-only. What keeps `/data` is
-  `PrerequisiteChecker::checkForConfigFile()`, which still refuses to start unless
-  `config.php` exists inside `VICTUAL_DATAPATH` — a check that predates environment
-  configuration and now has nothing left to check. Removing it is what deletes the
-  entrypoint and this mount together.
-- **File uploads still land on the filesystem.** `FilesService` writes to
-  `$VICTUAL_DATAPATH/storage`, which in this pod is memory that disappears on restart.
-  [Plan 01](../docs/plans/01-file-storage.md) moves it into the database. Until then a
-  deployment that uses file attachments needs a real volume mounted there, and that is a
-  deliberate, documented exception rather than an oversight.
+- ~~**One writable mount remains, and it is not the view cache.**~~ **Done, 2026-09-04.**
+  It named `PrerequisiteChecker::checkForConfigFile()` as the only thing keeping `/data`,
+  and said removing it "deletes the entrypoint and this mount together". That is what
+  happened, and issue #49 is why it happened when it did rather than eventually: podman
+  does not honour `fsGroup`, so the mount the check required could not be written to on a
+  laptop and the pod would not start. The two writable mounts left are `/tmp`, one per
+  serving container.
+- ~~**File uploads still land on the filesystem.**~~ **Done.** Plan 01 landed, and this
+  deployment sets `VICTUAL_FILE_STORAGE=database` rather than treating it as an option —
+  with nothing writable mounted, the `filesystem` backend has nowhere to write. A
+  deployment that wants files on a volume must mount one and say so.
 - **Two production images exist in the tree.** The `Dockerfile`'s `production` target and
   these. That is deliberate and temporary:
   [ADR-0013](../docs/adr/0013-nix-built-container-images.md) retires the former when it is

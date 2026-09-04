@@ -13,7 +13,19 @@ use Slim\Factory\AppFactory;
 require_once __DIR__ . '/packages/autoload.php';
 
 // Load config files
-require_once VICTUAL_DATAPATH . '/config.php';
+//
+// config.php is optional. Every setting it can carry is also reachable as a VICTUAL_*
+// environment variable or a settingoverrides file, both of which Setting() prefers over
+// the defaults anyway (helpers/extensions.php), so an installation configured entirely
+// from the environment has nothing to put in the file. Requiring it unconditionally is
+// what made a container need a writable data directory for a file with no content in it
+// — see docs/adr/0013-nix-built-container-images.md and issue #49. The CLI tools under
+// bin/ have always read it this way; this is the web application catching up.
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
+{
+	require_once VICTUAL_DATAPATH . '/config.php';
+}
+
 require_once __DIR__ . '/config-dist.php'; // For not in own config defined values we use the default ones
 
 // Error reporting definitions

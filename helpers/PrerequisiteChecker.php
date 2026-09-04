@@ -34,7 +34,7 @@ const REQUIRED_SQLITE_VERSION = '3.40.0';
 /**
  * Checks on application startup that the runtime environment meets all
  * requirements: PHP version, required PHP extensions, presence of
- * config.php / config-dist.php and the Composer autoloader.
+ * config-dist.php and the Composer autoloader.
  *
  * In two parts, because they know different things. checkRequirements() runs from
  * public/index.php before anything is loaded, so it cannot know which database engine is
@@ -52,7 +52,6 @@ class PrerequisiteChecker
 	public function checkRequirements()
 	{
 		self::checkForPhpVersion();
-		self::checkForConfigFile();
 		self::checkForConfigDistFile();
 		self::checkForComposer();
 		self::checkForPhpExtensions();
@@ -104,13 +103,22 @@ class PrerequisiteChecker
 		}
 	}
 
-	private function checkForConfigFile()
-	{
-		if (!file_exists(VICTUAL_DATAPATH . '/config.php'))
-		{
-			throw new ERequirementNotMet('config.php in data directory (' . VICTUAL_DATAPATH . ') not found. Have you copied config-dist.php to the data directory and renamed it to config.php?');
-		}
-	}
+	/*
+	 * There is deliberately no checkForConfigFile() here any more.
+	 *
+	 * It required config.php to exist in the data directory, and that requirement
+	 * predates environment configuration: Setting() has since preferred a
+	 * settingoverrides file and then a VICTUAL_* environment variable over its own
+	 * defaults, so an installation can be fully configured without the file existing at
+	 * all. app.php loads it when it is there.
+	 *
+	 * Removing the check is not tidiness. The requirement was the last thing forcing a
+	 * container to carry a writable data directory — to hold a file with nothing in it —
+	 * which cost an entrypoint, a seed layer, an emptyDir volume and the pcntl extension,
+	 * and which is what stopped the pod starting under podman in issue #49. What replaces
+	 * it is nothing: a missing config.php is now indistinguishable from an empty one,
+	 * which is what it always was.
+	 */
 
 	private function checkForPhpExtensions()
 	{

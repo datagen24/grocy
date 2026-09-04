@@ -22,7 +22,8 @@
   appRoot,
   runtimeNginxConf,
   webroot,
-  configSeed,
+  nginx,
+  webcheckBin,
   runtime,
   imageLib,
   version,
@@ -62,10 +63,23 @@ in
     '';
 
   # 2. No shell, no scripting runtime other than PHP, in what the serving images ship.
+  #    The web tier is in these root paths too, and that is new as of 2026-09-04: it
+  #    gained a probe binary (nix/webcheck.nix) because podman runs httpGet probes inside
+  #    the container, and a tier that had held only nginx and static files now holds a
+  #    program. Static linking is what keeps that free, and this is what says so — an
+  #    accidental dynamic build would pull a libc and its shell into the one image whose
+  #    argument is that it has neither.
   image-has-no-shell =
     runCommand "victual-check-no-shell"
       {
-        closure = closureInfo { rootPaths = [ php app runtime.entrypoint ]; };
+        closure = closureInfo {
+          rootPaths = [
+            php
+            app
+            nginx
+            webcheckBin
+          ];
+        };
       }
       ''
         found=""
@@ -76,12 +90,13 @@ in
         done
 
         if [ -n "$found" ]; then
-          echo "The app image's runtime closure contains:$found" >&2
+          echo "The serving images' runtime closure contains:$found" >&2
           echo >&2
-          echo "That means the image ships an interpreter the application never calls," >&2
+          echo "That means an image ships an interpreter the application never calls," >&2
           echo "which is exactly what docs/adr/0013-nix-built-container-images.md claims" >&2
           echo "it does not. Find the reference with:" >&2
           echo "  nix why-depends .#app <the offending store path>" >&2
+          echo "  nix why-depends .#webcheckBin <the offending store path>" >&2
           exit 1
         fi
 
@@ -164,21 +179,41 @@ in
     echo "$compiled" > "$out"
   '';
 
-  # 6. The entrypoint's seed path exists as an image layer. Declaring the file in the
-  #    overlay and never putting it in an image is what the first version of this tree
-  #    did, and it made the migrate initContainer exit 1 on a fresh data directory —
-  #    which, being an initContainer, kept the whole pod from starting.
-  config-seed-is-installed = runCommand "victual-check-config-seed" { } ''
-    seeded=${configSeed}/etc/victual/config.php
-    if [ ! -f "$seeded" ]; then
-      echo "no config.php at /etc/victual/config.php in the seed layer" >&2
+  # 6. The application does not require config.php to exist.
+  #
+  #    This replaces a check that asserted the opposite arrangement was wired up
+  #    correctly — that the entrypoint's seed file was really in the image, because the
+  #    first version of this tree declared it and never installed it, and the migrate
+  #    initContainer exited 1 on a fresh data directory, which kept the whole pod from
+  #    starting.
+  #
+  #    Issue #49 was the same failure from the other end: podman does not honour fsGroup
+  #    for emptyDir volumes, so the seed had nowhere writable to land and the pod did not
+  #    start on a laptop even though the seed layer was present and correct. The fix was
+  #    to stop needing the file at all, which deleted the entrypoint, the seed, the
+  #    writable mount and the pcntl extension together.
+  #
+  #    So this asserts the property that replaced them: app.php reads config.php only if
+  #    it is there. An unguarded `require_once` would reintroduce the need for a writable
+  #    data directory, and the failure would appear as a pod that will not start rather
+  #    than as anything naming this file.
+  config-php-is-optional = runCommand "victual-check-config-optional" { } ''
+    app=${appRoot}/app.php
+
+    if ! grep -q "if (file_exists(VICTUAL_DATAPATH . '/config.php'))" "$app"; then
+      echo "app.php no longer guards its config.php require with file_exists()." >&2
+      echo >&2
+      echo "The images ship no config.php and mount no writable data directory, so an" >&2
+      echo "unconditional require means every container fails to start. See issue #49" >&2
+      echo "and docs/adr/0013-nix-built-container-images.md." >&2
       exit 1
     fi
 
-    # The path is written down in two places and they have to agree.
-    if ! grep -q "'/etc/victual/config.php'" ${runtime.entrypoint}; then
-      echo "nix/runtime/entrypoint.php no longer seeds from /etc/victual/config.php" >&2
-      echo "nix/config-seed.nix installs it there; one of the two has moved" >&2
+    # Column 0 only: the guarded require above is indented inside the if, and an
+    # unanchored pattern matches it and fails a correct file. Found by this check
+    # rejecting the very change it was written for.
+    if grep -qE '^require_once VICTUAL_DATAPATH' "$app"; then
+      echo "app.php requires config.php unconditionally at the top level." >&2
       exit 1
     fi
 

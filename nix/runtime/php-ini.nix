@@ -13,8 +13,20 @@
 # is stderr, and this is that answer written down.
 #
 # What is deliberately *not* here: `disable_functions`. It belongs to the fpm pool
-# (nix/runtime/fpm-conf.nix) rather than to the interpreter, because the entrypoint runs
-# under this same ini and needs pcntl_exec to hand off to php-fpm.
+# (nix/runtime/fpm-conf.nix) rather than to the interpreter.
+#
+# The reason recorded here until 2026-09-04 was that the entrypoint ran under this same
+# ini and needed pcntl_exec. That reason is gone with the entrypoint (issue #49) — and
+# moving the ban here anyway immediately broke the build, which is how the *real* reason
+# surfaced. This ini is baked into `php.buildEnv`, so it applies to every consumer of this
+# PHP in the overlay, including the one that runs at build time: nixpkgs' composer, whose
+# XdebugHandler calls `putenv()` and which dies with "Call to undefined function
+# Composer\XdebugHandler\putenv()" before it can install a single package.
+#
+# So the ban is a property of the *serving pool*, not of the interpreter, and the migrate
+# image's CLI is not covered by it. That is a real gap and it is stated rather than
+# papered over: closing it needs a second ini applied to the migrate image alone, not a
+# line moved into this file.
 ''
   ; --- Disclosure -------------------------------------------------------------------
   expose_php = Off
