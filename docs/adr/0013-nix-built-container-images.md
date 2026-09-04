@@ -247,11 +247,19 @@ these images being a fatal error — had been shipped and unnoticed since plan 1
    The lean said "in the same commit" as the acceptance and it was one commit later, for a
    reason the lean could not have known: it was written 2026-09-03, and the parity suite
    arrived on 2026-09-04 building `--target production` because that was the only image in
-   this tree that served HTTP. Porting that suite onto the Nix images is a real piece of
-   work — two serving containers sharing a network namespace where it expects one — so it
-   is [issue #56](https://github.com/datagen24/victual/issues/56) rather than a rushed
-   half of this change. The suite fails with that issue number rather than a raw build
-   error in the meantime.
+   this tree that served HTTP. Porting that suite onto the Nix images was a real piece of
+   work — two serving containers sharing a network namespace where it expected one — so it
+   was [issue #56](https://github.com/datagen24/victual/issues/56) rather than a rushed
+   half of this change.
+
+   **#56 is done, also 2026-09-04.** `.devtools/parity/stack/stack.sh` runs
+   `victual-migrate` once PostgreSQL is up, then puts `victual-app` and `victual-web` in a
+   `podman pod` joined to the parity network, with the read-only root, dropped
+   capabilities and in-container probes the manifest uses. It still does not play
+   `deploy/podman/victual.yaml`, for the reason it never did: an initContainer runs to
+   completion before PostgreSQL would start. The suite now compares upstream against the
+   artifact this repository ships rather than one it does not, which was the argument for
+   doing it rather than deleting the target check.
 
 ## Options considered
 

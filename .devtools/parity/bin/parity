@@ -7,9 +7,10 @@
 #   .devtools/parity/bin/parity api         the API scenarios
 #   .devtools/parity/bin/parity ui          the browser walk
 #   .devtools/parity/bin/parity side-effects  MQTT and InfluxDB (fork-only, no upstream)
+#   .devtools/parity/bin/parity cli <tool> [args…]  one of the app's bin/ entry points
 #   .devtools/parity/bin/parity reset       throw both databases away and re-migrate
 #   .devtools/parity/bin/parity status      what is running
-#   .devtools/parity/bin/parity logs <name> podman logs for one container
+#   .devtools/parity/bin/parity logs <name> podman logs for one container (app|web|upstream|…)
 #   .devtools/parity/bin/parity down        stop everything and delete the volumes
 #
 # This is the *other* differential suite and the difference matters. `.devtools/pgsql/`
@@ -55,47 +56,62 @@ ensure_harness_deps() {
 	fi
 }
 
-# The Victual image is built from this working tree, so it is the thing under test and has
-# to be rebuilt when the tree changes. `--build` forces it; otherwise an existing image is
-# reused, because a five-minute build on every run is how a suite stops being run.
+# The fork side is the three Nix images, built from this working tree, so they are the
+# thing under test and have to be rebuilt when the tree changes. `--build` forces it;
+# otherwise existing images are reused, because a build this long on every run is how a
+# suite stops being run.
 #
-# **This is currently broken and issue #56 tracks the fix.** It built the `Dockerfile`'s
-# `production` target, which ADR-0013's acceptance removed on 2026-09-04 — production
-# images are built by Nix now. Pointing this at them is not a one-line change: that build
-# is two serving containers sharing a network namespace plus a migrate run, where this was
-# one container, and stack.sh has a standing reason not to use `podman kube play`. #56
-# carries the shape of it.
+# This used to build the `Dockerfile`'s `production` target. That stage was removed when
+# ADR-0013 was accepted on 2026-09-04 — the production images are `flake.nix`'s — and
+# issue #56 was the port. What changed is not only which command builds: the artifact is
+# now three images rather than one, and `stack/stack.sh` boots them the way
+# `deploy/podman/victual.yaml` does. The suite compares upstream against what the fork
+# actually ships instead of against an image it does not.
 #
-# It fails here, loudly and with the issue number, rather than letting the engine report
-# "target stage not found" and leaving the reader to work out why a suite that ran
-# yesterday does not today.
-ensure_victual_image() {
-	local force="${1:-no}"
-
-	if ! grep -q '^FROM .* AS production' "$REPO_ROOT/Dockerfile" 2>/dev/null; then
-		cat >&2 <<-'MESSAGE'
-			parity: the fork side cannot be built.
-
-			  This suite builds `docker build --target production`, and that stage is gone:
-			  ADR-0013 was accepted on 2026-09-04 and production images are built by Nix
-			  (flake.nix, nix/). The Dockerfile now builds the dev and CI image only.
-
-			  Porting this suite onto the Nix images is tracked as issue #56, which carries
-			  what the port has to decide — the Nix build is two serving containers sharing a
-			  network namespace plus a migrate run, not one container.
-
-			  Nothing else in the suite is affected: the upstream side, the harness, the
-			  scenarios and the accepted-differences list are all still good.
-		MESSAGE
-		exit 1
-	fi
-
-	if [ "$force" = "force" ] || ! "$ENGINE" image exists "$VICTUAL_IMAGE" 2>/dev/null; then
-		log "building $VICTUAL_IMAGE from the working tree (Dockerfile, production target)"
-		"$ENGINE" build --target production -t "$VICTUAL_IMAGE" "$REPO_ROOT"
+# **Two build routes, and the host decides which.** `nix run .#load` is the direct one and
+# needs Nix able to produce Linux artifacts — true on a Linux host, and on a Mac only with
+# a Linux builder configured (nix/README.md, option B). Everything else goes through
+# `nix/build-in-podman.sh images`, which builds inside a podman container running the
+# official Nix image and keeps a warm store between runs. Both end in `podman load`, and
+# both write the same tags.
+build_victual_images() {
+	if [ "$(uname -s)" = "Linux" ] && command -v nix >/dev/null 2>&1; then
+		log "building the Nix images (nix run .#load)"
+		CONTAINER_ENGINE="$ENGINE" nix run "$REPO_ROOT#load" \
+			|| die "nix run .#load failed — see nix/README.md"
 	else
-		log "reusing $VICTUAL_IMAGE (pass --build to rebuild it from the current tree)"
+		log "building the Nix images inside podman (nix/build-in-podman.sh images)"
+		log "the first run is slow; the builder keeps its store, later runs are not"
+		CONTAINER_ENGINE="$ENGINE" "$REPO_ROOT/nix/build-in-podman.sh" images \
+			|| die "nix/build-in-podman.sh images failed — see nix/README.md"
 	fi
+}
+
+ensure_victual_images() {
+	local force="${1:-no}"
+	local missing=()
+	local image
+
+	for image in "$VICTUAL_APP_IMAGE" "$VICTUAL_WEB_IMAGE" "$VICTUAL_MIGRATE_IMAGE"; do
+		"$ENGINE" image exists "$image" 2>/dev/null || missing+=("$image")
+	done
+
+	if [ "$force" = "force" ] || [ "${#missing[@]}" -gt 0 ]; then
+		if [ "${#missing[@]}" -gt 0 ]; then
+			log "not loaded yet: ${missing[*]}"
+		fi
+		build_victual_images
+	else
+		log "reusing victual-{app,web,migrate}:${VICTUAL_VERSION} (pass --build to rebuild from the current tree)"
+	fi
+
+	# The build is only half of it: `podman load` names the images from the streamer's own
+	# metadata, so a version.json the tags do not match is a suite that boots the previous
+	# build without saying so. Fail on the tag rather than on a confusing diff later.
+	for image in "$VICTUAL_APP_IMAGE" "$VICTUAL_WEB_IMAGE" "$VICTUAL_MIGRATE_IMAGE"; do
+		"$ENGINE" image exists "$image" 2>/dev/null \
+			|| die "$image is still not present after the build — check the tag against version.json ($VICTUAL_VERSION)"
+	done
 }
 
 ensure_upstream_image() {
@@ -131,9 +147,15 @@ phase_ui() {
 phase_side_effects() {
 	ensure_harness_deps
 	log "fork-only side effects (MQTT, InfluxDB)"
+	# `bin/victual-publish-state` is the one thing here with no HTTP surface, so the harness
+	# has to be told how to run it. It used to `podman exec` into the single Victual
+	# container; there is no such container now, and neither serving image has a shell, a
+	# PATH or a plain PHP CLI to exec into. `parity cli` runs it from the migrate image
+	# instead — which is where a deployment would run it from too.
 	PARITY_INFLUX_TOKEN="$INFLUX_TOKEN" \
 	PARITY_INFLUX_ORG="$INFLUX_ORG" \
 	PARITY_INFLUX_BUCKET="$INFLUX_BUCKET" \
+	PARITY_PUBLISH_CMD="'$HERE/parity' cli victual-publish-state --quiet" \
 	node "$HARNESS/run-side-effects.js" \
 		--victual "$VICTUAL_URL" \
 		--mqtt "127.0.0.1:${MQTT_PORT}" \
@@ -177,7 +199,7 @@ set -- "${ARGS[@]:-}"
 
 case "${1:-all}" in
 	up)
-		ensure_victual_image "$BUILD"
+		ensure_victual_images "$BUILD"
 		ensure_upstream_image
 		stack_up
 		;;
@@ -192,7 +214,14 @@ case "${1:-all}" in
 		;;
 	logs)
 		shift || true
-		name="${1:-victual}"
+		# `victual` used to be one container and is now two. It still resolves, to the app
+		# tier, because that is where a PHP error goes — but `web` is where an nginx or
+		# FastCGI failure goes, and a 502 is read from there.
+		name="${1:-app}"
+		case "$name" in
+			victual|app) name=victual-app ;;
+			web)         name=victual-web ;;
+		esac
 		"$ENGINE" logs --tail 200 "${PARITY_PREFIX}-${name}"
 		;;
 	api)
@@ -207,8 +236,13 @@ case "${1:-all}" in
 		shift || true
 		phase_side_effects "$@"
 		;;
+	cli)
+		shift || true
+		[ "$#" -gt 0 ] || die "cli needs a tool name, e.g. '$0 cli victual-publish-state --quiet'"
+		victual_cli "$@"
+		;;
 	all)
-		ensure_victual_image "$BUILD"
+		ensure_victual_images "$BUILD"
 		ensure_upstream_image
 		stack_up
 		phase_all
