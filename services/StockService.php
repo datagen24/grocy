@@ -1179,7 +1179,17 @@ class StockService extends BaseService
 		$returnData = [];
 		$shoppingLocations = $this->DB->shopping_locations();
 
-		$rows = $this->DB->products_price_history()->where('product_id = :1', $productId)->orderBy('purchased_date', 'DESC');
+		// Ordered by the ledger row id as well as the date, for the reason migration 0261
+		// gives: several bookings for one product commonly share a purchased_date, so
+		// ordering by the date alone is not a total order and the rows come back in
+		// whatever sequence the plan produces. That decided nothing here - this endpoint
+		// returns all of them - but it made the *array order* engine-dependent on exactly
+		// the days a household buys twice, which is a documented response differing for
+		// no reason anybody chose.
+		$rows = $this->DB->products_price_history()
+			->where('product_id = :1', $productId)
+			->orderBy('purchased_date', 'DESC')
+			->orderBy('stock_log_id', 'DESC');
 		foreach ($rows as $row)
 		{
 			$returnData[] = [

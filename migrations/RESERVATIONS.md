@@ -34,6 +34,7 @@ have recorded it.
 | 0258 | [plan 01](../docs/plans/01-file-storage.md) — the files table | in `master` (PR #39) |
 | 0259 | [plan 18](../docs/plans/18-mqtt-state-publication.md) — `outbox` | in this tree |
 | 0260 | [plan 21](../docs/plans/21-frontend-sink-discipline.md) — purify stored rich text that predates the API purifier | in this tree |
+| 0261 | [issue #46](https://github.com/datagen24/victual/issues/46) — a total order for `products_last_purchased.price`, and SQLite's integer division in `products_average_price` | in this tree |
 
 ## The merge order this implies — discharged
 
@@ -51,7 +52,7 @@ nothing, and it runs `StoredHtmlPurifier` over the five columns in
 `BaseApiController::HTML_RENDERED_COLUMNS`. It is portable in one file because PDO is, so it
 needs no engine pair under [ADR-0004](../docs/adr/0004-engine-specific-migrations.md).
 
-The next migration takes **0261** and claims it here first.
+The next migration takes **0262** and claims it here first.
 
 **The waiver stays.** `--allow-reserved-holes` (and `SUITE_ALLOW_RESERVED_HOLES=1`) is not
 scaffolding for this one branch: the situation recurs by construction, because parallel plan
