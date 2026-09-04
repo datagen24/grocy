@@ -39,6 +39,26 @@ Two differences are known, deliberate, judged harmless, and **must not be "fixed
   `format: date-time` anyway. Only a date-only string differs, and
   `trigdifftest.php` confirmed this is the only such column across all 37 tables.
 
+  **This exception has one consequence beyond the column itself**, found by the parity
+  suite in 2026-09 and recorded here rather than as a third exception because it is not
+  an independent decision — it is this one, seen downstream. `chores_current`'s `daily`
+  branch takes the time of day out of `start_date` *positionally* upstream, with
+  `SUBSTR(CAST(h.start_date AS TEXT), -8)` (`migrations/0185.sql:44`). Given
+  `"2025-01-01"` that reads `"25-01-01"`, so `DATETIME("2026-02-04 " || "25-01-01")` is
+  `NULL` and `next_estimated_execution_time` collapses for the whole chore. The port
+  reads the same time semantically, with `to_char(h.start_date, 'HH24:MI:SS')`
+  (`db/pgsql/baseline/05_views_l2.sql:63`), which a `TIMESTAMP` column cannot make
+  malformed. So a chore given a date-only `start_date` and then executed answers
+  `"2026-02-04 23:59:59"` here and `null` upstream, on `GET /api/chores` and
+  `GET /api/chores/{id}`. **This fork is the conforming side** — the spec documents the
+  field as a non-nullable `format: date-time` string — so matching upstream would mean
+  reproducing a string-slicing bug in typed SQL, which is what this ADR exists to
+  prevent. `chores` is an `ExposedEntity` and the value also reaches
+  `chores_log.scheduled_execution_time`, the chores overview, `CalendarService` and
+  [18](../plans/18-mqtt-state-publication.md)'s MQTT payloads. `.devtools/pgsql/`
+  structurally cannot see it: every chore it seeds carries a full timestamp, and with a
+  time present the two idioms are the same function.
+
 A third was recorded as accepted and then withdrawn, which is worth keeping visible: the
 `qu_factor_*` `TEXT`-versus-number difference was excused on the grounds that no affected
 view was an `ExposedEntity`. **That reasoning was too generous** — PostgreSQL was already

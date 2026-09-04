@@ -34,6 +34,32 @@ const ACCEPTED = [
 	},
 
 	{
+		id: 'ADR-0005-chores-next-estimated-execution-time',
+		reference: 'docs/adr/0005-wire-contract-is-the-invariant.md',
+		reason:
+			'chores.next_estimated_execution_time is computed here and null upstream, for a chore whose ' +
+			'start_date was stored without a time. This is the entry above seen downstream, not a separate ' +
+			'decision: upstream\'s daily branch takes the time of day out of start_date positionally, with ' +
+			'SUBSTR(CAST(h.start_date AS TEXT), -8) (migrations/0185.sql:44). Given "2025-01-01" that reads ' +
+			'"25-01-01", so DATETIME("2026-02-04 " || "25-01-01") is NULL and the whole expression ' +
+			'collapses. The port reads the same time semantically, with to_char(h.start_date, ' +
+			'\'HH24:MI:SS\') (db/pgsql/baseline/05_views_l2.sql:63), which a TIMESTAMP column cannot make ' +
+			'malformed. chores is an ExposedEntity and the value also reaches ' +
+			'chores_log.scheduled_execution_time, the chores overview, CalendarService and plan 18\'s MQTT ' +
+			'payloads.\n\n' +
+			'**The fork is the conforming side and this must not be "fixed" towards upstream** — the spec ' +
+			'documents the field as a non-nullable format: date-time string, and upstream\'s null is the ' +
+			'artifact of a string-slicing bug. It fires only after an execution: before one, both take the ' +
+			'start_date branch and agree. The matcher is narrow — upstream strictly null, and the fork\'s ' +
+			'side a well-formed Y-m-d H:i:s - so a null here, or a malformed value, is still reported.',
+		match: ({ difference }) =>
+			difference.kind === 'type' &&
+			difference.pointer.endsWith('/next_estimated_execution_time') &&
+			difference.upstream === null &&
+			/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(difference.victual))
+	},
+
+	{
 		id: 'ADR-0005-float-accumulation',
 		reference: 'docs/adr/0005-wire-contract-is-the-invariant.md',
 		reason:
@@ -240,6 +266,31 @@ const ACCEPTED = [
 			if (!Number.isInteger(v) || !Number.isInteger(u)) return false;
 			return v > u && v - u < 10;
 		}
+	},
+
+	{
+		id: 'no-insert-no-last-insert-id',
+		reference: 'docs/plans/11-api-error-handling.md',
+		reason:
+			'POST /objects/{entity} with a body that sets no column answers 200 with created_object_id ' +
+			'null here and the string "0" upstream. Neither side creates anything and neither refuses: ' +
+			'LessQL\'s Row::save() skips a row with no modified columns, so no INSERT is issued at all, and ' +
+			'GenericEntityApiController then asks the driver for the id of an insert that never happened. ' +
+			'The two drivers answer differently with nothing to report — pdo_sqlite returns the string "0", ' +
+			'pdo_pgsql raises SQLSTATE[55000] "lastval is not yet defined in this session", which LessQL ' +
+			'catches and turns into null (its own comment says so). Neither is fork code, and neither ' +
+			'value is an object id: the spec documents created_object_id as an integer, so "0" is a ' +
+			'fabricated one and null is the less misleading of two wrong answers.\n\n' +
+			'**That a create which created nothing answers 200 at all is the defect, it is shared with ' +
+			'upstream, and plan 11 owns it** — this entry accepts the difference between two ways of ' +
+			'saying nothing happened, not the 200. Matching upstream by returning "0" would mean copying ' +
+			'the fabricated id.',
+		match: ({ step, difference }) =>
+			difference.kind === 'type' &&
+			step.method === 'POST' &&
+			difference.pointer.endsWith('/created_object_id') &&
+			difference.victual === null &&
+			String(difference.upstream) === '0'
 	},
 
 	{

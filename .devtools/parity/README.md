@@ -97,12 +97,15 @@ say whether any of it is exposed, and cite the record that decided it. "It has a
 that" is not a reason, and neither is "no endpoint returns it" — ADR-0005 records that
 exact reasoning being withdrawn once already, over `qu_factor`.
 
-Fourteen entries exist today, plus an explicit `FORK_ADDED_FIELDS` list for fields the
+Sixteen entries exist today, plus an explicit `FORK_ADDED_FIELDS` list for fields the
 fork adds that upstream never had — deliberately a named list rather than a blanket "extra
 fields are fine", so that a field arriving by accident is still a difference somebody has
-to explain. Two entries are ADR-0005's own accepted exceptions; the rest are the fork's
-deliberate divergences, and three of those are worth knowing about because they are the fork
-being *more careful* than upstream rather than merely different:
+to explain. Two entries are ADR-0005's own accepted exceptions, and a third is the second
+of those seen downstream — `chores.next_estimated_execution_time`, which is `null` upstream
+because a date-only `start_date` breaks the positional `SUBSTR` upstream slices the time of
+day out of. The rest are the fork's deliberate divergences, and three of those are worth
+knowing about because they are the fork being *more careful* than upstream rather than
+merely different:
 
 - **`exposed-settings-allowlist`** — `GET /api/system/config` returns 21 fewer settings
   here. `SystemApiController::EXPOSED_SETTINGS` is an allowlist; upstream returns

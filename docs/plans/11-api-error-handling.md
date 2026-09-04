@@ -137,6 +137,16 @@ mirroring `GetRegexpCondition()`, and PostgreSQL gets `ILIKE`. SQLite's behaviou
 as the reference, so no client pointed at a SQLite instance sees any change; a client
 pointed at PostgreSQL now gets the rows the API always documented.
 
+**A create that creates nothing answers 200.** `POST /api/objects/{entity}` with a body
+that sets no column reaches `GenericEntityApiController::AddObject`, where LessQL skips the
+insert entirely — a row with no modified columns is already "clean" — and the endpoint then
+asks the driver for the id of an insert that never happened and answers 200 with it.
+`pdo_sqlite` says the string `"0"`, `pdo_pgsql` raises `SQLSTATE[55000] lastval is not yet
+defined in this session` and LessQL turns that into `null`. Neither is an object id. The
+body is a client error and wants a 400; until then the parity suite records the
+`null`-versus-`"0"` difference against this plan as `no-insert-no-last-insert-id`
+(issue #47).
+
 **Missing objects are 404 or 400 depending on the verb.** `GetObject` returns
 `GenericErrorResponse($response, 'Object not found', 404)`; `EditObject` and `DeleteObject`
 return `GenericErrorResponse($response, 'Object not found', 400)`. (This paragraph used to
