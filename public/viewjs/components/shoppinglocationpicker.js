@@ -59,7 +59,7 @@ if (typeof prefillByName !== "undefined")
 		$('#shopping_location_id').data('combobox').refresh();
 		$('#shopping_location_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.ShoppingLocationPicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.ShoppingLocationPicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 }
@@ -72,6 +72,6 @@ if (typeof prefillById !== "undefined")
 	$('#shopping_location_id').data('combobox').refresh();
 	$('#shopping_location_id').trigger('change');
 
-	var nextInputElement = $(Victual.Components.ShoppingLocationPicker.GetPicker().parent().data('next-input-selector').toString());
+	var nextInputElement = $(document).find(Victual.Components.ShoppingLocationPicker.GetPicker().parent().data('next-input-selector').toString());
 	nextInputElement.focus();
 }

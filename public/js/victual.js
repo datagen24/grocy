@@ -613,7 +613,8 @@ $(document).on("change", ".user-setting-control", function ()
 // Show file name Bootstrap custom file input
 $('input.custom-file-input').on('change', function ()
 {
-	$(this).next('.custom-file-label').html(GetFileNameFromPath($(this).val()));
+	// .text(), not .html(): the file name is chosen by the user and would otherwise be markup
+	$(this).next('.custom-file-label').text(GetFileNameFromPath($(this).val()));
 });
 
 // Translation of "Browse"-button of Bootstrap custom file input

@@ -341,7 +341,10 @@ is what a later reader most needs. Review of 12's landing pull request found:
 All three sinks are escaped at the point of use, the probe now derives a verdict and exits
 non-zero — treating "the sink was never reached" and "the action threw" as failures rather
 than skips — and it runs on every pull request as the `frontend-security` job rather than
-once by hand. The `shoppinglist.js` sink is fixed but **not** probed: it is behind
+once by hand. That last clause was written on 2026-09-03 and was not true until 2026-09-04:
+the job was named in four documents, this one included, before anyone wrote it, and
+[plan 21](plans/21-frontend-sink-discipline.md) is what added it and what made the claim
+checkable. The `shoppinglist.js` sink is fixed but **not** probed: it is behind
 `VICTUAL_FEATURE_FLAG_THERMAL_PRINTER`, which a demo instance does not set. Details in
 [12's second-pass record](plans/12-frontend-shared-core.md#executed--s29-second-pass).
 

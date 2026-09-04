@@ -16,6 +16,23 @@
 // `Victual.FrontendHelpers.ShowGenericError` renders the technical details through
 // bootbox - and on PostgreSQL a uniqueness violation quotes the offending value back.
 //
+// A third family asks the opposite question of the others. Five columns are rendered as
+// HTML on purpose - the rich text a summernote editor writes - so escaping them is not an
+// option and the boundary is HTMLPurifier, server side, in
+// `BaseApiController::HTML_RENDERED_COLUMNS`. That boundary is load-bearing security code
+// with six render sinks behind it and, until plan 21, nothing asserting it holds. This
+// family writes live payloads to each of the five through the API, reads them back, and
+// fails on any stored value that still carries an event handler, a script, an iframe or a
+// javascript: URI - then loads a page that renders one and checks nothing executed.
+//
+// A fourth family seeds nothing either, and is here because its absence is what let two
+// live sinks reach master in September 2026 and sit open until an external scanner found
+// them (plan 21). Everything above takes its payload from the *database*, so a sink fed by
+// input the browser never sent anywhere is invisible to all of it: a chosen file's name
+// rendered into its `.custom-file-label`, and a barcode typed at
+// `/barcodescannertesting` echoed into `#scanned_codes`. Both were `.html()` / string
+// concatenation and both executed. They are driven entirely from the page.
+//
 // Run it against the unfixed head first. There it must report `xss: 1` and exit non-zero,
 // otherwise the check is not capable of failing and proves nothing.
 //
@@ -30,6 +47,7 @@
 // every action silently did nothing must not be able to pass.
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
 
@@ -38,6 +56,48 @@ const { chromium } = require('playwright');
 const RUN_TOKEN = 's29-' + Date.now().toString(36);
 const PAYLOAD_ENCODED = '&lt;img src=x onerror=window.__xss=1&gt; ' + RUN_TOKEN;
 const PAYLOAD_LIVE = '<img src=x onerror=window.__xss=1> ' + RUN_TOKEN;
+
+// The local-input probes need the payload as a *file name* on disk, because the only way
+// to reach the file-label sink is to actually choose a file. Every character in the
+// payload is legal in a POSIX file name; the one that would not be, "/", does not appear -
+// and `GetFileNameFromPath` splits on it, so a payload containing one would be truncated
+// by the code under test rather than by the check.
+const PAYLOAD_FILE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 's29-'));
+const PAYLOAD_FILE = path.join(PAYLOAD_FILE_DIR, PAYLOAD_LIVE + '.png');
+
+// A 1x1 PNG. Nothing decodes it - the sink renders the *name* - but a file that is what
+// its extension claims keeps the probe honest against a form that starts validating.
+fs.writeFileSync(PAYLOAD_FILE, Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+	'base64'));
+
+// Written live (not entity encoded) into every HTML-rendered column, because that is what
+// an attacker sends. Each has to come back stripped of the part that executes; the last one
+// has to come back intact, since a boundary that also destroys legitimate formatting would
+// be reported as a pass by a check that only looks for danger.
+const HTML_COLUMN_PAYLOADS = [
+	['img-onerror', '<img src=x onerror=window.__xss=1>'],
+	['script', '<script>window.__xss=1</' + 'script>'],
+	['svg-onload', '<svg onload=window.__xss=1></svg>'],
+	['body-onload', '<body onload=window.__xss=1>'],
+	['a-javascript-uri', '<a href="javascript:window.__xss=1">click</a>'],
+	['iframe', '<iframe src="https://example.invalid/"></iframe>'],
+	['object-data', '<object data="javascript:window.__xss=1"></object>'],
+	['style-expression', '<div style="background:url(javascript:window.__xss=1)">x</div>'],
+	// Not an attack. The formatting summernote's own toolbar produces, which has to survive.
+	['legitimate-formatting', '<h1>Notes</h1><p><b>bold</b> <span style="background-color: rgb(255, 255, 0);">mark</span></p><ul><li>one</li></ul>']
+];
+
+/** What must never survive into storage, whatever shape the payload arrived in. */
+const DANGEROUS = [
+	[/<script/i, 'a <script> tag'],
+	[/<iframe/i, 'an <iframe>'],
+	[/<svg/i, 'an <svg> element'],
+	[/<object/i, 'an <object>'],
+	[/<embed/i, 'an <embed>'],
+	[/\son[a-z]+\s*=/i, 'an inline event handler'],
+	[/javascript\s*:/i, 'a javascript: URI']
+];
 
 function arg(name, fallback)
 {
@@ -90,6 +150,134 @@ async function apiGet(page, apiPath)
 	}, apiPath);
 }
 
+/** Writes one value to an object's column through the API and reads the stored value back. */
+async function apiPut(page, apiPath, column, value)
+{
+	return page.evaluate(async ([p, c, v]) =>
+	{
+		await fetch(p, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ [c]: v })
+		});
+
+		const response = await fetch(p);
+		const object = await response.json();
+
+		return object ? object[c] : null;
+	}, [apiPath, column, value]);
+}
+
+/**
+ * Writes every payload in the battery to one HTML-rendered column and reports what came
+ * back. A column is clean when nothing dangerous survived *and* the legitimate formatting
+ * did: a purifier that deleted everything would otherwise pass.
+ */
+async function checkHtmlColumn(page, entity, apiPath)
+{
+	const reasons = [];
+	const storedByPayload = {};
+
+	for (const [name, payload] of HTML_COLUMN_PAYLOADS)
+	{
+		let stored;
+
+		try
+		{
+			stored = await apiPut(page, apiPath, 'description', payload);
+		}
+		catch (e)
+		{
+			reasons.push(name + ': the write threw: ' + e.message);
+			continue;
+		}
+
+		storedByPayload[name] = stored;
+
+		if (name === 'legitimate-formatting')
+		{
+			// Any of the four is enough: HTMLPurifier reformats (it drops the space in
+			// "rgb(255, 255, 0)"), so an exact comparison would fail on tidying rather
+			// than on loss.
+			const survived = ['<h1>', '<b>', '<ul>', 'background-color'].filter(f => String(stored || '').includes(f));
+
+			if (survived.length < 4)
+			{
+				reasons.push('legitimate formatting did not survive: kept ' + survived.length + ' of 4 markers - ' + JSON.stringify(stored));
+			}
+
+			continue;
+		}
+
+		for (const [pattern, description] of DANGEROUS)
+		{
+			if (pattern.test(String(stored || '')))
+			{
+				reasons.push(name + ': ' + description + ' survived as ' + JSON.stringify(stored));
+			}
+		}
+	}
+
+	return {
+		probe: 'html-column:' + entity, url: apiPath, xss: null, visibleText: null,
+		sinkFound: true, imgInjected: 0, error: null, precomputed: true,
+		reasons: reasons, stored: storedByPayload
+	};
+}
+
+/**
+ * The render half. Storage being inert is the boundary; this is the assertion that the
+ * sinks behind it behave - a page that renders one of these columns as HTML, driven with a
+ * payload sitting in it, must execute nothing and must contain no dangerous node. Unlike
+ * the seeded families there is no "visible as text" assertion here, because being rendered
+ * as markup is what these columns are for.
+ */
+async function checkHtmlRender(context, name, url, action)
+{
+	const page = await newProbePage(context);
+	const reasons = [];
+
+	try
+	{
+		await page.goto(BASE + url, { waitUntil: 'domcontentloaded' });
+		await page.waitForTimeout(1200);
+		await action(page);
+		await page.waitForTimeout(1000);
+
+		if (await page.evaluate(() => window.__xss))
+		{
+			reasons.push('THE PAYLOAD EXECUTED (window.__xss set)');
+		}
+
+		const dangerous = await page.evaluate(() => ({
+			handlers: document.querySelectorAll('[onerror],[onload],[onclick],[onmouseover]').length,
+			frames: document.querySelectorAll('iframe:not(#shopping-list-stock-add-workflow-purchase-form-frame)').length,
+			scripts: document.querySelectorAll('#description-for-print script, .note-editable script').length
+		}));
+
+		if (dangerous.handlers)
+		{
+			reasons.push(dangerous.handlers + ' element(s) with an inline event handler in the document');
+		}
+
+		if (dangerous.scripts)
+		{
+			reasons.push(dangerous.scripts + ' <script> inside a rendered description');
+		}
+	}
+	catch (e)
+	{
+		reasons.push('the action threw: ' + String(e.message).split('\n')[0]);
+	}
+
+	await page.close();
+
+	return {
+		probe: name, url: url, xss: null, visibleText: null, sinkFound: true,
+		imgInjected: 0, error: null, precomputed: true, reasons: reasons
+	};
+}
+
 /** Fresh page with `window.__xss` unset and every console message captured. */
 async function newProbePage(context)
 {
@@ -99,13 +287,43 @@ async function newProbePage(context)
 }
 
 /**
- * Opens `url`, performs `action(page)` - which must make a bootbox dialog or a toastr
- * toast appear - and reports whether the payload executed and whether it is visible as
+ * Where each probe's payload is expected to land, and how to read it back.
+ *
+ * The two seeded families render into a component that is on screen by the time the
+ * assertion runs, so `innerText` is the right read: it asserts the payload arrived as
+ * *visible* text rather than merely being somewhere in the subtree. The local-input sinks
+ * cannot use it. `#scanned_codes` is a `<select>`, whose `innerText` is not its options'
+ * text, and `.custom-file-label` carries `d-none` until a picture exists - neither is a
+ * statement about whether markup was injected, which is the question being asked.
+ */
+const SINKS = {
+	dialog: { selector: '.bootbox', read: 'innerText' },
+	toast: { selector: '#toast-container', read: 'innerText' },
+	// The label the delegated handler's `.next()` resolves to on /product/new, by id: the
+	// page carries a second `.custom-file-label` ("No file selected") that is never written
+	// to, and a class selector would read that one instead and report a clean sink forever.
+	'file-label': { selector: '#product-picture-label', read: 'textContent' },
+	'scanned-codes': { selector: '#scanned_codes', read: 'textContent' }
+};
+
+/**
+ * Opens `url`, performs `action(page)` - which must make the named sink appear carrying
+ * the payload - and reports whether the payload executed and whether it is present as
  * text. `setup`, when given, runs against the fresh page *before* the navigation, which
  * is where `page.route()` interception has to be registered.
  */
 async function probe(context, name, url, action, sink, setup)
 {
+	const target = SINKS[sink];
+
+	if (!target)
+	{
+		// A typo in a probe's sink name would otherwise read as "the sink never appeared",
+		// which is a failure about the application rather than about this file.
+		return { probe: name, url: url, xss: null, visibleText: null, sinkFound: false,
+			imgInjected: 0, error: 'unknown sink "' + sink + '" - not one of ' + Object.keys(SINKS).join(', ') };
+	}
+
 	const page = await newProbePage(context);
 	const record = { probe: name, url: url, xss: null, visibleText: null, sinkFound: false, imgInjected: 0, error: null };
 
@@ -124,15 +342,15 @@ async function probe(context, name, url, action, sink, setup)
 		await action(page);
 		await page.waitForTimeout(1200);
 
-		const selector = sink === 'toast' ? '#toast-container' : '.bootbox';
+		const selector = target.selector;
 		// The last match, not the first: a probe that goes through more than one dialog
 		// leaves the earlier one in the DOM, and it is the newest one that holds the
 		// payload.
-		const visible = await page.evaluate(s =>
+		const visible = await page.evaluate(([s, read]) =>
 		{
 			const el = Array.from(document.querySelectorAll(s)).pop();
-			return el ? el.innerText : null;
-		}, selector);
+			return el ? el[read] : null;
+		}, [selector, target.read]);
 
 		record.sinkFound = visible !== null;
 		record.visibleText = visible === null ? null : (visible.indexOf('<img src=x onerror=') !== -1);
@@ -162,6 +380,13 @@ async function probe(context, name, url, action, sink, setup)
 function verdict(record)
 {
 	const reasons = [];
+
+	// The HTML-column family computes its own reasons: "the payload is visible as text" is
+	// the wrong assertion for a column whose whole purpose is to be rendered as markup.
+	if (record.precomputed)
+	{
+		return { ok: record.reasons.length === 0, reasons: record.reasons };
+	}
 
 	if (record.seedFailure)
 	{
@@ -372,7 +597,28 @@ let browser = null;
 				contentType: 'application/json',
 				body: JSON.stringify({ error_message: PAYLOAD_LIVE })
 			}));
-		}]
+		}],
+		// --- local input: nothing is seeded and nothing is stored ---------------------
+		//
+		// The payload is chosen or typed in the browser and rendered straight back, so no
+		// amount of care on the API's side is involved. One `.custom-file-input` probe
+		// covers all four forms that have one: the sink is a single delegated handler in
+		// victual.js, and the four Blade blocks are the same markup copied, so a second
+		// probe would be asserting that a copy is still a copy.
+		['file-name', '/product/new', async page =>
+		{
+			await page.setInputFiles('input.custom-file-input', PAYLOAD_FILE);
+		}, 'file-label'],
+		// The scanned barcode is echoed into an <option>. #scanned_barcode stays disabled
+		// until #expected_barcode has more than one character, and the keyup handler is
+		// what enables it - hence type() rather than fill() for that first field.
+		['barcode-echo', '/barcodescannertesting', async page =>
+		{
+			await page.type('#expected_barcode', '1234');
+			await page.waitForTimeout(300);
+			await page.fill('#scanned_barcode', PAYLOAD_LIVE);
+			await page.press('#scanned_barcode', 'Enter');
+		}, 'scanned-codes']
 	];
 
 	const results = [];
@@ -391,6 +637,57 @@ let browser = null;
 				sinkFound: false, imgInjected: 0, error: null, seedFailure: true
 			});
 		}
+	}
+
+	// --- the HTML-rendered columns, before the page probes ------------------------
+	//
+	// Every one of the five is written and read back, rather than a representative: the
+	// list is a per-entity constant, so an entity dropped out of it is exactly the mistake
+	// that would not show up anywhere else.
+	const htmlColumns = [
+		['shopping_lists', '/api/objects/shopping_lists/' + ids.shoppinglist],
+		['products', '/api/objects/products/' + ids.product],
+		['recipes', '/api/objects/recipes/' + ids.recipe],
+		['equipment', '/api/objects/equipment/' + ids.equipment],
+		['chores', '/api/objects/chores/' + ids.chore]
+	];
+
+	if (!ONLY.length || ONLY.includes('html-columns'))
+	{
+		// Its own page: the seeding one is closed by the time this runs, and a fetch from a
+		// closed page throws per call - which this family would have reported as nine
+		// purifier failures per column rather than as its own mistake.
+		const writer = await context.newPage();
+		await writer.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+		await writer.waitForTimeout(400);
+
+		for (const [entity, apiPath] of htmlColumns)
+		{
+			const record = await checkHtmlColumn(writer, entity, apiPath);
+			results.push(record);
+			console.log('probe ' + record.probe.padEnd(22) + ' offences=' + record.reasons.length);
+		}
+
+		// Leave a live payload in the column the render probe below reads, then prove the
+		// sink behind the boundary is clean too. The shopping list's description is the
+		// sink CodeQL reported (shoppinglist.js:560, alert #17): it is only ever reached
+		// through the print dialog, so the probe has to open it.
+		await apiPut(writer, '/api/objects/shopping_lists/' + ids.shoppinglist, 'description',
+			'<img src=x onerror=window.__xss=1><svg onload=window.__xss=1></svg>');
+		await writer.close();
+
+		const rendered = await checkHtmlRender(context, 'description-render',
+			'/shoppinglist?list=' + ids.shoppinglist, async page =>
+			{
+				// The Print entry is a dropdown item, and its dialog's confirm button is
+				// what actually writes #description-for-print.
+				await openMenuThen('.dropdown:has(#print-shopping-list-button) [data-toggle="dropdown"]',
+					'#print-shopping-list-button')(page);
+				await page.waitForTimeout(800);
+				await page.locator('.bootbox .btn-primary').first().click();
+			});
+		results.push(rendered);
+		console.log('probe ' + rendered.probe.padEnd(22) + ' offences=' + rendered.reasons.length);
 	}
 
 	for (const [name, url, action, sink, setup] of probes)
@@ -438,6 +735,11 @@ let browser = null;
 	}
 
 	console.log('\nwrote ' + OUT);
+
+	// The seeded records are left behind on purpose (the database is throwaway and the
+	// values are evidence); the payload-named file is not part of that record and is this
+	// process's own litter.
+	fs.rmSync(PAYLOAD_FILE_DIR, { recursive: true, force: true });
 
 	if (!results.length)
 	{

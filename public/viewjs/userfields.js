@@ -33,7 +33,7 @@ $("#entity-filter").on("change", function ()
 	}
 
 	userfieldsList.Table.column(userfieldsList.Table.colReorder.transpose(1)).search(value).draw();
-	$("#new-userfield-button").attr("href", U("/userfield/new?embedded&entity=" + value));
+	$("#new-userfield-button").attr("href", U("/userfield/new?embedded&entity=" + encodeURIComponent(value)));
 });
 
 // Pre-apply the entity filter when opened scoped to one

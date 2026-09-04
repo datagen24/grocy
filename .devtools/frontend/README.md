@@ -59,9 +59,33 @@ no page executes it. Run it against an unfixed tree first — there it must repo
 on every probe, or it is not capable of failing and proves nothing. It leaves its seeded
 records behind, named with a per-run token, so it needs a throwaway database too.
 
+It carries four families, added at different times for different reasons:
+
+| Family | Payload arrives via | Asserts |
+|---|---|---|
+| seeded | a record written through the API | nothing executes, and the payload is visible as text |
+| `error-details` | a server error message, route intercepted | the same, for the technical-details dialog |
+| `html-column:*`, `description-render` | the API, into the five HTML-rendered columns | nothing dangerous is *stored*, legitimate formatting survives, and the page rendering it executes nothing |
+| `file-name`, `barcode-echo` | the browser itself — a chosen file, a typed barcode | nothing executes, and the payload is present as text |
+
+The last two families exist because of
+[plan 21](../../docs/plans/21-frontend-sink-discipline.md). `html-column` is the only
+assertion anywhere that `BaseApiController::HTML_RENDERED_COLUMNS` and its purifier
+configuration still do their job — five columns are deliberately rendered as HTML, so
+escaping is not available and that server-side purifier is the whole boundary. To watch the
+family fail, make `GetParsedAndFilteredRequestBody` skip `description`: every column then
+reports ten offences and `description-render` reports the payload executing. The
+local-input family exists because every other family takes its payload from the *database*,
+and so was structurally blind to a sink fed by input the browser never sent anywhere —
+which is how two live sinks reached master in September 2026.
+
 **`s29-payload.js` is a gate, and it is the one this repository runs on every pull
 request** — the `frontend-security` job in `.github/workflows/tests.yml` boots a demo
-instance and runs it. It prints a `PASS`/`FAIL` line per probe with the reason, and exits
+instance and runs it. That sentence was written here on 2026-09-03 and only became true on
+2026-09-04: the job was described in four documents before it was written and then not
+written, and while nothing ran the probe two live sinks of the class it guards reached
+master. `php .devtools/check-cited-jobs.php`, in the `lint` job, is what stops a job being
+described here again without existing. It prints a `PASS`/`FAIL` line per probe with the reason, and exits
 non-zero if any probe is not clean. Everything that makes a probe uninformative counts as
 a failure, deliberately: a payload that executed, an injected `<img>`, a payload not
 visible as text, a record that was never seeded, a **sink that never appeared** and an

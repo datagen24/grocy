@@ -29,6 +29,11 @@
 // SQLSTATE, so the two implementations of DatabaseDialect::IsMissingTableError() have
 // nothing in common except the answer they have to agree on.
 //
+// Cases 6 and 7 are a third failure, found 2026-09-04 rather than in review: the migrations
+// table is also a flag store, and the gate was reading its one non-migration row as a
+// migration from the future. They are a pair on purpose - the fix has to stop the demo
+// marker being a schema version without stopping a genuine rollback being one.
+//
 // The database is mutated as each case needs and restored immediately afterwards, in a
 // finally: the runner builds this database from nothing, but a phase that leaves a
 // database it damaged behind is a phase that will eventually be run against something
@@ -251,6 +256,64 @@ else
 		!$dialect->IsMissingTableError($syntax),
 		'false',
 		var_export($dialect->IsMissingTableError($syntax), true) . ' (SQLSTATE ' . ($syntax->errorInfo[0] ?? '?') . ')');
+}
+
+// --- 6. The demo marker is bookkeeping, not a migration ---------------------------
+//
+// The migrations table doubles as a flag store: DemoDataGeneratorService records "the demo
+// data already ran" as migration -1. Nothing has a file for -1, so a gate that reads every
+// applied row as a schema version calls a demo instance "ahead of the code" - which it did,
+// from the first request that seeded the data until the process was restarted into the same
+// 503. Every probe in .devtools/frontend needs a demo instance, so this one row took the
+// whole frontend harness offline for two days without anything reporting it.
+
+$pdo->exec('INSERT INTO migrations (migration) VALUES (-1)');
+
+try
+{
+	ForgetMemo();
+	$applied = $service->GetAppliedMigrationNumbers();
+	$unknown = $service->GetUnknownMigrationNumbers($dialect);
+	$missing = $service->GetMissingMigrationNumbers($dialect);
+
+	Check('the demo marker is not a migration',
+		!in_array(-1, $applied, true) && empty($unknown) && empty($missing),
+		'-1 absent from applied, nothing unknown, nothing missing',
+		'-1 ' . (in_array(-1, $applied, true) ? 'present' : 'absent') . ', unknown [' . implode(',', $unknown) . ']');
+}
+finally
+{
+	$pdo->exec('DELETE FROM migrations WHERE migration = -1');
+	ForgetMemo();
+}
+
+// --- 7. A genuinely rolled-back database still is one -----------------------------
+//
+// The other half of case 6, and the reason that fix is a filter on negative numbers rather
+// than on "numbers with no file". An older image deployed against a database a newer one
+// migrated has to stay refused: it is the failure that looks most like success, since every
+// migration the running code knows about has been applied and only the ones it has never
+// heard of are extra. A filter that widened far enough to swallow the demo marker and this
+// case too would leave nothing behind to notice a rollback.
+
+$rolledBack = $required[count($required) - 1] + 1;
+
+$pdo->exec('INSERT INTO migrations (migration) VALUES (' . $rolledBack . ')');
+
+try
+{
+	ForgetMemo();
+	$unknown = $service->GetUnknownMigrationNumbers($dialect);
+
+	Check('a rollback is still refused',
+		$unknown === [$rolledBack],
+		'unknown [' . $rolledBack . ']',
+		'unknown [' . implode(',', $unknown) . ']');
+}
+finally
+{
+	$pdo->exec('DELETE FROM migrations WHERE migration = ' . $rolledBack);
+	ForgetMemo();
 }
 
 // --- The database is where it started ---------------------------------------------

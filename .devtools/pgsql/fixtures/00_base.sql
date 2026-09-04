@@ -35,6 +35,12 @@ INSERT INTO locations (id, name, description, is_freezer) VALUES (3, 'Freezer', 
 INSERT INTO shopping_locations (id, name, description) VALUES (1, 'Base Store', 'Base fixture store');
 INSERT INTO shopping_locations (id, name, description) VALUES (2, 'Other Store', 'Second store, for filtering');
 
+-- Equipment, which nothing else in the suite refers to yet: richtext-tests.php plants a
+-- payload in every column of BaseApiController::HTML_RENDERED_COLUMNS and fails loudly when
+-- one of the five tables is empty, because a phase that quietly tested four of five columns
+-- is the shape of miss this fixture's own suite exists to catch.
+INSERT INTO equipment (id, name, description) VALUES (1, 'Base Equipment', 'Base fixture equipment');
+
 -- A product group, so product_groups-joined views have a non-null case and a null one.
 INSERT INTO product_groups (id, name, description) VALUES (1, 'Base Group', 'Base fixture group');
 

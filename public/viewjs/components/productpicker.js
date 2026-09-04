@@ -4,6 +4,7 @@
 // match any known product, offers "add as new product" / "add barcode to existing product" /
 // external-lookup / camera-retry workflows via a bootbox dialog.
 // Public API: GetPicker/GetInputElement/GetValue/SetValue/SetId/Clear/Disable/Enable,
+// FindOptionBySearchdata/FindOptionByText/FindOptionByValue,
 // ShowCustomError/HideCustomError, and the *Workflow()/FinishFlow() helpers below.
 Victual.Components.ProductPicker = {};
 
@@ -48,6 +49,60 @@ Victual.Components.ProductPicker.Clear = function ()
 	$('#product_id').attr("barcode", "null");
 }
 
+// Three lookups over #product_id's options, as predicates rather than as selector strings
+// built by concatenation.
+//
+// Putting a value inside "option[data-additional-searchdata*='…']" or ":contains('…')" means
+// hand-writing an escaper for Sizzle's string syntax, and both versions this file has had
+// were wrong. The first replaced only the leading quote, because replace() with a string
+// argument replaces one occurrence (CodeQL js/incomplete-sanitization, alerts 23-25). The
+// second used /'/g and still did not escape the backslash *before* a quote, so an input of
+// a\'b became a\\'b - two literal backslashes, then a quote that closes the string and
+// resumes the selector as syntax (alert 38). There is no third version: nothing here is
+// parsed, so nothing needs escaping.
+//
+// Each is a faithful translation of the selector it replaces: attribute-substring and
+// :contains() are both case-sensitive, and .first() over a filtered set keeps document
+// order, so the option chosen is the one the selector would have chosen.
+
+/**
+ * @param {string} needle Text to find in an option's data-additional-searchdata
+ * @returns {jQuery} The first option whose attribute contains it, or an empty set
+ */
+Victual.Components.ProductPicker.FindOptionBySearchdata = function (needle)
+{
+	return $('#product_id option').filter(function ()
+	{
+		return String($(this).attr('data-additional-searchdata') || '').indexOf(needle) !== -1;
+	}).first();
+}
+
+/**
+ * @param {string} needle Text to find in an option's visible text
+ * @returns {jQuery} The first option whose text contains it, or an empty set
+ */
+Victual.Components.ProductPicker.FindOptionByText = function (needle)
+{
+	return $('#product_id option').filter(function ()
+	{
+		return $(this).text().indexOf(needle) !== -1;
+	}).first();
+}
+
+/**
+ * The value *attribute* rather than .val(), which falls back to an option's text when the
+ * attribute is absent - the selector this replaces would not have matched that option.
+ * @param {string} value Exact product id
+ * @returns {jQuery} The option with that value, or an empty set
+ */
+Victual.Components.ProductPicker.FindOptionByValue = function (value)
+{
+	return $('#product_id option').filter(function ()
+	{
+		return $(this).attr('value') === value;
+	}).first();
+}
+
 /** @returns {boolean} True when the "flow" URI param indicates the new-product-with-name workflow */
 Victual.Components.ProductPicker.InProductAddWorkflow = function ()
 {
@@ -75,7 +130,8 @@ Victual.Components.ProductPicker.FinishFlow = function ()
 {
 	if (GetUriParam("flow") == "InplaceAddBarcodeToExistingProduct")
 	{
-		$("#product_id option[value=\"" + Victual.Components.ProductPicker.GetValue() + "\"]").attr("data-additional-searchdata", (i, value) => `${value || ""}${GetUriParam("barcode")},`);
+		Victual.Components.ProductPicker.FindOptionByValue(Victual.Components.ProductPicker.GetValue())
+			.attr("data-additional-searchdata", (i, value) => `${value || ""}${GetUriParam("barcode")},`);
 	}
 
 	RemoveUriParam("flow");
@@ -125,10 +181,10 @@ if (prefillProduct2)
 }
 if (typeof prefillProduct !== "undefined")
 {
-	var possibleOptionElement = $("#product_id option[data-additional-searchdata*='" + prefillProduct.replace("'", "\\'") + "']").first();
+	var possibleOptionElement = Victual.Components.ProductPicker.FindOptionBySearchdata(prefillProduct);
 	if (possibleOptionElement.length === 0)
 	{
-		possibleOptionElement = $("#product_id option:contains('" + prefillProduct.replace("'", "\\'") + "')").first();
+		possibleOptionElement = Victual.Components.ProductPicker.FindOptionByText(prefillProduct);
 	}
 
 	if (possibleOptionElement.length > 0)
@@ -137,7 +193,7 @@ if (typeof prefillProduct !== "undefined")
 		$('#product_id').data('combobox').refresh();
 		$('#product_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 }
@@ -158,7 +214,7 @@ if (typeof prefillProductId !== "undefined")
 		$('#product_id').data('combobox').refresh();
 		$('#product_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 	else
@@ -199,14 +255,14 @@ $('#product_id_text_input').on('blur', function (e)
 		var gc = input.split(":");
 		if (gc[1] == "p")
 		{
-			possibleOptionElement = $("#product_id option[value=\"" + gc[2] + "\"]").first();
+			possibleOptionElement = Victual.Components.ProductPicker.FindOptionByValue(gc[2]);
 			$("#product_id").data("grocycode", true);
 			$('#product_id').attr("barcode", input);
 		}
 	}
 	else // Normal product barcode handling
 	{
-		possibleOptionElement = $("#product_id option[data-additional-searchdata*='" + input.toLowerCase().replace("'", "\\'") + ",']").first();
+		possibleOptionElement = Victual.Components.ProductPicker.FindOptionBySearchdata(input.toLowerCase() + ",");
 	}
 
 	if (GetUriParam('flow') === undefined && input.length > 0 && possibleOptionElement.length > 0)
@@ -223,7 +279,11 @@ $('#product_id_text_input').on('blur', function (e)
 			return;
 		}
 
-		var optionElement = $("#product_id option:contains(\"" + input + "\")").first();
+		// The typed or scanned value, so a quote or a bracket in it would rewrite the
+		// expression rather than be searched for. Review finding P2: this one survived the
+		// sweep that replaced the others because it is ":contains(...)" rather than an
+		// "option[...]" attribute selector, and the grep looked for the latter.
+		var optionElement = Victual.Components.ProductPicker.FindOptionByText(input);
 		if (input.length > 0 && optionElement.length === 0 && GetUriParam('flow') === undefined && Victual.Components.ProductPicker.GetPicker().parent().data('disallow-all-product-workflows').toString() === "false")
 		{
 			var addProductWorkflowsAdditionalCssClasses = "";

@@ -59,7 +59,7 @@ if (typeof prefillByName !== "undefined")
 		$('#recipe_id').data('combobox').refresh();
 		$('#recipe_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 }
@@ -72,7 +72,7 @@ if (typeof prefillById !== "undefined")
 	$('#recipe_id').data('combobox').refresh();
 	$('#recipe_id').trigger('change');
 
-	var nextInputElement = $(Victual.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
+	var nextInputElement = $(document).find(Victual.Components.RecipePicker.GetPicker().parent().data('next-input-selector').toString());
 	nextInputElement.focus();
 }
 

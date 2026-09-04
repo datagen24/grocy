@@ -87,7 +87,8 @@ function OnBarcodeScanned(barcode)
 		animateCSS("#hit-count", "flash");
 	}
 
-	$("#scanned_codes").prepend("<option class='" + bgClass + "'>" + barcode + "</option>");
+	// Built as a node rather than concatenated markup - the barcode is scanner/keyboard input
+	$("#scanned_codes").prepend($("<option>").addClass(bgClass).text(barcode));
 	setTimeout(function()
 	{
 		$("#scanned_barcode").val("");

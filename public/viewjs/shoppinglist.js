@@ -83,7 +83,7 @@ $("#status-filter").on("change", function ()
 $("#selected-shopping-list").on("change", function ()
 {
 	var value = $(this).val();
-	window.location.href = U('/shoppinglist?list=' + value);
+	window.location.href = U('/shoppinglist?list=' + encodeURIComponent(value));
 });
 
 // Clicking a status message (e.g. "N items below min. stock amount") applies that status as the filter
@@ -164,7 +164,7 @@ $(document).on('click', '#add-products-below-min-stock-amount', function (e)
 	Victual.Api.Post('stock/shoppinglist/add-missing-products', { "list_id": $("#selected-shopping-list").val() },
 		function (result)
 		{
-			window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
+			window.location.href = U('/shoppinglist?list=' + encodeURIComponent($("#selected-shopping-list").val()));
 		}
 	);
 });
@@ -178,7 +178,7 @@ $(document).on('click', '#add-overdue-expired-products', function (e)
 			Victual.Api.Post('stock/shoppinglist/add-expired-products', { "list_id": $("#selected-shopping-list").val() },
 				function (result)
 				{
-					window.location.href = U('/shoppinglist?list=' + $("#selected-shopping-list").val());
+					window.location.href = U('/shoppinglist?list=' + encodeURIComponent($("#selected-shopping-list").val()));
 				}
 			);
 		}

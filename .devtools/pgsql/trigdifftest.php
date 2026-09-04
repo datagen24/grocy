@@ -62,7 +62,9 @@ foreach ($scripts as $script)
 	// Load the SQLite state into PostgreSQL with triggers off, so both sides begin
 	// from the same rows rather than from rows the target's triggers have re-derived
 	$importer = new DatabaseImporter($sqlite, $pg, $dialect, fn($m) => null);
-	$importer->Import(true);
+	// purifyStoredHtml: false - this phase compares every table across both engines after
+	// applying the same trigger scripts, so the target must stay a verbatim copy.
+	$importer->Import(true, false);
 
 	$statements = ParseScript(file_get_contents($script));
 

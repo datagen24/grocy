@@ -109,7 +109,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 				}
 				else
 				{
-					window.location.href = U('/shoppinglist?list=' + $("#shopping_list_id").val().toString());
+					window.location.href = U('/shoppinglist?list=' + encodeURIComponent($("#shopping_list_id").val().toString()));
 				}
 			},
 			function(xhr)
@@ -153,7 +153,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 				}
 				else
 				{
-					window.location.href = U('/shoppinglist?list=' + $("#shopping_list_id").val().toString());
+					window.location.href = U('/shoppinglist?list=' + encodeURIComponent($("#shopping_list_id").val().toString()));
 				}
 			},
 			function(xhr)
@@ -196,7 +196,7 @@ $('#save-shoppinglist-button').on('click', function(e)
 				}
 				else
 				{
-					window.location.href = U('/shoppinglist?list=' + $("#shopping_list_id").val().toString());
+					window.location.href = U('/shoppinglist?list=' + encodeURIComponent($("#shopping_list_id").val().toString()));
 				}
 			},
 			function(xhr)

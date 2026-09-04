@@ -15,8 +15,12 @@ carried no security content. See
 [Executed — steps 5 and 6](#executed--steps-5-and-6) below.
 **S29's closure needed a second pass**: review of the landing PR found one sink the by-hand
 sweep had missed, and the probe that was meant to be the evidence could not fail. Both are
-fixed, and the probe now runs on every pull request rather than once — see
-[Executed — S29, second pass](#executed--s29-second-pass).
+fixed. The probe was to run on every pull request rather than once, and **for a day it did
+not: the `frontend-security` job was described here and never added to
+`.github/workflows/tests.yml`**, found 2026-09-04 when CodeQL reported two sinks of this
+class that the gate would have caught. [21](21-frontend-sink-discipline.md) added the job,
+two probe families this one was blind to, and a `lint` check that a documented job exists.
+See [Executed — S29, second pass](#executed--s29-second-pass).
 
 ## Today
 

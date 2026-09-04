@@ -214,7 +214,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 	e.preventDefault();
 
 	var dataTableSelector = $(e.currentTarget).attr("data-table-selector");
-	var dataTable = $(dataTableSelector).DataTable();
+	var dataTable = $(document).find(dataTableSelector).DataTable();
 
 	var columnCheckBoxesHtml = "";
 	var rowGroupRadioBoxesHtml = "";
@@ -356,7 +356,7 @@ $(".change-table-columns-visibility-button").on("click", function (e)
 						{
 							if (result)
 							{
-								var dataTable = $(dataTableSelector).DataTable();
+								var dataTable = $(document).find(dataTableSelector).DataTable();
 								var tableId = dataTable.settings()[0].sTableId;
 
 								// Delete rowgroup settings
@@ -387,7 +387,7 @@ $(document).on("click", ".change-table-columns-visibility-toggle", function ()
 {
 	var dataTableSelector = $(this).attr("data-table-selector");
 	var columnIndex = $(this).attr("data-column-index");
-	var dataTable = $(dataTableSelector).DataTable();
+	var dataTable = $(document).find(dataTableSelector).DataTable();
 
 	dataTable.columns(columnIndex).visible(this.checked);
 });
@@ -400,7 +400,7 @@ $(document).on("click", ".change-table-columns-rowgroup-toggle", function ()
 {
 	var dataTableSelector = $(this).attr("data-table-selector");
 	var columnIndex = $(this).attr("data-column-index");
-	var dataTable = $(dataTableSelector).DataTable();
+	var dataTable = $(document).find(dataTableSelector).DataTable();
 	var rowGroup;
 
 	if (columnIndex == -1)

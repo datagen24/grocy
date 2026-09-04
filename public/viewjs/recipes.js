@@ -36,10 +36,10 @@ if (typeof recipe !== "undefined")
 {
 	$("#recipes-table tr").removeClass("selected");
 	var rowId = "#recipe-row-" + recipe;
-	$(rowId).addClass("selected")
+	$(document).find(rowId).addClass("selected")
 
 	var cardId = "#RecipeGalleryCard-" + recipe;
-	$(cardId).addClass("border-primary");
+	$(document).find(cardId).addClass("border-primary");
 
 	if ($(window).width() < 768)
 	{
@@ -91,7 +91,15 @@ $("#search").on("keyup", Delay(function()
 	}
 
 	$(".recipe-gallery-item").removeClass("d-none");
-	$(".recipe-gallery-item .card-title-search:not(:contains_case_insensitive(" + value + "))").parent().parent().parent().addClass("d-none");
+	// The search box's text, filtered as a predicate rather than concatenated into
+	// ":not(:contains_case_insensitive(...))" - an unbalanced bracket in the box would
+	// otherwise throw a Sizzle syntax error and leave the gallery half filtered. Same
+	// matching rule as the custom expression in extensions.js: case-insensitive substring.
+	var needle = String(value).toLowerCase();
+	$(".recipe-gallery-item .card-title-search").filter(function ()
+	{
+		return $(this).text().toLowerCase().indexOf(needle) === -1;
+	}).parent().parent().parent().addClass("d-none");
 }, Victual.FormFocusDelay));
 
 $("#clear-filter-button").on("click", function()

@@ -45,7 +45,19 @@ String.prototype.accentNeutralise = function ()
 // E.g. "<div class='c'>test</div>" becomes "test"
 String.prototype.stripHtml = function ()
 {
-	return this.replace(/<.*?>/g, '');
+	// Repeated until it no longer changes: a single pass leaves a tag behind for
+	// nested/overlapping input such as "<<a>b>". Not a security sanitiser - this only
+	// normalises HTML cell content for DataTables search and sort (see victual_datatables.js).
+	var result = String(this);
+	var previous;
+
+	do
+	{
+		previous = result;
+		result = result.replace(/<[^<>]*>/g, '');
+	} while (result !== previous);
+
+	return result;
 };
 
 /**
@@ -230,7 +242,7 @@ $.fn.isVisibleInViewport = function (extraHeightPadding = 0)
  */
 function animateCSS(selector, animationName, callback, speed = "faster")
 {
-	var nodes = $(selector);
+	var nodes = $(document).find(selector);
 	nodes.addClass('animated').addClass(speed).addClass(animationName);
 
 	function handleAnimationEnd()

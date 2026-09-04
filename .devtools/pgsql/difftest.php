@@ -81,12 +81,16 @@ if (!$skipCopy)
 	// disables triggers for the duration. Once triggers exist in the target, copying rows
 	// that the source's triggers already shaped would otherwise fire them a second time -
 	// cascading deletes and re-deriving values that are already correct.
+	// purifyStoredHtml: false. This script's question is whether both engines return the
+	// same view rows, so the target has to stay a verbatim copy of the source - a
+	// description the purifier rewrote on one side only would read as an engine difference.
+	// The real command's purification is covered by richtext-tests.php instead.
 	$report = (new Victual\Services\Database\DatabaseImporter(
 		$sqlite,
 		$pg,
 		new Victual\Services\Database\PostgresDialect(),
 		fn($m) => null
-	))->Import(true);
+	))->Import(true, false);
 
 	echo '  copied ' . array_sum($report) . ' rows across ' . count($report) . " tables into PostgreSQL\n\n";
 }

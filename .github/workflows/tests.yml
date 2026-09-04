@@ -54,6 +54,13 @@ jobs:
             exit 1
           fi
 
+      # Every CI job the documentation names has to exist. The `frontend-security` job
+      # below was described in four documents for a day before it was written, and while
+      # it did not exist nobody looked for the gate it claimed to be. See
+      # docs/plans/21-frontend-sink-discipline.md and the script's own header.
+      - name: Every cited CI job exists
+        run: php .devtools/check-cited-jobs.php
+
   suite:
     runs-on: ubuntu-latest
 
@@ -122,6 +129,90 @@ jobs:
           name: coverage-clover
           path: clover.xml
           if-no-files-found: warn
+
+  # The gate this repository has claimed to run since 2026-09-03 and did not: sweep S29's
+  # payload probe, which asserts that no page executes a payload it is asked to display.
+  # Three documents described this job before it existed, and in the gap two sinks of
+  # exactly the class S29 closed reached master and stayed open until an external scanner
+  # reported them. See docs/plans/21-frontend-sink-discipline.md.
+  frontend-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 8.5, not the 8.4 the suite job uses. This one boots the application through
+      # public/index.php, where PrerequisiteChecker enforces REQUIRED_PHP_VERSION, and
+      # composer.json pins 8.5.* - so this is the version the app says it needs, and no
+      # platform requirement has to be ignored to install against it.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_sqlite, gd, intl, zip, mbstring, fileinfo, ctype
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: packages
+          key: composer-frontend-${{ hashFiles('composer.lock') }}
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --no-scripts
+
+      # The views load their CSS and JS from /packages/..., and .yarnrc points yarn at
+      # public/packages. Without them the pages boot unstyled and, more to the point, with
+      # no jQuery - so every probe would report "the sink was never reached" and the job
+      # would fail for a reason that has nothing to do with a sink.
+      - name: Install frontend packages
+        run: yarn install --frozen-lockfile
+
+      - name: Install the probe harness
+        working-directory: .devtools/frontend
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      # Demo mode seeds a SQLite database and auto-logs-in, which is what the probe needs:
+      # it drives real pages as a real session. Migrating first is required - a request no
+      # longer migrates the database - and the first GET / is what generates the demo data.
+      - name: Boot a demo instance
+        run: |
+          VDATA=$(mktemp -d)
+          cp config-dist.php "$VDATA/config.php"
+          VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php bin/victual-migrate --quiet
+          VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" \
+            php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8085/ || true)
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then break; fi
+            sleep 1
+          done
+          # Demo generation runs on that first request and takes a few seconds; the probe
+          # seeds through the API and would race it.
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8085/stockoverview || true)
+            if [ "$code" = "200" ]; then break; fi
+            sleep 2
+          done
+          curl -sS -o /dev/null -w 'stockoverview -> %{http_code}\n' http://127.0.0.1:8085/stockoverview
+
+      - name: Run the S29 payload probe
+        working-directory: .devtools/frontend
+        run: node s29-payload.js --url http://127.0.0.1:8085 --out s29-payload-ci.json
+
+      # Uploaded on failure: the per-probe reasons are in the log, but the JSON carries
+      # what was stored and read back, which is what tells a reader whether a failing probe
+      # found a real sink or a broken seed.
+      - name: Upload the probe report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s29-payload
+          path: .devtools/frontend/s29-payload-ci.json
+          if-no-files-found: warn
+
+      - name: The server log, if anything went wrong
+        if: failure()
+        run: tail -50 /tmp/php-server.log || true
 
   images:
     runs-on: ubuntu-latest

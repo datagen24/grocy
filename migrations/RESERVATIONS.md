@@ -33,6 +33,7 @@ have recorded it.
 | 0257 | [plan 18](../docs/plans/18-mqtt-state-publication.md) — `mqtt_product_entities`, `mqtt_published_entities` | in this tree |
 | 0258 | [plan 01](../docs/plans/01-file-storage.md) — the files table | in `master` (PR #39) |
 | 0259 | [plan 18](../docs/plans/18-mqtt-state-publication.md) — `outbox` | in this tree |
+| 0260 | [plan 21](../docs/plans/21-frontend-sink-discipline.md) — purify stored rich text that predates the API purifier | in this tree |
 
 ## The merge order this implies — discharged
 
@@ -45,7 +46,12 @@ through #39 — #34 had merged into a branch that was itself already consumed, w
 #36 merged `master` afterwards, so this tree has 0256 through 0259 with no hole, and
 `check-migrations.php` passes without `--allow-reserved-holes`.
 
-The next migration takes **0260** and claims it here first.
+0260 is a data migration, not a schema one: it is PHP rather than SQL, it adds and alters
+nothing, and it runs `StoredHtmlPurifier` over the five columns in
+`BaseApiController::HTML_RENDERED_COLUMNS`. It is portable in one file because PDO is, so it
+needs no engine pair under [ADR-0004](../docs/adr/0004-engine-specific-migrations.md).
+
+The next migration takes **0261** and claims it here first.
 
 **The waiver stays.** `--allow-reserved-holes` (and `SUITE_ALLOW_RESERVED_HOLES=1`) is not
 scaffolding for this one branch: the situation recurs by construction, because parallel plan
