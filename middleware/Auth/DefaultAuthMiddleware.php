@@ -24,6 +24,8 @@ class DefaultAuthMiddleware extends BaseAuthMiddleware
 
 		if ($user !== null)
 		{
+			$this->AuthenticatedByCookie = true;
+
 			return $user;
 		}
 

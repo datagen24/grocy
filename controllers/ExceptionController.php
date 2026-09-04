@@ -65,11 +65,7 @@ class ExceptionController extends BaseApiController
 
 		if ($isApiRoute)
 		{
-			$status = 500;
-			if ($exception instanceof HttpException)
-			{
-				$status = $exception->getCode();
-			}
+			$status = self::HttpStatusOf($exception);
 
 			// The same rule GenericErrorResponse() applies to a caught exception, applied
 			// to one that escaped: an uncaught PDOException is a server fault and stays a
@@ -92,11 +88,6 @@ class ExceptionController extends BaseApiController
 
 		if ($exception instanceof HttpNotFoundException)
 		{
-			if (!defined('VICTUAL_AUTHENTICATED'))
-			{
-				define('VICTUAL_AUTHENTICATED', false);
-			}
-
 			return $this->RenderPage($response->withStatus(404), 'errors/404', [
 				'exception' => $exception
 			]);
@@ -109,10 +100,46 @@ class ExceptionController extends BaseApiController
 			]);
 		}
 
+		$status = self::HttpStatusOf($exception);
+
+		if ($status < 500)
+		{
+			// A 4xx that is neither of the two above - a 405 on a route whose verb changed,
+			// a 400 raised before a controller was reached. It used to render the "a server
+			// error occured" page with a 500, which is wrong in both halves: it is the
+			// caller's request that could not be handled, and telling them the server broke
+			// invites a retry that will fail the same way. Plan 15-C4.
+			return $this->RenderPage($response->withStatus($status), 'errors/4xx', [
+				'exception' => $exception,
+				'status' => $status
+			]);
+		}
+
 		return $this->RenderPage($response->withStatus(500), 'errors/500', [
 			'exception' => $exception,
 			'systemInfo' => ApplicationService::GetInstance()->GetSystemInfo()
 		]);
+	}
+
+	/**
+	 * The HTTP status an exception asks for, clamped to a range that is one.
+	 *
+	 * `HttpException::getCode()` was trusted as a status with nothing checking it, so an
+	 * exception constructed with a code that is not one - which any `\Exception` subclass
+	 * may carry, since getCode() is free-form - reached the response as a status the PSR-7
+	 * implementation then rejected, turning a handled error into an unhandled one. Plan
+	 * 15-C4.
+	 */
+	private static function HttpStatusOf(Throwable $exception): int
+	{
+		if (!($exception instanceof HttpException))
+		{
+			return 500;
+		}
+
+		$status = (int)$exception->getCode();
+
+		return ($status >= 400 && $status <= 599) ? $status : 500;
 	}
 
 	/**
@@ -136,12 +163,7 @@ class ExceptionController extends BaseApiController
 			return;
 		}
 
-		$status = 500;
-
-		if ($exception instanceof HttpException)
-		{
-			$status = $exception->getCode();
-		}
+		$status = self::HttpStatusOf($exception);
 
 		$context = [
 			'method' => $request->getMethod(),

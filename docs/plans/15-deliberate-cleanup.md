@@ -43,7 +43,7 @@ Grouped by whether they change behaviour anyone can observe.
 | C1 | **Done (wave 2)** — auth middlewares instantiate *other* middlewares and call `AuthenticateRequest` cross-instance; visibility drifts (protected in `DefaultAuthMiddleware`, public in three siblings); `ProcessLogin` is an abstract static that three of five subclasses stub with `throw` | `middleware/Auth/` |
 | C2 | `StockReportsController` embeds three hand-written multi-join `SELECT`s — the only controller with raw SQL, and the only place outside services where the dialect boundary could be crossed again | `controllers/StockReportsController.php:71,90,107` |
 | C3 | About dialog reports `sqlite_version` from a throwaway `sqlite::memory:` connection even on a PostgreSQL install | `services/ApplicationService.php:84,114` |
-| C4 | `ExceptionController` has an unreachable duplicate `if (!defined('VICTUAL_AUTHENTICATED'))` inside its 404 branch, and trusts `$exception->getCode()` as an HTTP status with no clamping | `controllers/ExceptionController.php` |
+| C4 | **Done (wave 2)** — `ExceptionController` has an unreachable duplicate `if (!defined('VICTUAL_AUTHENTICATED'))` inside its 404 branch, and trusts `$exception->getCode()` as an HTTP status with no clamping | `controllers/ExceptionController.php` |
 | C5 | Unused `EquipmentController::$UserfieldsService` | `controllers/EquipmentController.php` |
 | C6 | `config-dist.php` documents locale precedence as browser → user setting → default; `LocaleMiddleware::GetLocale` actually does user setting → browser → default | `config-dist.php:40-43` vs `middleware/LocaleMiddleware.php:41,52` |
 | C7 | `composer.json` requires PHP `8.5.*` and `PrerequisiteChecker::REQUIRED_PHP_VERSION` is `8.5.0`, while the real language floor in the code is 8.4 | `composer.json`, `helpers/PrerequisiteChecker.php:19` |
@@ -168,6 +168,15 @@ this is the cosmetic twin and should say `postgresql_version` on a PostgreSQL in
 rather than a misleading `sqlite_version`.
 
 C4: delete the dead block; clamp the status to 400–599 with a 500 fallback.
+
+> **C4 executed, 2026-09-04**, in wave 2, because sweep S8 made `/logout` a `POST` and the
+> `GET` then rendered "a server error occured" with a 500. Both halves of the item, plus a
+> third the item did not name and the first two imply: `HttpStatusOf()` clamps to 400–599
+> with a 500 fallback in one place that the API branch, the view branch and the new error
+> log all read, the unreachable duplicate `if (!defined('VICTUAL_AUTHENTICATED'))` is gone,
+> and a 4xx that is neither 404 nor 403 renders `errors/4xx` with its own status rather
+> than the server-error page. Telling a caller the server broke when their request could
+> not be handled invites a retry that fails the same way.
 C5: delete the property.
 C6: fix the comment to match the code — the code's order (explicit user setting beats
 browser guess) is the correct behaviour; the comment is what is wrong.

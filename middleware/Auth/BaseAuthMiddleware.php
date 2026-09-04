@@ -5,6 +5,7 @@ namespace Victual\Middleware\Auth;
 use Victual\Middleware\BaseMiddleware;
 use Victual\Services\DatabaseService;
 use Victual\Services\SessionService;
+use Victual\Services\UsersService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as RequestHandler;
@@ -28,6 +29,14 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 {
 	/** @var bool True when the request addresses the JSON API rather than a rendered page */
 	protected bool $IsApiRoute = false;
+
+	/**
+	 * @var bool True when the request was recognised by a credential the browser attaches
+	 * on its own - a session cookie, or a header a reverse proxy adds - rather than by an
+	 * API key the caller had to put there. Set by the subclass that did the recognising;
+	 * read by the Origin check below.
+	 */
+	protected bool $AuthenticatedByCookie = false;
 
 	/**
 	 * Authenticates the request as described in the class docblock and
@@ -97,9 +106,166 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 				define('VICTUAL_USER_PICTURE_FILE_NAME', $user->picture_file_name);
 				self::SyncDatabaseUserContext();
 
+				$crossOrigin = $this->CrossOriginRefusal($request);
+
+				if ($crossOrigin !== null)
+				{
+					return $crossOrigin;
+				}
+
+				$forcedChange = $this->PasswordChangeRedirect($request, (int)$user->id);
+
+				if ($forcedChange !== null)
+				{
+					return $forcedChange;
+				}
+
 				return $handler->handle($request);
 			}
 		}
+	}
+
+	/**
+	 * A 403 when a state-changing API call was authenticated by a credential the browser
+	 * attached on its own and came from another origin, and null otherwise.
+	 *
+	 * Sweep finding S8. Most API writes are incidentally protected by the
+	 * `Content-Type: application/json` check, because a browser cannot send that
+	 * cross-origin from a plain form without a preflight - but the routes that act on path
+	 * parameters alone parse no body and so were never protected by it:
+	 * `POST /stock/bookings/{id}/undo`, the two merge endpoints, `POST /recipes/{id}/copy`
+	 * and their neighbours. `SameSite=Lax` closes most of the rest; this is the check that
+	 * does not depend on the browser having that default.
+	 *
+	 * An API key request is exempt, and that is the point of the distinction rather than an
+	 * exception to it: a key has to be put in a header deliberately, so a page on another
+	 * origin cannot cause one to be sent. The forgery being refused is of the ambient kind.
+	 *
+	 * **An absent Origin is allowed**, deliberately and with a cost worth stating. Browsers
+	 * send `Origin` on every cross-origin request and on same-origin non-GET requests too,
+	 * so refusing only a mismatch closes the browser case; refusing an absent one would
+	 * also refuse a script or a command-line client driving the API with a session cookie,
+	 * which is a legitimate if unusual thing to do. `Referer` is consulted when `Origin` is
+	 * missing, so a browser that only sends the older header is still covered.
+	 */
+	private function CrossOriginRefusal(Request $request): ?Response
+	{
+		if (!$this->IsApiRoute || !$this->AuthenticatedByCookie)
+		{
+			return null;
+		}
+
+		if (in_array($request->getMethod(), ['GET', 'HEAD', 'OPTIONS'], true))
+		{
+			return null;
+		}
+
+		$claimed = self::OriginOf($request->getHeaderLine('Origin'));
+
+		if ($claimed === null)
+		{
+			$claimed = self::OriginOf($request->getHeaderLine('Referer'));
+		}
+
+		if ($claimed === null || $claimed === self::OwnOrigin($request))
+		{
+			return null;
+		}
+
+		$response = $this->ResponseFactory->createResponse();
+		$response->getBody()->write(json_encode(['error_message' => 'Cross-origin request refused for a session-authenticated write - send an API key instead']));
+
+		return $response->withStatus(403);
+	}
+
+	/**
+	 * The scheme://host[:port] of a URL, or null when there is not one to read.
+	 */
+	private static function OriginOf(string $url): ?string
+	{
+		$url = trim($url);
+
+		if ($url === '' || $url === 'null')
+		{
+			return null;
+		}
+
+		$parts = parse_url($url);
+
+		if ($parts === false || empty($parts['scheme']) || empty($parts['host']))
+		{
+			return null;
+		}
+
+		return strtolower($parts['scheme']) . '://' . strtolower($parts['host']) . (isset($parts['port']) ? ':' . $parts['port'] : '');
+	}
+
+	/**
+	 * The origin this request was addressed to, as the client sees it.
+	 *
+	 * X-Forwarded-Proto is honoured because the scheme the PHP process sees behind a
+	 * reverse proxy is http while the browser used https, and comparing those would refuse
+	 * every write on a correctly deployed instance. The host is the request's own, which is
+	 * the same value the browser put in Origin, so nothing here has to be configured.
+	 */
+	private static function OwnOrigin(Request $request): string
+	{
+		$uri = $request->getUri();
+		$scheme = SessionCookie::IsHttpsRequest() ? 'https' : strtolower($uri->getScheme());
+		$origin = $scheme . '://' . strtolower($uri->getHost());
+		$port = $uri->getPort();
+
+		if ($port !== null && !(($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80)))
+		{
+			$origin .= ':' . $port;
+		}
+
+		return $origin;
+	}
+
+	/**
+	 * A redirect to the account's own edit form when it is still using the password
+	 * migration 0027 seeds, and null otherwise.
+	 *
+	 * Sweep finding S12's second half: the installation ships with admin/admin and nothing
+	 * ever made anybody change it. "Force" here means every rendered page sends the
+	 * account to the form that changes it, with the password fields already open - the
+	 * `changepw` parameter userform.js already understands. Logging out is left reachable,
+	 * because trapping somebody on one page with no way off it is a worse answer than the
+	 * problem.
+	 *
+	 * Deliberately limited to rendered pages. API routes are untouched, which is not an
+	 * oversight and is worth being explicit about: the form on that page saves through the
+	 * API, so gating API routes too would make the one page a person is allowed to reach
+	 * the one page that cannot work. An API key is also a credential of its own, issued
+	 * deliberately, rather than a default nobody chose.
+	 *
+	 * It costs a settings read rather than a password hash - see
+	 * UsersService::SETTING_MUST_CHANGE_PASSWORD for why that distinction is the whole
+	 * design.
+	 */
+	private function PasswordChangeRedirect(Request $request, int $userId): ?Response
+	{
+		if ($this->IsApiRoute || defined('VICTUAL_EXTERNALLY_MANAGED_AUTHENTICATION'))
+		{
+			return null;
+		}
+
+		if (!UsersService::GetInstance()->MustChangePassword($userId))
+		{
+			return null;
+		}
+
+		$path = $request->getUri()->getPath();
+
+		if (string_ends_with($path, '/logout') || string_ends_with($path, '/user/' . $userId))
+		{
+			return null;
+		}
+
+		return $this->ResponseFactory->createResponse()
+			->withStatus(302)
+			->withHeader('Location', $this->AppContainer->get('UrlManager')->ConstructUrl('/user/' . $userId . '?changepw=true'));
 	}
 
 	/**

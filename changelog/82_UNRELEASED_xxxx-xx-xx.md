@@ -6,6 +6,12 @@
 
 > ⚠️ Changing your own password now requires your current password
 
+> ⚠️ `/logout` and `/manageapikeys/new` are `POST` routes now, not `GET`. As `GET`s they fired from any page that could get a browser to load a URL - the second one creating an API key with a description of the requester's choosing. The links in the interface were updated; a bookmark or a script calling either as a `GET` gets a `405`
+
+> ⚠️ Failed logins are now rate limited, per username and per client address (`LOGIN_THROTTLE_MAX_ATTEMPTS`, default 10, inside `LOGIN_THROTTLE_WINDOW_MINUTES`, default 15). While the limit is reached, even the correct password is refused, and the refusal looks exactly like a wrong one
+
+> ⚠️ An installation still using the seeded `admin`/`admin` password is sent to the password change form on every page until it is changed
+
 > ⚠️ The API no longer sends `Access-Control-Allow-Origin: *`. Cross-origin browser access is now off unless the new `CORS_ALLOWED_ORIGINS` setting lists the origins that may use it
 
 > ⚠️ Several API failure paths now answer a different status code - `403` for a permission failure, `404` for a missing object on `PUT`/`DELETE`, `400` where a `500` or a `404` was returned for a malformed request. Every changed code is on a failure path and no successful response changed shape; see the API section below for the full list
@@ -78,6 +84,7 @@
 - A CORS preflight (`OPTIONS`) on an API route is now answered `204` instead of `401`, and carries the CORS headers when the request's `Origin` is listed in `CORS_ALLOWED_ORIGINS`
 - Cross-origin responses no longer carry `Access-Control-Allow-Origin: *`. Set `CORS_ALLOWED_ORIGINS` to the exact origins that may call the API from a browser; the default is empty, which sends no CORS headers at all
 - An unmatched `/api/...` path is now answered `404` instead of an empty `200`
+- A state-changing API request authenticated by a session cookie (rather than by an API key) is refused `403` when its `Origin` or `Referer` names another site. Requests carrying an API key are unaffected, and so are requests with no `Origin` at all
 - A permission failure is now always answered `403`. It was a `400` on `POST /chores/{id}/execute`, `POST /chores/executions/{id}/undo` and `GET /print/shoppinglist/thermal`, where the check happened to run inside the error handling rather than before it
 - `POST /chores/executions/calculate-next-assignments` now requires the `CHORES` permission. It had no permission check at all, so any authenticated key could rewrite every chore's next assignment
 - `PUT` and `DELETE` on an object that does not exist are now answered `404` instead of `400`, which is what `GET` of the same object already answered
@@ -108,7 +115,13 @@
 - Expired sessions are deleted on login. The table was never pruned
 - A login for a username that does not exist now takes the same time as one for a username that does
 
+### Login
+
+- Failed logins are rate limited - see the note at the top. The counters live in the database rather than in the process, so they survive a restart
+- An account still using the seeded `admin`/`admin` password is redirected to its own password change form from every page until the password is changed. The API is not gated, because that form saves through it
+
 ### Server errors and logging
 
 - Uncaught exceptions are now written to `stderr` as one line each, carrying the request method and path, the response status, the exception class and - when error details are enabled - the file, line and stack trace. In production nothing was recorded anywhere before this
+- A `4xx` that is neither "not found" nor "not allowed" - a `405`, say - now renders its own page with its own status, instead of the "a server error occured" page with a `500`
 - The server error page no longer shows the exception message, file, line, stack trace and system info to everyone. That block is now shown in `dev` mode only, and every value in it is HTML escaped

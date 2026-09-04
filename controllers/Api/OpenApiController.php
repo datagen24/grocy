@@ -42,15 +42,17 @@ class OpenApiController extends BaseApiController
 	}
 
 	/**
-	 * GET /manageapikeys/new - creates a new API key (optional "description" query
+	 * POST /manageapikeys/new - creates a new API key (optional "description" form
 	 * parameter) and redirects to /manageapikeys?key={newKeyId}.
 	 */
 	public function CreateNewApiKey(Request $request, Response $response, array $args)
 	{
 		$description = null;
-		if (isset($request->getQueryParams()['description']))
+		$postParams = $request->getParsedBody();
+
+		if (is_array($postParams) && isset($postParams['description']))
 		{
-			$description = $request->getQueryParams()['description'];
+			$description = $postParams['description'];
 		}
 
 		$newApiKey = ApiKeyService::GetInstance()->CreateApiKey(ApiKeyService::API_KEY_TYPE_DEFAULT, $description);

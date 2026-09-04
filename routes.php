@@ -40,7 +40,9 @@ $app->group('', function (RouteCollectorProxy $group)
 	// Login routes
 	$group->get('/login', [LoginController::class, 'LoginPage'])->setName('login');
 	$group->post('/login', [LoginController::class, 'ProcessLogin'])->setName('login');
-	$group->get('/logout', [LoginController::class, 'Logout']);
+	// POST rather than GET: logging out changes state, and a state-changing GET is
+	// reachable by an <img> tag on any page the browser loads. Sweep finding S8.
+	$group->post('/logout', [LoginController::class, 'Logout']);
 
 	// Generic entity interaction
 	$group->get('/userfields', [GenericEntityController::class, 'UserfieldsList']);
@@ -144,7 +146,10 @@ $app->group('', function (RouteCollectorProxy $group)
 	// OpenAPI routes
 	$group->get('/api', [OpenApiController::class, 'DocumentationUi']);
 	$group->get('/manageapikeys', [OpenApiController::class, 'ApiKeysList']);
-	$group->get('/manageapikeys/new', [OpenApiController::class, 'CreateNewApiKey']);
+	// POST rather than GET, and for a much better reason than tidiness: as a GET this
+	// creates an API key with an attacker-chosen description on any page load. Sweep
+	// finding S8.
+	$group->post('/manageapikeys/new', [OpenApiController::class, 'CreateNewApiKey']);
 });
 
 $app->group('/api', function (RouteCollectorProxy $group)

@@ -512,6 +512,9 @@ msgstr ""
 msgid "Current password"
 msgstr ""
 
+msgid "This request could not be handled"
+msgstr ""
+
 msgid "Your current password is required to set a new one"
 msgstr ""
 

@@ -53,7 +53,7 @@ $(".apikey-show-qr-button").on("click", function ()
 });
 
 // "Add" opens a modal asking for a description; the key itself is then
-// generated server side by navigating to /manageapikeys/new
+// generated server side by posting the description to /manageapikeys/new
 $("#add-api-key-button").on("click", function (e)
 {
 	$("#add-api-key-modal").modal("show");
@@ -69,5 +69,14 @@ $("#add-api-key-modal").on("shown.bs.modal", function (e)
 
 $("#new-api-key-button").on("click", function (e)
 {
-	window.location.href = U("/manageapikeys/new?description=" + encodeURIComponent($("#description").val()));
+	// Submitted as a form rather than navigated to. Creating a key is a state change, and
+	// as a GET it fired from any page that could get the browser to load a URL - with a
+	// description of the attacker's choosing. Sweep finding S8.
+	//
+	// Built as nodes rather than as a markup string: the description is user input on its
+	// way into the DOM, which is the sink rule the frontend-security job checks.
+	var form = $("<form>").attr({ method: "post", action: U("/manageapikeys/new") });
+	form.append($("<input>").attr({ type: "hidden", name: "description" }).val($("#description").val()));
+	$(document.body).append(form);
+	form.trigger("submit");
 });

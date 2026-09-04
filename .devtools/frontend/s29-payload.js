@@ -499,11 +499,24 @@ let browser = null;
 		console.log('seed  recipepos -> ' + recipePos.status + ' id ' + ids.recipepos);
 	}
 
-	// The API key description is not written through the JSON body path (it is a query
-	// parameter on a GET), so the key is created the way the UI creates it and its id is
-	// read out of the redirect target.
-	await seed.goto(BASE + '/manageapikeys/new?description=' + encodeURIComponent(PAYLOAD_LIVE), { waitUntil: 'domcontentloaded' });
-	await seed.waitForTimeout(600);
+	// The API key description is not written through the JSON body path (it is a form field
+	// on a POST since sweep finding S8 stopped that route being a GET), so the key is
+	// created the way the UI creates it - by submitting a form - and its id is read out of
+	// the redirect target.
+	await seed.evaluate((args) =>
+	{
+		const form = document.createElement('form');
+		form.method = 'post';
+		form.action = args.action;
+		const input = document.createElement('input');
+		input.type = 'hidden';
+		input.name = 'description';
+		input.value = args.description;
+		form.appendChild(input);
+		document.body.appendChild(form);
+		form.submit();
+	}, { action: BASE + '/manageapikeys/new', description: PAYLOAD_LIVE });
+	await seed.waitForTimeout(1200);
 	const keyMatch = /[?&]key=(\d+)/.exec(seed.url());
 	ids.apikey = keyMatch ? keyMatch[1] : null;
 	console.log('seed  apikey -> id ' + ids.apikey);

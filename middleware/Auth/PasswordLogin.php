@@ -3,7 +3,9 @@
 namespace Victual\Middleware\Auth;
 
 use Victual\Services\DatabaseService;
+use Victual\Services\LoginThrottleService;
 use Victual\Services\SessionService;
+use Victual\Services\UsersService;
 
 /**
  * Verifies a submitted username and password against the users table and, on success,
@@ -45,6 +47,18 @@ class PasswordLogin
 			return false;
 		}
 
+		$throttle = LoginThrottleService::GetInstance();
+		$ipAddress = LoginThrottleService::ClientAddress();
+
+		if (!$throttle->IsAttemptAllowed($username, $ipAddress))
+		{
+			// Answered exactly like a wrong password, and deliberately: telling a guesser
+			// that they have hit the limit tells them the limit exists and roughly where
+			// it is, which is information worth more to them than to anybody else. The
+			// person who has genuinely forgotten their password waits and tries again.
+			return false;
+		}
+
 		$db = DatabaseService::GetInstance()->GetDbConnection();
 		$user = $db->users()->where('username', $username)->fetch();
 
@@ -52,14 +66,20 @@ class PasswordLogin
 		{
 			// Deliberately does the work anyway - see DUMMY_PASSWORD_HASH
 			password_verify($inputPassword, self::DUMMY_PASSWORD_HASH);
+			$throttle->RecordFailedAttempt($username, $ipAddress);
 
 			return false;
 		}
 
 		if (!password_verify($inputPassword, $user->password))
 		{
+			$throttle->RecordFailedAttempt($username, $ipAddress);
+
 			return false;
 		}
+
+		$throttle->ClearAttempts($username, $ipAddress);
+		UsersService::GetInstance()->RecordPasswordUsedAtLogin((int)$user->id, $inputPassword);
 
 		// Every session this login supersedes and every expired one, cleared while there
 		// is a reason to be writing to the table anyway. Nothing pruned the sessions table

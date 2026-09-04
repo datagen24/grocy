@@ -179,6 +179,17 @@ Setting('REVERSE_PROXY_AUTH_USE_ENV', false); // Set to true if the username is 
 // Your proxy must also be configured to strip this header from inbound requests
 Setting('REVERSE_PROXY_AUTH_TRUSTED_PROXIES', '');
 
+// How many failed logins are allowed per username, and per client address, inside the
+// window below. Further attempts are refused - answered exactly like a wrong password, so
+// that hitting the limit tells a guesser nothing. Set MAX_ATTEMPTS to 0 to turn the
+// throttle off entirely.
+//
+// The counters live in the database rather than in memory, because the deployment this
+// fork targets scales to zero: a counter held in the process is reset for free by anyone
+// willing to wait out an idle window, which is the same as having no throttle
+Setting('LOGIN_THROTTLE_MAX_ATTEMPTS', 10);
+Setting('LOGIN_THROTTLE_WINDOW_MINUTES', 15);
+
 // Default permissions for new users
 // the array needs to contain the technical/constant names
 // See the file controllers/Users/User.php for possible values

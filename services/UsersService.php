@@ -97,6 +97,47 @@ class UsersService extends BaseService
 	}
 
 	/**
+	 * The setting that marks an account as still using the password migration 0027 seeds.
+	 *
+	 * It is a stored flag rather than a check, because checking means running
+	 * password_verify() against the seeded password on every request - an Argon2id
+	 * verification, which is expensive by design. Only the login path ever sees a
+	 * plaintext password, so that is where the question is answered and this is where the
+	 * answer is kept. Sweep finding S12's second half.
+	 */
+	const SETTING_MUST_CHANGE_PASSWORD = 'must_change_password';
+
+	/**
+	 * The password migration 0027 gives the account it creates.
+	 */
+	const SEEDED_DEFAULT_PASSWORD = 'admin';
+
+	/**
+	 * Records whether the password just used to log in is the seeded default, so that
+	 * MustChangePassword() can answer without hashing anything.
+	 *
+	 * Written only when the answer changes, so an ordinary login is still a read.
+	 */
+	public function RecordPasswordUsedAtLogin(int $userId, string $plaintextPassword): void
+	{
+		$mustChange = ($plaintextPassword === self::SEEDED_DEFAULT_PASSWORD) ? '1' : '0';
+
+		if ((string)$this->GetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD) !== $mustChange)
+		{
+			$this->SetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD, $mustChange);
+		}
+	}
+
+	/**
+	 * Whether this account is still on the seeded admin/admin password and should be
+	 * sent to change it before it is allowed to do anything else.
+	 */
+	public function MustChangePassword($userId): bool
+	{
+		return (string)$this->GetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD) === '1';
+	}
+
+	/**
 	 * Deletes the users row (only that row - related rows like sessions or
 	 * permissions are not cleaned up here).
 	 */
@@ -139,6 +180,10 @@ class UsersService extends BaseService
 				'password' => password_hash($password, PASSWORD_ARGON2ID),
 				'picture_file_name' => $pictureFileName
 			]);
+
+			// Whatever it is now, it is not the seeded default any more - unless somebody
+			// deliberately set it back to that, which the next login will notice
+			$this->SetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD, '0');
 		}
 	}
 

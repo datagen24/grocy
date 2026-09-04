@@ -43,6 +43,11 @@ class ReverseProxyAuthMiddleware extends BaseAuthMiddleware
 			}
 		}
 
+		// A proxy-supplied identity travels with the request the same way a cookie does -
+		// the browser sends it on a cross-site request without the page asking - so it is
+		// ambient in the sense the Origin check cares about
+		$this->AuthenticatedByCookie = true;
+
 		return (new ReverseProxyAuthenticator($this->AppContainer))->Authenticate($request);
 	}
 }
