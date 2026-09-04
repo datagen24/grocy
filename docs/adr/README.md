@@ -128,7 +128,11 @@ nothing here counts as one.
   entangled with [19](../plans/19-rbac.md)'s wire-contract questions, and 19 is itself
   blocked on its own Q8. **Decidable, but reads better after 19 unblocks.**
 - **[0013](0013-nix-built-container-images.md) — Nix-built production images.** The
-  furthest along and the only one blocked by something outside itself.
+  furthest along, the only one blocked by something outside itself, and **the only one
+  whose direction the decider has already stated**: Nix is the production builder, and the
+  `Dockerfile` is for development containers, which are heavier and carry a surface Nix
+  does not (2026-09-04). That settles *whether*; it does not by itself accept the record,
+  because acceptance is its own pull request and three gates are unmet.
   [20](../plans/20-container-infrastructure.md) piece 1 met gates **2** (measured, not
   asserted: 284 MB, 205 MB and 291 MB against the `Dockerfile` production image's 819 MB,
   with no shell in any of them) and **3** (`nix flake check` passes 34 assertions,
@@ -136,15 +140,16 @@ nothing here counts as one.
   reached through PEAR, sendmail and `gd`). Gates **1** and **5** need a pod that serves,
   and the pod does not start under `podman kube play`
   ([#49](https://github.com/datagen24/victual/issues/49)). Gate **4**, the fixed-output
-  hashes reproducing on a second machine, has not been attempted. **Blocked on #49.**
+  hashes reproducing on a second machine, has not been attempted. **Blocked on #49** —
+  which is a defect in the deploy manifest, not in the flake, and the record now says so
+  and names the gate amendment that would make it acceptable without waiting.
 
-  Worth knowing when reading this record: it was **rejected once**, on 2026-09-03
-  (`1c97766f`), when plan 10 landed a `production` target in the `Dockerfile` while 0013
-  was in review and refuted three of its premises within hours — and the rejection was
-  itself reversed when the flake was restored and built. The file carries no trace of
-  either, which is a gap: the corpus rule is that a number is permanent and a reason is
-  preserved, and a rejection that happened should be visible in the record even when the
-  rejection did not stick.
+  **This record was never rejected.** A commit on 2026-09-03 (`1c97766f`) marked it
+  Rejected and deleted the flake; the next commit put both back. That was an agent
+  hallucinating a decision the maintainer never made — not a rejection later reconsidered.
+  0013 now carries the correction, because the git history alone reads as a maintainer who
+  changed their mind, and this corpus is the wrong place for false provenance about who
+  decided what.
 
 ## Known unfiled decisions
 

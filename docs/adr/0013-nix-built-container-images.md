@@ -1,8 +1,22 @@
 # ADR-0013: Production images are built by Nix from a flake in this repository
 
-- **Status: Proposed.** Written to be argued with.
+- **Status: Proposed, and the direction is not in question.** The decider has stated it
+  plainly (2026-09-04): **Nix is the production builder, and `Dockerfile`-based images are
+  development containers** — heavier, with a surface Nix does not carry. What is still
+  open is not *whether* but *proved*: three of the five acceptance prerequisites below are
+  unmet, and this record is written from interfaces read rather than run. Acceptance is
+  its own pull request and remains so.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
   lifecycle rule in [the index](README.md).
+- **This record was never rejected.** A commit on 2026-09-03 (`1c97766f`) marked it
+  Rejected and deleted the flake, and it was reverted the next commit (`62686a2b`) as
+  having "read the maintainer's direction backwards". That is accurate but too gentle: the
+  rejection was **an agent's hallucination of a decision the maintainer never made**, not
+  a decision later reconsidered. It is recorded here rather than left in the git history
+  because a reader who finds that commit deserves to know it carried no authority — and
+  because "the maintainer rejected this once" is exactly the kind of false provenance a
+  corpus of records exists to prevent. Numbers are permanent and reasons are preserved;
+  so are non-reasons.
 - **Recorded:** 2026-09-03, and revised the same day when
   [plan 10](../plans/10-cold-start-statelessness.md) landed a production image from the
   `Dockerfile` while this was in review. The revision is in *Context*; the decision did
@@ -15,7 +29,8 @@
   follows stands on the build-system argument alone.
 - **Supersedes, if accepted:** the `Dockerfile`'s `production` target, which
   [10](10-cold-start-statelessness.md) landed on 2026-08-31. **Not** its `dev` target,
-  which is a different artifact for a different job and stays. Retiring the production
+  which is a different artifact for a different job and stays — and which the decider's
+  2026-09-04 statement makes the `Dockerfile`'s *only* job. Retiring the production
   stage is work for the accepting change to schedule, not something this record does by
   being written — see *Consequences*.
 - **Would affect:** [01](../plans/01-file-storage.md),
@@ -154,25 +169,52 @@ acceptance prerequisite 2.
 
 ## Acceptance prerequisites
 
-Gates, not suggestions. This record is written from interfaces read rather than run.
+Gates, not suggestions. This record is written from interfaces read rather than run — and
+that is the whole reason these survive the decider's statement above. The direction is
+settled; these are what turn a read interface into a run one. Status as of 2026-09-04,
+after [plan 20](../plans/20-container-infrastructure.md) piece 1:
 
 1. **All three images build, and the pod serves.** On the maintainer's Mac, through
    podman: `nix run .#load`, then `podman kube play deploy/podman/victual.yaml` against a
    throwaway PostgreSQL, then a rendered `/login` and one authenticated API read
    (`GET /api/stock`). The accepting pull request records image sizes and
    `nix path-info -rSh .#image-app`.
+   — **half met.** All three build and load. The pod does **not** start under `podman kube
+   play` ([#49](https://github.com/datagen24/victual/issues/49): `fsGroup` is not honoured
+   and the README's Secret step does not work), so nothing has served yet. Note what #49 is
+   and is not: it is a defect in the *manifest and its instructions*, not in the flake or
+   the images — which is the argument for splitting this gate, below.
 2. **The comparison against `victual:production` is measured, not asserted.** Size, and
    whether a shell is present, for both. The claim in *Consequences* that these are
    smaller is either replaced by the number or deleted.
+   — **met.** 284 MB, 205 MB and 291 MB for app, web and migrate, against the `Dockerfile`
+   production image's 819 MB; no shell in any of the three.
 3. **`nix flake check` passes**, including `image-has-no-shell` and
    `web-tier-carries-no-application`. If nixpkgs' PHP drags a shell into its runtime
    closure after all, this record's claim is amended to what is true rather than the check
    being relaxed.
+   — **met**, 34 assertions. `image-has-no-shell` earned its place: it failed first, and
+   correctly, on three shells reached through PEAR's `bin/pear`, PHP's `PROG_SENDMAIL`,
+   and `gd`. The check was not relaxed; the closure was.
 4. **The two fixed-output hashes reproduce** on a second machine or architecture. A hash
    that only holds where it was produced is not a pin.
+   — **not attempted.** Everything so far is one Mac.
 5. **The read-only root filesystem is proved on a running container**, not only asserted
    at evaluation — the one thing the `images` job does that `nix flake check` cannot. Plan
    20's verification check 4 is the form of it.
+   — **blocked by #49**, which is the same blocker as gate 1's second half.
+
+**On amending gate 1 rather than waiting.** [ADR-0008](0008-postgresql-only-runtime-engine.md)
+amended one of its own gates at acceptance, in the open and with the reasoning stated,
+because the gate turned out to guard the *implementing* PR rather than the decision. The
+same argument is available here: gates 1 and 5 both reduce to "a pod serves", the thing
+blocking that is a manifest defect rather than a build-system one, and gate 4 asks about
+reproducibility across machines — a property of the approach, not evidence for choosing
+it. Splitting gate 1 into "the images build" (met) and "the pod serves" (blocking the
+retirement of the `Dockerfile`'s `production` target, not the decision to build with Nix)
+would make this acceptable now. **That amendment is the accepting pull request's to make
+and to argue, not this paragraph's** — recorded here so the option is visible rather than
+rediscovered.
 
 ## Open questions
 
