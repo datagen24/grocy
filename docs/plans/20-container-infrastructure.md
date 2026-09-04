@@ -381,14 +381,21 @@ database. Nothing is published to the runner, because nothing needs to be: both 
 where the answer is available. Every step was run locally against the real images before it
 was written into the workflow.
 
-**What this did not do: the parity suite.** `.devtools/parity/bin/parity` built
-`--target production`, because when it was written on 2026-09-04 that was the only image in
-this tree serving HTTP. It is now [issue #56](https://github.com/datagen24/victual/issues/56),
-not a rushed half of this change — the port is two serving containers sharing a namespace
-where the suite expects one, plus a migrate run, and `stack.sh` has a standing and still-good
-reason not to reach for `podman kube play`. The suite fails with that issue number and an
-explanation rather than a raw "target stage not found".
+**And then the parity suite, [#56](https://github.com/datagen24/victual/issues/56), the
+same day.** `.devtools/parity/bin/parity` built `--target production`, because when it was
+written on 2026-09-04 that was the only image in this tree serving HTTP. It now builds the
+Nix images — `nix run .#load` on a Linux host, `nix/build-in-podman.sh images` everywhere
+else — and `stack/stack.sh` boots them the way the manifest does: `victual-migrate` as its
+own container once PostgreSQL is up, then `victual-app` and `victual-web` in a
+`podman pod` joined to the parity network, each with `--read-only`, `--cap-drop ALL` and
+`--security-opt no-new-privileges`, the app tier gated on
+`podman exec … /opt/victual/healthcheck`. `stack.sh` still does not reach for
+`podman kube play`, for the reason it always had: an initContainer runs to completion
+before the PostgreSQL it needs would start.
 
-The end state is better than what it replaces, which is the argument for doing it at all:
-the parity suite currently compares upstream against an image the fork does not ship, and
-after #56 it will compare against the one it does.
+That is the second thing driving the real images, and it drives them differently from the
+boot test: the boot test asks whether they serve, and this asks whether what they serve
+still matches upstream grocy 4.6.0. The end state is better than what it replaces, which
+was the argument for doing it at all — the suite compared upstream against an image the
+fork does not ship, and now compares against the one it does. `seed_victual_data()` went
+with it, having existed only for the `config.php` check issue #49 removed.

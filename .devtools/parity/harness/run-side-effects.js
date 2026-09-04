@@ -198,20 +198,32 @@ async function queryInflux(args, measurement) {
 
 // --- The boot publish ---------------------------------------------------------------------------
 
-// Runs `bin/victual-publish-state` inside the running Victual container. This is the one
-// place the harness reaches for the container runtime rather than for HTTP, because the
-// command has no HTTP surface — it is a deployment step, and the property under test is
-// that the deployment step works. `PARITY_PUBLISH_CMD` overrides it for a stack that is not
-// this one.
+// Runs `bin/victual-publish-state`. This is the one place the harness reaches outside HTTP,
+// because the command has no HTTP surface — it is a deployment step, and the property under
+// test is that the deployment step works.
+//
+// **How to run it is the caller's to say, not this file's.** It used to `podman exec` into
+// a container named `parity-victual` and run `php bin/victual-publish-state`. Since the
+// port to the Nix images (issue #56) there is no such container: the fork side is a pod of
+// two, and neither serving image has a shell, a `PATH` or a plain PHP CLI to exec into —
+// the CLI entry points live in `victual-migrate`, whose interpreter is a store path. That
+// is stack knowledge, so it stays in `stack/stack.sh`, and `bin/parity side-effects` passes
+// it down as `PARITY_PUBLISH_CMD`. Guessing a default here would only produce a wrong one.
 function runPublishState(args) {
 	const { execFileSync } = require('child_process');
 	const override = process.env.PARITY_PUBLISH_CMD;
-	const engine = process.env.CONTAINER_ENGINE || 'podman';
-	const container = process.env.PARITY_VICTUAL_CONTAINER || 'parity-victual';
 
-	const argv = override
-		? ['sh', '-c', override]
-		: [engine, 'exec', container, 'php', 'bin/victual-publish-state', '--quiet'];
+	if (!override) {
+		return {
+			ok: false,
+			detail:
+				'PARITY_PUBLISH_CMD is not set, so there is no way to run bin/victual-publish-state. ' +
+				'Run this phase through `.devtools/parity/bin/parity side-effects`, which sets it, ' +
+				'or set it yourself to a shell command that runs the tool against this stack.'
+		};
+	}
+
+	const argv = ['sh', '-c', override];
 
 	try {
 		const out = execFileSync(argv[0], argv.slice(1), { encoding: 'utf8', timeout: 60000 });

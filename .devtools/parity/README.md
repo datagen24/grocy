@@ -129,8 +129,10 @@ the fork can introduce without noticing, so it survives normalisation and is rep
 
 Recorded here rather than fixed, because fixing them is substantive change that belongs in
 its own pull request with its own dual-engine proof. Measured 2026-09-04 against
-`localhost/victual:parity` built from this working tree, and
-`docker.io/linuxserver/grocy:version-v4.6.0`.
+`localhost/victual:parity` — the `Dockerfile` production image this suite built before the
+port to the Nix images described above — and `docker.io/linuxserver/grocy:version-v4.6.0`.
+Kept as the record of that run rather than rewritten: several have since been fixed, and
+what a later run reports is in `reports/`, not here.
 
 **All three are the same family: SQLite-flavoured SQL written in PHP rather than in a
 view**, which is why the existing differential suite could not see them.
@@ -161,21 +163,63 @@ usable. A suite that only drives valid input would not have seen it.
 
 ## The stack
 
+**The fork side is the artifact the fork ships.** Since
+[ADR-0013](../../docs/adr/0013-nix-built-container-images.md) the production images are the
+three built by `flake.nix`, and this suite boots exactly those: `victual-migrate` runs and
+exits, then `victual-app` (php-fpm on loopback) and `victual-web` (nginx) serve together,
+with the same read-only root filesystem, the same dropped capabilities and the same
+in-container probes [`deploy/podman/victual.yaml`](../../deploy/podman/victual.yaml) uses.
+Until 2026-09-04 it built the `Dockerfile`'s `production` target, which ADR-0013's
+acceptance removed; [issue #56](https://github.com/datagen24/victual/issues/56) was that
+port. Comparing upstream against an image the fork does not ship was the weaker question.
+
 Plain `podman run` on one network with DNS aliases, orchestrated by
-[`stack/stack.sh`](stack/stack.sh) — not `podman kube play`, and not because a pod would be
-worse. `deploy/podman/victual.yaml` is a Kubernetes Pod on purpose and is the right shape
-for a *deployment*. It is the wrong shape for this: Kubernetes runs every initContainer to
-completion before any regular container starts, so a migrate initContainer in a pod that
-also contains PostgreSQL waits for a database that has not been started yet. This is a test
-fixture, not a deployment artifact, and it says so by not pretending to be one.
+[`stack/stack.sh`](stack/stack.sh) — with one pod, and still not `podman kube play`.
+
+The pod is not optional and is not a step toward the manifest: php-fpm binds
+`127.0.0.1:9000` (`nix/runtime/fpm-conf.nix`) so that nothing outside the pod can reach it,
+and nginx's `fastcgi_pass` names that address, so the two serving containers must share a
+network namespace. `podman pod create --network victual-parity` gives them that *and* keeps
+`postgres`, `mosquitto` and `influxdb` resolvable; the published port lives on the pod,
+because that is where a pod's ports live.
+
+What is still avoided is playing the manifest itself. `deploy/podman/victual.yaml` is a
+Kubernetes Pod on purpose and is the right shape for a *deployment*. It is the wrong shape
+for this: Kubernetes runs every initContainer to completion before any regular container
+starts, so a migrate initContainer in a pod that also contains PostgreSQL waits for a
+database that has not been started yet. `stack.sh` runs the migrate image as its own
+container once PostgreSQL is up. This is a test fixture, not a deployment artifact, and it
+says so by not pretending to be one.
 
 | Container | Image | Port |
 |---|---|---|
-| `parity-victual` | `localhost/victual:parity`, built from the working tree | 8080 |
+| `parity-victual-app` | `localhost/victual-app:4.6.0`, in pod `parity-victual` | — (FastCGI on the pod's loopback) |
+| `parity-victual-web` | `localhost/victual-web:4.6.0`, in the same pod | 8080, published by the pod |
+| — | `localhost/victual-migrate:4.6.0`, run once and removed | — |
 | `parity-upstream` | `docker.io/linuxserver/grocy:version-v4.6.0` | 8081 |
 | `parity-postgres` | `postgres:16`, on a tmpfs | — |
 | `parity-mosquitto` | `eclipse-mosquitto:2` | 1883 |
 | `parity-influxdb` | `influxdb:2.7` | 8086 |
+
+The tag is `version.json`'s `Version`, read at run time, because that is what
+`nix/overlay.nix` tags with. There is **no data volume** on the fork side: the application
+no longer requires a `config.php` ([issue #49](https://github.com/datagen24/victual/issues/49)),
+uploads go to the database (`VICTUAL_FILE_STORAGE=database`, which this stack sets because
+nothing writable is mounted), and `/data` is an empty read-only directory in the image.
+
+### Building the fork's images
+
+`parity all` builds them if they are not loaded and `--build` forces a rebuild. On a Linux
+host with Nix that is `nix run .#load`; everywhere else — a Mac included — it is
+`nix/build-in-podman.sh images`, which builds inside a podman container running the
+official Nix image and keeps a warm store between runs, so only the first build is slow.
+Either way the requirement is still Podman and Node 18+ and nothing else. See
+[`nix/README.md`](../../nix/README.md), which has the whole story about why a Mac cannot
+build a Linux image on its own.
+
+The app container's readiness gate is the manifest's `startupProbe` run the same way —
+`podman exec … /opt/victual/healthcheck`, a PHP script with the interpreter in its shebang,
+because these images have no shell to run anything else with.
 
 The upstream image is pinned to `version-v4.6.0` rather than `latest`, and that is the
 whole argument of the suite: `version.json` says 4.6.0 / 2026-03-06 and so does the
@@ -214,12 +258,14 @@ that differs between the two things being compared.
 
 ```bash
 .devtools/parity/bin/parity all            # everything, in the right order
-.devtools/parity/bin/parity all --build    # rebuild the Victual image from the tree first
+.devtools/parity/bin/parity all --build    # rebuild the Victual images from the tree first
 .devtools/parity/bin/parity up             # boot both and leave them running
 .devtools/parity/bin/parity api --only stock,entities
 .devtools/parity/bin/parity ui --headed    # watch the browser walk
 .devtools/parity/bin/parity reset          # cold start: drop both databases, re-migrate
-.devtools/parity/bin/parity logs victual   # podman logs for one container
+.devtools/parity/bin/parity logs app       # php-fpm — where a PHP error goes
+.devtools/parity/bin/parity logs web       # nginx — where a 502 is explained
+.devtools/parity/bin/parity logs upstream
 .devtools/parity/bin/parity status
 .devtools/parity/bin/parity down
 ```
