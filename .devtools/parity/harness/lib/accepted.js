@@ -161,6 +161,29 @@ const ACCEPTED = [
 	},
 
 	{
+		id: 'non-integer-object-id',
+		reference: 'docs/plans/11-api-error-handling.md',
+		reason:
+			'A path parameter the endpoint types as an integer, given something that is not one, is a 400 ' +
+			'here and a 404 upstream. Upstream\'s 404 is not a decision either: SQLite\'s dynamic typing ' +
+			'makes WHERE ("id" = \'undefined\') a silent non-match, so the row is simply missing. The same ' +
+			'statement on PostgreSQL is a type error, and this fork answered it 500 with the failing SQL ' +
+			'quoted into error_message — including the caller\'s own value — on every id-taking endpoint. ' +
+			'That is issue #48, and PathParameterMiddleware now refuses the value before any statement is ' +
+			'built.\n\n' +
+			'**400 rather than 404 is the deliberate part.** A malformed id is a request this API cannot ' +
+			'parse, not a row that happens to be absent, and the two want different answers from a client: ' +
+			'404 invites a retry against a resource that never existed. Issue #48 is the record. The ' +
+			'matcher is narrow — only this status pair, and only where the fork explains itself in the ' +
+			'documented error_message shape, so a 400 arriving from anywhere else is still reported.',
+		match: ({ difference, step }) =>
+			difference.kind === 'status' &&
+			difference.victual === 400 &&
+			difference.upstream === 404 &&
+			/undefined/.test(String(step.path)),
+	},
+
+	{
 		id: 'fork-only-entities',
 		reference: 'docs/plans/README.md',
 		reason:

@@ -16,7 +16,17 @@ var equipmentTable = Victual.EntityList.Table('#equipment-table', {
 	'initComplete': function ()
 	{
 		this.api().row({ order: 'current' }, 0).select();
-		DisplayEquipment($('#equipment-table tbody tr:eq(0)').data("equipment-id"));
+
+		// Only real rows carry data-equipment-id (views/equipment.blade.php). With no
+		// equipment at all, tr:eq(0) is DataTables' own "no data" placeholder row, so
+		// this used to read undefined and ask the API for /objects/equipment/undefined -
+		// which answered 500 and put the failing SQL in front of the user. Issue #48
+		// fixes the answer; this is the page no longer asking the question.
+		var firstEquipmentId = $('#equipment-table tbody tr:eq(0)').data("equipment-id");
+		if (firstEquipmentId !== undefined)
+		{
+			DisplayEquipment(firstEquipmentId);
+		}
 	}
 });
 

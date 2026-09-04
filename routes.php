@@ -26,6 +26,7 @@ use Victual\Controllers\TasksController;
 use Victual\Controllers\UsersController;
 use Victual\Middleware\CorsMiddleware;
 use Victual\Middleware\JsonMiddleware;
+use Victual\Middleware\PathParameterMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Routing\RouteCollectorProxy;
@@ -265,7 +266,9 @@ $app->group('/api', function (RouteCollectorProxy $group)
 	// Calendar
 	$group->get('/calendar/ical', [CalendarApiController::class, 'Ical'])->setName('calendar-ical');
 	$group->get('/calendar/ical/sharing-link', [CalendarApiController::class, 'IcalSharingLink']);
-})->add(new CorsMiddleware($container, $app->getResponseFactory()))->add(new JsonMiddleware($container, $app->getResponseFactory()));
+// PathParameterMiddleware is added first so that the two below wrap it: its 400 is a
+// response like any other and wants the same CORS and Content-Type treatment.
+})->add(new PathParameterMiddleware($container, $app->getResponseFactory()))->add(new CorsMiddleware($container, $app->getResponseFactory()))->add(new JsonMiddleware($container, $app->getResponseFactory()));
 
 
 // For CORS preflight OPTIONS requests

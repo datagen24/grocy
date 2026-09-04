@@ -67,6 +67,13 @@ jobs:
       - name: Every cited CI job exists
         run: php .devtools/check-cited-jobs.php
 
+      # PathParameterMiddleware reads which path parameters are integer ids out of
+      # victual.openapi.json, so an undocumented parameter is an unvalidated one - and an
+      # unvalidated id reached PostgreSQL as a type error, answering 500 with the failing
+      # statement in the body. See issue #48.
+      - name: Every API path parameter is typed
+        run: php .devtools/check-path-id-validation.php
+
   suite:
     runs-on: ubuntu-latest
 

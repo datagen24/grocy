@@ -64,8 +64,11 @@ class ExceptionController extends BaseApiController
 				$status = $exception->getCode();
 			}
 
+			// The same rule GenericErrorResponse() applies to a caught exception, applied
+			// to one that escaped: an uncaught PDOException is a server fault and stays a
+			// 500, but the answer does not quote the statement that failed. See issue #48.
 			$data = [
-				'error_message' => $exception->getMessage()
+				'error_message' => self::WithoutDriverText($exception->getMessage())
 			];
 
 			if ($displayErrorDetails)
