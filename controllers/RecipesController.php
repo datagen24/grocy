@@ -88,6 +88,12 @@ class RecipesController extends BaseController
 			$weekRecipeId = $weekRecipe->id;
 		}
 
+		// LessQL carries a Result's ORDER BY into aggregate queries. PostgreSQL rejects
+		// SELECT COUNT(*) ... ORDER BY sort_number, while SQLite silently accepts it, so
+		// count the unordered result before adding the display order (issue #45).
+		$usedMealplanSections = $this->DB->meal_plan_sections()
+			->where("id IN (SELECT section_id FROM meal_plan WHERE $mealPlanWhereTimespan)", $mealPlanWhereTimespanParams);
+
 		return $this->RenderPage($response, 'mealplan', [
 			'fullcalendarEventSources' => $events,
 			'recipes' => $recipes,
@@ -97,7 +103,8 @@ class RecipesController extends BaseController
 			'quantityUnits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
 			'quantityUnitConversionsResolved' => $this->DB->cache__quantity_unit_conversions_resolved(),
 			'mealplanSections' => $this->DB->meal_plan_sections()->orderBy('sort_number'),
-			'usedMealplanSections' => $this->DB->meal_plan_sections()->where("id IN (SELECT section_id FROM meal_plan WHERE $mealPlanWhereTimespan)", $mealPlanWhereTimespanParams)->orderBy('sort_number'),
+			'usedMealplanSections' => $usedMealplanSections->orderBy('sort_number'),
+			'usedMealplanSectionsCount' => $usedMealplanSections->count(),
 			'weekRecipe' => $weekRecipe
 		]);
 	}

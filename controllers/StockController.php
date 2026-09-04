@@ -530,8 +530,14 @@ class StockController extends BaseController
 			$listId = $request->getQueryParams()['list'];
 		}
 
+		// LessQL carries a Result's ORDER BY into aggregate queries. PostgreSQL rejects
+		// SELECT COUNT(*) ... ORDER BY product_name, while SQLite silently accepts it, so
+		// count the unordered result before adding the display order (issue #45).
+		$listItems = $this->DB->uihelper_shopping_list()->where('shopping_list_id = :1', $listId);
+
 		return $this->RenderPage($response, 'shoppinglist', [
-			'listItems' => $this->DB->uihelper_shopping_list()->where('shopping_list_id = :1', $listId)->orderBy('product_name', 'COLLATE NOCASE'),
+			'listItems' => $listItems->orderBy('product_name', 'COLLATE NOCASE'),
+			'listItemsCount' => $listItems->count(),
 			'products' => $this->DB->products()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'quantityunits' => $this->DB->quantity_units()->orderBy('name', 'COLLATE NOCASE'),
 			'missingProducts' => StockService::GetInstance()->GetMissingProducts(),
