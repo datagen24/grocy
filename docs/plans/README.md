@@ -105,7 +105,7 @@ narrowings that [17](17-ecosystem-clients.md) has to state.
 |---|---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement. The repository has since **left `grocy/grocy`'s fork network** (2026-09-04) — see below |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
-| 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision; builds on 10, which landed | medium, front-loaded | **piece 1 landed** (2026-09-04) — the flake builds: `nix flake check` passes 34 assertions, all three images build and load, and the first build found five defects including three shells in the app image's closure. The **pod does not start** under `podman kube play` ([#49](https://github.com/datagen24/victual/issues/49) — a manifest defect, not a flake one), so piece 1's verification is partial and ADR-0013 stays Proposed. Its **direction is settled** — Nix builds production, the `Dockerfile` builds dev containers — and two of its five gates are met |
+| 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md), **Accepted 2026-09-04**; builds on 10, which landed | medium, front-loaded | **piece 1 complete** (2026-09-04) — the flake builds and **the pod serves**. `nix flake check` passes 34 assertions; all three images build and load (284/206/291 MB against the `Dockerfile` production image's 819 MB). Nine defects in two rounds: five from the first build (three of them shells in the app image's closure), then [#49](https://github.com/datagen24/victual/issues/49)'s two ways this manifest means something different under podman than under Kubernetes, plus a broken error page shipped since plan 10 — `GetSystemInfo()` opened a SQLite connection these images have no driver for, and `ExceptionController` calls it. **ADR-0013 accepted with all five gates met as written.** Pieces 2–5 remain, including retiring the `Dockerfile`'s `production` target |
 
 ### The repository has left grocy/grocy's fork network
 
@@ -162,29 +162,27 @@ One more was written on 2026-09-03:
 
 - **[ADR-0013](../adr/0013-nix-built-container-images.md)** — production container images
   are built by Nix from a flake in this repository, one image per workload, on no base
-  image. Still **proposed — but the direction is settled**: the maintainer's stated
-  position (2026-09-04) is that Nix is the production builder and the `Dockerfile` builds
-  development containers, which are heavier and carry a surface Nix does not. What is open
-  is proof, not choice. The record was revised the same day it was written, because
+  image. **Accepted 2026-09-04**: Nix is the production builder and the `Dockerfile` builds
+  development containers, which are heavier and carry a surface Nix does not. The record
+  was revised the same day it was written, because
   [10](10-cold-start-statelessness.md) landed a `production` target in the `Dockerfile`
   while it was in review and refuted three of its premises; it now argues against that
   image rather than against a vacuum, which is a weaker case honestly stated —
   reproducibility, image contents, an allowlisted source, and the non-PHP workloads
   coming, which inherit no Debian-and-Apache answer.
 
-  It **supersedes the `Dockerfile`'s `production` target if accepted**, not its `dev`
-  target — which the maintainer's statement makes the `Dockerfile`'s only remaining job —
-  and the accepting change schedules that retirement rather than this record doing
-  it by being written. Its acceptance prerequisites were unusually literal, because it was
-  written from interfaces read rather than run: **two of the five are now met** by
-  [plan 20](20-container-infrastructure.md) piece 1 (the measured size and shell
-  comparison, and `nix flake check`), two are blocked by
-  [#49](https://github.com/datagen24/victual/issues/49) and one is unattempted. The record
-  names the gate amendment that would let it be accepted without waiting on a manifest
-  defect. It supplies the *how* for [ADR-0010](../adr/0010-workload-standard.md)'s fourth
-  property; 0010's own open question 1, about whether the deploy tree belongs to the fork
-  or to the operator, is answered in practice — plan 20 shipped `deploy/podman/` — but
-  still 0010's to record.
+  It **supersedes the `Dockerfile`'s `production` target**, not its `dev` target — which
+  is now the `Dockerfile`'s only remaining job — and the acceptance *schedules* that
+  retirement as [20](20-container-infrastructure.md)'s piece 3 rather than performing it.
+  Its acceptance prerequisites were unusually literal, because it was written from
+  interfaces read rather than run: **all five are met as written**, two by piece 1's build
+  and three by the run that closed [#49](https://github.com/datagen24/victual/issues/49).
+  An amendment that would have made it acceptable a day earlier was available and
+  declined — and fixing the blocker instead found two further defects, which is the
+  argument for gates in one line. It supplies the *how* for
+  [ADR-0010](../adr/0010-workload-standard.md)'s fourth property; 0010's own open question
+  1, about whether the deploy tree belongs to the fork or to the operator, is answered in
+  practice — plan 20 shipped `deploy/podman/` — but still 0010's to record.
 
   **A commit on 2026-09-03 marked 0013 Rejected and deleted the flake. That was an agent
   hallucinating a decision the maintainer never made**, reverted the next commit, and it is

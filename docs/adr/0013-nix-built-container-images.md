@@ -1,11 +1,12 @@
 # ADR-0013: Production images are built by Nix from a flake in this repository
 
-- **Status: Proposed, and the direction is not in question.** The decider has stated it
-  plainly (2026-09-04): **Nix is the production builder, and `Dockerfile`-based images are
-  development containers** — heavier, with a surface Nix does not carry. What is still
-  open is not *whether* but *proved*: three of the five acceptance prerequisites below are
-  unmet, and this record is written from interfaces read rather than run. Acceptance is
-  its own pull request and remains so.
+- **Status: Accepted, 2026-09-04.** **Nix is the production builder, and
+  `Dockerfile`-based images are development containers** — heavier, with a surface Nix
+  does not carry. All five acceptance prerequisites below are met, each annotated in place
+  with what met it; none was amended or relaxed. **Supersedes the `Dockerfile`'s
+  `production` target**, whose retirement this acceptance schedules rather than performs —
+  see *Consequences* and open question 5, which is now
+  [plan 20](../plans/20-container-infrastructure.md)'s piece 3.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
   lifecycle rule in [the index](README.md).
 - **This record was never rejected.** A commit on 2026-09-03 (`1c97766f`) marked it
@@ -27,12 +28,14 @@
   root filesystem, a structural property of the artifact rather than a line somebody
   remembers to add. 0010 is Proposed and this record does not assume otherwise: what
   follows stands on the build-system argument alone.
-- **Supersedes, if accepted:** the `Dockerfile`'s `production` target, which
+- **Supersedes:** the `Dockerfile`'s `production` target, which
   [10](10-cold-start-statelessness.md) landed on 2026-08-31. **Not** its `dev` target,
-  which is a different artifact for a different job and stays — and which the decider's
-  2026-09-04 statement makes the `Dockerfile`'s *only* job. Retiring the production
-  stage is work for the accepting change to schedule, not something this record does by
-  being written — see *Consequences*.
+  which is a different artifact for a different job and stays — and which this acceptance
+  makes the `Dockerfile`'s *only* job. Retiring the production stage is scheduled rather
+  than done here, as [plan 20](../plans/20-container-infrastructure.md)'s piece 3: it
+  carries the `images` CI job's assertions across, and the one that has no
+  `nix flake check` equivalent — booting a container and fetching a URL — is now covered
+  by that plan's verification instead. See *Consequences*.
 - **Would affect:** [01](../plans/01-file-storage.md),
   [02](../plans/02-mcp-endpoint.md) and [18](../plans/18-mqtt-state-publication.md), whose
   workloads are born into this pattern or outside it;
@@ -169,21 +172,21 @@ acceptance prerequisite 2.
 
 ## Acceptance prerequisites
 
-Gates, not suggestions. This record is written from interfaces read rather than run — and
-that is the whole reason these survive the decider's statement above. The direction is
-settled; these are what turn a read interface into a run one. Status as of 2026-09-04,
-after [plan 20](../plans/20-container-infrastructure.md) piece 1:
+Gates, not suggestions. This record was written from interfaces read rather than run, and
+these are what turned a read interface into a run one. **All five are met**, by
+[plan 20](../plans/20-container-infrastructure.md) piece 1 and the run that closed
+[#49](https://github.com/datagen24/victual/issues/49). None was amended, relaxed or
+dropped; each carries what met it.
 
 1. **All three images build, and the pod serves.** On the maintainer's Mac, through
    podman: `nix run .#load`, then `podman kube play deploy/podman/victual.yaml` against a
    throwaway PostgreSQL, then a rendered `/login` and one authenticated API read
    (`GET /api/stock`). The accepting pull request records image sizes and
    `nix path-info -rSh .#image-app`.
-   — **half met.** All three build and load. The pod does **not** start under `podman kube
-   play` ([#49](https://github.com/datagen24/victual/issues/49): `fsGroup` is not honoured
-   and the README's Secret step does not work), so nothing has served yet. Note what #49 is
-   and is not: it is a defect in the *manifest and its instructions*, not in the flake or
-   the images — which is the argument for splitting this gate, below.
+   — **met.** All three build and load, and the pod serves: `/login` renders, `GET
+   /api/stock` returns JSON, and 27 top-level pages answer 200. Getting there took the two
+   podman-versus-Kubernetes defects and the broken error page recorded in plan 20's second
+   Executed section. Sizes: 284 MB, 206 MB and 291 MB.
 2. **The comparison against `victual:production` is measured, not asserted.** Size, and
    whether a shell is present, for both. The claim in *Consequences* that these are
    smaller is either replaced by the number or deleted.
@@ -198,23 +201,27 @@ after [plan 20](../plans/20-container-infrastructure.md) piece 1:
    and `gd`. The check was not relaxed; the closure was.
 4. **The two fixed-output hashes reproduce** on a second machine or architecture. A hash
    that only holds where it was produced is not a pin.
-   — **not attempted.** Everything so far is one Mac.
+   — **met, on a second architecture rather than a second machine.** The `nix` workflow
+   builds this flake on `ubuntu-latest` (x86_64-linux) and the local build is aarch64-linux
+   inside podman, from the same `nix/hashes.nix`. Both pass.
 5. **The read-only root filesystem is proved on a running container**, not only asserted
    at evaluation — the one thing the `images` job does that `nix flake check` cannot. Plan
    20's verification check 4 is the form of it.
-   — **blocked by #49**, which is the same blocker as gate 1's second half.
+   — **met**, and probed rather than asserted: from inside the running app container,
+   writes to `/opt`, `/etc` and `/data` are all refused while `/tmp` succeeds, across a
+   create, an edit, a delete, and an image uploaded, served, thumbnailed and deleted
+   through `FILE_STORAGE=database`. No `EROFS` anywhere, and the baked view cache's mtimes
+   are still the image's epoch afterwards.
 
-**On amending gate 1 rather than waiting.** [ADR-0008](0008-postgresql-only-runtime-engine.md)
-amended one of its own gates at acceptance, in the open and with the reasoning stated,
-because the gate turned out to guard the *implementing* PR rather than the decision. The
-same argument is available here: gates 1 and 5 both reduce to "a pod serves", the thing
-blocking that is a manifest defect rather than a build-system one, and gate 4 asks about
-reproducibility across machines — a property of the approach, not evidence for choosing
-it. Splitting gate 1 into "the images build" (met) and "the pod serves" (blocking the
-retirement of the `Dockerfile`'s `production` target, not the decision to build with Nix)
-would make this acceptable now. **That amendment is the accepting pull request's to make
-and to argue, not this paragraph's** — recorded here so the option is visible rather than
-rediscovered.
+**An amendment was available and was not taken.** While #49 was open, gates 1 and 5 both
+reduced to "a pod serves", and the thing blocking that was a manifest defect rather than a
+build-system one — so splitting gate 1 into "the images build" and "the pod serves" would
+have made this acceptable earlier, the way
+[ADR-0008](0008-postgresql-only-runtime-engine.md) amended one of its own gates in the
+open. The maintainer chose to fix #49 first and accept with every gate met as written.
+Recorded because the road not taken is part of what a gate is worth: fixing it turned up
+two further defects that no amendment would have found, one of which — every error page on
+these images being a fatal error — had been shipped and unnoticed since plan 10.
 
 ## Open questions
 

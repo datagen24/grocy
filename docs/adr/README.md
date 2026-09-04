@@ -80,7 +80,7 @@ readers most often need and least often have.
 | [0010](0010-workload-standard.md) | Fork-owned workloads are stateless, idempotent, unprivileged and declared | **Proposed** | [constitution](../constitution.md) |
 | [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Proposed** | [06](../plans/06-location-barcodes.md) |
 | [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Proposed** | — |
-| [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Proposed** | [20](../plans/20-container-infrastructure.md), [nix/](../../nix/README.md), [deploy/](../../deploy/README.md) |
+| [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Accepted** 2026-09-04, **supersedes the `Dockerfile`'s `production` target** | [20](../plans/20-container-infrastructure.md), [nix/](../../nix/README.md), [deploy/](../../deploy/README.md) |
 
 **0008 was accepted 2026-08-31 and supersedes
 [0001](0001-postgresql-alongside-sqlite.md).** 0009 remains a proposal under active
@@ -127,29 +127,19 @@ nothing here counts as one.
   payloads, and the confirm permission (question 2 carries the lean). The first is
   entangled with [19](../plans/19-rbac.md)'s wire-contract questions, and 19 is itself
   blocked on its own Q8. **Decidable, but reads better after 19 unblocks.**
-- **[0013](0013-nix-built-container-images.md) — Nix-built production images.** The
-  furthest along, the only one blocked by something outside itself, and **the only one
-  whose direction the decider has already stated**: Nix is the production builder, and the
-  `Dockerfile` is for development containers, which are heavier and carry a surface Nix
-  does not (2026-09-04). That settles *whether*; it does not by itself accept the record,
-  because acceptance is its own pull request and three gates are unmet.
-  [20](../plans/20-container-infrastructure.md) piece 1 met gates **2** (measured, not
-  asserted: 284 MB, 205 MB and 291 MB against the `Dockerfile` production image's 819 MB,
-  with no shell in any of them) and **3** (`nix flake check` passes 34 assertions,
-  including `image-has-no-shell` — which failed first, and correctly, on three shells
-  reached through PEAR, sendmail and `gd`). Gates **1** and **5** need a pod that serves,
-  and the pod does not start under `podman kube play`
-  ([#49](https://github.com/datagen24/victual/issues/49)). Gate **4**, the fixed-output
-  hashes reproducing on a second machine, has not been attempted. **Blocked on #49** —
-  which is a defect in the deploy manifest, not in the flake, and the record now says so
-  and names the gate amendment that would make it acceptable without waiting.
+- **[0013](0013-nix-built-container-images.md) — Nix-built production images.**
+  **Accepted 2026-09-04**, with all five gates met as written rather than amended; it is
+  listed here only so a reader of this section is not left thinking it is still open.
+  [Plan 20](../plans/20-container-infrastructure.md) piece 1 met two of them, and fixing
+  [#49](https://github.com/datagen24/victual/issues/49) met the other three. An amendment
+  that would have made it acceptable a day earlier was available and declined; the record
+  says why that mattered, which is that fixing the blocker found two more defects.
 
-  **This record was never rejected.** A commit on 2026-09-03 (`1c97766f`) marked it
-  Rejected and deleted the flake; the next commit put both back. That was an agent
-  hallucinating a decision the maintainer never made — not a rejection later reconsidered.
-  0013 now carries the correction, because the git history alone reads as a maintainer who
-  changed their mind, and this corpus is the wrong place for false provenance about who
-  decided what.
+  **It was never rejected.** A commit on 2026-09-03 (`1c97766f`) marked it Rejected and
+  deleted the flake; the next commit put both back. That was an agent hallucinating a
+  decision the maintainer never made — not a rejection later reconsidered. 0013 carries the
+  correction, because the git history alone reads as a maintainer who changed their mind,
+  and this corpus is the wrong place for false provenance about who decided what.
 
 ## Known unfiled decisions
 
