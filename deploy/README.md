@@ -8,8 +8,11 @@ manifest here with probes, limits and a security context, and there is nothing h
 about ingress classes, storage classes, secret management or DNS. PostgreSQL is not
 here either — it is infrastructure the fork consumes, not a workload the fork ships.
 
-**Nothing in this directory has been run yet, and the images it names have never been
-built.** See [plan 20](../docs/plans/20-container-infrastructure.md), "Verification".
+**Applied and serving since 2026-09-04.** The first application is what found
+[#49](https://github.com/datagen24/victual/issues/49) — two ways this manifest meant
+something different under `podman kube play` than it does under Kubernetes. Both are fixed
+and commented where they bit. See [plan 20](../docs/plans/20-container-infrastructure.md),
+"Verification", for what the run established and what is still outstanding.
 
 ## What is here
 
@@ -168,7 +171,8 @@ Stated plainly because the gap is the point of tracking it:
   deployment sets `VICTUAL_FILE_STORAGE=database` rather than treating it as an option —
   with nothing writable mounted, the `filesystem` backend has nowhere to write. A
   deployment that wants files on a volume must mount one and say so.
-- **Two production images exist in the tree.** The `Dockerfile`'s `production` target and
-  these. That is deliberate and temporary:
-  [ADR-0013](../docs/adr/0013-nix-built-container-images.md) retires the former when it is
-  accepted, and its open question 5 is about when.
+- ~~**Two production images exist in the tree.**~~ **Resolved, 2026-09-04.**
+  [ADR-0013](../docs/adr/0013-nix-built-container-images.md) was accepted and its open
+  question 5 answered by removing the `Dockerfile`'s `production` target. These are the
+  production images; the `Dockerfile` builds the development and CI image and nothing
+  else.

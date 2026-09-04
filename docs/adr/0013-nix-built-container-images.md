@@ -237,10 +237,21 @@ these images being a fatal error — had been shipped and unnoticed since plan 1
    cut; re-answering later costs one file.*
 4. **One architecture or two?** *Lean: build for the cluster's architecture and treat
    "runs on the laptop" as a property of the podman bootstrap.*
-5. **When does the `production` stage actually go?** Accepting this record does not delete
-   it, and running both for a while is defensible. *Lean: the accepting change removes the
-   stage and moves the `images` job's boot test onto the Nix images in the same commit,
-   because two production images is exactly the drift this record exists to avoid.*
+5. ~~**When does the `production` stage actually go?**~~ **Answered 2026-09-04: it is
+   gone**, and the lean is what happened — the stage removed, the `images` job's boot test
+   moved onto the Nix images in the `nix` workflow, the `assets` stage that existed only to
+   feed production removed with it, and the four assertions with `nix flake check`
+   equivalents left to those. `docker build .` now builds the dev image, which is the
+   `Dockerfile`'s only stage.
+
+   The lean said "in the same commit" as the acceptance and it was one commit later, for a
+   reason the lean could not have known: it was written 2026-09-03, and the parity suite
+   arrived on 2026-09-04 building `--target production` because that was the only image in
+   this tree that served HTTP. Porting that suite onto the Nix images is a real piece of
+   work — two serving containers sharing a network namespace where it expects one — so it
+   is [issue #56](https://github.com/datagen24/victual/issues/56) rather than a rushed
+   half of this change. The suite fails with that issue number rather than a raw build
+   error in the meantime.
 
 ## Options considered
 

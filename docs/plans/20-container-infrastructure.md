@@ -177,6 +177,7 @@ keeping `images/lib.nix` small enough to copy.
   and the `pcntl` extension together, exactly as predicted.
 - **CI and production still build different images.** The differential suite runs in the
   Debian `dev` image. Piece 2 narrows the gap; only pieces 3 and the tag build close it.
+  Piece 3's first half is now done — see below — but the suite still runs in `dev`.
 
 ## Verification
 
@@ -352,3 +353,42 @@ upstream behaves the same way, so nothing here is broken; but "success" for a wr
 stored nothing is the same shape as the two findings review caught in
 [01](01-file-storage.md)'s importer, and it belongs in [11](11-api-error-handling.md)'s
 sweep rather than being lost with this session.
+
+## Executed — piece 3, first half: the `production` target is retired, 2026-09-04
+
+[ADR-0013](../adr/0013-nix-built-container-images.md)'s open question 5 said the accepting
+change should remove the `Dockerfile`'s `production` stage rather than leave two production
+images in the tree, "because two production images is exactly the drift this record exists
+to avoid". Done, one commit after the acceptance rather than in it.
+
+**What went, and where its assertions went.** The stage itself; the `assets` stage, which
+existed only to feed it (`nix/frontend.nix` does that for the Nix images); and the `images`
+job's five assertions about it, none of which were deleted:
+
+| Assertion | Now |
+|---|---|
+| Does not run as root | `nix/checks.nix` `image-runs-unprivileged`, plus the boot test reading `.Config.User` back off all three images |
+| View cache baked and unwritable | `nix/checks.nix` `viewcache-is-warm`, plus a boot-test write probe |
+| No `.git` or `data/` in the image | `nix/source.nix` is an allowlist, so neither can arrive by being forgotten — the property is structural rather than checked |
+| Read-only root filesystem, serving a page | The `nix` workflow's boot test. **This is the one with no `nix flake check` equivalent**, which is why it moved rather than being dropped |
+| `/tmp`, upload limits, `php://temp` spill | The same boot test, as an extension-list and write-probe check |
+
+The boot test runs `victual-migrate` read-only against a throwaway PostgreSQL, then
+`victual-app` and `victual-web` sharing a network namespace exactly as the pod does, and
+drives both in-container probes — `/opt/victual/healthcheck` and `/opt/victual/webcheck`,
+the latter on `/robots.txt` and on `/login`, which goes through nginx, FastCGI, PHP and the
+database. Nothing is published to the runner, because nothing needs to be: both probes run
+where the answer is available. Every step was run locally against the real images before it
+was written into the workflow.
+
+**What this did not do: the parity suite.** `.devtools/parity/bin/parity` built
+`--target production`, because when it was written on 2026-09-04 that was the only image in
+this tree serving HTTP. It is now [issue #56](https://github.com/datagen24/victual/issues/56),
+not a rushed half of this change — the port is two serving containers sharing a namespace
+where the suite expects one, plus a migrate run, and `stack.sh` has a standing and still-good
+reason not to reach for `podman kube play`. The suite fails with that issue number and an
+explanation rather than a raw "target stage not found".
+
+The end state is better than what it replaces, which is the argument for doing it at all:
+the parity suite currently compares upstream against an image the fork does not ship, and
+after #56 it will compare against the one it does.

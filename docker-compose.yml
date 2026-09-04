@@ -12,10 +12,9 @@ services:
     # victual/victual, in the open, on purpose: this database exists for the length of a
     # suite run, on a tmpfs, with no published ports, and every run creates it from
     # nothing. Sweep finding S25 records the credentials as an Info-level observation
-    # about exactly this file, and the production image the Dockerfile now builds bakes
-    # no credentials at all - it reads VICTUAL_DB_* from the deployment. Changing these
-    # would move the secret rather than remove it, and would break every documented
-    # invocation of the suite.
+    # about exactly this file, and the production images bake no credentials at all - they
+    # read VICTUAL_DB_* from the deployment. Changing these would move the secret rather
+    # than remove it, and would break every documented invocation of the suite.
     environment:
       POSTGRES_USER: victual
       POSTGRES_PASSWORD: victual
@@ -33,8 +32,9 @@ services:
   dev:
     build:
       context: .
-      # The Dockerfile's default target is the production image; this service wants the
-      # other one. See the Dockerfile's header.
+      # Named although it is now the Dockerfile's only stage: the name is what this
+      # service is asking for, and a file that grows a second stage should not silently
+      # change what this builds. See the Dockerfile's header for where production went.
       target: dev
     depends_on:
       postgres:

@@ -45,8 +45,8 @@
 								<td><code>{{ $systemInfo['php_version'] }}</code></td>
 							</tr>
 							<tr>
-								<td class="text-right">SQLite Version</td>
-								<td><code>{{ $systemInfo['sqlite_version'] }}</code></td>
+								<td class="text-right">Database Engine</td>
+								<td><code>{{ $systemInfo['database_engine'] }}</code></td>
 							</tr>
 							<tr>
 								<td class="text-right">Database Version</td>

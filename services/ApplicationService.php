@@ -85,10 +85,61 @@ class ApplicationService extends BaseService
 			'victual_version' => $this->GetInstalledVersion(),
 			'php_version' => phpversion(),
 			'sqlite_version' => self::GetSqliteVersion(),
+			'database_engine' => $this->GetDatabaseEngine(),
 			'db_version' => $this->DB->migrations()->max('migration'),
 			'os' => php_uname('s') . ' ' . php_uname('r') . ' ' . php_uname('v') . ' ' . php_uname('m'),
 			'client' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'unknown'
 		];
+	}
+
+	/**
+	 * The database engine actually serving this installation, as "PostgreSQL 16.10".
+	 *
+	 * This is what `sqlite_version` below was *for* on an installation that runs SQLite:
+	 * "what version is the database engine behind this?" On an installation with an
+	 * external database it never answered that question — it reported the version of the
+	 * SQLite library compiled into PHP, which is a client library for an engine nothing
+	 * here is talking to. The About page showed it under the heading "SQLite Version" and
+	 * the honest reading of that row on this fork was "3.46.1, and irrelevant".
+	 *
+	 * So the question is kept and the answer is made true. `PDO::ATTR_SERVER_VERSION`
+	 * rather than `SELECT version()`, which returns PostgreSQL's full build banner —
+	 * compiler, architecture, a hundred characters of it. The attribute is shorter but not
+	 * short: libpq reports `16.15 (Debian 16.15-1.pgdg13+2)`, so the leading version is
+	 * taken and the packaging suffix dropped. That is measured rather than assumed — the
+	 * first version of this comment claimed the attribute was already the bare number.
+	 *
+	 * @return string
+	 */
+	private function GetDatabaseEngine()
+	{
+		try
+		{
+			$pdo = DatabaseService::GetInstance()->GetDbConnectionRaw();
+
+			$driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+			$version = (string)$pdo->getAttribute(\PDO::ATTR_SERVER_VERSION);
+
+			// The leading version token: "16.15 (Debian ...)" -> "16.15". A server that
+			// reports something this does not match keeps whatever it reported, because a
+			// version nobody can parse is still more useful than an empty row.
+			if (preg_match('/^\d+(\.\d+)*/', $version, $matches) === 1)
+			{
+				$version = $matches[0];
+			}
+
+			$name = $driver === 'pgsql' ? 'PostgreSQL' : ($driver === 'sqlite' ? 'SQLite' : $driver);
+
+			return trim($name . ' ' . $version);
+		}
+		catch (\Throwable $ex)
+		{
+			// The About page and the 500 page both read this, and the 500 page is reached
+			// precisely when things are broken — including, sometimes, the database. A
+			// diagnostic that throws while reporting a diagnostic is how one 500 becomes
+			// a fatal error, which is the bug this whole method sits next to.
+			return 'unavailable';
+		}
 	}
 
 	/**
