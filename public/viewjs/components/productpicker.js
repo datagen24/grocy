@@ -279,7 +279,11 @@ $('#product_id_text_input').on('blur', function (e)
 			return;
 		}
 
-		var optionElement = $("#product_id option:contains(\"" + input + "\")").first();
+		// The typed or scanned value, so a quote or a bracket in it would rewrite the
+		// expression rather than be searched for. Review finding P2: this one survived the
+		// sweep that replaced the others because it is ":contains(...)" rather than an
+		// "option[...]" attribute selector, and the grep looked for the latter.
+		var optionElement = Victual.Components.ProductPicker.FindOptionByText(input);
 		if (input.length > 0 && optionElement.length === 0 && GetUriParam('flow') === undefined && Victual.Components.ProductPicker.GetPicker().parent().data('disallow-all-product-workflows').toString() === "false")
 		{
 			var addProductWorkflowsAdditionalCssClasses = "";

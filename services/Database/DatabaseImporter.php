@@ -9,7 +9,10 @@ use Victual\Services\DatabaseMigrationService;
  * installation can move without losing its data.
  *
  * The schema is expected to already exist in the target - run the migrations there first.
- * This only moves rows.
+ * This only moves rows, verbatim, and then purifies the five HTML-rendered columns in the
+ * target: a source that predates the API's purifier carries payloads no later write path
+ * would have accepted, and the target's migrations ran before the copy so migration 0260
+ * cannot see them. See StoredHtmlPurifier.
  */
 class DatabaseImporter
 {
@@ -65,9 +68,13 @@ class DatabaseImporter
 	 * (unless $force) when the target already holds data.
 	 *
 	 * @param bool $force Skip the target-is-empty check; existing rows are truncated away
+	 * @param bool $purifyStoredHtml Clean the HTML-rendered columns afterwards - see below.
+	 * Defaults to true so an operator's import is protected without asking for it; the
+	 * differential test scripts pass false because they compare the two engines row for row
+	 * and a target the importer had rewritten would read as a copy it had corrupted.
 	 * @return array Row counts per table, keyed by table name
 	 */
-	public function Import(bool $force = false): array
+	public function Import(bool $force = false, bool $purifyStoredHtml = true): array
 	{
 		$tables = $this->GetCommonTables();
 
@@ -126,6 +133,26 @@ class DatabaseImporter
 
 		$this->AssertRowCountsMatch($report);
 		$this->AssertValuesMatch($tables);
+
+		// After the assertions, never before them. The copy's job is to be verbatim and
+		// AssertValuesMatch is what proves it was; purifying mid-copy would make every
+		// rewritten description read as a value the importer had corrupted. So the target
+		// is first shown to be an exact copy, and only then cleaned.
+		//
+		// It has to happen here rather than in a migration, because bin/victual-db-import
+		// migrates the target *before* copying into it - migration 0260 therefore runs
+		// against an empty database and finds nothing. A source predating the API's
+		// purifier (upstream grocy, or this fork before sweep finding S1) otherwise lands
+		// its stored payloads in the target untouched. Review finding P1 on #41.
+		if ($purifyStoredHtml)
+		{
+			$purified = StoredHtmlPurifier::Purify($this->Target, $this->TargetDialect, $this->Progress);
+
+			if (!empty($purified))
+			{
+				($this->Progress)('  purified ' . array_sum($purified) . ' stored description(s) that predate the API purifier');
+			}
+		}
 
 		return $report;
 	}

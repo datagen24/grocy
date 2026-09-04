@@ -71,7 +71,12 @@ if (typeof prefillUser !== "undefined")
 var prefillUserId = Victual.Components.UserPicker.GetPicker().parent().data('prefill-by-user-id').toString();
 if (typeof prefillUserId !== "undefined")
 {
-	var possibleOptionElement = $("#user_id option[value='" + prefillUserId + "']").first();
+	// A predicate, not a selector built by concatenation - see productpicker.js's
+	// FindOptionByValue for why this file no longer quotes values into Sizzle syntax.
+	var possibleOptionElement = $('#user_id option').filter(function ()
+	{
+		return $(this).attr('value') === prefillUserId;
+	}).first();
 	if (possibleOptionElement.length > 0)
 	{
 		$('#user_id').val(possibleOptionElement.val());

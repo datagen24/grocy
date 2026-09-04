@@ -3,9 +3,9 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|files|mqtt]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|richtext|files|mqtt]
 #
-# Eight kinds of check, for eight reasons. Views are compared by what they return, because
+# Nine kinds of check, for nine reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -46,7 +46,18 @@
 # can tell an imported file from a stale one, since an operator deletes the source volume
 # on its say-so. Like the rollback phase it asks one engine a question.
 #
-# The eighth is not a differential check at all, and it is here because the alternative
+# The eighth is about rows rather than schema, and it is a differential check because the
+# routine it exercises quotes identifiers through the dialect and writes through PDO - the
+# two things that differ per engine. Five columns are rendered as HTML rather than escaped,
+# so their boundary is the purifier every API write goes through; a row that arrived any
+# other way never met it. An in-place upgrade from a database predating the purifier is one
+# such way, and DatabaseImporter - which copies verbatim, as it should - is the other. The
+# rich text phase plants payloads with a direct write, the way the gap does, and asserts
+# that migration 0260 and the importer both clean them up. Two of its cases are controls
+# rather than assertions about danger: real summernote formatting has to survive, and a
+# column that is *not* HTML-rendered has to be left exactly as typed.
+#
+# The ninth is not a differential check at all, and it is here because the alternative
 # was worse. Plan 18's published-state and outbox probes guard eight defects that produce
 # no error of any kind - a stale retained topic, an event lost after a commit, a
 # redelivered point that duplicates instead of overwriting, an MQTT client id that lost its
@@ -75,6 +86,7 @@
 #   SUITE_PGSQL_ROLLBACK_DB              database for the rollback tests (default victual_rollback)
 #   SUITE_PGSQL_FILTER_DB                database for the filter tests  (default victual_filter)
 #   SUITE_PGSQL_SCHEMA_DB                database for the schema gate   (default victual_schema)
+#   SUITE_PGSQL_RICHTEXT_DB              database for the rich text phase (default victual_richtext)
 #   SUITE_PGSQL_FILES_DB                 database for the file import tests (default victual_files)
 #   SUITE_PGSQL_MQTT_DB                  database for the mqtt tests    (default victual_mqtt)
 #   SUITE_MQTT_STANDIN_PORT              port for the stand-in InfluxDB (default 8390)
@@ -111,6 +123,7 @@ MIGRATE_DB="${SUITE_PGSQL_MIGRATE_DB:-victual_migrate}"
 ROLLBACK_DB="${SUITE_PGSQL_ROLLBACK_DB:-victual_rollback}"
 FILTER_DB="${SUITE_PGSQL_FILTER_DB:-victual_filter}"
 SCHEMA_DB="${SUITE_PGSQL_SCHEMA_DB:-victual_schema}"
+RICHTEXT_DB="${SUITE_PGSQL_RICHTEXT_DB:-victual_richtext}"
 FILES_DB="${SUITE_PGSQL_FILES_DB:-victual_files}"
 MQTT_DB="${SUITE_PGSQL_MQTT_DB:-victual_mqtt}"
 MQTT_STANDIN_PORT="${SUITE_MQTT_STANDIN_PORT:-8390}"
@@ -459,6 +472,65 @@ run_schema_tests() {
 	rm -rf "$pgdatapath"
 }
 
+# --- Stored rich text -------------------------------------------------------------
+#
+# The five columns rendered as HTML are guarded by the API's purifier, which covers every
+# row the API wrote and nothing that arrived another way - an in-place upgrade from a
+# database that predates the purifier, or an import, which copies rows verbatim. Migration
+# 0260 and DatabaseImporter both run StoredHtmlPurifier for that; this asserts they work,
+# by planting payloads with a direct write the way the gap does.
+#
+# Both engines, because the routine quotes identifiers through the dialect and issues its
+# UPDATEs through PDO - the two things that differ. The PostgreSQL half also gets --source,
+# which adds the import case: PostgreSQL is the only target bin/victual-db-import has.
+
+run_richtext_tests() {
+	local datapath="$SUITE_SCRATCH/richtext-sqlite"
+
+	rm -rf "$datapath"
+	mkdir -p "$datapath"
+
+	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
+		|| fail 'could not migrate the rich text test database'
+
+	# The base fixture, for the same reason the trigger and view phases apply it: the
+	# script fails loudly when one of the five tables is empty, and a freshly migrated
+	# database only has shopping_lists.
+	php "$SUITE_DIR/apply-sql.php" "sqlite:$datapath/victual.db" "$SUITE_DIR/fixtures/00_base.sql" \
+		|| fail 'could not apply the base fixture to the rich text test database'
+
+	say ""
+	if ! VICTUAL_DATAPATH="$datapath" php "$SUITE_DIR/richtext-tests.php"; then
+		failures=$((failures + 1))
+	fi
+
+	local sourcedb="$datapath/victual.db"
+
+	build_pgsql "$RICHTEXT_DB"
+
+	local pgdatapath="$SUITE_SCRATCH/richtext-pgsql"
+	rm -rf "$pgdatapath"
+	mkdir -p "$pgdatapath"
+
+	cat > "$pgdatapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', getenv('DIFFTEST_DB_NAME'));
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+
+	say ""
+	if ! VICTUAL_DATAPATH="$pgdatapath" DIFFTEST_DB_NAME="$RICHTEXT_DB" \
+		php "$SUITE_DIR/richtext-tests.php" --source "$sourcedb"; then
+		failures=$((failures + 1))
+	fi
+
+	rm -rf "$pgdatapath" "$datapath"
+}
+
 # --- Trigger tests ----------------------------------------------------------------
 
 run_trigger_tests() {
@@ -795,10 +867,11 @@ case "$WHICH" in
 	rollback) run_rollback_tests ;;
 	filter) run_filter_tests ;;
 	schema) run_schema_tests ;;
+	richtext) run_richtext_tests ;;
 	files) run_files_import_tests ;;
 	mqtt) run_mqtt_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_files_import_tests; run_mqtt_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, files, mqtt or all)" ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_richtext_tests; run_files_import_tests; run_mqtt_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, richtext, files, mqtt or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then

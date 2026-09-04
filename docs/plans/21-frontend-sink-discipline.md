@@ -436,6 +436,73 @@ The lesson is the one this plan already carries once, in a different costume: an
 hand-written against a parser you do not control is a defect waiting for its next input.
 The fix is to stop parsing, not to escape harder.
 
+### Executed — the round review sent back
+
+Two findings on the pull request, both valid, both verified against the code before being
+acted on.
+
+**P2 — one selector still concatenated browser input.** `productpicker.js` line 282 built
+`option:contains("…")` from the typed or scanned value. It survived the sweep that replaced
+the other four because that sweep grepped for `option[`, an *attribute* selector, and this
+one is `:contains(...)`. So "there is no third escaper" was true and "the file has none of
+these left" was not — a sweep is only as wide as its pattern, and the pattern was written
+from the examples in hand rather than from the shape of the defect.
+
+It is now `FindOptionByText(input)`, the helper the same commit added. Two siblings in files
+this pull request already touches went with it: `userpicker.js:74` (`option[value='…']` from
+a Blade attribute) and `recipes.js:94`, which concatenated the search box's text into
+`:not(:contains_case_insensitive(…))`.
+
+Verified rather than assumed, against the running app: `FindOptionByText` and the expression
+it replaces agree on all 33 comparisons across every option on `/purchase`; the gallery
+filter and its old expression agree on 11 needles including every card-title prefix; typing
+`x") , option:not(` throws `Syntax error` through the old expression and returns cleanly
+through the new one; and the workflow dialog the selector gates behaves identically before
+and after, checked by reverting the line and re-running rather than by reading it.
+
+The gallery case is the one worth keeping. Its hostile input did **not** throw through the
+old expression — `:contains_case_insensitive(x) , div:not()` is a valid *selector list*, so
+it silently matched something else and filtered the wrong cards. A thrown error would have
+been the kinder failure.
+
+**P1 — imported and legacy rich text never met the purifier.** Step 4 concluded that
+server-side purification on write is the boundary, and it is, for every row the API wrote.
+Two paths do not go through the API and the plan accounted for neither:
+`DatabaseImporter::CopyTable()` copies rows verbatim, which is what an importer should do,
+and no migration has ever rewritten descriptions already stored — so a payload planted
+through upstream grocy, or through this fork before sweep finding S1, survives an upgrade or
+an import and lands in the six raw render sinks. The `html-column:*` probes cannot see it,
+because they write through the purified API. That is the same blind spot this plan found in
+the seeded probe families, one level up, in the probes it added itself.
+
+`StoredHtmlPurifier` now runs the API's own purifier over the five columns where they sit,
+from two callers: **migration 0260** for a database upgraded in place, and the end of
+`DatabaseImporter::Import()` for one that was imported. It has to be both —
+`bin/victual-db-import` migrates the target *before* copying into it, so 0260 alone runs
+against an empty database and finds nothing.
+
+Two things shaped the implementation, neither obvious from the finding:
+
+- **Purification runs after `AssertValuesMatch`, never before.** The copy's job is to be
+  verbatim and that assertion is what proves it was; a target rewritten mid-copy would read
+  as one the importer had corrupted.
+- **`Import()` takes `purifyStoredHtml`, defaulting to true.** `difftest.php` and
+  `trigdifftest.php` compare the two engines row for row and pass `false`: a description
+  purified on the PostgreSQL side only would show up as an engine difference. Default-on
+  means a future caller is covered without knowing to ask.
+
+The regression test is a ninth suite phase, `richtext`, on both engines — the routine quotes
+identifiers through the dialect and writes through PDO, which is what differs per engine. It
+plants payloads with a direct write, the way the gap does, and the PostgreSQL half also
+takes `--source` and runs a real `DatabaseImporter` copy, which is the finding's own path.
+Two of its nine cases are controls rather than assertions about danger: real summernote
+formatting must survive, and a column that is *not* HTML-rendered must be left exactly as
+typed, because rewriting those would be data loss dressed as a security fix. With
+`StoredHtmlPurifier` stubbed out, six of the nine fail and both controls still pass.
+
+End to end on a real upgrade: a payload planted directly in `shopping_lists.description`,
+then `bin/victual-migrate`, comes back `<img src="x" alt="x" />`, with 0260 recorded.
+
 ### Found on the way, not fixed here
 
 Two things surfaced while verifying, neither in this plan's scope and both worth a line so
