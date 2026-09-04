@@ -93,9 +93,8 @@ Please include what you would want to receive: what the impact is, the account o
 an attacker needs to start from, and the steps to reproduce. A proof of concept is welcome
 and will not be treated as hostile.
 
-**Expectations, honestly.** This is a personal fork maintained for one household. There is
-no bounty, no SLA, and no security team — there is one person who will read your report
-and take it seriously. Assume days, not hours, and say so in the report if you think
+**Expectations, honestly.** This fork has one maintainer. There is no bounty, no SLA, and
+no security team — there is one person who will read your report and take it seriously. Assume days, not hours, and say so in the report if you think
 something warrants faster.
 
 ## Issues that also affect upstream
