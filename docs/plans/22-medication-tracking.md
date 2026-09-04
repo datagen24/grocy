@@ -5,10 +5,10 @@ regimen drawing on a shared physical supply — rather than as groceries that ha
 appear in a recipe. Scheduling, adherence, days-of-supply, lot traceability and cold chain,
 built on the stock subsystem rather than beside it.
 **Depends on:** [23](23-storage-classes.md) (the storage vocabulary, extracted from this plan
-per Q1), [19](19-rbac.md) (per-subject visibility, see Q5),
-[14](14-contract-and-regression-scaffolding.md) piece 2 (this surface is invisible to the
-parity suite and contract tests are its only guard). Builds on
-[12](12-frontend-shared-core.md), landed.
+per Q1) and [14](14-contract-and-regression-scaffolding.md) piece 2 (this surface is invisible
+to the parity suite and contract tests are its only guard). Builds on
+[12](12-frontend-shared-core.md), landed. **Not** blocked on [19](19-rbac.md) — Q5 decided
+this ships its own narrow visibility enforcement and becomes a client of 19 later.
 **Governed by:** [ADR-0014](../adr/0014-medication-records-never-advises.md) (scope boundary)
 and [ADR-0015](../adr/0015-schedule-expansion-in-the-application.md) (where expansion lives),
 both **Proposed** and written alongside this plan.
@@ -144,7 +144,29 @@ visibility is opt-in per subject. This is the sharpest data-visibility case in t
 and it is enforced **server-side, in the service and the view predicate, on every route** — not
 by filtering in the frontend. Under
 [ADR-0006](../adr/0006-authenticated-issues-in-scope.md) a leak here is a finding, not a
-cosmetic issue. Q5 is whether this ships its own enforcement or waits on [19](19-rbac.md).
+cosmetic issue.
+
+**Decided (Q5): this plan ships that enforcement itself, narrowly.** A caller sees the subjects
+linked to their own user, plus subjects explicitly marked household-visible, plus everything if
+they hold `MEDICATIONS_ALL`. The predicate lives in `MedicationService` and the medication
+views, applies to regimens and administrations, and is not a general mechanism.
+
+Two properties of that, both deliberate. **It is row filtering, not field redaction** — an
+invisible subject is absent, never a row with nulled columns — which is why it sidesteps the
+hardest problem [19](19-rbac.md) has, the absent-versus-redacted-versus-unknown contract that
+[ADR-0009](../adr/0009-database-as-the-logic-layer.md)'s question 4 and
+[ADR-0012](../adr/0012-observations-are-proposals.md)'s prerequisite both circle. Medication
+visibility is row-shaped, so none of that applies. And **a direct fetch of an invisible subject
+answers 404, not 403**, because 403 confirms the row exists, which is the whole thing being
+protected.
+
+**What this does not protect, stated so the plan does not overclaim.** Stock is shared and
+medication products are ordinary products. Anyone holding `STOCK` can see that the household
+holds a given drug, in what quantity, and — through piece 2 — its lot and storage history.
+`hide_on_stock_overview` keeps it off a screen; it is not an access control. What per-subject
+visibility protects is **the link between a drug and a person**, which is the sensitive half but
+not the whole of it. Closing the other half means gating stock reads, which is
+[19](19-rbac.md)'s question 8 and not this plan's to answer.
 
 New permission constants alongside the existing 30 in
 [controllers/Users/User.php](../../controllers/Users/User.php): `MEDICATIONS`,
@@ -304,9 +326,17 @@ Collected because most of them are only visible from inside the existing code.
    the three call sites in `StockService` (visible, testable, and forgettable when a fourth
    split site is added). *Lean: the trigger, plus an assertion in the contract tests that no
    `stock_id` belonging to a medication product lacks an attribute row — belt and braces,
-   because the failure is silent and safety-relevant.* Note this is the same
-   trigger-versus-application question [23](23-storage-classes.md) Q2 asks about derivation,
-   and the two should be answered the same way or the inconsistency explained.
+   because the failure is silent and safety-relevant.*
+
+   **Still open, and now with one constraint.** [23](23-storage-classes.md) Q2 asked the same
+   trigger-versus-application question about deriving `is_freezer` and was answered
+   *application*, overturning its own lean — because its trigger case was
+   `bin/victual-db-import`, and an upstream grocy database carries no storage class for a
+   trigger to derive. That argument does not transfer here: this question's trigger case is a
+   `StockService` split site somebody forgets when a fourth is added, in code that already has
+   three, which is a live risk rather than a speculative one. So the two may legitimately
+   diverge, and 23 Q2's response records why. What must not happen is diverging without
+   noticing — whoever answers this one says which of the two arguments they are applying.
 
 5. **Does piece 3 ship its own visibility enforcement, or wait on [19](19-rbac.md)?** Waiting
    blocks the whole plan behind a draft that is itself blocked on its own Q8. Shipping first
@@ -314,6 +344,28 @@ Collected because most of them are only visible from inside the existing code.
    as the finished thing. *Lean: ship a narrow version — subject-scoped predicates in
    `MedicationService` and the medication views only, no general mechanism — and state in 19
    that it is a client of whatever 19 builds.*
+
+   > **Response, 2026-09-04:** Ship it narrowly, as the lean stood. Waiting is not a real
+   > option on inspection: 19 is a draft, blocked on its own Q8, split across two waves and
+   > sitting behind wave 2's S5/S6 — so "wait" means pieces 3 through 6 do not exist for
+   > several waves, while pieces 1 and 2 are unaffected because they are product- and
+   > stock-shaped and need no subject at all.
+   >
+   > What made this decidable rather than a coin toss is that **medication visibility is row
+   > filtering, not field redaction**, so the half of 19 that is genuinely hard — deciding
+   > what an absent key means on the wire — does not arise. A subject a caller may not see is
+   > simply not in the result. That is expressible today, testable today, and does not
+   > pre-empt any answer 19 later gives about prices.
+   >
+   > Two obligations come with it. Piece 3's enforcement is server-side on every route, since
+   > [ADR-0006](../adr/0006-authenticated-issues-in-scope.md) makes a leak here a finding —
+   > and 404-not-403 on a direct fetch, because the existence of the row is the thing being
+   > protected. And [19](19-rbac.md) Q8 now carries a note that this exists, so the general
+   > answer is chosen knowing a narrow one already shipped rather than discovering it.
+   >
+   > The plan states plainly what this does not cover — stock-level existence of a drug is
+   > visible to anyone with `STOCK`, and only the drug-to-person link is protected. That
+   > limitation was not in the lean and is the more important half of this answer.
 
 6. **[ADR-0011](../adr/0011-label-namespace.md) is accepted but unbuilt — does piece 7 build
    it?** The question this asked before 2026-09-04 was what to do if 0011 were rejected; it

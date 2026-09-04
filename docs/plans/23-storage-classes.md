@@ -61,8 +61,13 @@ be a contract break for the sake of tidiness, and would break the due-date path 
 stroke.
 
 A location with a NULL class keeps whatever `is_freezer` it has. Derivation applies when a
-class is set, which makes the two consistent going forward without rewriting history — see Q1
-and Q2, which are the same question asked at two layers.
+class is set, which makes the two consistent going forward without rewriting history.
+
+**Decided (Q1, Q2).** `is_freezer` is derived, not independently editable, and the derivation
+lives in the application write path rather than in a trigger. The column therefore has two
+modes during the transition — authoritative on an unclassified location, derived on a
+classified one — which is the price of Q3's answer that a class may be absent, and is paid
+deliberately rather than by backfilling a guess.
 
 ### Views, API, UI
 
@@ -80,8 +85,8 @@ plan, and the one most likely to surprise someone who has been ticking that box 
 
 One pair, claiming **0262** in [RESERVATIONS.md](../../migrations/RESERVATIONS.md) before any
 file is written, per [ADR-0004](../adr/0004-engine-specific-migrations.md). It is a table, a
-column and a seed — no views, no triggers unless Q2 says otherwise — so the dual-engine tax
-here is the small kind.
+column and a seed — no views, and **no triggers**, since Q2 put derivation in the application
+— so the dual-engine tax here is the small kind, and stays that way.
 
 ## Interaction with 08
 
@@ -111,6 +116,23 @@ capability, and the comparison is between two fields a human entered. That compa
    Two fields that can disagree about the same physical fact is the thing this plan exists to
    remove, not to double.*
 
+   > **Response, 2026-09-04:** Derived. The checkbox becomes a display wherever a class is
+   > set, and the derivation is the only writer of `is_freezer` from that point.
+   >
+   > The consequence worth stating is the one this creates with Q3: because a class may be
+   > absent, `is_freezer` is authoritative on an unclassified location and derived on a
+   > classified one, and the tree will hold both kinds indefinitely. The alternative —
+   > backfilling every location so the column is derived everywhere — was considered and
+   > rejected, and the reason is not tidiness. Backfilling means writing Freezer where
+   > `is_freezer = 1`, which is correct by construction, and **Ambient everywhere else**,
+   > which is a guess. NULL and Ambient are not the same claim: NULL says nobody has
+   > classified this, Ambient says someone has classified it as room temperature. Plan
+   > [22](22-medication-tracking.md) warns on a mismatch between a product's required class
+   > and its location's, so a guessed Ambient would make that check fire against data no
+   > human entered — and a warning derived from a guess is the kind of thing
+   > [ADR-0014](../adr/0014-medication-records-never-advises.md) exists to keep out of a
+   > medication surface. The two modes are cheaper than that.
+
 2. **Where does derivation live — a trigger, or the application?** A trigger catches
    `bin/victual-db-import` and any future direct writer; application-level derivation is
    easier to read and is bypassed by exactly those paths. *Lean: trigger, on the grounds that
@@ -118,6 +140,27 @@ capability, and the comparison is between two fields a human entered. That compa
    [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) rather than a corner case, and a
    derived column that the importer silently leaves wrong is a defect nobody would think to
    look for.* Costs a trigger pair under the dual-engine discipline.
+
+   > **Response, 2026-09-04: the application — the lean is overturned, and by its own
+   > argument.** The lean rested on the importer, and the importer cannot produce the
+   > inconsistency it was worried about. `bin/victual-db-import` reads upstream grocy
+   > SQLite, which has `is_freezer` and **no storage class at all**, so every imported
+   > location arrives with a NULL class. Under Q1's answer a NULL class means `is_freezer`
+   > stays as it came in, which is exactly right — there is nothing for a trigger to derive,
+   > and a trigger placed there would fire on no rows.
+   >
+   > What is left of the lean is a future direct writer that does not exist, which is not
+   > worth a trigger pair on both engines plus its differential proof — a real cost under
+   > the live dual-engine discipline, paid against a speculative caller.
+   >
+   > **This does not automatically settle [22](22-medication-tracking.md) Q4**, which asks
+   > the same trigger-versus-application question about copying medication stock attributes
+   > on a split. 22 Q4 said the two should be answered together or the difference explained;
+   > here is the difference. This question's trigger case was the importer, and it
+   > evaporated. That one's is a `StockService` call site somebody forgets to update when a
+   > fourth split path is added — a live risk in code that already has three, not a
+   > speculative one. Same question, different facts, so a different answer there would be
+   > consistent rather than contradictory.
 
 3. **May a location have no class?** *Lean: yes, and every existing row starts that way. A
    migration that forced a class would have to guess, and guessing "Ambient" for a row whose

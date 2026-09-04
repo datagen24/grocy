@@ -657,6 +657,19 @@ topic, and has no Response yet. See Q5.
    left unsaid. This question is worth answering before piece 1 is scheduled, because (a)
    changes piece 1's size and its wave.
 
+   **One read gate now exists outside this plan, decided 2026-09-04.**
+   [22](22-medication-tracking.md) Q5 ships subject-scoped visibility for regimens and
+   administrations in `MedicationService`, rather than waiting for this plan — because
+   waiting would hold half of 22 behind several waves, and because the medication case is
+   **row filtering** (an invisible subject is absent) rather than field redaction, so it does
+   not touch the absent-versus-redacted contract that makes piece 2 hard. It is explicitly
+   narrow and explicitly a client of whatever this plan builds. Two things follow for this
+   question. Option (c) — read-gating out of scope — is now a statement that would be false
+   as written, since one domain gates reads; it would need rewording to "roles do not gate
+   reads, and the one domain that does owns its own predicate." And option (a) gains a worked
+   example of what a `*_VIEW` leaf costs when the domain is row-shaped, which is much less
+   than the general case: no wire-contract question, no redaction funnel.
+
 9. **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch, which
    [14](14-contract-and-regression-scaffolding.md)'s section 2b deferred to this plan.**
    `UsersController` renders `/user/{id}/permissions` behind `USERS_READ` in the resolved,
