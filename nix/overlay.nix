@@ -79,17 +79,15 @@ in
       # build (nix/php.nix) so that every SAPI in every image reads the same settings.
       fpmConf = self.callPackage ./runtime/fpm-conf.nix { };
       nginxConf = self.callPackage ./runtime/nginx-conf.nix { };
-      entrypoint = ./runtime/entrypoint.php;
       healthcheck = ./runtime/healthcheck.php;
-      configPhp = ./runtime/config.php;
     };
-
-    # /etc/victual/config.php, as an image layer. Both PHP images carry it; the
-    # entrypoint copies it into the data directory when nothing is mounted there.
-    configSeed = self.callPackage ./config-seed.nix { };
 
     # /opt/victual/healthcheck — what the pod manifest's exec probe runs. See the file.
     healthcheckBin = self.callPackage ./healthcheck.nix { };
+
+    # /opt/victual/webcheck — the same thing for the nginx tier, statically linked so it
+    # brings no libc into an image that holds no interpreter.
+    webcheckBin = self.callPackage ./webcheck.nix { };
 
     imageLib = self.callPackage ./images/lib.nix { };
 

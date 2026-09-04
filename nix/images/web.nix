@@ -10,6 +10,7 @@
   dockerTools,
   nginx,
   webroot,
+  webcheckBin,
   imageLib,
   runtime,
   version,
@@ -26,7 +27,11 @@ dockerTools.streamLayeredImage (
     # store path, which makes it a closure root through the image's config, so the
     # binary is present without also being symlinked into /bin. An image with an empty
     # /bin is one fewer thing for an attacker to find by looking.
+    #
+    # webcheckBin is listed, because unlike nginx it has to land at a path the *manifest*
+    # can name: /opt/victual/webcheck. It is statically linked and brings nothing with it.
     contents = [
+      webcheckBin
       imageLib.passwd
       imageLib.certificates
     ];

@@ -11,15 +11,13 @@
 # trimmed application root would warm a cache the serving image could not use.
 #
 # Overriding Cmd runs a different tool from the same image — bin/victual-db-import for a
-# grocy SQLite migration, for instance — and the entrypoint's preparation still happens.
+# grocy SQLite migration, for instance.
 {
   lib,
   dockerTools,
   phpMigrate,
   appRoot,
-  configSeed,
   imageLib,
-  runtime,
   version,
 
   dataPath ? "/data",
@@ -31,23 +29,22 @@ dockerTools.streamLayeredImage (
     name = "victual-migrate";
 
     contents = [
-      configSeed
       imageLib.passwd
       imageLib.certificates
     ];
 
     extraCommands = imageLib.scaffold ''
+      # Read-only and empty, as in the app image. bin/victual-migrate creates
+      # VICTUAL_DATAPATH when it is missing — for a SQLite database file, which a pgsql
+      # deployment never has — so the directory existing here is what keeps that mkdir
+      # from being attempted against a read-only root filesystem.
       mkdir -p .${dataPath}
     '';
 
     config = imageLib.commonConfig // {
       WorkingDir = appRoot;
 
-      Entrypoint = [
-        "${phpMigrate}/bin/php"
-        "${runtime.entrypoint}"
-      ];
-
+      # No Entrypoint; see nix/images/app.nix for why the one that was here is gone.
       Cmd = [
         "${phpMigrate}/bin/php"
         "${appRoot}/bin/victual-migrate"

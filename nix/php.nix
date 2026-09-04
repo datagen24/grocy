@@ -101,7 +101,10 @@ phpWithoutShell.passthru.buildEnv {
       xmlwriter # ditto
       zip # mike42/escpos-php, gettext/gettext
       openssl # TLS for guzzle, and for libpq when DB_SSLMODE asks for it
-      pcntl # nix/runtime/entrypoint.php execs php-fpm without a shell in the image
+      # pcntl was here for nix/runtime/entrypoint.php, which pcntl_exec'd php-fpm after
+      # seeding config.php. Both are gone (issue #49), and with them the only caller —
+      # so the extension goes too, and disable_functions moves from the fpm pool to
+      # php.ini, where it now covers the migrate image's CLI as well.
       # opcache is deliberately *not* here, and this is the first build's finding rather
       # than a preference: nixpkgs has no `opcache` extension attribute, because it
       # compiles Zend OPcache into php85 itself. Listing it failed evaluation with

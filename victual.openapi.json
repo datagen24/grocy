@@ -88,7 +88,12 @@
 											"type": "string"
 										},
 										"sqlite_version": {
-											"type": "string"
+											"type": "string",
+											"description": "The SQLite library version compiled into PHP. Empty where pdo_sqlite is not installed, which is every serving container image since ADR-0008 made PostgreSQL the only runtime engine - see database_engine for what is actually serving."
+										},
+										"database_engine": {
+											"type": "string",
+											"description": "The database engine serving this installation and its version, e.g. \"PostgreSQL 16.10\", or \"unavailable\" when the connection cannot be interrogated."
 										}
 									}
 								}

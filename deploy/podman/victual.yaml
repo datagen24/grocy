@@ -14,8 +14,10 @@
 # workloads need, the operator decides where they run — the database is the operator's,
 # and deploy/README.md says how to stand a throwaway one up for the bootstrap.
 #
-# Status: written but never applied. See docs/plans/20-container-infrastructure.md,
-# "Verification", for what the first run has to establish.
+# Status: applied and serving, 2026-09-04. The first application is what found issue #49
+# — two ways this manifest meant something different under podman than it does under
+# Kubernetes, both fixed here and both commented where they bit. See
+# docs/plans/20-container-infrastructure.md, "Verification".
 apiVersion: v1
 kind: Pod
 metadata:
@@ -37,14 +39,21 @@ spec:
       type: RuntimeDefault
 
   volumes:
-    # The scratch directory the entrypoint prepares. Since plan 10 the view cache is
-    # baked into the image and mounted read-only, so the only thing left here is the
-    # config.php that PrerequisiteChecker insists on — plus uploaded files, until plan 01
-    # moves file storage into the database. Ephemeral on purpose.
-    - name: data
-      emptyDir:
-        medium: Memory
-        sizeLimit: 64Mi
+    # There is no `data` volume. There was one, for two things that have both gone: the
+    # view cache, baked into the image and mounted read-only since plan 10, and a
+    # config.php that PrerequisiteChecker used to insist on, which the application no
+    # longer requires at all (issue #49). Uploads are the third thing that would have
+    # lived here and they go to the database instead — VICTUAL_FILE_STORAGE=database in
+    # the ConfigMap, which plan 01 landed and which this deployment requires rather than
+    # merely permits.
+    #
+    # What that buys is not tidiness. `fsGroup` below is not honoured by
+    # `podman kube play`, so a writable emptyDir arrives root-owned and a uid-65532
+    # container cannot write to it; keeping one meant the pod started under Kubernetes
+    # and not on a laptop. VICTUAL_DATAPATH still points at /data, which exists in the
+    # image as an empty read-only directory, so a deployment that wants to supply a real
+    # config.php or a settingoverrides directory can mount one over it.
+    #
     # /tmp is per-container: PHP's temporary files and nginx's buffer paths have no
     # business sharing a directory.
     - name: tmp-app
@@ -72,8 +81,6 @@ spec:
         - secretRef:
             name: victual-secrets
       volumeMounts:
-        - name: data
-          mountPath: /data
         - name: tmp-app
           mountPath: /tmp
       securityContext:
@@ -101,8 +108,6 @@ spec:
         - secretRef:
             name: victual-secrets
       volumeMounts:
-        - name: data
-          mountPath: /data
         - name: tmp-app
           mountPath: /tmp
       securityContext:
@@ -159,18 +164,29 @@ spec:
         allowPrivilegeEscalation: false
         capabilities:
           drop: ["ALL"]
+      # An exec probe rather than httpGet, and — unlike the app container's, which is
+      # about loopback binding — the reason is the runtime rather than the network.
+      # `podman kube play` does not perform httpGet itself the way the kubelet does: it
+      # rewrites the field into a container healthcheck, `CMD-SHELL curl -f <url> ||
+      # exit 1`, and runs it inside the container. This image has no shell and no curl,
+      # so the probe failed thirty times and podman killed a container that was serving
+      # every request correctly. See issue #49 and nix/runtime/webcheck.c.
+      #
+      # /opt/victual/webcheck is a statically linked binary placed by nix/webcheck.nix.
+      # It GETs the path it is given over loopback and exits 0 on 2xx or 3xx. An exec
+      # probe means the same thing to podman and to the kubelet, which is what keeps
+      # this one manifest.
+      #
       # robots.txt is a static file the web tier serves without involving PHP, so this
       # proves nginx is up and its document root is mounted — and nothing more.
       startupProbe:
-        httpGet:
-          path: /robots.txt
-          port: 8080
+        exec:
+          command: ["/opt/victual/webcheck", "/robots.txt"]
         periodSeconds: 2
         failureThreshold: 30
       livenessProbe:
-        httpGet:
-          path: /robots.txt
-          port: 8080
+        exec:
+          command: ["/opt/victual/webcheck", "/robots.txt"]
         periodSeconds: 10
       # Readiness goes through the whole stack: nginx, FastCGI, PHP, the database. It
       # covers two things the app container's probe cannot see — a pool accepting
@@ -179,9 +195,8 @@ spec:
       # rather than /api/system/info because that one needs an API key, and rather than a
       # static file because a static file proves none of it.
       readinessProbe:
-        httpGet:
-          path: /login
-          port: 8080
+        exec:
+          command: ["/opt/victual/webcheck", "/login"]
         periodSeconds: 5
         failureThreshold: 6
       resources:

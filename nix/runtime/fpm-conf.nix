@@ -56,10 +56,14 @@ writeText "victual-php-fpm.conf" ''
   ; rule; the first half is the nginx location block.
   security.limit_extensions = .php
 
-  ; Process-level function bans. These live here rather than in php.ini because the
-  ; entrypoint runs under the same php.ini and needs pcntl_exec to hand off to fpm;
-  ; a worker never does. Nothing in the tree calls any of these — services/PrintService
-  ; reaches printers through file and network connectors, not through exec.
+  ; Process-level function bans. These live here rather than in php.ini because php.ini
+  ; is baked into the buildEnv and therefore reaches build-time PHP as well — nixpkgs'
+  ; composer calls putenv() and will not run without it. Tried and reverted on
+  ; 2026-09-04; nix/runtime/php-ini.nix records it. Nothing in the tree calls any of
+  ; these — services/PrintService reaches printers through file and network connectors,
+  ; not through exec. pcntl_exec and pcntl_fork stay named although nix/php.nix no longer
+  ; builds the extension, so that returning it for one caller does not silently return it
+  ; to the request path.
   php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,proc_close,proc_nice,proc_terminate,popen,pcntl_exec,pcntl_fork,dl,putenv
   php_admin_flag[allow_url_fopen] = off
 ''

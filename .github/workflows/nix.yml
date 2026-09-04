@@ -84,3 +84,155 @@ jobs:
             "$(nix build ".#$img" --no-link --print-out-paths)" | docker load
           done
           docker images --filter reference='victual-*'
+
+      # --- The boot test ----------------------------------------------------------------
+      #
+      # This is the half of the retired `images` job that had nowhere else to go. Four of
+      # its five assertions about the Dockerfile's production image have `nix flake check`
+      # equivalents, which are stronger because they are properties of the artifact rather
+      # than of a running copy of it. The fifth does not and cannot: whether a read-only
+      # root filesystem actually holds is a statement about a kernel, a mount table and an
+      # application that has served a request, and no amount of evaluation reaches it.
+      #
+      # ADR-0013's Consequences said these assertions "move rather than disappear". This is
+      # where they moved, and plan 20's verification section is the longer form of it.
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name victual-db \
+            -e POSTGRES_USER=victual -e POSTGRES_PASSWORD=victual -e POSTGRES_DB=victual \
+            -p 5432:5432 postgres:16
+          for _ in $(seq 1 60); do
+            if docker exec victual-db pg_isready -U victual >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec victual-db pg_isready -U victual
+
+      - name: The images declare a non-root user
+        run: |
+          set -euo pipefail
+          for img in victual-app victual-web victual-migrate; do
+            user=$(docker inspect --format '{{.Config.User}}' "$img:4.6.0")
+            echo "$img runs as $user"
+            test "$user" = "65532:65532"
+          done
+
+      # `docker inspect`, not `id -un`: these images have no shell and no coreutils, which
+      # is the point. The assertion that used to run `id` inside the container is the
+      # assertion that could only be written against a Debian image.
+      - name: Migrate, then serve
+        run: |
+          set -euo pipefail
+
+          docker network create victual-ci
+          docker network connect victual-ci victual-db
+
+          env_args=(
+            -e VICTUAL_MODE=production
+            -e VICTUAL_DB_DRIVER=pgsql
+            -e VICTUAL_DB_HOST=victual-db
+            -e VICTUAL_DB_PORT=5432
+            -e VICTUAL_DB_NAME=victual
+            -e VICTUAL_DB_USER=victual
+            -e VICTUAL_DB_PASSWORD=victual
+            -e VICTUAL_FILE_STORAGE=database
+            -e VICTUAL_BASE_URL=http://127.0.0.1:8080
+          )
+
+          # The initContainer, as a one-shot run. Read-only from the start: if the
+          # migration needed to write anything outside /tmp this fails here rather than
+          # leaving a half-migrated database behind.
+          docker run --rm --name victual-migrate-run \
+            --network victual-ci --read-only --tmpfs /tmp:rw,mode=1777 \
+            "${env_args[@]}" victual-migrate:4.6.0
+
+          # The two serving containers share a network namespace exactly as they do in the
+          # pod, which is what makes 127.0.0.1:9000 mean the same thing here as in k3s.
+          docker run -d --name victual-app \
+            --network victual-ci --read-only --tmpfs /tmp:rw,mode=1777 \
+            "${env_args[@]}" victual-app:4.6.0
+
+          docker run -d --name victual-web \
+            --network "container:victual-app" --read-only --tmpfs /tmp:rw,mode=1777 \
+            victual-web:4.6.0
+
+          # Both probes run inside the containers, which is the only place the answer is
+          # available: php-fpm binds loopback and nginx is in the app container's network
+          # namespace. Nothing is published to the runner, and nothing needs to be.
+          for _ in $(seq 1 60); do
+            if docker exec victual-app /opt/victual/healthcheck >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec victual-app /opt/victual/healthcheck
+          docker exec victual-web /opt/victual/webcheck /robots.txt
+          docker exec victual-web /opt/victual/webcheck /login
+          echo "php-fpm is accepting connections and nginx served /robots.txt and /login"
+
+      - name: The read-only root filesystem holds
+        run: |
+          set -euo pipefail
+          # The app image's own PHP, not the migrate image's: those are different store
+          # paths, because migrate carries pdo_sqlite and the serving images do not. The
+          # CLI sits beside php-fpm in the same buildEnv.
+          php="$(dirname "$(docker inspect --format '{{index .Config.Cmd 0}}' victual-app:4.6.0)")/php"
+
+          # Writes outside /tmp must fail; /tmp is the one writable mount.
+          docker exec victual-app "$php" -r '
+            foreach (["/opt/probe", "/etc/probe", "/data/probe"] as $path) {
+              if (@file_put_contents($path, "x") !== false) {
+                fwrite(STDERR, "wrote to $path on a read-only root filesystem\n");
+                exit(1);
+              }
+            }
+            if (file_put_contents("/tmp/probe", "x") === false) {
+              fwrite(STDERR, "could not write /tmp, which is the one writable mount\n");
+              exit(1);
+            }
+            @unlink("/tmp/probe");
+            echo "  /opt, /etc and /data refused; /tmp accepted\n";
+          '
+
+      - name: The baked view cache is the one being used, and is not writable
+        run: |
+          set -euo pipefail
+          # The app image's own PHP, not the migrate image's: those are different store
+          # paths, because migrate carries pdo_sqlite and the serving images do not. The
+          # CLI sits beside php-fpm in the same buildEnv.
+          php="$(dirname "$(docker inspect --format '{{index .Config.Cmd 0}}' victual-app:4.6.0)")/php"
+          docker exec victual-app "$php" -r '
+            $dir = getenv("VICTUAL_VIEWCACHE_PATH");
+            if (is_writable($dir)) { fwrite(STDERR, "the baked cache is writable\n"); exit(1); }
+            $compiled = 0;
+            foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir)) as $f) {
+              if ($f->isFile()) { $compiled++; }
+            }
+            echo "  compiled templates in the baked cache: $compiled\n";
+            if ($compiled < 97) { fwrite(STDERR, "the cache looks unwarmed\n"); exit(1); }
+          '
+
+      - name: The extension list is what nix/php.nix says it is
+        run: |
+          set -euo pipefail
+          # The app image's own PHP, not the migrate image's: those are different store
+          # paths, because migrate carries pdo_sqlite and the serving images do not. The
+          # CLI sits beside php-fpm in the same buildEnv.
+          php="$(dirname "$(docker inspect --format '{{index .Config.Cmd 0}}' victual-app:4.6.0)")/php"
+          docker exec victual-app "$php" -r '
+            $loaded = array_map("strtolower", get_loaded_extensions());
+            foreach (["pdo_pgsql", "gd", "intl", "curl"] as $required) {
+              if (!in_array($required, $loaded)) { fwrite(STDERR, "missing: $required\n"); exit(1); }
+            }
+            // pcntl left with nix/runtime/entrypoint.php (issue #49); pdo_sqlite is the
+            // migrate image only, since ADR-0008 keeps SQLite as an import format.
+            foreach (["pcntl", "pdo_sqlite"] as $forbidden) {
+              if (in_array($forbidden, $loaded)) { fwrite(STDERR, "unexpectedly present: $forbidden\n"); exit(1); }
+            }
+            echo "  extensions are as declared\n";
+          '
+
+      - name: Container logs, if anything went wrong
+        if: failure()
+        run: |
+          for c in victual-db victual-app victual-web; do
+            echo "--- $c ---"
+            docker logs "$c" 2>&1 | tail -40 || true
+          done

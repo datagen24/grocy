@@ -58,8 +58,38 @@ ensure_harness_deps() {
 # The Victual image is built from this working tree, so it is the thing under test and has
 # to be rebuilt when the tree changes. `--build` forces it; otherwise an existing image is
 # reused, because a five-minute build on every run is how a suite stops being run.
+#
+# **This is currently broken and issue #56 tracks the fix.** It built the `Dockerfile`'s
+# `production` target, which ADR-0013's acceptance removed on 2026-09-04 — production
+# images are built by Nix now. Pointing this at them is not a one-line change: that build
+# is two serving containers sharing a network namespace plus a migrate run, where this was
+# one container, and stack.sh has a standing reason not to use `podman kube play`. #56
+# carries the shape of it.
+#
+# It fails here, loudly and with the issue number, rather than letting the engine report
+# "target stage not found" and leaving the reader to work out why a suite that ran
+# yesterday does not today.
 ensure_victual_image() {
 	local force="${1:-no}"
+
+	if ! grep -q '^FROM .* AS production' "$REPO_ROOT/Dockerfile" 2>/dev/null; then
+		cat >&2 <<-'MESSAGE'
+			parity: the fork side cannot be built.
+
+			  This suite builds `docker build --target production`, and that stage is gone:
+			  ADR-0013 was accepted on 2026-09-04 and production images are built by Nix
+			  (flake.nix, nix/). The Dockerfile now builds the dev and CI image only.
+
+			  Porting this suite onto the Nix images is tracked as issue #56, which carries
+			  what the port has to decide — the Nix build is two serving containers sharing a
+			  network namespace plus a migrate run, not one container.
+
+			  Nothing else in the suite is affected: the upstream side, the harness, the
+			  scenarios and the accepted-differences list are all still good.
+		MESSAGE
+		exit 1
+	fi
+
 	if [ "$force" = "force" ] || ! "$ENGINE" image exists "$VICTUAL_IMAGE" 2>/dev/null; then
 		log "building $VICTUAL_IMAGE from the working tree (Dockerfile, production target)"
 		"$ENGINE" build --target production -t "$VICTUAL_IMAGE" "$REPO_ROOT"

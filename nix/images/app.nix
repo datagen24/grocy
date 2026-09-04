@@ -5,10 +5,10 @@
 # database credential, with neither able to do the other's job.
 #
 # What is in the image: the PHP interpreter with the extensions nix/php.nix names, the
-# application and its baked view cache at their store path, the config stub at
-# /etc/victual/config.php, /etc/passwd for uid 65532, and CA roots. There is no shell, no
-# package manager, no composer, no git. `kubectl exec … sh` will not work here, which is
-# the intended cost — see docs/adr/0013-nix-built-container-images.md, "Consequences".
+# application and its baked view cache at their store path, /etc/passwd for uid 65532, and
+# CA roots. There is no shell, no package manager, no composer, no git. `kubectl exec … sh`
+# will not work here, which is the intended cost — see
+# docs/adr/0013-nix-built-container-images.md, "Consequences".
 #
 # Note how the application gets into the image: not through `contents`, which would
 # splice its `share/` into `/`, but through the store path named in `Env` below.
@@ -20,7 +20,6 @@
   php,
   app,
   appRoot,
-  configSeed,
   healthcheckBin,
   imageLib,
   runtime,
@@ -36,29 +35,28 @@ dockerTools.streamLayeredImage (
     name = "victual-app";
 
     contents = [
-      configSeed
       healthcheckBin
       imageLib.passwd
       imageLib.certificates
     ];
 
     extraCommands = imageLib.scaffold ''
-      # A mount point, not a directory with anything in it. The deployment mounts an
-      # emptyDir here (see deploy/README.md).
+      # A read-only mount point, and empty on purpose. Nothing writes here: config.php is
+      # optional (app.php), the view cache is baked into the store path below, and
+      # FILE_STORAGE=database keeps uploads out of the filesystem. It exists so that a
+      # deployment which *wants* to supply a config.php or a settingoverrides directory
+      # has somewhere to mount one — see deploy/README.md.
       mkdir -p .${dataPath}
     '';
 
     config = imageLib.commonConfig // {
       WorkingDir = appRoot;
 
-      # Entrypoint seeds config.php and execs; Cmd is what it execs. Splitting them this
-      # way means overriding Cmd runs a different tool from the same image and the
-      # seeding still happens.
-      Entrypoint = [
-        "${php}/bin/php"
-        "${runtime.entrypoint}"
-      ];
-
+      # No Entrypoint. There used to be one — nix/runtime/entrypoint.php — whose whole
+      # job was seeding a config.php into the data directory and then pcntl_exec-ing this
+      # command. The application no longer requires that file, so the process below is
+      # PID 1 directly: no wrapper in the address space, no seed layer, no writable data
+      # directory, and no pcntl in the build. See issue #49.
       Cmd = [
         "${php}/bin/php-fpm"
         "--nodaemonize"

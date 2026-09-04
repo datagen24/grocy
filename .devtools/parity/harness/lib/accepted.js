@@ -80,6 +80,22 @@ const ACCEPTED = [
 	},
 
 	{
+		id: 'sqlite-version-is-empty-without-the-driver',
+		reference: 'docs/adr/0008-postgresql-only-runtime-engine.md',
+		reason:
+			'sqlite_version is "" here and a real version upstream. It used to be read by opening ' +
+			'new PDO(\'sqlite::memory:\'), which the serving images cannot do — they carry no ' +
+			'pdo_sqlite since plan 10 made the driver check engine-specific. That unconditional open ' +
+			'was a fatal error on /about *and inside ExceptionController*, so every error page on ' +
+			'those images was a fatal error rather than an error page. The field stays in the ' +
+			'contract and reports what it can, which is nothing.',
+		match: ({ difference }) =>
+			difference.kind === 'value' &&
+			difference.pointer.endsWith('/sqlite_version') &&
+			difference.victual === ''
+	},
+
+	{
 		id: 'fork-schema-is-ahead',
 		reference: 'docs/adr/0004-engine-specific-migrations.md',
 		reason:
@@ -237,7 +253,11 @@ const FORK_ADDED_FIELDS = new Set([
 	'file_storage_backend',
 	// plan 01 Q2 / services/Storage/FileSizeLimit.php — the effective upload cap, which
 	// upstream has no concept of.
-	'FILE_STORAGE_MAX_SIZE_MB'
+	'FILE_STORAGE_MAX_SIZE_MB',
+	// plan 20 — the database engine actually serving, which upstream has no need for
+	// because upstream is always SQLite and reports it in sqlite_version. See the
+	// sqlite-version entry above for why that field could not keep answering here.
+	'database_engine'
 ]);
 
 function lastSegment(pointer) {
