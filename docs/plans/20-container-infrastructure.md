@@ -327,14 +327,25 @@ This is what verification check 4 is *for*: it is not reachable by building, by
 | 1 | Three images build, twice, on two architectures | aarch64-linux locally; x86_64-linux in the `nix` workflow, same `nix/hashes.nix` |
 | 2 | `nix flake check` passes | 34 assertions, including `image-has-no-shell` now covering the web tier |
 | 3 | The pod serves | `/login` renders; `GET /api/stock` returns JSON; 27 top-level pages all 200 |
-| 4 | Read-only root filesystem holds under real use | Writes to `/opt`, `/etc` and `/data` all refuse; `/tmp` accepts. Create, edit and delete through `/api/objects/locations`. No `EROFS` anywhere |
-| 5 | The baked view cache is the one being used | 99 compiled files, every mtime still the image's `1970-01-01T00:00:01Z`, directory not writable |
+| 4 | Read-only root filesystem holds under real use | Writes to `/opt`, `/etc` and `/data` all refuse; `/tmp` accepts. Create, edit and delete through `/api/objects/locations`. An image uploaded, served, thumbnailed at `best_fit_width=200` and deleted — all through `FILE_STORAGE=database`. No `EROFS` anywhere, and `/data` and `/tmp` both still empty afterwards |
+| 5 | The baked view cache is the one being used | 99 compiled files, every mtime still the image's `1970-01-01T00:00:01Z`, directory not writable, unchanged after check 4 |
 | 6 | The extension list is right, and minimal | No `pcntl`, no `pdo_sqlite`, no `session`; `pdo_pgsql` present |
 | 7 | The web tier really has no PHP | `/index.php`, `/app.php`, `/config-dist.php`, `/css/../index.php` and its encoded form all 404 |
 | 8 | The credential split is real | **Not done.** Needs a role with no DDL rights; the bootstrap uses one superuser |
 | 9 | Signals | `podman kube down` returns in 0.3s with no truncated request. The SIGTERM half is not done |
+| 10 | A migration failure keeps the pod down | Wrong password: the initContainer exits 1, `app` and `web` stay `Created`, and 8080 refuses the connection |
 
 Checks 8 and 9's second half remain, and they belong to piece 3 rather than here: 8 needs a
 second database role the bootstrap does not create, and 9's point is measuring what a
 cluster too old for `lifecycle.stopSignal` costs. Neither is an
 [ADR-0013](../adr/0013-nix-built-container-images.md) acceptance gate.
+
+**One observation from check 4 that is not a defect in this deployment and is worth a
+sentence anyway.** A `PUT` to `/api/files/{group}/{name}` whose `Content-Type` is
+`application/x-www-form-urlencoded` — curl's default, and so the first thing this
+verification accidentally sent — stores a **zero-byte file and answers 204**. PHP has
+consumed the body by then and `php://input` is empty. The web UI sends a real type and
+upstream behaves the same way, so nothing here is broken; but "success" for a write that
+stored nothing is the same shape as the two findings review caught in
+[01](01-file-storage.md)'s importer, and it belongs in [11](11-api-error-handling.md)'s
+sweep rather than being lost with this session.
