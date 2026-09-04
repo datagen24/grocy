@@ -79,7 +79,7 @@ readers most often need and least often have.
 | [0009](0009-database-as-the-logic-layer.md) | The database is the logic layer | **Proposed**, depends on 0008 | — |
 | [0010](0010-workload-standard.md) | Fork-owned workloads are stateless, idempotent, unprivileged and declared | **Proposed** | [constitution](../constitution.md) |
 | [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Accepted** 2026-09-04 | [06](../plans/06-location-barcodes.md) (narrowed by it) |
-| [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Proposed** | — |
+| [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Accepted** 2026-09-04 | [06](../plans/06-location-barcodes.md) Q2 (routed out of it) |
 | [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Accepted** 2026-09-04, **supersedes the `Dockerfile`'s `production` target** | [20](../plans/20-container-infrastructure.md), [nix/](../../nix/README.md), [deploy/](../../deploy/README.md) |
 
 **0008 was accepted 2026-08-31 and supersedes
@@ -128,11 +128,24 @@ nothing here counts as one.
   thinking it is still open. **Accepting it decided the namespace, not the schedule:** no
   table exists yet and the fork still prints Grocycodes, so what changed on 2026-09-04 is
   what may be built — no new Grocycode type, and no new label payload carrying a row id.
-- **[0012](0012-observations-are-proposals.md) — observations are proposals.** Two gates,
-  both design statements: the absent-versus-redacted-versus-unknown contract for proposal
-  payloads, and the confirm permission (question 2 carries the lean). The first is
-  entangled with [19](../plans/19-rbac.md)'s wire-contract questions, and 19 is itself
-  blocked on its own Q8. **Decidable, but reads better after 19 unblocks.**
+- **[0012](0012-observations-are-proposals.md) — observations are proposals.**
+  **Accepted 2026-09-04**, with both gates met as written; it is listed here so a reader of
+  this section is not left thinking it is still open. Both were design statements, so the
+  acceptance wrote them into the Decision: the confirm permission is item 3 (confirming, and
+  rejecting, require exactly what the underlying booking requires — no reviewer role), and
+  the absent-versus-redacted-versus-unknown contract is item 6 (`proposed_fields` carries the
+  key set as submitted and is never redacted, so a key missing from the payload means
+  redacted and a key missing from both means nobody proposed one).
+
+  **This section had the dependency backwards.** It said the first gate was entangled with
+  [19](../plans/19-rbac.md)'s wire-contract questions and read better after 19's Q8 unblocks.
+  The contract needed only 19's *decided* rules — redaction removes the key rather than
+  nulling it, and a redacted field is already distinguishable from a refused call — and Q8
+  asks something else entirely, whether reads are gated at the object level at all. Either
+  answer to Q8 leaves item 6 intact. Reading 19 first still helps; waiting for it was never
+  required, and this is recorded rather than quietly dropped because "blocked on" claims are
+  what this section exists to keep honest. **Accepting decided the contract, not the
+  schedule:** no `proposals` table exists and no plan owns the work.
 - **[0013](0013-nix-built-container-images.md) — Nix-built production images.**
   **Accepted 2026-09-04**, with all five gates met as written rather than amended; it is
   listed here only so a reader of this section is not left thinking it is still open.

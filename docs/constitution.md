@@ -56,7 +56,8 @@ not. Every fork-owned workload is:
 - **Declared.** It exists in the deploy tree with probes and limits, or it does not exist.
 
 Consumers may multiply; contracts may not. One outbox schema with event types, one
-proposal schema for observations — sprawl of tools over few stable contracts is the
+proposal schema for observations ([ADR-0012](adr/0012-observations-are-proposals.md),
+accepted 2026-09-04) — sprawl of tools over few stable contracts is the
 design; sprawl of contracts is coupling with extra steps. (A binding, testable form of
 this standard belongs in an ADR; until that record exists, this section is the statement
 of intent it will formalize.)
@@ -66,7 +67,12 @@ of intent it will formalize.)
 **The stock ledger is exact history.** Every booking is a fact a human can trust and
 undo. Probabilistic observations — vision inference, sensor fusion, anything with a
 confidence attached — never write the ledger directly; they write proposals, and a person
-(or an explicitly decided threshold) confirms them.
+confirms them. [ADR-0012](adr/0012-observations-are-proposals.md), accepted 2026-09-04,
+makes that a decision rather than a description, and draws it narrower than this paragraph
+did: confirming a proposal — or rejecting one — requires exactly the permission the booking
+it proposes requires, and **there is no auto-confirm path**. The threshold this paragraph
+used to admit as a second kind of confirmer is deferred until there is precision data to
+set it from.
 
 **Physical artifacts are contracts.** A printed label outlives every deployment and
 cannot be rolled back. Labels carry stable opaque identifiers resolved by a mapping the

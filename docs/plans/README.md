@@ -158,6 +158,27 @@ one is now decided:
   **proposed**; its dependency on 0008 is now satisfied. Claims on
   [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and [19](19-rbac.md).
 
+Three more were written on 2026-08-31 and are not in the list above;
+[0010](../adr/0010-workload-standard.md) (the workload standard) is still **proposed**,
+[0011](../adr/0011-label-namespace.md) (the label namespace) was **accepted 2026-09-04** and
+narrowed [06](06-location-barcodes.md), and:
+
+- **[ADR-0012](../adr/0012-observations-are-proposals.md)** — a client with a confidence
+  value writes a proposal, never a booking, and a person confirming it is what books.
+  **Accepted 2026-09-04**, both gates met as written. It owns no plan and is in no wave, so
+  nothing in the table above moves; what it does is fix three things before anyone builds
+  them. Creating a proposal is its own narrow grant and confirming (or rejecting) one needs
+  exactly the permission the proposed booking needs — a fact [19](19-rbac.md) now carries,
+  and the reason it mints no reviewer role. A proposal payload carries `proposed_fields` so
+  that a redacted key and an unobserved key are not the same bytes, which is 19 piece 2's
+  redaction rule applied to a payload that is partial by design. And the pending count is an
+  eighth ambient sensor on [18](18-mqtt-state-publication.md), whose price guard means the
+  count may be published and the payload may not — 18 carries that note. It leaves
+  [14](14-contract-and-regression-scaffolding.md) and [02](02-mcp-endpoint.md) alone: the
+  wire surface is additive and lands under 14's snapshot discipline when it is built, and
+  02 reads through a Victual user like any other client. It also routes
+  [06](06-location-barcodes.md)'s Q2 out of that plan for good.
+
 One more was written on 2026-09-03:
 
 - **[ADR-0013](../adr/0013-nix-built-container-images.md)** — production container images

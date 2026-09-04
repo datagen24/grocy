@@ -46,8 +46,10 @@ what the record took from it is marked here and in place rather than deleted.
 
 Q2's machine-reporting endpoint left this plan before ADR-0011 did, and by its own
 response: it is the subject of [ADR-0012](../adr/0012-observations-are-proposals.md),
-which is **Proposed** and argues exactly the observation-then-confirm shape that response
-reached for. Nothing here waits on it either way.
+**accepted 2026-09-04**, which decides exactly the observation-then-confirm shape that
+response reached for. Nothing here waits on it either way, and nothing here may route
+around it: a camera that reads one of this plan's labels and reports what it sees writes a
+proposal, not stock.
 
 ## The use case drives the design
 
@@ -214,6 +216,13 @@ A print action on the locations list and form, mirroring products.
    > When it comes, the observation-then-accept shape (a staging record a human
    > confirms) is the one that cannot silently corrupt stock; a camera writing
    > straight through the inventory endpoint is the trapdoor to avoid.
+
+   > **Decided 2026-09-04 by [ADR-0012](../adr/0012-observations-are-proposals.md)**, which
+   > is this response generalized past cameras to anything carrying a confidence value: a
+   > `proposals` entity, creation as its own narrow grant, confirmation executing the
+   > booking through the existing write paths, and a unique source-event id making
+   > redelivery harmless. The record owns the question now; it did not become a plan, and it
+   > is scheduled in no wave. Kept because it is the reasoning the record generalized.
 3. **Add `QR` to `GROCYCODE_TYPE`?** I think yes, specifically for this use case. Needs a
    check that the bundled barcode library can produce it.
 
