@@ -15,13 +15,13 @@
 // So this asserts the property the middleware depends on: every path parameter of every
 // /api route is described by the spec, and described with a type. It is the same idea as
 // check-cited-jobs.php - the guard exists because the alternative is a hole nobody looks
-// for.
+// for. Three /recipes parameters were typed "string" while recipes.id is INTEGER when
+// this was written, which is exactly the drift it is meant to catch, and one of those
+// three routes answered 500 with the failing statement in the body (issue #48).
 //
 // It runs in the `suite` job rather than in `lint`, because registering the routes means
 // booting Slim and `lint` deliberately installs no dependencies. Registering is still the
-// right way round: see the comment on the route collector below. Three /recipes parameters were typed "string" while recipes.id is INTEGER when
-// this was written, which is exactly the drift it is meant to catch, and one of those
-// three routes answered 500 with the failing statement in the body (issue #48).
+// right way round: see the comment on the route collector below.
 //
 // Exit codes: 0 when every parameter is typed, 1 otherwise.
 
