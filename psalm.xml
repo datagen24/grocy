@@ -1,9 +1,21 @@
-<projectFiles>
-    <file name="app.php"/>
-    <file name="routes.php"/>
-    <directory name="controllers"/>
-    <directory name="helpers"/>
-    <directory name="middleware"/>
-    <directory name="plugins"/>
-    <directory name="services"/>
-</projectFiles>
+<?xml version="1.0"?>
+<psalm
+    errorLevel="1"
+    resolveFromConfigFile="true"
+    phpVersion="8.5"
+    xmlns="https://getpsalm.org/schema/config"
+>
+    <projectFiles>
+        <file name="app.php"/>
+        <file name="routes.php"/>
+        <directory name="controllers"/>
+        <directory name="helpers"/>
+        <directory name="middleware"/>
+        <directory name="plugins"/>
+        <directory name="services"/>
+
+        <ignoreFiles>
+            <directory name="packages"/>
+        </ignoreFiles>
+    </projectFiles>
+</psalm>
