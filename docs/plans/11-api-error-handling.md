@@ -102,7 +102,7 @@ answered 500.
 >   name cannot: `{objectId}` is an integer on `/objects/{entity}/{objectId}` and a string
 >   on `/userfields/{entity}/{objectId}`, because `userfield_values.object_id` is `TEXT`
 >   and carries a grocycode for the `stock` entity.
-> - **`.devtools/check-path-id-validation.php` in the `lint` job** fails when a route takes
+> - **`.devtools/check-path-id-validation.php` in the `suite` job** fails when a route takes
 >   a path parameter the spec does not type, so "the spec did not say" cannot quietly mean
 >   "unvalidated". Three `/recipes/{recipeId}` parameters were typed `string` while
 >   `recipes.id` is `INTEGER` when this landed — one of them on a route that answered 500 —
