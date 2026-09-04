@@ -224,3 +224,55 @@ Medium, front-loaded. The framework is written; piece 1 is a day of first-build 
 that could be an hour or three. Piece 2 is an afternoon of walking the application with a
 notebook. Piece 3 is small but must not be rushed — it removes a CI job that asserts real
 things. Pieces 4 and 5 are small and per-workload respectively.
+
+## Executed — piece 1, 2026-09-04
+
+The flake had never been built. It builds now: `nix flake check` passes its 34 assertions,
+and `.#image-app`, `.#image-web` and `.#image-migrate` build and load — 284 MB, 205 MB and
+291 MB against the `Dockerfile` production image's 819 MB.
+
+Built on macOS through [`nix/build-in-podman.sh`](../../nix/build-in-podman.sh), added with
+this piece: it is this document's own option A, made repeatable, and the three things it
+does differently from the README's one-liner are each a failure the one-liner produced. See
+[nix/README.md](../../nix/README.md), "The awkward fact about macOS".
+
+**Five defects, and the shape of the set is the argument for this piece having been a gate
+rather than a formality.** Every one was invisible to reading and immediate on running;
+three of them contradicted [ADR-0013](../adr/0013-nix-built-container-images.md)'s claim
+that these images carry no shell.
+
+| # | Defect | Where |
+|---|---|---|
+| 1 | `opcache` is not a nixpkgs extension attribute — it is compiled into `php85`, and `php -m` reports it without being listed. Listing it failed evaluation with "undefined variable 'opcache'". | `nix/php.nix` |
+| 2 | `checks` came from `callPackage`, so it carried `override`/`overrideDerivation`; `nix flake check` rejects a non-derivation under `checks` before running any of them. | `flake.nix` |
+| 3 | PEAR's `bin/pear`, `peardev` and `pecl` are shell scripts, so the app image's closure contained **bash** — and a package manager, which the decision says it does not have. | `nix/php.nix` |
+| 4 | PHP's `PROG_SENDMAIL=${system-sendmail}/bin/sendmail` configure flag names a shell script. Nothing in this tree sends mail. | `nix/php.nix` |
+| 5 | `gd` reached bash twice more — through libavif's `gdk-pixbuf-thumbnailer-avif`, and through `libxpm → gzip`. | `nix/overlay.nix` |
+
+Two things worth carrying forward from fixing them:
+
+- **`pearSupport = false` is the obvious lever for 3 and it is the wrong one.** nixpkgs'
+  `php/generic.nix` adds `libxml2.dev` to PHP's build inputs *only when pearSupport is
+  true*, so disabling it silently builds a PHP without libxml2 — and `dom`, `simplexml` and
+  `xmlwriter`, which htmlpurifier and gettext need, are then built against something else.
+  It was tried, and simplexml failed its own test suite. Deleting the three scripts after
+  the install keeps libxml2 and removes exactly what pulled bash in.
+- **Defect 5's fix, `gd.override { withXorg = false; }`, is what the `Dockerfile` already
+  did** — `docker-php-ext-configure gd --with-freetype --with-jpeg`, and nothing else. The
+  two images disagreed about what `gd` needs and only one of them said so out loud. This
+  makes the Nix build match the Dockerfile rather than the reverse, because the
+  Dockerfile's narrower list is the one that has been serving the application.
+
+The cost is that PHP and its extensions are built from source rather than substituted from
+cache.nixos.org, since the derivation is no longer the one Hydra built. That is minutes on
+a laptop, a cached layer thereafter, and the honest price of an image whose closure matches
+what the record claims about it.
+
+**What this piece did *not* establish, and why ADR-0013 stays Proposed.** The images build;
+the pod does not run. `deploy/podman/victual.yaml` fails under `podman kube play` because
+`fsGroup` is not honoured for `emptyDir` volumes, so uid 65532 cannot write `/data` and the
+migrate initContainer exits 1 — which is the failure
+[deploy/README.md](../../deploy/README.md) predicts by name, one paragraph before a reader
+reaches it. Two documentation defects in the same bootstrap were found on the way. All of
+it is [issue #49](https://github.com/datagen24/victual/issues/49). The verification section
+above is still the list; this closes the build half of it.

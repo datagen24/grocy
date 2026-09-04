@@ -14,6 +14,36 @@ let
   sources = import ./source.nix { inherit lib; };
 in
 {
+  # **The third edge that put a shell in the app image's closure**, and the only one that
+  # is not this fork's doing. `nix flake check`'s no-shell assertion traced it to
+  # php-gd → gd → libavif → bash, where the referrer inside libavif is
+  # `libexec/gdk-pixbuf-thumbnailer-avif`: a wrapper script for a desktop file manager's
+  # thumbnailer, in a library that PHP's gd links for its `.so` alone. Nothing in a
+  # container renders a thumbnail for a file browser.
+  #
+  # It is removed rather than allowed for, because allowing for it means editing
+  # `nix/checks.nix` to permit a shell — and that check exists to make ADR-0013's "no
+  # shell and no package manager" a property of the artifact rather than a sentence in a
+  # record. `gdk-pixbuf = null` is not an option (the derivation dereferences it), so the
+  # files go after the install. gd and php-gd rebuild from source as a result; libavif's
+  # shared library, which is the only part gd uses, is untouched.
+  libavif = prev.libavif.overrideAttrs (old: {
+    postInstall = (old.postInstall or "") + ''
+      rm -rf "$out/libexec" "$out/share/thumbnailers"
+    '';
+  });
+
+  # …and the fourth, which the libavif fix uncovered: gd → libxpm → gzip → bash. X11
+  # pixmap support drags in an X library, which drags in gzip, which is a shell script.
+  #
+  # `withXorg = false` is not a trim for its own sake — it is what the `Dockerfile`'s
+  # production stage has always done, one line up from here in the same repository:
+  # `docker-php-ext-configure gd --with-freetype --with-jpeg`, and nothing else. The two
+  # images disagreed about what gd needs and only one of them said so out loud. This makes
+  # the Nix build match the Dockerfile rather than the other way round, because the
+  # Dockerfile's narrower list is the one that has been serving the application.
+  gd = prev.gd.override { withXorg = false; };
+
   victual = lib.makeScope final.newScope (self: {
     inherit version hashes sources;
 

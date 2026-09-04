@@ -95,7 +95,15 @@
         }
       );
 
-      checks = forSystems linuxSystems (system: (pkgsFor system).victual.checks);
+      # `victual.checks` comes out of `callPackage`, which decorates the attribute set it
+      # returns with `override` and `overrideDerivation`. `nix flake check` walks every
+      # attribute under `checks` and insists each one is a derivation, so passing the set
+      # through unfiltered fails with "flake attribute 'checks.<system>.override' is not a
+      # derivation" — before it has run a single check. Found by the first `nix flake
+      # check`, which is the whole argument for plan 20's piece 1 being a gate.
+      checks = forSystems linuxSystems (
+        system: lib.filterAttrs (_: lib.isDerivation) (pkgsFor system).victual.checks
+      );
 
       devShells = forSystems allSystems (
         system:

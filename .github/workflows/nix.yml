@@ -1,0 +1,86 @@
+# The Nix build, on every pull request that touches it.
+#
+# ADR-0013 proposes building the production images with Nix, and plan 20's piece 1 is the
+# first build — which is also the record's acceptance gate. This workflow is what keeps that
+# gate from rotting: a flake nobody builds is a flake that quietly stops building, which is
+# the same argument the `images` job in tests.yml makes about the Dockerfile.
+#
+# It runs on Linux, so it needs none of the podman-hosted builder that
+# `nix/build-in-podman.sh` exists for on a Mac. That script and this workflow build the
+# same three attributes from the same flake; the difference is only where the Linux is.
+#
+# Paths are filtered because a full build from source is minutes: PHP is rebuilt rather
+# than substituted, since nix/php.nix overrides the derivation to drop the PEAR scripts and
+# the sendmail reference that put a shell in the runtime closure. A change that cannot
+# affect the images should not pay for that.
+
+name: nix
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'nix/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'version.json'
+      - '.github/workflows/nix.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'nix/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'version.json'
+
+jobs:
+  flake:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # The lock file is the pin that makes "reproducible" mean anything, and a build that
+      # silently updates it is not reproducing anything. --no-update-lock-file turns a
+      # stale lock into a failure here rather than a surprise later.
+      - name: Check the flake is locked
+        run: nix flake metadata --no-update-lock-file
+
+      # The 34 assertions in nix/checks.nix. Three of them are why this job is worth its
+      # minutes: the runtime closure contains no shell, the web tier's closure does not
+      # contain the application, and the baked view cache is actually warm. Each is a
+      # property of the artifact rather than of the file describing it, and each has already
+      # caught something — the no-shell check found three separate paths by which bash
+      # reached the app image (PEAR's wrapper scripts, PHP's sendmail reference, and libavif's
+      # gdk-pixbuf thumbnailer via gd).
+      - name: nix flake check
+        run: nix flake check --print-build-logs
+
+      - name: Build the three images
+        run: |
+          nix build .#image-app .#image-web .#image-migrate --print-build-logs --no-link
+
+      # Loading them proves the streamer produces something a runtime accepts, which
+      # building alone does not: streamLayeredImage writes a tar to stdout and a malformed
+      # one fails here rather than on somebody's laptop.
+      - name: Load them into the local runtime
+        run: |
+          for img in image-app image-web image-migrate; do
+            "$(nix build ".#$img" --no-link --print-out-paths)" | docker load
+          done
+          docker images --filter reference='victual-*'
