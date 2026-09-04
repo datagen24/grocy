@@ -41,8 +41,10 @@ what the record took from it is marked here and in place rather than deleted.
   Q5, which ADR-0011 explicitly leaves to the plans that consume labels.
 - **The locations UI.** A print action on the locations list and form, mirroring
   products, over whatever [12](12-frontend-shared-core.md) landed.
-- **Interactive scanning.** The "current location" notion — scan the shelf, then scan
-  items onto it — which Victual does not have today and no record has decided.
+- **Interactive scanning — decided out of this plan, 2026-09-04.** The "current
+  location" notion — scan the shelf, then scan items onto it — is a session concept that
+  touches the stock forms rather than the locations pair, and it gets its own plan after
+  [08](08-nested-locations.md). This plan ships labels and the print action only.
 
 Q2's machine-reporting endpoint left this plan before ADR-0011 did, and by its own
 response: it is the subject of [ADR-0012](../adr/0012-observations-are-proposals.md),

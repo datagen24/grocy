@@ -12,16 +12,16 @@ why S5 and S6 are not parked here. **Piece 2 additionally** depends on
 refused call must be distinguishable and both must be spec'd) and on
 [14](14-contract-and-regression-scaffolding.md) piece 2 for the response-contract
 snapshot that proves redaction; piece 1 needs neither, and verifies its views against
-14 **piece 1**, which landed in wave 0. Feeds [04](04-seed-datasets.md) (the three
+14 **piece 1**, which landed in wave 0. Feeds [04](04-seed-datasets.md) (the four
 roles are a seed) and constrains [02](02-mcp-endpoint.md) and
 [18](18-mqtt-state-publication.md) (both are channels that carry prices — see Q4 and Q5).
 **Status:** draft for review and **on the roadmap as of 2026-08-30** — the README's
 Status table and its waves both carry it, rather than the tail bullet that promised it a
-number. **Blocked on its own question 8** (does this plan gate reads
-at all — the answer changes piece 1's size and its wave), and **split across two waves** —
-piece 1 in wave 3 as its own
-track, piece 2 in wave 5 alongside 14 piece 2, whose snapshot harness it extends. Piece 1
-is in wave 3 rather than later because it grows the API read surface, which the roadmap
+number. **Question 8 answered 2026-09-04: (a), gate reads in piece 1**, which makes
+piece 1 a model change and gives it wave 3a to itself, and **split across two waves** —
+piece 1 in wave 3a, alone,
+piece 2 in wave 5 alongside 14 piece 2, whose snapshot harness it extends. Piece 1
+is in wave 3a rather than later because it grows the API read surface, which the roadmap
 requires to happen *before* 14 piece 2 freezes the contract; piece 2 is in wave 5 because
 it changes existing response shapes and cannot precede the harness that proves it. Both
 land before any client work in [17](17-ecosystem-clients.md) resumes, because the Swift
@@ -189,9 +189,10 @@ PostgreSQL are free to return the rows of an unordered join in different orders,
 would make `difftest.php` fail on a correct implementation — and it discards information
 the UI wants, since a permission inherited from two roles survives the removal of either
 one. Sorting on the immutable `code` rather than the editable `name` keeps the column
-stable across a rename, and the UI resolves codes to display names for the tooltip. This is a dual-engine migration (PostgreSQL has no `AUTOINCREMENT`
-and `TINYINT` becomes `SMALLINT`), and the `permission_tree` recursive CTE already runs on
-both, so the closure needs no new engine-specific SQL.
+stable across a rename, and the UI resolves codes to display names for the tooltip. This migration is PostgreSQL-only — it lands after the
+[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md) retirement sitting (README, wave
+2.5) — so `SMALLINT` and an identity column, no `AUTOINCREMENT` twin; the `permission_tree`
+recursive CTE already runs there, so the closure needs no new SQL of its own.
 
 Direct grants in `user_permissions` stay. A user's effective permissions are the union of
 direct and role grants; there is no "deny". This keeps the existing API and the existing
@@ -200,13 +201,14 @@ behaviour change for a database that has no rows in `user_roles`.
 
 #### Seed
 
-Three built-in roles, shipped by the migration (and re-shippable by [04](04-seed-datasets.md)):
+Four built-in roles, shipped by the migration (and re-shippable by [04](04-seed-datasets.md)) — Guest added by Q7's Response, and the `*_VIEW` leaves by Q8's:
 
 | Role | Grants | Deliberately absent |
 |---|---|---|
 | **Admin** | `ADMIN` | — |
 | **Adult** | `STOCK` (all children), `SHOPPINGLIST` (all), `RECIPES`, `RECIPES_MEALPLAN`, `CHORES` (all), `TASKS` (all), `BATTERIES` (all), `EQUIPMENT`, `CALENDAR`, `USERS_READ`, `USERS_EDIT_SELF`, and piece 2's `STOCK_PRICES_VIEW` | `ADMIN`, `MASTER_DATA_EDIT`, `USERS`, `USERS_CREATE`, `USERS_EDIT` |
-| **Child** | **leaves only** — `CHORE_TRACK_EXECUTION`, `STOCK_CONSUME`, `STOCK_OPEN`, `SHOPPINGLIST_ITEMS_ADD`, `TASKS_MARK_COMPLETED`, `RECIPES_MEALPLAN` (Q3), `RECIPES_VIEW` (piece 2 split), `CALENDAR`, `USERS_EDIT_SELF` | everything that creates or destroys: purchase, inventory, transfer, stock edit, undo of anything, delete from shopping list, recipe edit, all master data, prices |
+| **Child** | **leaves only** — `STOCK_VIEW`, `STOCK_CONSUME`, `STOCK_OPEN`, `SHOPPINGLIST_VIEW`, `SHOPPINGLIST_ITEMS_ADD`, `CHORES_VIEW`, `CHORE_TRACK_EXECUTION`, `TASKS_VIEW`, `TASKS_MARK_COMPLETED`, `RECIPES_VIEW`, `MEALPLAN_VIEW` (Q3), `CALENDAR`, `USERS_EDIT_SELF` | everything that creates or destroys: purchase (which now implies prices, Q6), inventory, transfer, stock edit, undo of anything, delete from shopping list, recipe edit, meal-plan edit, all master data, prices |
+| **Guest** | `STOCK_VIEW`, `RECIPES_VIEW`, `MEALPLAN_VIEW` | everything else — no writes, no prices, no chores or tasks, no calendar |
 
 The Child row is leaves-only for a reason worth stating, because the first draft of this
 table got it wrong in four places. It granted `STOCK`, `SHOPPINGLIST`, `CHORES` and
@@ -570,15 +572,31 @@ topic, and has no Response yet. See Q5.
    A migration that grants `RECIPES_EDIT` to every user currently holding `RECIPES`
    gets both, at the cost of one more row per user.
 
+
+   > **Response (2026-09-04):** `X_VIEW` leaf under `X`, and — because Q8 answers (a) —
+   > the same shape five times: `STOCK_VIEW`, `SHOPPINGLIST_VIEW`, `CHORES_VIEW`,
+   > `TASKS_VIEW`, `RECIPES_VIEW`. `X` keeps today's read+write meaning, so no existing
+   > grant row changes on upgrade. See Q8's Response for the upgrade backfill.
+
 2. **Where does the field policy live** — a table (`permission_fields`, editable, so a
    household can decide `note` on `stock_log` is also adults-only) or a PHP constant
    (auditable, versioned, and the contract snapshot can be generated from it)? The plan
    above says constant. A table is a small step later if wanted; a constant cannot be
    made from a table without losing the snapshot generation.
 
+
+   > **Response (2026-09-04):** A table, `permission_fields`, so a household can widen the
+   > policy without a release. The contract snapshot is generated from the **seeded rows
+   > shipped in the migration**, never from a live database — that keeps the snapshot
+   > versioned and reviewable; local additions are by definition outside the contract.
+
 3. **Meal plan for children: read, or read+write?** `RECIPES_MEALPLAN` is one leaf
    covering both. If a child should be able to pick Tuesday's dinner, no split is
    needed. If not, it is the same split as Q1, one more time.
+
+
+   > **Response (2026-09-04):** Split. `MEALPLAN_VIEW` is a leaf under `RECIPES_MEALPLAN`;
+   > the Child seed role holds only the view leaf. Picking dinner is an Adult act.
 
 4. **[02](02-mcp-endpoint.md): the MCP endpoint runs as a user, and that half is already
    answered.** 02's Q1 and Q6 responses put a sidecar behind an `API_KEY_TYPE_MCP` bearer
@@ -631,9 +649,21 @@ topic, and has no Response yet. See Q5.
    odd. Leaving them independent is the flexible choice; the seed roles never combine
    them the odd way.
 
+
+   > **Response (2026-09-04):** Implied — `STOCK_PURCHASE` resolves down to
+   > `STOCK_PRICES_VIEW`. Recording a purchase without seeing what it cost is not a case
+   > this household has. The consequence is carried by the seed roles: **the Child role
+   > does not hold `STOCK_PURCHASE`**, so a child can consume and open but not record
+   > purchases, and prices stay hidden from it.
+
 7. **Is there a fourth role?** "Guest" — read-only stock and recipes, nothing else — is
    the obvious one for a visitor's phone, and costs one seed row. It is not the family
    that asked, so it is a question rather than a row.
+
+
+   > **Response (2026-09-04):** Yes — a fourth seed role, `Guest`: `STOCK_VIEW`,
+   > `RECIPES_VIEW` and `MEALPLAN_VIEW`, nothing else. A visitor's phone can see what is
+   > in the house, the recipes and what is for dinner; no prices, no writes.
 
 8. **Does this plan also gate reads, and if so does that land with piece 1 or piece 2?**
    This is the largest question the plan has and it was not in the first draft, because
@@ -665,8 +695,7 @@ topic, and has no Response yet. See Q5.
    **row filtering** (an invisible subject is absent) rather than field redaction, so it does
    not touch the absent-versus-redacted contract that makes piece 2 hard. It is explicitly
    narrow and explicitly a client of whatever this plan builds. Two things follow for this
-   question, and **neither answers it** — this plan stays a draft, unscheduled, and blocked
-   on this question exactly as before.
+   question, and **neither answers it** — the Response below does, later the same day.
 
    Option (c) was reworded rather than left standing: as originally written it said only
    prices restrict what a user can see, and that is now false, so it reads *read-gating out
@@ -676,6 +705,32 @@ topic, and has no Response yet. See Q5.
    row-shaped, which is much less than the general case: no wire-contract question, no
    redaction funnel. Whether that generalises to stock, which is not row-shaped in the same
    way, is precisely what this question still has to decide.
+
+
+   > **Response (2026-09-04): (a) — gate reads, in piece 1.** Roles that restrict what a
+   > user can do while every read stays universal are decorative, and the field-level
+   > redaction of piece 2 would otherwise be the only read-side authorization in the
+   > system. Piece 1 is therefore a model change, and is sized and scheduled as one:
+   >
+   > - Five `*_VIEW` leaves per Q1, plus `MEALPLAN_VIEW` per Q3, each a child of the
+   >   permission it narrows; the tree still resolves downward, so every existing holder
+   >   of `STOCK` already resolves to `STOCK_VIEW`.
+   > - Every read path in those subtrees gains a `CheckPermission` on the view leaf —
+   >   controllers, API controllers, and the exposed-entity generic reads, which today
+   >   check nothing.
+   > - **Upgrade is behaviour-preserving:** the migration grants each `*_VIEW` leaf to
+   >   every existing user. Nobody loses a read on upgrade; admins narrow deliberately
+   >   afterwards. This is the same rule the Verification section already states for
+   >   price fields, applied to objects.
+   > - Piece 1 runs **alone**, as wave 3a, before 03 and 06 add read paths of their own —
+   >   see the README's wave 3.
+   >
+   > Piece 2's redaction funnel is unchanged by this: it still removes keys from objects
+   > the caller may see; refusing the object is now piece 1's job at the route.
+   > [22](22-medication-tracking.md)'s Q5 subject filter is consistent with this answer
+   > rather than an exception to it: a `*_VIEW` leaf says whether the caller may read the
+   > domain at all, and 22's predicate says which rows within it — the leaf gates, the
+   > domain filters, and neither replaces the other.
 
 9. **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch, which
    [14](14-contract-and-regression-scaffolding.md)'s section 2b deferred to this plan.**
@@ -718,15 +773,22 @@ topic, and has no Response yet. See Q5.
    > The shape question is untouched: the endpoint still returns raw unresolved rows.
    > Also unchanged by wave 2: `permission_id` validation, which this plan's verification
    > asserts on its own two id-taking endpoints, is now `CheckMayGrant()`'s first job.
+   >
+   > **Response, from this plan (2026-09-04): piece 1 takes the write half and the
+   > shape.** `POST`/`PUT /users/{userId}/permissions` move from `ADMIN` to `USERS_EDIT`,
+   > gated by wave 2's `CheckMayGrant()`, which is what makes that loosening safe; and
+   > `GET` returns the resolved, hierarchy-joined shape the page already renders, with
+   > `via_roles` on each row. One change to the endpoint's shape rather than two, and 14
+   > piece 2 freezes it after piece 1 lands.
 
 ## Effort
 
-Piece 1 (roles): small–medium **if Q8 answers (b) or (c)**. One dual-engine migration
-with two views rewritten, ~8 routes on `UsersApiController` (or a new
-`RolesApiController`), one list plus two mixin adopters, seed rows. Two to three sittings.
-If Q8 answers (a) — gate reads in piece 1 — it is a different plan: four more `*_VIEW`
-leaves, a `CheckPermission` on every read path in the tree, and an upgrade in which users
-who hold nothing stop being able to read anything. Answer Q8 before sizing this.
+Piece 1 (roles and read gating): **medium — Q8 answered (a).** One migration (PostgreSQL
+only, after the 0008 retirement) with two views rewritten, six new `*_VIEW` leaves, the
+`permission_fields` table and its seed, a `CheckPermission` on every read path in five
+subtrees, the behaviour-preserving `*_VIEW` backfill, ~8 routes on `UsersApiController` (or
+a new `RolesApiController`), the Q9 endpoint change, one list plus two mixin adopters, four
+seed roles. Its own sitting, as wave 3a; four to five sittings of work.
 
 Piece 2 (visibility): medium. Two permission leaves, the policy constant, the funnel in
 `BaseApiController`, the Blade helper, the OpenAPI annotations, and 14's double snapshot
