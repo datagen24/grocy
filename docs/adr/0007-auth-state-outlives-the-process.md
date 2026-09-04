@@ -1,8 +1,10 @@
 # ADR-0007: Authentication rate-limit state lives outside the process
 
 - **Status:** **Accepted** 2026-08-29, recorded in the sweep's S12 and in
-  [11](../plans/11-api-error-handling.md)'s sequencing. The throttle itself is not built
-  yet; the constraint on how it may be built is decided.
+  [11](../plans/11-api-error-handling.md)'s sequencing. **Built 2026-09-04**, in a table
+  (`login_attempts`, migration 0262, a per-engine pair) — `services/LoginThrottleService.php`
+  and `middleware/Auth/PasswordLogin.php`. This record is what decided the shape, and it is
+  cited in both.
 - **Decider:** datagen24 (maintainer), retrospectively — see the lifecycle rule in [the index](README.md).
 - **Recorded:** 2026-08-30, retrospectively.
 - **Referenced by:** [security sweep](../security-sweep.md) S12,
@@ -40,5 +42,19 @@ this ADR is its first concrete instance.
   consistent with this record: a memoized `SELECT MAX(migration)` losing its memo on a
   restart costs one query, while a lost throttle counter costs the throttle.
 - It is a constraint on [11](../plans/11-api-error-handling.md) rather than on the sweep:
-  S12 stays open until the throttle exists, and this record is what stops it being
-  implemented the fast, wrong way.
+  S12 stayed open until the throttle existed, and this record is what stopped it being
+  implemented the fast, wrong way. **It worked**: the throttle landed in wave 2 as a table,
+  and the schema change this section names as the cost is migration 0262. Redis was
+  available and was not chosen, for the reason the Consequences list already implies — a
+  table costs one write per *failed* attempt and no second service, and a household
+  instance has few of either.
+- **The same reasoning generalised on the way through, and the fix is recorded here because
+  the ADR is where a reader looks.** S12's second half — force a password change while the
+  seeded `admin`/`admin` hash is in use — has the same shape and a different answer. The
+  question "is this account still on the default password?" can only be asked where a
+  plaintext password exists, which is the login path, so the *answer* is stored (a
+  `must_change_password` user setting) rather than recomputed. Recomputing it would mean an
+  Argon2id verification on every request, which is expensive by design. That is the mirror
+  of this record rather than an exception to it: state that must outlive the process goes in
+  the database either way, and what changes is whether the process could cheaply derive it
+  again.

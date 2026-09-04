@@ -81,6 +81,7 @@ readers most often need and least often have.
 | [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Accepted** 2026-09-04 | [06](../plans/06-location-barcodes.md) (narrowed by it) |
 | [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Accepted** 2026-09-04 | [06](../plans/06-location-barcodes.md) Q2 (routed out of it) |
 | [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Accepted** 2026-09-04, **supersedes the `Dockerfile`'s `production` target** | [20](../plans/20-container-infrastructure.md), [nix/](../../nix/README.md), [deploy/](../../deploy/README.md) |
+| [0014](0014-administering-a-user-is-a-subset-question.md) | Administering a user means holding everything they hold | **Proposed** | [security sweep](../security-sweep.md) S5, S6, S27 |
 
 **0008 was accepted 2026-08-31 and supersedes
 [0001](0001-postgresql-alongside-sqlite.md).** 0009 remains a proposal under active
