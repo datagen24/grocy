@@ -70,7 +70,7 @@ them are routing sentences in *this file* that were never true.
 |---|---|---|---|---|---|
 | 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
-| 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision; builds on 10, which landed | medium, front-loaded | draft — **the flake landed, never built**; piece 1 is the first build |
+| 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision; builds on 10, which landed | medium, front-loaded | **piece 1 landed** (2026-09-04) — the flake builds: `nix flake check` passes 34 assertions, all three images build and load, and the first build found five defects including three shells in the app image's closure. The **pod does not start** under `podman kube play` ([#49](https://github.com/datagen24/victual/issues/49)), so piece 1's verification is partial and ADR-0013 stays Proposed |
 
 ## Decisions
 

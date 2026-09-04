@@ -8,10 +8,19 @@ can run the differential suite from a clean checkout. These are the other thing.
 The decision is [ADR-0013](../docs/adr/0013-nix-built-container-images.md); the work and
 what remains unproved is [plan 20](../docs/plans/20-container-infrastructure.md).
 
-**Nothing here has been built yet.** It was written against nixpkgs' PHP, Composer,
-yarn and `dockerTools` interfaces as they stand on `nixos-unstable`, but no build has
-run, so treat the first `nix build` as part of the work rather than as a formality. Plan
-20's verification section is the list of what the first build has to establish.
+**This was first built on 2026-09-04**, on macOS through
+[`build-in-podman.sh`](build-in-podman.sh). `nix flake check` passes its 34 assertions and
+all three images build and load. The sentence that stood here until then — "nothing here
+has been built yet, so treat the first `nix build` as part of the work rather than as a
+formality" — turned out to be right: the first build found five defects, three of them
+contradicting ADR-0013's claim that these images carry no shell. Every one was fixed in the
+source rather than in [`checks.nix`](checks.nix), which is what found them.
+
+What remains unproved is the *deployment*. `deploy/podman/victual.yaml` does not start
+under `podman kube play`: `fsGroup` is not honoured for `emptyDir` volumes, so uid 65532
+cannot write `/data` and the migrate initContainer exits 1. See
+[issue #49](https://github.com/datagen24/victual/issues/49). Plan 20's verification section
+is still the list of what has to be established, and this closes part of it, not all.
 
 ## What gets built
 
@@ -44,25 +53,33 @@ This flake evaluates fine on a Mac — the devShell and the application derivati
 there — but `nix build .#image-app` will fail with "a 'aarch64-linux' with features {}
 is required to build" unless one of the following is true.
 
-**Option A — build inside podman.** No change to the host, and podman is already the
-stated bootstrap tool:
+**Option A — build inside podman**, which is what [`build-in-podman.sh`](build-in-podman.sh)
+does. No change to the host, and podman is already the stated bootstrap tool:
 
 ```sh
-podman run --rm -v "$PWD:/src:ro,Z" -w /src \
-  docker.io/nixos/nix:latest \
-  nix --extra-experimental-features 'nix-command flakes' \
-      build .#image-app --print-out-paths
+nix/build-in-podman.sh bootstrap   # fill nix/hashes.nix and write flake.lock
+nix/build-in-podman.sh check       # nix flake check
+nix/build-in-podman.sh images      # build all three and load them into podman
+nix/build-in-podman.sh all         # all of the above
+nix/build-in-podman.sh clean       # discard the builder and its warm store
 ```
 
-The catch is that the result lives inside the throwaway container, so in practice you
-want the streamer to write straight out:
+Three things it does that the obvious one-liner does not, each learned by the one-liner
+failing:
 
-```sh
-podman run --rm -v "$PWD:/src:ro,Z" -w /src docker.io/nixos/nix:latest \
-  sh -c 'nix --extra-experimental-features "nix-command flakes" build .#image-app \
-           --no-link --print-out-paths | xargs -I{} {}' \
-  | podman load
-```
+- **The store is a long-lived container, not a `-v victual-nix-store:/nix` volume.** An
+  empty volume mounted over `/nix` hides the store nix itself lives in, and seeding it by
+  copying `/nix` in produces a store whose `nix` segfaults — rc=139, before it prints its
+  own version.
+- **The flake ref is `path:/src`, not `.`.** A bare `.` makes nix treat the directory as a
+  *git* flake, and in a git worktree `.git` is a file pointing at
+  `<main repo>/.git/worktrees/<name>` — a path that does not exist inside the container
+  (`failed to resolve path … libgit2 error code = 2`). `path:` reads a directory as a
+  directory, and does not care that the tree is dirty, which is what you want while
+  bootstrapping hashes that are by definition uncommitted.
+- **It captures the streamer's path and runs it**, rather than `| xargs -I{} {}`. The
+  nixos/nix image's busybox `xargs` will not substitute `{}` into the command position and
+  answers `{}: No such file or directory`.
 
 **Option B — a persistent Linux builder.** `nix-darwin`'s `nix.linux-builder.enable`
 gives a small NixOS VM registered as a remote builder, after which
@@ -99,10 +116,11 @@ when `composer.lock` or `yarn.lock` changes — and a changed lockfile with an u
 hash here is a build failure rather than a silently stale dependency set, which is the
 property being bought.
 
-There is no `flake.lock` in the repository yet, for the same reason: it cannot be
-written by hand. `nix flake update` produces it on the first build, and **it should be
-committed** — it is the pin that makes "reproducible" mean anything, and it is a
-supply-chain input that belongs under review like any other.
+`flake.lock` is committed, for the same reason the hashes are: it cannot be written by
+hand, `nix flake update` produces it, and it is the pin that makes "reproducible" mean
+anything — a supply-chain input that belongs under review like any other. The `nix` CI
+workflow runs `nix flake metadata --no-update-lock-file`, so a stale lock is a failed job
+rather than a silent update.
 
 ## The tree
 
