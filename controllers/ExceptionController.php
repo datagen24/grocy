@@ -22,14 +22,19 @@ class ExceptionController extends BaseApiController
 {
 	/**
 	 * @param ResponseFactoryInterface $responseFactory Factory used to create the fresh error response
+	 * @param LoggerInterface|null $logger Where uncaught exceptions are recorded. Slim's error
+	 *                                     middleware only hands its own logger to its own handler,
+	 *                                     so this one arrives here rather than through __invoke()
 	 */
-	public function __construct(Container $container, ResponseFactoryInterface $responseFactory)
+	public function __construct(Container $container, ResponseFactoryInterface $responseFactory, ?LoggerInterface $logger = null)
 	{
 		parent::__construct($container);
 		$this->ResponseFactory = $responseFactory;
+		$this->Logger = $logger;
 	}
 
 	private $ResponseFactory;
+	private ?LoggerInterface $Logger;
 
 	/**
 	 * Handles the given exception (Slim error handler signature).
@@ -49,7 +54,9 @@ class ExceptionController extends BaseApiController
 		}
 
 		$response = $this->ResponseFactory->createResponse();
-		$isApiRoute = string_starts_with($request->getUri()->getPath(), '/api/');
+		$isApiRoute = IsApiRoutePath($request->getUri()->getPath());
+
+		$this->LogException($request, $exception, $logErrors, $logErrorDetails, $logger);
 
 		if (!defined('VICTUAL_AUTHENTICATED'))
 		{
@@ -106,5 +113,59 @@ class ExceptionController extends BaseApiController
 			'exception' => $exception,
 			'systemInfo' => ApplicationService::GetInstance()->GetSystemInfo()
 		]);
+	}
+
+	/**
+	 * Records the exception for the operator.
+	 *
+	 * What it deliberately does not carry is the request body. Bodies on this API contain
+	 * product notes, user names and, on the user endpoints, passwords, and a log is a
+	 * place they would sit in plain text for as long as the platform keeps records.
+	 *
+	 * A client error is logged at warning and a server fault at error, so that the volume
+	 * a malformed filter can generate does not drown the faults worth reading. File, line
+	 * and stack trace are attached only when the error middleware was asked for details -
+	 * the same flag that used to be the only reason anything was recorded at all.
+	 */
+	private function LogException(ServerRequestInterface $request, Throwable $exception, bool $logErrors, bool $logErrorDetails, ?LoggerInterface $logger): void
+	{
+		$logger = $logger ?? $this->Logger;
+
+		if (!$logErrors || $logger === null)
+		{
+			return;
+		}
+
+		$status = 500;
+
+		if ($exception instanceof HttpException)
+		{
+			$status = $exception->getCode();
+		}
+
+		$context = [
+			'method' => $request->getMethod(),
+			'path' => $request->getUri()->getPath(),
+			'status' => $status,
+			'exception' => get_class($exception)
+		];
+
+		if ($logErrorDetails)
+		{
+			$context['file'] = $exception->getFile();
+			$context['line'] = $exception->getLine();
+			$context['stack_trace'] = $exception->getTraceAsString();
+		}
+
+		$message = self::WithoutDriverText($exception->getMessage());
+
+		if ($status >= 500)
+		{
+			$logger->error($message, $context);
+		}
+		else
+		{
+			$logger->warning($message, $context);
+		}
 	}
 }

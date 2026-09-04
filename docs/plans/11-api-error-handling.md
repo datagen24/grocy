@@ -128,6 +128,65 @@ answered 500.
 > malformed id is a request that cannot be parsed, not a row that is absent — and is
 > recorded in the parity suite as `non-integer-object-id`.
 
+> **Landed — the middleware ordering, the CORS setting and the error log.** This is the
+> second of the three sessions the Effort section splits this plan into, taken first
+> because it is self-contained and because the logging half was what made every other
+> failure in this plan invisible in production. Landed 2026-09-04 in wave 2. The shared
+> `HandleApiCall()` helper and the API-key work are still unbuilt.
+>
+> - **`JsonMiddleware` and `CorsMiddleware` are application level**, added after the
+>   authentication middleware *and* after the error middleware, so they are outermost of
+>   everything. On the route group they could not be: authentication and routing both ran
+>   first. A 401 now carries `{"error_message": "Unauthorized"}` and
+>   `Content-Type: application/json`; a 404 and a 405 are typed too, which they were not.
+>   Both middlewares decide by path whether a request is theirs, so the rendered pages are
+>   untouched — and that predicate is now `IsApiRoutePath()`, which strips
+>   `VICTUAL_BASE_PATH` first. The bare `string_starts_with($path, '/api/')` it replaces
+>   answered **false for every API request on an installation mounted in a
+>   subdirectory**, in `ExceptionController` and `BaseAuthMiddleware` alike — an API error
+>   there was an HTML page.
+> - **`CorsMiddleware` has to be outside the routing middleware, not merely outside
+>   authentication.** The plan said "before authentication is attempted", which is
+>   necessary and not sufficient: no route registers `OPTIONS`, so routing raises
+>   `HttpMethodNotAllowedException` before any inner middleware runs. That is the real
+>   reason the `$app->any('/api/{routes:.+}', …)` catch-all existed, and deleting it
+>   without moving CORS outside routing would have replaced a 401 preflight with a 405 one.
+> - **The catch-all is deleted**, as the plan said to decide deliberately. An unmatched
+>   `/api/*` path answered 200 with an empty body and now answers 404 — a row for the
+>   change table below, added here rather than left implicit.
+> - **`VICTUAL_CORS_ALLOWED_ORIGINS`, empty by default**, per Q3. Exact-match against the
+>   request's `Origin`, `Vary: Origin` on every API response once the list is non-empty,
+>   and the entries are validated at startup by `ConfigurationValidator` — a value written
+>   with a trailing slash matches nothing a browser sends, so it is refused rather than
+>   silently behaving as if CORS were off. Sweep **S21** closes with it.
+> - **A preflight is answered 204 whether or not the origin is allowed.** It carries no
+>   credentials, so authenticating it could only ever refuse a request that was asking
+>   permission; a disallowed origin gets the 204 without CORS headers, which is what makes
+>   the browser refuse the real request.
+> - **Errors are logged**: `helpers/StderrLogger.php`, a PSR-3 logger writing one line per
+>   record to `php://stderr` (Q7), handed to `ExceptionController` through its constructor.
+>   Slim's `addErrorMiddleware()` only passes its logger to *its own* `ErrorHandler`, and
+>   this application replaces that handler — so the parameter the plan noted on
+>   `__invoke()` is not the socket, and the constructor is. The line carries method, path,
+>   status, exception class, message and — under `logErrorDetails` — file, line and trace.
+>   It carries no request body, deliberately: bodies here contain product notes, user names
+>   and passwords. A client error logs at `warning` and a server fault at `error`, so a
+>   malformed filter cannot drown a real fault.
+> - **Sweep S9 closes with it**, because it is the same surface: the 500 page's detail
+>   block — file, line, message, stack trace and `json_encode($systemInfo)` — is now
+>   rendered in `dev` mode only and every value in it is printed with `{{ }}` rather than
+>   `{!! !!}`. The `/` route is unauthenticated, so the old page showed all of it to
+>   anonymous visitors, and an exception message is the one string on that page that can
+>   carry request data.
+>
+> Verified on a booted instance, both modes: unauthenticated `GET /api/system/info`
+> answers `401` with the JSON body and content type; `OPTIONS` answers `204`, with the
+> CORS headers for a configured origin and without them for any other; a UI page carries
+> no CORS header at all; an unmatched `/api/*` answers `404` as JSON while an unmatched UI
+> path still answers HTML; and a forced exception in production leaves the stderr line with
+> no `error_details` in the response, while in `dev` the same exception renders on the page
+> with `&lt;script&gt;` escaped.
+
 **A related divergence in the same method was *not* a status-code question, and has since
 been fixed** — noted here because it is the reason `FilterData` no longer spells its own
 operators. `FilterData`'s `~` and `!~` emitted `LIKE`, which is case-insensitive on SQLite
@@ -309,6 +368,7 @@ codes, and that needs to be explicit rather than slipped in:
 | Unauthenticated API call | bodyless 401 | 401 with JSON body |
 | `OPTIONS` on an API route | 401 | 204 with CORS headers |
 | Cross-origin `GET` | `Allow-Origin: *` | no CORS header unless configured |
+| Unmatched `/api/*` path | 200, empty body | 404 |
 | API key in a query parameter | accepted | 401 |
 | `POST`/`PUT`/`DELETE` `/api/objects/{userfields\|userentities}` as a non-admin | 200 | 403 |
 | `?query[]=` or `?order=` naming a field the caller may not see | 200, filtered | 400 |

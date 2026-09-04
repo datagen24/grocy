@@ -870,11 +870,15 @@ unconditionally, and piece 2 is what makes them optional.
   parked on a plan that does not depend on it.** Where the plan and the parking each name
   the other as prerequisite, one of them is wrong, and it is worth checking which before
   the wave that would have fixed it goes past.
-- **Not scheduled, recorded**: sweep S20–S22 and S24 (Host-header redirects, wildcard
-  CORS, integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to
-  tags). Each is a one-liner that rides with whichever wave opens the file; S21 waits on
-  17 to say which browser clients exist. S23 (`Content-Disposition` quoting) is the rule
-  working as intended: the hotfix had that line open and took it.
+- **Not scheduled, recorded**: sweep S20, S22 and S24 (Host-header redirects, integer ids
+  concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to tags). Each is a
+  one-liner that rides with whichever wave opens the file. S23
+  (`Content-Disposition` quoting) is the rule working as intended: the hotfix had that line
+  open and took it — and **S21** (wildcard CORS) is the same rule again: this list said it
+  waited on 17 to say which browser clients exist, and wave 2 had `CorsMiddleware` open
+  anyway. It landed there on 2026-09-04, and the answer 17 was being waited on for turned
+  out not to be needed: `CORS_ALLOWED_ORIGINS` defaults to empty, so an operator names the
+  clients rather than a plan enumerating them.
 
 Every wave ends mergeable: nothing in a later wave reworks what an earlier wave
 shipped, and each track lands through its own PR with its plan's Verification section

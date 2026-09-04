@@ -34,6 +34,7 @@ class ConfigurationValidator
 		self::checkEntryPage();
 		self::checkMealplanFirstDayOfWeek();
 		self::checkAutoNightModeRange();
+		self::checkCorsAllowedOrigins();
 		self::checkMqttSettings();
 		self::checkInfluxDbSettings();
 	}
@@ -168,6 +169,27 @@ class ConfigurationValidator
 			(is_numeric(VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK) && VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK >= -1 && VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK <= 6)))
 		{
 			throw new EInvalidConfig('Invalid value for MEAL_PLAN_FIRST_DAY_OF_WEEK');
+		}
+	}
+
+	/**
+	 * Every entry of CORS_ALLOWED_ORIGINS has to be an origin, because that is what
+	 * CorsMiddleware compares the request's Origin header against - exactly, since a
+	 * prefix or substring match on an origin is how a rule meant for
+	 * "https://home.example.com" comes to admit "https://home.example.com.evil.test".
+	 *
+	 * The failure this refuses is a silent one: a browser sends `Origin` with no path and
+	 * no trailing slash, so an entry written as "https://home.example.com/" never matches
+	 * anything and the setting looks configured while behaving as if it were empty.
+	 */
+	private function checkCorsAllowedOrigins()
+	{
+		foreach (\Victual\Middleware\CorsMiddleware::AllowedOrigins() as $origin)
+		{
+			if (!preg_match('#^https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$#', $origin))
+			{
+				throw new EInvalidConfig('Invalid CORS_ALLOWED_ORIGINS entry "' . $origin . '" - each entry has to be a bare origin such as "https://home.example.com", with no path and no trailing slash');
+			}
 		}
 	}
 

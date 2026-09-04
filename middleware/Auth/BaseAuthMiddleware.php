@@ -36,7 +36,7 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 		$routeContext = RouteContext::fromRequest($request);
 		$route = $routeContext->getRoute();
 		$this->RouteName = $route->getName();
-		$this->IsApiRoute = string_starts_with($request->getUri()->getPath(), '/api/');
+		$this->IsApiRoute = IsApiRoutePath($request->getUri()->getPath());
 
 		if ($this->RouteName === 'root' || $this->RouteName === 'login')
 		{
@@ -73,6 +73,12 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 
 				if ($this->IsApiRoute)
 				{
+					// The body is written here rather than left to the caller because
+					// nothing downstream of this point runs: this is a short circuit, and
+					// a bodyless 401 was what a client had to guess at. JsonMiddleware,
+					// which now wraps this middleware, supplies the Content-Type.
+					$response->getBody()->write(json_encode(['error_message' => 'Unauthorized']));
+
 					return $response->withStatus(401);
 				}
 				else

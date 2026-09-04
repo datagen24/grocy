@@ -186,6 +186,15 @@ Setting('LDAP_UID_ATTR', ''); // Windows AD: "sAMAccountName", OpenLDAP: "uid", 
 // See the file controllers/Users/User.php for possible values
 Setting('DEFAULT_PERMISSIONS', ['ADMIN']);
 
+// Which browser origins may call the API cross-origin, as a comma separated list of
+// exact origins, e.g. 'https://home.example.com, https://tablet.example.com'.
+// Empty (the default) means no CORS response headers are sent at all, which is what an
+// installation with no browser based third party client wants. This used to be an
+// unconditional 'Access-Control-Allow-Origin: *' on an API that authenticates with a key
+// (sweep finding S21); a preflight is still answered 204, it just carries no permission
+// for an origin that is not listed here
+Setting('CORS_ALLOWED_ORIGINS', '');
+
 // "1D" (=> Code128) or "2D" (=> DataMatrix)
 Setting('GROCYCODE_TYPE', '2D');
 

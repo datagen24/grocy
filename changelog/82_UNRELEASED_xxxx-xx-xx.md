@@ -1,5 +1,7 @@
 > ⚠️ Authentication middleware was reorganized, review your `AUTH_CLASS` setting (see the default reference in `config-dist.php` as usual)
 
+> ⚠️ The API no longer sends `Access-Control-Allow-Origin: *`. Cross-origin browser access is now off unless the new `CORS_ALLOWED_ORIGINS` setting lists the origins that may use it
+
 ### New Feature: xxxx
 
 - xxx
@@ -64,3 +66,12 @@
 ### API
 
 - Fixed that the endpoints `POST /stock/shoppinglist/add-product` and `POST /stock/shoppinglist/remove-product` truncated decimal product amounts
+- An unauthenticated API request is now answered with the usual `{ "error_message": ... }` body and `Content-Type: application/json` instead of a bodyless, untyped `401`
+- A CORS preflight (`OPTIONS`) on an API route is now answered `204` instead of `401`, and carries the CORS headers when the request's `Origin` is listed in `CORS_ALLOWED_ORIGINS`
+- Cross-origin responses no longer carry `Access-Control-Allow-Origin: *`. Set `CORS_ALLOWED_ORIGINS` to the exact origins that may call the API from a browser; the default is empty, which sends no CORS headers at all
+- An unmatched `/api/...` path is now answered `404` instead of an empty `200`
+
+### Server errors and logging
+
+- Uncaught exceptions are now written to `stderr` as one line each, carrying the request method and path, the response status, the exception class and - when error details are enabled - the file, line and stack trace. In production nothing was recorded anywhere before this
+- The server error page no longer shows the exception message, file, line, stack trace and system info to everyone. That block is now shown in `dev` mode only, and every value in it is HTML escaped

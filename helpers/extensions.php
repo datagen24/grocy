@@ -480,6 +480,30 @@ function SafeExternalUrl($url)
 	return IsSafeExternalUrl($url) ? (string)$url : '#';
 }
 
+/**
+ * Whether the given request path addresses the JSON API rather than a rendered page.
+ *
+ * The comparison is made after VICTUAL_BASE_PATH is removed, because Slim's
+ * setBasePath() only affects routing - $request->getUri()->getPath() still carries the
+ * prefix the installation is mounted under. A bare string_starts_with($path, '/api/')
+ * therefore answers false for every API request on an installation in a subdirectory,
+ * which is the difference between a JSON error body and an HTML error page.
+ *
+ * @param string $path The request path, as returned by $request->getUri()->getPath()
+ * @return bool
+ */
+function IsApiRoutePath($path)
+{
+	$basePath = rtrim(VICTUAL_BASE_PATH, '/');
+
+	if ($basePath !== '' && string_starts_with($path, $basePath))
+	{
+		$path = substr($path, strlen($basePath));
+	}
+
+	return string_starts_with($path, '/api/');
+}
+
 function string_starts_with($haystack, $needle)
 {
 	return (substr($haystack, 0, strlen($needle)) === $needle);

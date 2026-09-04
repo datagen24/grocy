@@ -24,8 +24,6 @@ use Victual\Controllers\StockReportsController;
 use Victual\Controllers\SystemController;
 use Victual\Controllers\TasksController;
 use Victual\Controllers\UsersController;
-use Victual\Middleware\CorsMiddleware;
-use Victual\Middleware\JsonMiddleware;
 use Victual\Middleware\PathParameterMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -266,13 +264,16 @@ $app->group('/api', function (RouteCollectorProxy $group)
 	// Calendar
 	$group->get('/calendar/ical', [CalendarApiController::class, 'Ical'])->setName('calendar-ical');
 	$group->get('/calendar/ical/sharing-link', [CalendarApiController::class, 'IcalSharingLink']);
-// PathParameterMiddleware is added first so that the two below wrap it: its 400 is a
-// response like any other and wants the same CORS and Content-Type treatment.
-})->add(new PathParameterMiddleware($container, $app->getResponseFactory()))->add(new CorsMiddleware($container, $app->getResponseFactory()))->add(new JsonMiddleware($container, $app->getResponseFactory()));
-
-
-// For CORS preflight OPTIONS requests
-$app->any('/api/{routes:.+}', function (Request $request, Response $response): Response
-{
-	return $response;
-})->add(new CorsMiddleware($container, $app->getResponseFactory()));
+// CorsMiddleware and JsonMiddleware used to be added here too. They are now application
+// level (app.php), outside authentication, which is the only place they can treat a 401
+// and an OPTIONS preflight like every other API response. PathParameterMiddleware stays
+// on the group - it needs the matched route - and is still wrapped by both, since
+// application-level middleware is outside a group's.
+//
+// The catch-all `$app->any('/api/{routes:.+}', ...)` that used to follow this group is
+// gone with them. It existed for CORS preflights, which the application-level middleware
+// now answers; it was also, because it was `any` rather than `options`, what answered
+// every unmatched /api/* request with an empty 200. Those are now a 404 from Slim through
+// ExceptionController, which is a deliberate behaviour change rather than a side effect:
+// two code paths adding the same headers was the worse of the two options. Plan 11.
+})->add(new PathParameterMiddleware($container, $app->getResponseFactory()));
