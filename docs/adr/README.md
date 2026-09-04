@@ -75,7 +75,7 @@ readers most often need and least often have.
 | [0005](0005-wire-contract-is-the-invariant.md) | The JSON on the wire is the invariant — with two accepted exceptions | **Accepted** 2026 | [db/pgsql](../../db/pgsql/README.md) |
 | [0006](0006-authenticated-issues-in-scope.md) | Issues requiring an authenticated account are in scope | **Accepted** 2026-08-29 | [security sweep](../security-sweep.md), [SECURITY.md](../../.github/SECURITY.md) |
 | [0007](0007-auth-state-outlives-the-process.md) | Authentication rate-limit state lives outside the process | **Accepted** 2026-08-29 | [security sweep](../security-sweep.md) S12 |
-| [0008](0008-postgresql-only-runtime-engine.md) | PostgreSQL becomes the only runtime engine; SQLite becomes an import format | **Proposed** | — |
+| [0008](0008-postgresql-only-runtime-engine.md) | PostgreSQL becomes the only runtime engine; SQLite becomes an import format | **Accepted** 2026-08-31, **supersedes [0001](0001-postgresql-alongside-sqlite.md)** | — |
 | [0009](0009-database-as-the-logic-layer.md) | The database is the logic layer | **Proposed**, depends on 0008 | — |
 | [0010](0010-workload-standard.md) | Fork-owned workloads are stateless, idempotent, unprivileged and declared | **Proposed** | [constitution](../constitution.md) |
 | [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Proposed** | [06](../plans/06-location-barcodes.md) |
@@ -87,6 +87,64 @@ readers most often need and least often have.
 consideration — its dependency on 0008 is now satisfied, and it is still not in the
 roadmap's wave order. They were written together as one concept and split into two
 records precisely because the first is defensible without the second.
+
+*That acceptance took eight days to reach this table: the record's own status line said
+Accepted from 2026-08-31 and 0001's row named 0008 as its successor, while 0008's row
+here still read Proposed until 2026-09-04. The lifecycle rule above lists exactly four
+things the accepting pull request changes and the index row is the second of them, so this
+was the one piece of bookkeeping that rule already names — missed anyway, and only caught
+by reading the index against the records.*
+
+## Where the proposals stand
+
+Reviewed 2026-09-04. This section is a **status of the gates, not a decision** — accepting
+or rejecting any of these is its own pull request, per the lifecycle rule above, and
+nothing here counts as one.
+
+- **[0009](0009-database-as-the-logic-layer.md) — the database is the logic layer.** Its
+  first gate (0008 accepted) is met. Its second is not, and is now *cheap* rather than
+  blocked: it says deploy [18](../plans/18-mqtt-state-publication.md) and measure whether
+  the pod actually sleeps — 18 landed 2026-09-02, so the measurement is available for the
+  taking and has not been taken. The record is explicit that if the pod does not sleep,
+  this collapses to 0008's tax argument and should be **rejected rather than accepted
+  smaller**. The third gate, the seven-part Anonymizer spike behind the redaction
+  mechanism, is untouched. **Not ready; the next move is a measurement, not an argument.**
+- **[0010](0010-workload-standard.md) — the workload standard.** No acceptance
+  prerequisites, and two of its three open questions have been answered by events rather
+  than by argument: the deploy tree does live in this repository ([20](../plans/20-container-infrastructure.md)
+  shipped `deploy/podman/`, question 1's lean), and the main image's root-user retrofit
+  landed with [10](../plans/10-cold-start-statelessness.md) (question 3). Question 2,
+  enforcement, is the one that matters and the tree now argues its lean for it — the
+  cheap greps work, as `.devtools/check-cited-jobs.php` and
+  `.devtools/pgsql/check-runtime-sql.php` both demonstrate. **The most acceptable of the
+  five, and the one whose acceptance would cost the least.**
+- **[0011](0011-label-namespace.md) — the label namespace.** Two gates, both answerable at
+  a desk: choose the uid format (question 1 carries a specific lean) and reconcile plan
+  [06](../plans/06-location-barcodes.md), which is either absorbed or narrowed. Neither
+  needs code. **Ready to decide whenever 06 comes up the queue; nothing is waiting on it.**
+- **[0012](0012-observations-are-proposals.md) — observations are proposals.** Two gates,
+  both design statements: the absent-versus-redacted-versus-unknown contract for proposal
+  payloads, and the confirm permission (question 2 carries the lean). The first is
+  entangled with [19](../plans/19-rbac.md)'s wire-contract questions, and 19 is itself
+  blocked on its own Q8. **Decidable, but reads better after 19 unblocks.**
+- **[0013](0013-nix-built-container-images.md) — Nix-built production images.** The
+  furthest along and the only one blocked by something outside itself.
+  [20](../plans/20-container-infrastructure.md) piece 1 met gates **2** (measured, not
+  asserted: 284 MB, 205 MB and 291 MB against the `Dockerfile` production image's 819 MB,
+  with no shell in any of them) and **3** (`nix flake check` passes 34 assertions,
+  including `image-has-no-shell` — which failed first, and correctly, on three shells
+  reached through PEAR, sendmail and `gd`). Gates **1** and **5** need a pod that serves,
+  and the pod does not start under `podman kube play`
+  ([#49](https://github.com/datagen24/victual/issues/49)). Gate **4**, the fixed-output
+  hashes reproducing on a second machine, has not been attempted. **Blocked on #49.**
+
+  Worth knowing when reading this record: it was **rejected once**, on 2026-09-03
+  (`1c97766f`), when plan 10 landed a `production` target in the `Dockerfile` while 0013
+  was in review and refuted three of its premises within hours — and the rejection was
+  itself reversed when the flake was restored and built. The file carries no trace of
+  either, which is a gap: the corpus rule is that a number is permanent and a reason is
+  preserved, and a rejection that happened should be visible in the record even when the
+  rejection did not stick.
 
 ## Known unfiled decisions
 

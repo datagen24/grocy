@@ -64,13 +64,72 @@ them are routing sentences in *this file* that were never true.
 | 21 | [Frontend sink discipline](21-frontend-sink-discipline.md) | CodeQL, 2026-09-04 (23 alerts); **S29's standing guard** | — | small | **landed** (`bdfa00c`…, 2026-09-04) — all 23 alerts closed and, more to the point, the reason they were not caught: the `frontend-security` job four documents claimed ran on every pull request had never been written, and the harness it would run could not boot (demo mode 503'd on its own `-1` marker). The job now exists, `.devtools/check-cited-jobs.php` in `lint` stops a job being documented into existence again, and the probe gains two families — local input, and an assertion that `HTML_RENDERED_COLUMNS` still holds. **Its step 4 was overturned by its own Q6**: alert #17 is a false positive, the boundary is the server-side purifier, and the plan says so — and **review then found the gap in that argument**: rows that predate the purifier survive an in-place upgrade or an import, so migration 0260 and `DatabaseImporter` both run `StoredHtmlPurifier`, proved by a ninth suite phase (`richtext`) on both engines |
 | — | [Security sweep hotfix](../security-sweep.md) (S1, S2, S3, **S4**, S7, S23, S28, R1) | [docs/security-sweep.md](../security-sweep.md) | — | small | **landed** — see the sweep's [What the hotfix changed](../security-sweep.md#what-the-hotfix-changed) |
 
+### The parity suite, and what it found
+
+The three reviews above are readings. [`.devtools/parity/`](../../.devtools/parity/README.md),
+added 2026-09-04, is a fourth input that is not a reading at all: it boots this fork and
+upstream grocy 4.6.0 side by side in Podman and diffs them over HTTP — 285 API calls
+across 8 scenarios, 49 view routes in a browser, and the fork-only MQTT and InfluxDB
+surfaces against a real broker. It is **a tool to run as you work, not a gate**, and is
+deliberately not wired into CI; see its README for why a suite that is red on arrival
+makes a bad gate.
+
+It exists because `.devtools/pgsql/` structurally cannot see a whole class of defect.
+That suite drives SQL at both engines and compares views, triggers and migrations, so it
+never enters a controller — and SQLite-flavoured SQL written *in PHP*, built only at
+request time, is invisible to it. Three such defects were sitting in `master` when the
+parity suite was written, each a 500 or a 400 on a page that works upstream. Plan 10 had
+found the same three by hand and this file had been carrying them as "they need an owner"
+ever since, which is the argument for the suite in one sentence: the thing a person finds
+once by browsing is the thing an instrument should find every time.
+
+The first run's findings are routed rather than parked:
+
+| Found | Status |
+|---|---|
+| `IFNULL` in PHP → `/locationcontentsheet` 500s, shopping-list "clear done" 400s | **fixed** — [#44](https://github.com/datagen24/victual/issues/44), plus a CI guard on request-time SQL strings |
+| `COUNT(*)` with `ORDER BY` → `/shoppinglist` and `/mealplan` 500 | **fixed** — [#45](https://github.com/datagen24/victual/issues/45) |
+| `products_average_price` / `products_last_purchased` disagree with upstream about which bookings count | **open** — [#46](https://github.com/datagen24/victual/issues/46). Not the ~1e-15 float drift [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md) accepts; a real disagreement needing a decision, not a fix |
+| Two unrecorded wire-contract differences: chores `next_estimated_execution_time`, `created_object_id` on a rejected create | **open** — [#47](https://github.com/datagen24/victual/issues/47). [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md)'s bar applies: accept them in the record or fix them, but do not leave them undescribed |
+| A non-integer object id answers 500 **and quotes the SQL back** where upstream answers 404 | **open** — [#48](https://github.com/datagen24/victual/issues/48). Belongs to [11](11-api-error-handling.md) in wave 2, which owns the error surface; the SQL in the response body is the part that should not wait for it |
+
+Ten differences are **accepted** rather than reported, each citing the record that
+accepted them, per ADR-0005's bar — including the fork returning 21 fewer settings from
+`GET /api/system/config` and withholding upstream's `error_details` stack frames. Both
+are the fork being more careful than upstream, and both are still wire-contract
+narrowings that [17](17-ecosystem-clients.md) has to state.
+
 ## Meta
 
 | # | Plan | Upstream | Depends on | Size | Status |
 |---|---|---|---|---|---|
-| 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement |
+| 16 | [Project rename](16-project-rename.md) | — | before first deployment | medium | **landed in the codebase**; registry/domain claims wait for announcement. The repository has since **left `grocy/grocy`'s fork network** (2026-09-04) — see below |
 | 17 | [Ecosystem clients](17-ecosystem-clients.md) | — | 14 supplies the mechanism; was to be read before 11 and 16 | small, ongoing | **Q2 and Q4 answered** (2026-08-29); Q1 open, Q3 half — see below |
 | 20 | [Container infrastructure](20-container-infrastructure.md) | — | [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision; builds on 10, which landed | medium, front-loaded | **piece 1 landed** (2026-09-04) — the flake builds: `nix flake check` passes 34 assertions, all three images build and load, and the first build found five defects including three shells in the app image's closure. The **pod does not start** under `podman kube play` ([#49](https://github.com/datagen24/victual/issues/49)), so piece 1's verification is partial and ADR-0013 stays Proposed |
+
+### The repository has left grocy/grocy's fork network
+
+Done 2026-09-04: `datagen24/victual` is no longer a GitHub fork of `grocy/grocy`. It has
+no parent repository, and issues, pull requests and comparisons default to this repository
+rather than upstream's.
+
+**This changes nothing about the lineage and nothing in the tree.** Victual is still a
+hard fork of grocy, the attribution stays where [16](16-project-rename.md) deliberately
+left it — `README.md`, `LICENSE.md`, `AGENTS.md`, `SECURITY.md`, `CONTRIBUTING.md`, the
+issue templates that route upstream bugs upstream — and the changelog is still upstream's
+release record and not ours to rewrite. Leaving the fork network is a *GitHub* fact, not a
+claim about origin, and no document that credits Bernd Bestel should be edited on the
+strength of it.
+
+What it fixes is confusion with real consequences. In a fork network, `gh pr create` and
+the web UI default the base branch to the parent, issue and PR references can resolve
+against the wrong repository, and the fork's issues are easy to file into upstream's
+tracker by muscle memory — which matters more now that the [parity suite](#the-parity-suite-and-what-it-found)
+generates issues about differences *from* upstream, the exact class of report a
+misdirected filing does the most damage with. The one thing it costs: this repository no
+longer appears in upstream's fork list, so nobody browsing grocy's forks will find it.
+That is a discoverability question, and [16](16-project-rename.md) parks discoverability
+until announcement anyway.
 
 ## Decisions
 
@@ -380,13 +439,23 @@ to freeze while its visibility half changes response shapes and cannot precede t
 snapshot that proves it. Waves are strictly ordered; tracks inside a wave touch disjoint
 files and can run as parallel sessions.
 
-Wave 0 is complete and wave 1's track C is done; the rest is unstarted. Wave 4's shape
+**Waves 0, 0.5 and 1 are complete; wave 2 is the open one.** Wave 4's shape
 is no longer settled — see 07-Q6 there. Two things sat between wave 0 and wave 1:
 a hotfix the security sweep forced, and a decision 17 has been owed since 16 landed.
 Neither is a wave; both are a single sitting, and wave 1 does not start until both are
-done. **Both are now done** — the hotfix landed and 17-Q2 and 17-Q4 carry responses, so
-wave 1 is open. Q2's answer added [18](18-mqtt-state-publication.md) to the roadmap and
-took the Home Assistant conflict out of 10's path; see wave 0.5 below.
+done. Both were done — the hotfix landed and 17-Q2 and 17-Q4 carry responses. Q2's answer
+added [18](18-mqtt-state-publication.md) to the roadmap and took the Home Assistant
+conflict out of 10's path; see wave 0.5 below. Wave 1 then closed on 2026-09-02 with all
+four tracks landed.
+
+This paragraph said "wave 1's track C is done; the rest is unstarted" until 2026-09-04,
+by which point A, B and D had all landed and only this sentence still said otherwise. It
+is the same failure this file already documents twice — the S4 gate whose wording became
+false when S4 moved, and the rigor review's findings that were tracked nowhere. The Status
+tables were updated as each track landed and the prose was not, because nothing points
+from a row to the sentences that quote it. The cheap discipline: a status row that changes
+from *draft* to *landed* is not finished until the Order of operations text that names that
+plan has been re-read.
 
 A third thing has since been added without a wave of its own: [19](19-rbac.md), written
 2026-08-30. It is placed rather than pending — piece 1 in wave 3, piece 2 in wave 5 — and
@@ -484,7 +553,7 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   written here, not forked, so the licence question is closed and only distribution is
   open); Q1, the version string, is still open and still blocks nothing.
 
-### Wave 1 — platform (four parallel tracks, disjoint files; C is done)
+### Wave 1 — platform (four parallel tracks, disjoint files) — **complete**
 
 - **Track A: 10 cold start**, then **01 file storage** — **both done** (2026-09-02). 10 first —
   01's importer is easier to reason about once cold start no longer rewrites requests.
@@ -502,8 +571,15 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   rather than proven until CI runs them; and browsing every page on PostgreSQL turned up
   **three pre-existing PostgreSQL-only 500s** (`/shoppinglist`, `/mealplan`,
   `/locationcontentsheet` — two `GROUP BY` strictness errors in PHP-built queries and one
-  `ifnull()` written into PHP) that belong to no plan yet and become "the application is
-  broken" once 0008's retirement lands; they need an owner, 15's table or a hotfix.
+  `ifnull()` written into PHP) that belonged to no plan and became "the application is
+  broken" once 0008's retirement landed. **All three are now fixed** — the parity suite
+  reproduced them independently on 2026-09-04 and they were taken as hotfixes:
+  [#44](https://github.com/datagen24/victual/issues/44) replaced the `IFNULL`s with
+  `COALESCE` and added `.devtools/pgsql/check-runtime-sql.php` to the `lint` job, so
+  request-time SQL strings are guarded going forward, and
+  [#45](https://github.com/datagen24/victual/issues/45) stopped LessQL building
+  `COUNT(*)` with an `ORDER BY` attached. `COLLATE NOCASE` itself stays and is fine: the
+  baseline ships a `nocase` collation for it (`db/pgsql/README.md` hazard 15).
   Migration numbers: 18's opt-in table took **0257** (a per-engine pair), so 01 took
   **0258** rather than the 0257 its text names. 01 inherited S2's per-group extension
   allow-list and landed **S10** — a streaming upload cap (`FILE_STORAGE_MAX_SIZE_MB`,
@@ -522,18 +598,20 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   migration phase carries it as a named exemption, `db/pgsql/README.md` records it, and the
   suite gained a sixth phase (`run-tests.sh files`) for the importer, since a
   PostgreSQL-only table has no second engine to be compared against.
-- **Track B: 12 frontend shared core**, which now also carries sweep **S29** as its step
-  3a. If steps 1–2 land alone and the factories wait, S29 waits with them — so if that gap
-  is going to be long, pull the ~20 toast sites forward on their own, since they need no
-  factory and close most of the exposure. Land steps 1–2 as their own PR: the four latent
-  bug fixes plus the `request()` core with `timeout`/`onerror`. Note what that PR does
-  *not* deliver — all 157 `console.error` handlers are passed explicitly, so the default
-  error toast cannot fire until they are deleted, and those deletions belong to the
-  files step 3 rewrites wholesale. The handler deletions therefore ride with the factory
-  conversions, per file, so each one is exercised as it lands.
+- **Track B: 12 frontend shared core** — **done** (2026-09-02), in the three PRs the
+  sequencing below called for, with sweep **S29** carried as its step 3a. The plan was to
+  land steps 1–2 alone (the four latent bug fixes plus the `request()` core with
+  `timeout`/`onerror`), then ride the 157 `console.error` deletions along with the factory
+  conversions per file, so each was exercised as it landed; that is what happened, and the
+  ~20 toast sites did not need pulling forward because the gap stayed short. What the
+  sequencing did not anticipate is where the misses were: **S29 needed a second pass**
+  (2026-09-03) for one sink this track rewrote and three more of the same class, and the
+  `frontend-security` job this row's Status entry claimed ran on every pull request had
+  never been written at all — found 2026-09-04 and closed by
+  [21](21-frontend-sink-discipline.md), which is where the standing guard now lives.
 - **Track C: 13 write-path transactions** — **done**, ahead of the rest of this wave
   (`7abfd2fa`, `782289b8`, `96f9ec99`, 2026-08-29). All seven entrypoints, webhook after
-  commit, and the importer made atomic. Tracks A and B are still open.
+  commit, and the importer made atomic.
 - **Track D: 18 MQTT state publication — done** (`e794ea8`…`6a0d1fb`, 2026-09-02), three
   rounds of review fixes included: they turned the after-commit publish into a transactional
   outbox (`migrations/0259`, a per-engine pair) with per-event identity, dead-lettering and
