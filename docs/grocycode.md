@@ -18,12 +18,17 @@ There are three mandatory parts in a Grocycode:
    ([plan 16](plans/16-project-rename.md), Tier 0). The same goes for the name
    *Grocycode* itself, which names that format rather than the project.
 2. An entity identifer matching the regular expression `[a-z]+` (that is, lowercase english alphabet without any fancy accents, minimum length 1 character).
-3. An object identifer. Today every emitted code uses `[0-9]+` — a row id — but the format
-   does not require it, and [plan 06](plans/06-location-barcodes.md)'s Q1 response puts a
-   UUID here for locations (`grcy:l:{uuid}`, the uuid *as* the id rather than appended as
-   extra data), because a label outlives the row id printed on it. A parser must therefore
-   accept a non-numeric id. Read this part as "an opaque token containing no colon"; the
-   numeric form is a property of what currently exists, not a constraint of the format.
+3. An object identifer. Every emitted code uses `[0-9]+` — a row id — and every code this
+   fork ever emits will, because [ADR-0011](adr/0011-label-namespace.md) (accepted
+   2026-09-04) makes Grocycode an input symbology: no new type, no new id shape, and no
+   emission at all once that record's print outbox lands.
+   [Plan 06](plans/06-location-barcodes.md)'s Q1 response once put a UUID here for
+   locations (`grcy:l:{uuid}`) because a label outlives the row id printed on it; that
+   reasoning was right, and is exactly what ADR-0011 generalized — into a separate
+   `vctl:<uid>` namespace rather than a non-numeric Grocycode id. The format still does not
+   *require* a numeric id, and a parser reading codes from the wider grocy world should
+   read this part as "an opaque token containing no colon" — but the non-numeric id this
+   document warned about is not something this fork will produce.
 
 Optionally, any number of further data without format restrictions besides not containing any colons [0] may be appended.
 
@@ -42,7 +47,10 @@ Currently, there are four different entity types defined, per `Grocycode::$Items
 - `c` for Chores
 - `r` for Recipes
 
-[Plan 06](plans/06-location-barcodes.md) adds a fifth, `l` for Locations.
+**There is no fifth.** [Plan 06](plans/06-location-barcodes.md) proposed `l` for
+Locations; [ADR-0011](adr/0011-label-namespace.md) decided against it — no new Grocycode
+type is added, ever, and location labels carry `vctl:<uid>` instead. The four above are
+the whole set.
 
 Example
 ----
@@ -79,10 +87,14 @@ other encoding formats like QR codes; however DataMatrix uses less space for the
 easier read by 2D barcode scanners, especially on non-flat surfaces.
 
 That paragraph is upstream's reasoning and it stays, but it is an argument about the
-default rather than a restriction: [plan 06](plans/06-location-barcodes.md) adds QR
-alongside DataMatrix, because a location label is read by a phone camera as often as by a
-dedicated scanner and QR is what phones decode reliably. The encoding is a per-label
-choice; the serialization above is what must not vary.
+default rather than a restriction: the encoding is a per-label choice, and the
+serialization above is what must not vary. QR was going to join it here — plan 06 argued
+that a location label is read by a phone camera as often as by a dedicated scanner, and
+that QR is what phones decode reliably. [ADR-0011](adr/0011-label-namespace.md) took that
+argument with the rest of the label question: **QR is the symbology of the `vctl:`
+namespace, not a third `GROCYCODE_TYPE`.** DataMatrix and Code128 stay exactly as they
+are, for as long as this fork still renders Grocycodes at all, which ADR-0011's print
+outbox ends when it lands.
 
 You can pick up cheap-ish used scanners from ebay (about 45€ in germany). Make sure to set them to the correct keyboard emulation,
 so that the colons get entered correctly.
@@ -104,3 +116,13 @@ rigor review B7). The lesson is the obvious one and worth writing down where it 
 the guarantee that a format never changes is not the same as the guarantee that its
 documentation is right, and this file is only load-bearing if it is checked against
 `Grocycode.php` when either moves.
+
+Checked again 2026-09-04, when [ADR-0011](adr/0011-label-namespace.md) was accepted. Three
+of the statements above were true only because plan 06 was going to make them true — a
+fifth entity type, a UUID in the object id, and QR as a third `GROCYCODE_TYPE` — and the
+record decided against all three by moving new labels out of this format entirely. They are
+corrected above. Note what did *not* change: the serialization, the magic, the four entity
+types and the parser's obligations, because ADR-0011 keeps this format readable forever.
+The second lesson stacks on the first — documentation drifts toward what the plans intend as
+readily as toward what the code does, and an accepted record that cancels a plan has to be
+walked back through the documents that were already written as if it had shipped.

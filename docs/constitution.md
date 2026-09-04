@@ -87,6 +87,8 @@ done is kept, because it is what future readers most need and least often have.
 
 This fork's contract is its own OpenAPI specification. Upstream grocy compatibility is an
 *import capability*, not a behavioral obligation: grocy SQLite is an input format for
-`bin/victual-db-import`, grocycode is an input symbology for barcode resolution, and both
-are kept honest by pinned fixtures at stated supported versions. The fork accepts drift
-in exchange for the ceiling coming off.
+`bin/victual-db-import`, grocycode is an input symbology for barcode resolution
+([ADR-0011](adr/0011-label-namespace.md), accepted 2026-09-04, makes that a decision rather
+than a description: parsed forever, emitted never), and both are kept honest by pinned
+fixtures at stated supported versions. The fork accepts drift in exchange for the ceiling
+coming off.

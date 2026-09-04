@@ -18,7 +18,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft — may grow a parent column, per 07-Q6 |
 | 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium | draft |
 | 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | 12 | medium | draft |
-| 06 | [Location barcodes](06-location-barcodes.md) | — | 12 | small | draft |
+| 06 | [Location barcodes](06-location-barcodes.md) | — | 12 | small | draft, **narrowed by [ADR-0011](../adr/0011-label-namespace.md)** (accepted 2026-09-04) — the payload, label stability, the symbology and the print path are decided there, and `grcy:l:` is not minted; what remains here is label placement, the locations print action and UI, and the current-location notion interactive scanning needs |
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
@@ -200,8 +200,10 @@ so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
 `victual.db`, the bin scripts are `bin/victual-*`, the spec is
 `victual.openapi.json`, and `GET /api/system/info` answers `victual_version`.
 Anything written from here forward uses those names. What is *not* renamed, ever,
-is the `grcy:` grocycode magic and the format's name — see 16's Tier 0. The repo
-rename and the registry claims happen at announcement time, not in a commit.
+is the `grcy:` grocycode magic and the format's name — see 16's Tier 0, and note that
+under [ADR-0011](../adr/0011-label-namespace.md) (accepted 2026-09-04) the fork parses
+that format forever and emits it never. The repo rename and the registry claims happen at
+announcement time, not in a commit.
 
 **Blocking and de-risking, in one place:**
 

@@ -286,8 +286,14 @@ navigation.
 
 The Home Assistant integration does not model groups or locations and is unaffected.
 
-The same shape recurs for [06](06-location-barcodes.md)'s `l` Grocycode type: the iOS
-app's scanner resolves `grcy:p:42` and will not recognise `grcy:l:{uuid}`.
+The same shape recurs for location labels, in the form
+[ADR-0011](../adr/0011-label-namespace.md) gave them when it was accepted 2026-09-04: there
+is no `l` Grocycode type and no `grcy:l:{uuid}`, and the iOS app's scanner, which resolves
+`grcy:p:42`, will not recognise a `vctl:<uid>` payload. That is the better version of the
+same problem — an unrecognised namespace fails visibly, where a non-numeric id in a
+`grcy:` code was a parser hazard — and neither tracked client *generates* Grocycodes, which
+is the check ADR-0011's consequences asked this catalogue for before its acceptance claimed
+a zero blast radius at print time.
 
 ## Coupling 5 — fields that may be absent per user
 
