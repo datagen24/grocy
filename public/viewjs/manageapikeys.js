@@ -12,11 +12,11 @@ var apiKeysTable = Victual.EntityList.Table('#apikeys-table', {
 Victual.EntityList.SearchFilter(apiKeysTable);
 
 // Delete an API key after confirmation (DELETE /api/objects/api_keys/{id});
-// the buttons carry data-apikey-id/-key/-description from the Blade template. Both the
-// key and the description are user-controlled text that ends up in an HTML-rendered
-// bootbox message, so the shared confirmation escapes whichever one is shown - see sweep
-// finding S29. `nameAttr` picks the description when there is one and the key otherwise,
-// which is what this page has always displayed.
+// the buttons carry data-apikey-id/-description from the Blade template. The description
+// is user-controlled text that ends up in an HTML-rendered bootbox message, so the shared
+// confirmation escapes whatever is shown - see sweep finding S29. `nameAttr` picks the
+// description when there is one and the key's hint otherwise; it used to be the key
+// itself, which is a hash on disk now and no longer readable (plan 11, question 4).
 Victual.EntityList.ConfirmDelete({
 	button: '.apikey-delete-button',
 	idAttr: 'data-apikey-id',
@@ -27,8 +27,10 @@ Victual.EntityList.ConfirmDelete({
 	list: '/manageapikeys'
 });
 
-// Show the key as QR code - regular keys encode "<api url>|<key>",
-// iCal special purpose keys encode the ready-to-use calendar URL
+// Show the key as QR code - the reveal block encodes "<api url>|<key>" for a key that has
+// just been created, and an iCal special purpose key's row encodes the ready-to-use
+// calendar URL. There is deliberately no such button on a regular key's row: what is
+// stored is a hash, so there is nothing to encode.
 $(".apikey-show-qr-button").on("click", function ()
 {
 	var button = $(this);

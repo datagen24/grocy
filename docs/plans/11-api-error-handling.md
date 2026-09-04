@@ -380,10 +380,36 @@ should instead preserve today's behaviour.
 
 ### API-key hygiene
 
-> **The query-parameter form is gone, 2026-09-04**, landed with 15-C1 rather than here
-> because that refactor rewrote the file that read it. The header and, on the calendar
-> route only, `?secret=` are the two ways a key reaches the application. The hashing and
-> the `last_used` write below are still to do.
+> **Landed, 2026-09-04, all three.**
+>
+> - **The query-parameter form is gone**, with 15-C1 rather than here, because that
+>   refactor rewrote the file that read it. The header and, on the calendar route only,
+>   `?secret=` are the two ways a key reaches the application.
+> - **Keys are stored as SHA-256**, per Q4: migration `0263` (a per-engine pair) adds
+>   `api_keys.key_hint`, and `0264` (PHP, portable) hashes each key in place and backfills
+>   the hint from its last four characters. A key issued before the migration keeps
+>   working — proved on a database migrated from 262 with a plaintext key in it.
+> - **`last_used` is stamped once a day, not once a request.** A read-only GET used to
+>   issue a write on the hot path of the endpoint clients poll most, to record a value the
+>   screen displays as a date.
+>
+> **One thing this plan did not anticipate, because it was written before the wave that
+> fixed it:** special-purpose calendar keys are deliberately *not* hashed. Sweep finding
+> S17's fix is what made the sharing link work at all, and the application has to be able
+> to hand that URL back to whoever asks for it — which it cannot do from a hash.
+> Regenerating the key on each request instead would break every calendar application
+> already subscribed. The exposure is bounded and is not the API: `ApiKeyAuthenticator`
+> accepts such a key on the `calendar-ical` route only, and `IsValidApiKey()` checks
+> `key_type`, so a leaked table yields the household's calendar rather than an account.
+> `ApiKeyService::StoredValueOf()` is the one place that distinction lives.
+>
+> **The manage-keys screen changed in the way Q4 said it would, and one way it did not
+> say.** It shows `••••` plus the hint instead of the key, and offers the QR code only for
+> a special-purpose key — for a regular one there is nothing left to encode. The way it
+> did not say: creating a key now *renders* the page rather than redirecting to it, because
+> the response to the create is the only moment the plaintext exists. Putting it in the
+> redirect URL was the obvious alternative and is exactly the query-string key path S11
+> exists to remove, in the place it would be most durable — browser history.
 
 - **Drop the query-parameter form** of `VICTUAL-API-KEY`. The iCal `?secret=` path is
   separate, is scoped to `API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL`, is the reason that

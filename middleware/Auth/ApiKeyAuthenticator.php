@@ -16,6 +16,11 @@ use Slim\Routing\RouteContext;
  * subscribing to the feed cannot set a custom header, and it is scoped to one route and
  * one key type for the same reason.
  *
+ * A regular key is stored as a SHA-256 hash, so the lookup hashes what arrives rather than
+ * comparing it; a calendar key is stored as issued, because the sharing dialog has to be
+ * able to hand its URL back. ApiKeyService::StoredValueOf() is where that distinction and
+ * its reasoning live.
+ *
  * It resolves that route itself rather than being told, which is sweep finding S17's fix:
  * the branch used to read a RouteName field that only BaseAuthMiddleware::__invoke() ever
  * set, and the instance doing the reading was constructed by another middleware and never
@@ -52,7 +57,7 @@ class ApiKeyAuthenticator extends Authenticator
 
 		if ($calendarKey !== null && $apiKeyService->IsValidApiKey($calendarKey, ApiKeyService::API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL))
 		{
-			return $apiKeyService->GetUserByApiKey($calendarKey);
+			return $apiKeyService->GetUserByApiKey($calendarKey, ApiKeyService::API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL);
 		}
 
 		return null;

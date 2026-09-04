@@ -504,6 +504,43 @@ function IsApiRoutePath($path)
 	return string_starts_with($path, '/api/');
 }
 
+/**
+ * Whether the stored value of the given api_keys row is the key itself rather than a hash
+ * of it.
+ *
+ * Only a special-purpose key is: the application has to be able to hand its URL back to
+ * whoever asks for the calendar sharing link, and it cannot do that from a hash. A regular
+ * key is stored as SHA-256 - see Victual\Services\ApiKeyService::StoredValueOf().
+ *
+ * @param object $apiKey A row from api_keys
+ * @return bool
+ */
+function ApiKeyIsReadable($apiKey)
+{
+	return $apiKey->key_type !== \Victual\Services\ApiKeyService::API_KEY_TYPE_DEFAULT;
+}
+
+/**
+ * What the manage-keys screen shows in the "key" column.
+ *
+ * A regular key is a hash on disk and unreadable by design, so what is shown is the hint -
+ * its last four characters - which is enough to tell two of them apart and not enough to
+ * use. Keys created before the hashing migration have no hint, so those show nothing at
+ * all rather than a misleading blank-looking value.
+ *
+ * @param object $apiKey A row from api_keys
+ * @return string
+ */
+function ApiKeyDisplayValue($apiKey)
+{
+	if (ApiKeyIsReadable($apiKey))
+	{
+		return (string)$apiKey->api_key;
+	}
+
+	return empty($apiKey->key_hint) ? '••••' : '••••' . $apiKey->key_hint;
+}
+
 function string_starts_with($haystack, $needle)
 {
 	return (substr($haystack, 0, strlen($needle)) === $needle);

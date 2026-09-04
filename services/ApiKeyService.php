@@ -16,6 +16,48 @@ class ApiKeyService extends BaseService
 	const API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL = 'special-purpose-calendar-ical';
 
 	/**
+	 * The value stored in api_keys.api_key for a key of the given type.
+	 *
+	 * A regular key is stored as its SHA-256 hash, so that a copy of the database is not a
+	 * set of live credentials (plan 11, question 4). Clients keep sending the same string;
+	 * only what is on disk changed, in migration 0264.
+	 *
+	 * SHA-256 rather than password_hash(): a key is looked up *by value* on every
+	 * authenticated request, which salted bcrypt cannot do without scanning the table, and
+	 * these are 50 characters of random alphabet - roughly 250 bits of entropy. Brute force
+	 * is not the threat model; a leaked table is, and an unsalted hash of a high-entropy
+	 * secret is exactly right for that.
+	 *
+	 * **A special-purpose calendar key is stored as issued, deliberately.** The application
+	 * has to hand its URL back to whoever asks for the sharing link, and it cannot do that
+	 * from a hash; regenerating the key instead would break every calendar application
+	 * already subscribed. The exposure is bounded and is not the API - such a key is
+	 * accepted on the calendar-ical route only, and only for its own key_type - so what a
+	 * leaked table yields is the household's calendar rather than an account.
+	 */
+	public static function StoredValueOf(string $apiKey, string $keyType): string
+	{
+		return $keyType === self::API_KEY_TYPE_DEFAULT ? self::HashKey($apiKey) : $apiKey;
+	}
+
+	/**
+	 * The SHA-256 hash of a key, as stored.
+	 */
+	public static function HashKey(string $apiKey): string
+	{
+		return hash('sha256', $apiKey);
+	}
+
+	/**
+	 * The last four characters of a key, kept so that the manage-keys screen can still tell
+	 * two keys apart once neither can be read back.
+	 */
+	public static function HintFor(string $apiKey): string
+	{
+		return substr($apiKey, -4);
+	}
+
+	/**
 	 * Creates a new random API key for the current user and returns it.
 	 *
 	 * Keys are practically non-expiring (expiry is set to the year 2999).
@@ -27,7 +69,8 @@ class ApiKeyService extends BaseService
 		$newApiKey = $this->GenerateKey();
 
 		$apiKeyRow = $this->DB->api_keys()->createRow([
-			'api_key' => $newApiKey,
+			'api_key' => self::StoredValueOf($newApiKey, $keyType),
+			'key_hint' => self::HintFor($newApiKey),
 			'user_id' => VICTUAL_USER_ID,
 			'expires' => '2999-12-31 23:59:59', // Default is that API keys never expire
 			'key_type' => $keyType,
@@ -35,6 +78,8 @@ class ApiKeyService extends BaseService
 		]);
 		$apiKeyRow->save();
 
+		// The only moment the plaintext of a regular key exists. The caller shows it once;
+		// nothing can produce it again.
 		return $newApiKey;
 	}
 
@@ -44,9 +89,9 @@ class ApiKeyService extends BaseService
 	 * @param string $apiKey
 	 * @return int
 	 */
-	public function GetApiKeyId($apiKey)
+	public function GetApiKeyId($apiKey, string $keyType = self::API_KEY_TYPE_DEFAULT)
 	{
-		$apiKey = $this->DB->api_keys()->where('api_key', $apiKey)->fetch();
+		$apiKey = $this->DB->api_keys()->where('api_key', self::StoredValueOf($apiKey, $keyType))->fetch();
 		return $apiKey->id;
 	}
 
@@ -87,9 +132,9 @@ class ApiKeyService extends BaseService
 	 * @param string $apiKey
 	 * @return \LessQL\Row|null
 	 */
-	public function GetUserByApiKey($apiKey)
+	public function GetUserByApiKey($apiKey, string $keyType = self::API_KEY_TYPE_DEFAULT)
 	{
-		$apiKeyRow = $this->DB->api_keys()->where('api_key', $apiKey)->fetch();
+		$apiKeyRow = $this->DB->api_keys()->where('api_key', self::StoredValueOf($apiKey, $keyType))->fetch();
 
 		if ($apiKeyRow !== null)
 		{
@@ -100,9 +145,9 @@ class ApiKeyService extends BaseService
 	}
 
 	/**
-	 * Checks that the given key exists with the given type and is not expired, and
-	 * updates its last_used timestamp on success (without advancing the db changed
-	 * time, since that would make API clients refetch unchanged data).
+	 * Checks that the given key exists with the given type and is not expired, and stamps
+	 * last_used on the first success of each day (without advancing the db changed time,
+	 * since that would make API clients refetch unchanged data).
 	 *
 	 * @param string|null $apiKey
 	 * @param string $keyType One of the API_KEY_TYPE_* constants
@@ -114,27 +159,32 @@ class ApiKeyService extends BaseService
 		{
 			return false;
 		}
-		else
+
+		$apiKeyRow = $this->DB->api_keys()->where('api_key = :1 AND expires > :2 AND key_type = :3', self::StoredValueOf($apiKey, $keyType), date('Y-m-d H:i:s', time()), $keyType)->fetch();
+
+		if ($apiKeyRow === null)
 		{
-			$apiKeyRow = $this->DB->api_keys()->where('api_key = :1 AND expires > :2 AND key_type = :3', $apiKey, date('Y-m-d H:i:s', time()), $keyType)->fetch();
-
-			if ($apiKeyRow !== null)
-			{
-				// This should not change the database file modification time as this is used
-				// to determine if REALLY something has changed
-				$dbModTime = DatabaseService::GetInstance()->GetDbChangedTime();
-				$apiKeyRow->update([
-					'last_used' => date('Y-m-d H:i:s', time())
-				]);
-				DatabaseService::GetInstance()->SetDbChangedTime($dbModTime);
-
-				return true;
-			}
-			else
-			{
-				return false;
-			}
+			return false;
 		}
+
+		// Only once a day, not once a request. A read-only GET used to issue a write on
+		// every call, which is a write on the hot path of the endpoint clients poll most
+		// and an invalidation of the row's cache line for a value nobody reads to the
+		// second. The manage-keys screen shows a date; a date is what is kept accurate.
+		$today = date('Y-m-d');
+
+		if (substr((string)$apiKeyRow->last_used, 0, 10) !== $today)
+		{
+			// This should not change the database file modification time as this is used
+			// to determine if REALLY something has changed
+			$dbModTime = DatabaseService::GetInstance()->GetDbChangedTime();
+			$apiKeyRow->update([
+				'last_used' => date('Y-m-d H:i:s', time())
+			]);
+			DatabaseService::GetInstance()->SetDbChangedTime($dbModTime);
+		}
+
+		return true;
 	}
 
 	/**
@@ -142,9 +192,9 @@ class ApiKeyService extends BaseService
 	 *
 	 * @param string $apiKey
 	 */
-	public function RemoveApiKey($apiKey)
+	public function RemoveApiKey($apiKey, string $keyType = self::API_KEY_TYPE_DEFAULT)
 	{
-		$this->DB->api_keys()->where('api_key', $apiKey)->delete();
+		$this->DB->api_keys()->where('api_key', self::StoredValueOf($apiKey, $keyType))->delete();
 	}
 
 	/**

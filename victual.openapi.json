@@ -6479,7 +6479,12 @@
 						"type": "integer"
 					},
 					"api_key": {
-						"type": "string"
+						"type": "string",
+						"description": "The SHA-256 hash of the key, not the key itself. A regular key is only ever readable at the moment it is created; a special-purpose calendar key is stored as issued, because the sharing link has to be reproducible."
+					},
+					"key_hint": {
+						"type": "string",
+						"description": "The last four characters of the key, kept so that two keys can be told apart once neither can be read."
 					},
 					"expires": {
 						"type": "string",
