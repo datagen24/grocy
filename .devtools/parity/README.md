@@ -12,6 +12,24 @@ fork-only MQTT and InfluxDB surfaces against a real broker and a real InfluxDB. 
 about six minutes on a laptop after the first run and needs nothing installed but Podman
 and Node 18+.
 
+## What it is for
+
+**A tool to run as you work, not a gate.** It is deliberately not wired into CI: you run it
+while changing a controller, a service or a view, to find out whether the change moved
+something away from upstream — and you run one phase or one scenario, not the whole thing,
+when you know what you touched.
+
+```bash
+.devtools/parity/bin/parity up                        # once
+.devtools/parity/bin/parity api --only stock          # then, as often as you like
+```
+
+That is why the report is written to be read rather than merely to exit non-zero: every
+difference names the step, the JSON pointer and both values, and accepted ones say which
+record accepted them. The suite currently exits non-zero against `master` because the
+differences it reports are real, which is another reason it is not a gate — a gate that is
+red on arrival is one people learn to route around.
+
 ## Why this exists next to `.devtools/pgsql/`
 
 They ask different questions and neither subsumes the other.
