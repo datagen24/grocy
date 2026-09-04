@@ -1,4 +1,10 @@
-> ⚠️ Authentication middleware was reorganized, review your `AUTH_CLASS` setting (see the default reference in `config-dist.php` as usual)
+> ⚠️ Authentication middleware was reorganized, review your `AUTH_CLASS` setting (see the default reference in `config-dist.php` as usual). `SessionAuthMiddleware` and `ApiKeyAuthMiddleware` no longer exist as classes - they were never valid `AUTH_CLASS` values, but a configuration naming one is now refused at startup rather than failing on the first request
+
+> ⚠️ The LDAP authentication backend has been removed, along with the six `LDAP_*` settings. An LDAP directory reaches Victual through a reverse proxy that authenticates against it (`AUTH_CLASS = Victual\Middleware\Auth\ReverseProxyAuthMiddleware`), which is the same arrangement every other identity provider uses. An installation still set to `LdapAuthMiddleware` refuses to start, with a message saying so
+
+> ⚠️ `DEFAULT_PERMISSIONS` is now empty rather than `['ADMIN']`. New users - including the ones reverse proxy authentication creates on first sight of a username - are given nothing by merely existing. Set it if you want them to have something, and note that creating a user now also requires the creator to hold everything the default would confer
+
+> ⚠️ Changing your own password now requires your current password
 
 > ⚠️ The API no longer sends `Access-Control-Allow-Origin: *`. Cross-origin browser access is now off unless the new `CORS_ALLOWED_ORIGINS` setting lists the origins that may use it
 
@@ -81,6 +87,26 @@
 - `GET /files/{group}/{fileName}` now answers `400` for an invalid file group or file name. Every failure used to be answered `404`, so "you asked wrongly" and "it is not here" were the same answer; a file that does not exist is still `404`
 - Nine list endpoints no longer document a `500` response, because they no longer return one - an invalid filter or sort parameter has been a `400` since the previous release. The nine are `GET` `/objects/{entity}`, `/users`, `/stock/products/{productId}/locations`, `/stock/products/{productId}/entries`, `/stock/locations/{locationId}/entries`, `/recipes/fulfillment`, `/chores`, `/batteries` and `/tasks`. Clients that read `error_details` off those responses will no longer find it
 - The OpenAPI specification now documents the `401`, `403` and `404` responses that the API actually returns
+
+### Users and permissions
+
+- `USERS_EDIT` no longer lets an account edit, delete or re-permission a user who holds permissions it does not hold itself - which included resetting an administrator's password. The same rule covers deleting another user's picture. Note that `USERS_CREATE` resolves to `USERS_EDIT` through the permission hierarchy, so this closed the shorter path too
+- Changing your own password requires the current one (body field `current_password` or `current_password_base64`; the user form asks for it)
+- Creating a user is now bounded by what the creator holds: `POST /api/users` is refused with `403` when `DEFAULT_PERMISSIONS` would confer something the creator does not have
+- `DEFAULT_PERMISSIONS` defaults to empty instead of `['ADMIN']`
+- The permission assignment endpoints now refuse a `permission_id` that names no permission, instead of storing a row that grants nothing
+- `GET /api/users/{userId}/permissions` now requires `USERS_READ` instead of `ADMIN`, which is what the permissions page itself has always required. The two endpoints that *change* permissions still require `ADMIN`
+- `POST /api/users` with an incomplete body is answered `400` naming the missing field, where it used to be a `500` carrying PHP's own type error
+
+### Authentication
+
+- The LDAP backend was removed - see the note at the top
+- The calendar iCal sharing link works again. The URL the sharing dialog produces answered `401`, because the code path that accepts its `secret` parameter could never be reached
+- Each user now gets their own calendar sharing link. There used to be one for the whole installation, created by whoever opened the dialog first and authenticating as them
+- An API key is no longer accepted in a `VICTUAL-API-KEY` query parameter. It lands in access logs, browser history and `Referer` headers; send it as the header. The calendar `secret` parameter is unaffected
+- Logging out now expires the session cookie as well as deleting the session
+- Expired sessions are deleted on login. The table was never pruned
+- A login for a username that does not exist now takes the same time as one for a username that does
 
 ### Server errors and logging
 

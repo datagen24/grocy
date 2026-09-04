@@ -158,8 +158,14 @@ Setting('SESSION_STAY_LOGGED_IN_DAYS', 90);
 // A valid fully qualified class name of the authentication middlware to use:
 //  Victual\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Victual
 //  Victual\Middleware\Auth\ReverseProxyAuthMiddleware: When your reverse proxy handles authentication (see options below)
-//  Victual\Middleware\Auth\LdapAuthMiddleware: When you want to use your existing LDAP server (see options below)
-// or any other class that implements Victual\Middleware\Auth\BaseAuthMiddleware
+// or any other class that extends Victual\Middleware\Auth\BaseAuthMiddleware, which is
+// checked at startup - a value naming a class that does not, or that does not exist, is
+// refused rather than fataling on the first request
+//
+// The LDAP backend was removed in this release. An LDAP directory reaches this
+// application through a reverse proxy that authenticates against it, which is the same
+// arrangement for every other identity provider and one this fork does not have to
+// maintain a second implementation of
 Setting('AUTH_CLASS', 'Victual\Middleware\Auth\DefaultAuthMiddleware');
 
 // Options when using ReverseProxyAuthMiddleware
@@ -173,18 +179,16 @@ Setting('REVERSE_PROXY_AUTH_USE_ENV', false); // Set to true if the username is 
 // Your proxy must also be configured to strip this header from inbound requests
 Setting('REVERSE_PROXY_AUTH_TRUSTED_PROXIES', '');
 
-// Options when using LdapAuthMiddleware
-Setting('LDAP_ADDRESS', ''); // Example value "ldap://vm-dc2019.local.berrnd.net"
-Setting('LDAP_BASE_DN', ''); // Example value "DC=local,DC=berrnd,DC=net"
-Setting('LDAP_BIND_DN', ''); // Example value "CN=victual_bind_account,OU=service_accounts,DC=local,DC=example,DC=net"
-Setting('LDAP_BIND_PW', ''); // Password for the above account
-Setting('LDAP_USER_FILTER', ''); // Example value "(OU=victual_users)"
-Setting('LDAP_UID_ATTR', ''); // Windows AD: "sAMAccountName", OpenLDAP: "uid", GLAuth: "cn"
-
 // Default permissions for new users
 // the array needs to contain the technical/constant names
 // See the file controllers/Users/User.php for possible values
-Setting('DEFAULT_PERMISSIONS', ['ADMIN']);
+//
+// Empty by default, and deliberately: this used to be ['ADMIN'], which made every user
+// created by the reverse proxy backend an administrator on first sight of their username,
+// and let an account holding only USERS_CREATE create an administrator and log in as it.
+// A new user is given what whoever created them chose to give them; nothing is granted by
+// merely existing
+Setting('DEFAULT_PERMISSIONS', []);
 
 // Which browser origins may call the API cross-origin, as a comma separated list of
 // exact origins, e.g. 'https://home.example.com, https://tablet.example.com'.

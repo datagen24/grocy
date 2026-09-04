@@ -80,6 +80,21 @@
 			</div>
 			@endif
 
+			@if($mode == 'edit' && $user->id == VICTUAL_USER_ID)
+			{{-- Sweep finding S6: changing your own password needs the old one, so that a
+			     borrowed session cannot lock the account's owner out of it permanently. --}}
+			<div class="form-group">
+				<label for="current_password">{{ $__t('Current password') }}</label>
+				<input type="password"
+					class="form-control"
+					required
+					id="current_password"
+					name="current_password"
+					disabled>
+				<small class="form-text text-muted">{{ $__t('Your current password is required to set a new one') }}</small>
+			</div>
+			@endif
+
 			<div class="form-group">
 				<label for="password">{{ $__t('Password') }}</label>
 				<input type="password"

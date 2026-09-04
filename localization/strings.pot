@@ -509,6 +509,12 @@ msgstr ""
 msgid "Change password"
 msgstr ""
 
+msgid "Current password"
+msgstr ""
+
+msgid "Your current password is required to set a new one"
+msgstr ""
+
 msgid "Done by"
 msgstr ""
 

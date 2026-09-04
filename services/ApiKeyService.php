@@ -51,8 +51,15 @@ class ApiKeyService extends BaseService
 	}
 
 	/**
-	 * Returns any valid (unexpired) key of the given type, creating one when none
-	 * exists; not allowed for key type "default" (returns null then).
+	 * Returns the current user's valid (unexpired) key of the given type, creating one
+	 * when they have none; not allowed for key type "default" (returns null then).
+	 *
+	 * Scoped to the current user, which it was not: the lookup matched on key_type alone,
+	 * so the first person to open the calendar sharing dialog created the key and every
+	 * other household member was then handed *that* key - a URL that authenticates as its
+	 * creator, and that a subscribed calendar application keeps using indefinitely
+	 * (sweep finding S17). Nobody noticed because the branch that consumes these keys was
+	 * itself unreachable; both halves are fixed together.
 	 *
 	 * @param string $keyType One of the API_KEY_TYPE_* constants
 	 * @return string|null
@@ -63,19 +70,15 @@ class ApiKeyService extends BaseService
 		{
 			return null;
 		}
-		else
-		{
-			$apiKeyRow = $this->DB->api_keys()->where('key_type = :1 AND expires > :2', $keyType, date('Y-m-d H:i:s', time()))->fetch();
 
-			if ($apiKeyRow !== null)
-			{
-				return $apiKeyRow->api_key;
-			}
-			else
-			{
-				return $this->CreateApiKey($keyType);
-			}
+		$apiKeyRow = $this->DB->api_keys()->where('key_type = :1 AND user_id = :2 AND expires > :3', $keyType, VICTUAL_USER_ID, date('Y-m-d H:i:s', time()))->fetch();
+
+		if ($apiKeyRow !== null)
+		{
+			return $apiKeyRow->api_key;
 		}
+
+		return $this->CreateApiKey($keyType);
 	}
 
 	/**

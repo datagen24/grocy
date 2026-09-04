@@ -40,7 +40,7 @@ Grouped by whether they change behaviour anyone can observe.
 
 | # | Item | Where |
 |---|---|---|
-| C1 | Auth middlewares instantiate *other* middlewares and call `AuthenticateRequest` cross-instance; visibility drifts (protected in `DefaultAuthMiddleware`, public in three siblings); `ProcessLogin` is an abstract static that three of five subclasses stub with `throw` | `middleware/Auth/` |
+| C1 | **Done (wave 2)** — auth middlewares instantiate *other* middlewares and call `AuthenticateRequest` cross-instance; visibility drifts (protected in `DefaultAuthMiddleware`, public in three siblings); `ProcessLogin` is an abstract static that three of five subclasses stub with `throw` | `middleware/Auth/` |
 | C2 | `StockReportsController` embeds three hand-written multi-join `SELECT`s — the only controller with raw SQL, and the only place outside services where the dialect boundary could be crossed again | `controllers/StockReportsController.php:71,90,107` |
 | C3 | About dialog reports `sqlite_version` from a throwaway `sqlite::memory:` connection even on a PostgreSQL install | `services/ApplicationService.php:84,114` |
 | C4 | `ExceptionController` has an unreachable duplicate `if (!defined('VICTUAL_AUTHENTICATED'))` inside its 404 branch, and trusts `$exception->getCode()` as an HTTP status with no clamping | `controllers/ExceptionController.php` |
@@ -71,7 +71,7 @@ HTTP status — and `GetParsedAndFilteredRequestBody` already throws a raw
 
 | # | Item | Breaks |
 |---|---|---|
-| B1 | Remove the LDAP auth backend (`LdapAuthMiddleware`, six `LDAP_*` settings) | Anyone using `AUTH_CLASS=…LdapAuthMiddleware` |
+| B1 | **Done (wave 2)** — remove the LDAP auth backend (`LdapAuthMiddleware`, six `LDAP_*` settings) | Anyone using `AUTH_CLASS=…LdapAuthMiddleware` |
 | B2 | Session cookie hardening: `HttpOnly`, `SameSite`, expiry | Plain-HTTP access if `Secure` is set; embedded/iframe use if `SameSite=Strict`; "stays logged in forever" if expiry is added |
 | B3 | `shopping_locations` → `stores` rename (parked from [05](05-store-shopping-lists.md) Q4) | An `ExposedEntity` name, a table, ~250 references across 63 files, the iOS app and the Home Assistant integration |
 | B4 | PHP version floor, if C7 resolves upward rather than downward | Anyone on 8.4 |
@@ -111,6 +111,37 @@ so the three `throw`-stubs disappear rather than being documented.
 This is the "do it opportunistically when something touches auth" item from the review.
 [02 MCP](02-mcp-endpoint.md) is the plan most likely to touch auth (a new API key type,
 possibly a new authenticator); if 02 starts before this lands, do this first.
+
+> **Executed, 2026-09-04, in wave 2.** The three named symptoms are gone and so is the
+> class of bug the first of them caused.
+>
+> - **`SessionAuthenticator`, `ApiKeyAuthenticator` and `ReverseProxyAuthenticator`** are
+>   plain objects with one method, composed by `BaseAuthMiddleware`'s subclasses.
+>   `SessionAuthMiddleware` and `ApiKeyAuthMiddleware` are deleted: they were never
+>   selectable as an `AUTH_CLASS`, only ever constructed by another middleware and called
+>   into directly, which is the shape this item exists to remove.
+> - **That shape was not merely untidy, and the proof is sweep S17.**
+>   `ApiKeyAuthMiddleware` read `$this->RouteName`, which only
+>   `BaseAuthMiddleware::__invoke()` sets — and a cross-constructed instance is never
+>   invoked, so the field was null and the iCal sharing link's `secret` branch was
+>   unreachable. Every calendar sharing URL the application generated answered 401. An
+>   authenticator that asks the request its own questions cannot have that bug, and the
+>   fix is one line in the new class rather than a field somebody has to remember to set.
+> - **`ProcessLogin` is no longer an abstract static with three `throw` stubs.** The
+>   password check moved to `PasswordLogin`, which is what `DefaultAuthMiddleware`
+>   delegates to; `BaseAuthMiddleware` supplies a default that answers false, so a login
+>   form posted on a reverse-proxy installation is "invalid credentials" rather than a 500.
+> - **Visibility drift is gone with the classes it was spread across**, and **C9's
+>   `ApiKeyAuthMiddleware.php:46` site went with it** — `ApiKeyService::GetInstance()`,
+>   as C9 asks, done here rather than separately exactly as C9 says to.
+> - **`SessionCookie`** carries the cookie setting and clearing that used to be a protected
+>   static on the middleware. That is what let sweep S19's logout half be fixed at all:
+>   `LoginController` had no way to reach it.
+>
+> Verified on a booted instance in production mode: session login, API key in the header,
+> the sharing link (200 where it was 401), logout clearing the cookie and invalidating the
+> session, and an `AUTH_CLASS` naming a class that no longer exists refused at startup with
+> a message that names the LDAP removal.
 
 ### C2 — `StockReportsService`
 
@@ -179,6 +210,20 @@ reverse-proxy auth, versus `AUTH_CLASS` simply not resolving.
 Note the interaction with the defects table: item 2's `/api/system/config` allowlist means
 the `LDAP_*` settings are no longer exposed, so removing them has no API consequence — a
 blocklist would have made this a two-part change.
+
+> **Executed, 2026-09-04, in wave 2.** `middleware/Auth/LdapAuthMiddleware.php` and the
+> six `LDAP_*` settings are deleted. Q1's stub-versus-nothing question is answered in a
+> third way that costs less than either: there is no stub class, and
+> `ConfigurationValidator` refuses an `AUTH_CLASS` that does not exist with a message
+> naming the removal and pointing at reverse-proxy authentication. So an installation
+> still configured for LDAP is told what happened, at startup, in one line — which is what
+> the stub was for — without a class existing whose only job is to fail.
+>
+> That validation is **sweep S18** as well, and it goes one step further than the finding
+> asked: `class_exists` first, then
+> `is_subclass_of(..., BaseAuthMiddleware::class)`. The defects table's `/api/system/config`
+> allowlist means the removed settings were never exposed, so there is no API consequence,
+> exactly as this section predicted.
 
 ### B2 — session cookie — **landed in the wave 0.5 hotfix**
 

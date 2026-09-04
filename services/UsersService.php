@@ -12,8 +12,59 @@ use LessQL\Result;
 class UsersService extends BaseService
 {
 	/**
+	 * The permission ids VICTUAL_DEFAULT_PERMISSIONS names.
+	 *
+	 * Read as ids rather than names because that is what a grant is checked against - see
+	 * User::CheckMayGrant(), which resolves them through the hierarchy. A configured name
+	 * that matches no permission simply contributes nothing, which is the same thing it
+	 * did before this method existed.
+	 *
+	 * @return int[]
+	 */
+	public function GetDefaultPermissionIds(): array
+	{
+		$ids = [];
+
+		foreach ($this->DB->permission_hierarchy()->where('name', VICTUAL_DEFAULT_PERMISSIONS)->fetchAll() as $perm)
+		{
+			$ids[] = (int)$perm->id;
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * Verifies the given plaintext password against the user's stored hash.
+	 *
+	 * @throws \Victual\Controllers\Users\PermissionMissingException Never - see below
+	 * @throws \Exception When the password does not match, so that the answer is the same
+	 *                    400 as any other refused edit rather than a 403, which would say
+	 *                    "you are allowed, but" about a credential check
+	 */
+	public function CheckCurrentPassword(int $userId, ?string $currentPassword): void
+	{
+		$user = $this->DB->users($userId);
+
+		if ($user === null)
+		{
+			throw new \Exception('User does not exist');
+		}
+
+		if ($currentPassword === null || $currentPassword === '' || !password_verify($currentPassword, $user->password))
+		{
+			throw new \Exception('The current password is required to change the password, and did not match');
+		}
+	}
+
+	/**
 	 * Creates a user (password hashed with Argon2id) and grants the permission set
 	 * configured as VICTUAL_DEFAULT_PERMISSIONS.
+	 *
+	 * That set is empty by default. It used to be ['ADMIN'], which made every user this
+	 * method creates an administrator - including the ones the reverse proxy backend
+	 * creates on first sight of a username, where there is no creator to bound the grant
+	 * against at all. Sweep finding S5. Callers who do have a creator check the grant
+	 * against them first (User::CheckMayGrant).
 	 *
 	 * @return \LessQL\Row The new users row
 	 */
@@ -29,15 +80,18 @@ class UsersService extends BaseService
 		$newUserRow = $newUserRow->save();
 		$permList = [];
 
-		foreach ($this->DB->permission_hierarchy()->where('name', VICTUAL_DEFAULT_PERMISSIONS)->fetchAll() as $perm)
+		foreach ($this->GetDefaultPermissionIds() as $permissionId)
 		{
 			$permList[] = [
 				'user_id' => $newUserRow->id,
-				'permission_id' => $perm->id
+				'permission_id' => $permissionId
 			];
 		}
 
-		$this->DB->user_permissions()->insert($permList);
+		if (!empty($permList))
+		{
+			$this->DB->user_permissions()->insert($permList);
+		}
 
 		return $newUserRow;
 	}
@@ -58,7 +112,7 @@ class UsersService extends BaseService
 	 *
 	 * @throws \Exception When the user does not exist
 	 */
-	public function EditUser(int $userId, string $username, string $firstName, string $lastName, ?string $password, ?string $pictureFileName = null)
+	public function EditUser(int $userId, string $username, ?string $firstName, ?string $lastName, ?string $password, ?string $pictureFileName = null)
 	{
 		if (!$this->UserExists($userId))
 		{

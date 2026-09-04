@@ -156,15 +156,9 @@ class FilesApiController extends BaseApiController
 				throw new EInvalidApiQuery('Invalid filename');
 			}
 
-			// USERS_EDIT_SELF is a natural grant - it is what lets someone change their own
-			// password - and without this it would also let them delete every other user's
-			// picture, since the route carries no user id. Uploading needs no equivalent
-			// check: the name is new, so there is nothing to take away.
-			if ($args['group'] === 'userpictures'
-				&& !User::HasPermissions(User::PERMISSION_USERS_EDIT)
-				&& (!defined('VICTUAL_USER_PICTURE_FILE_NAME') || $fileName !== VICTUAL_USER_PICTURE_FILE_NAME))
+			if ($args['group'] === 'userpictures')
 			{
-				throw new PermissionMissingException($request, User::PERMISSION_USERS_EDIT);
+				$this->CheckUserPictureDeletion($request, $fileName);
 			}
 
 			FilesService::GetInstance()->DeleteFile($args['group'], $fileName);
@@ -287,6 +281,47 @@ class FilesApiController extends BaseApiController
 
 			return $this->EmptyApiResponse($response);
 		});
+	}
+
+	/**
+	 * Refuses the deletion of somebody else's user picture.
+	 *
+	 * The route carries no user id, so the group permission alone is "may edit some user"
+	 * rather than "may edit this user" - and USERS_EDIT_SELF is a natural grant, since it
+	 * is what lets a person change their own password. Without this check it would also
+	 * let them delete every other user's picture. Uploading needs no equivalent check: the
+	 * name is new, so there is nothing to take away.
+	 *
+	 * The owner is recovered from users.picture_file_name, which is what makes this a
+	 * route gap rather than a model gap - the id is missing from the request, not from the
+	 * data. On top of "may edit some user" the caller has to be able to administer the one
+	 * whose picture this is, which is the same subset rule EditUser applies (sweep finding
+	 * S6). The sweep left that as an open question in either direction; it is answered
+	 * yes, because deleting the avatar of someone whose permissions you do not hold is the
+	 * same act of administering them, and because answering no would make this the one
+	 * place the rule does not reach.
+	 *
+	 * A picture no user row claims is orphaned, and deleting it needs USERS_EDIT and
+	 * nothing more: there is no owner to compare against.
+	 *
+	 * @throws PermissionMissingException
+	 */
+	private function CheckUserPictureDeletion(Request $request, string $fileName): void
+	{
+		if (defined('VICTUAL_USER_PICTURE_FILE_NAME') && $fileName === VICTUAL_USER_PICTURE_FILE_NAME)
+		{
+			// Own picture - the group permission was enough
+			return;
+		}
+
+		User::CheckPermission($request, User::PERMISSION_USERS_EDIT);
+
+		$owner = $this->DB->users()->where('picture_file_name', $fileName)->fetch();
+
+		if ($owner !== null)
+		{
+			User::CheckMayAdminister($request, (int)$owner->id);
+		}
 	}
 
 	/**

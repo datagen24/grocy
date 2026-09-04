@@ -26,6 +26,7 @@ class ConfigurationValidator
 	public function validateConfig()
 	{
 		self::checkMode();
+		self::checkAuthClass();
 		self::checkDatabaseDriver();
 		self::checkFileStorage();
 		self::checkDefaultLocale();
@@ -45,6 +46,35 @@ class ConfigurationValidator
 		if (!in_array(VICTUAL_MODE, $allowedModes))
 		{
 			throw new EInvalidConfig('Invalid mode "' . VICTUAL_MODE . '" set, only ' . implode(', ', $allowedModes) . ' allowed');
+		}
+	}
+
+	/**
+	 * AUTH_CLASS names a class that exists and is an authentication middleware.
+	 *
+	 * app.php does `new $authMiddlewareClass(...)` on this value, which arrives from
+	 * config.php, the environment or a settingoverrides file. Seven other settings were
+	 * validated here and this one was not, so a typo was a fatal on the first request
+	 * rather than a message at startup, and a value naming some other class was an object
+	 * with no __invoke() (sweep finding S18, plan 15-B1).
+	 *
+	 * The trust level is the same as writing config.php, which is why the finding is Low.
+	 * The check is worth having anyway: a fork that just removed an authentication backend
+	 * wants the installations still naming it to be told so in one line, not to discover
+	 * it as a stack trace.
+	 */
+	private function checkAuthClass()
+	{
+		$authClass = VICTUAL_AUTH_CLASS;
+
+		if (!class_exists($authClass))
+		{
+			throw new EInvalidConfig('AUTH_CLASS "' . $authClass . '" does not exist. The LDAP backend was removed - reverse proxy authentication (Victual\\Middleware\\Auth\\ReverseProxyAuthMiddleware) is how an external directory reaches Victual now');
+		}
+
+		if (!is_subclass_of($authClass, \Victual\Middleware\Auth\BaseAuthMiddleware::class))
+		{
+			throw new EInvalidConfig('AUTH_CLASS "' . $authClass . '" is not an authentication middleware - it has to extend Victual\\Middleware\\Auth\\BaseAuthMiddleware');
 		}
 	}
 

@@ -380,6 +380,11 @@ should instead preserve today's behaviour.
 
 ### API-key hygiene
 
+> **The query-parameter form is gone, 2026-09-04**, landed with 15-C1 rather than here
+> because that refactor rewrote the file that read it. The header and, on the calendar
+> route only, `?secret=` are the two ways a key reaches the application. The hashing and
+> the `last_used` write below are still to do.
+
 - **Drop the query-parameter form** of `VICTUAL-API-KEY`. The iCal `?secret=` path is
   separate, is scoped to `API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL`, is the reason that
   affordance exists at all, and stays.
