@@ -188,7 +188,7 @@ Victual.Components.CreateDateTimePicker = function (suffix)
 		var inputElement = $(e.currentTarget)
 		var value = inputElement.val();
 		var format = inputElement.data('format');
-		var nextInputElement = $(inputElement.data('next-input-selector'));
+		var nextInputElement = $(document).find(inputElement.data('next-input-selector'));
 
 		if (!nextInputElement.is("input"))
 		{
@@ -392,7 +392,7 @@ Victual.Components.CreateDateTimePicker = function (suffix)
 			var value = $(shortcutSelector).data("datetimepicker-shortcut-value");
 			picker.SetValue(value);
 			picker.GetInputElement().attr("readonly", "");
-			$(picker.GetInputElement().data('next-input-selector')).focus();
+			$(document).find(picker.GetInputElement().data('next-input-selector')).focus();
 		}
 		else
 		{

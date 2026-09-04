@@ -26,6 +26,12 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
   ([ADR-0006](docs/adr/0006-authenticated-issues-in-scope.md)). Sweep findings are
   tracked by S-number in the plans README; do not introduce user-configurable outbound
   URLs (the tree currently has no SSRF surface — keep it that way).
+- **Frontend sinks, two rules.** A string that came out of the DOM reaches jQuery through
+  `$(document).find(sel)`, never `$(sel)` — `$()` parses a string beginning with `<` as
+  HTML. And markup is built as nodes (`$("<option>").text(value)`), never by concatenating
+  a value into a string that is then handed to `.html()` or `.append()`. Both are checked
+  on every pull request by `.devtools/frontend/s29-payload.js` in the `frontend-security`
+  job; [plan 21](docs/plans/21-frontend-sink-discipline.md) is why.
 
 ## Documentation conventions
 

@@ -62,7 +62,7 @@ if (typeof prefillUser !== "undefined")
 		$('#user_id').data('combobox').refresh();
 		$('#user_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.UserPicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.UserPicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 }
@@ -78,7 +78,7 @@ if (typeof prefillUserId !== "undefined")
 		$('#user_id').data('combobox').refresh();
 		$('#user_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.UserPicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.UserPicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 }

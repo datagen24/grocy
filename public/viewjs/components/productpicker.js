@@ -137,7 +137,7 @@ if (typeof prefillProduct !== "undefined")
 		$('#product_id').data('combobox').refresh();
 		$('#product_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 }
@@ -158,7 +158,7 @@ if (typeof prefillProductId !== "undefined")
 		$('#product_id').data('combobox').refresh();
 		$('#product_id').trigger('change');
 
-		var nextInputElement = $(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
+		var nextInputElement = $(document).find(Victual.Components.ProductPicker.GetPicker().parent().data('next-input-selector').toString());
 		nextInputElement.focus();
 	}
 	else

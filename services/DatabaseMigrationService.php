@@ -133,6 +133,15 @@ class DatabaseMigrationService extends BaseService
 	 * rather than zero, and answering zero would tell an operator whose database is down
 	 * to run migrations at it. See DatabaseDialect::IsMissingTableError().
 	 *
+	 * Negative numbers are dropped. The table is also used as bookkeeping for things that
+	 * are not migrations - DemoDataGeneratorService records "the demo data already ran" as
+	 * migration -1 - and a marker that no engine has a file for otherwise reads as a
+	 * migration from a newer deployment, which is how demo mode made itself unserveable:
+	 * the first request seeded the data and every request after it was refused with "the
+	 * database is ahead of the code". Filtering here rather than in the two callers keeps
+	 * this method's contract ("every migration number this database has recorded") true,
+	 * and there is no migration 0 or below to hide.
+	 *
 	 * @return int[]
 	 * @throws \PDOException When the database could not be asked at all
 	 */
@@ -151,7 +160,10 @@ class DatabaseMigrationService extends BaseService
 					throw new \Exception('The migrations table could not be read.');
 				}
 
-				$numbers = array_map('intval', $statement->fetchAll(\PDO::FETCH_COLUMN, 0));
+				$numbers = array_filter(
+					array_map('intval', $statement->fetchAll(\PDO::FETCH_COLUMN, 0)),
+					fn (int $migration) => $migration >= 0
+				);
 			}
 			catch (\PDOException $ex)
 			{

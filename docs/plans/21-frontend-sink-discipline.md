@@ -6,7 +6,9 @@ would run cannot boot against this tree, and the one sink that is a decision rat
 defect is still open. Close all four.
 **Depends on:** nothing. Step 1 unblocks [12](12-frontend-shared-core.md)'s whole harness,
 so it comes first regardless of what else is scheduled.
-**Status:** draft for review. Step 0 has already landed (`bdfa00c`, 2026-09-04).
+**Status:** **landed**, 2026-09-04 — steps 0 to 5, all six open questions answered, and one
+of those answers overturned step 4 before it was built. The body below is kept as written;
+[Executed](#executed) is the record of what shipped and of what the plan got wrong.
 
 ## Today
 
@@ -18,7 +20,7 @@ one against the tree rather than by title:
 | Class | Alerts | Verdict |
 |---|---|---|
 | `.html()` / markup concatenation with browser-local input | #32, #10 | **exploitable**, proved with a payload |
-| `.html()` of a summernote field | #17 | **real, and a decision** — see step 4 |
+| `.html()` of a summernote field | #17 | **wrong when written** — read as real and a decision; it is a false positive, and step 4's Executed section is why |
 | DOM string reaching `$()` | #31, #30, #29, #28, #5, #4, #3 | not exploitable — jQuery 3.6 parses a string as HTML only when it starts with `<` and ends with `>`, and every one of these starts with `#` |
 | DOM value interpolated into a query string | #37, #36, #35, #20, #19, #18, #14 | not exploitable — fixed path prefix, so no scheme is reachable |
 | `replace("'", …)` escaping only the first quote | #25, #24, #23 | real bug, Sizzle selector rather than HTML |
@@ -207,21 +209,53 @@ which is the only kind of convention that survives.
    silently. That is a small script and a real widening of scope. Worth it, or is the job
    plus this record enough?
 
+   > **Response:** Mechanical. Three documents said the job existed and a fourth was found
+   > while answering this question — `docs/security-sweep.md:343` — so the count was wrong
+   > in the direction that argues for the script. `.devtools/check-cited-jobs.php` reads
+   > every `` `<name>` job `` citation in the Markdown corpus back against
+   > `.github/workflows/`, and the `lint` job runs it. It is 150 lines including its
+   > reasoning, it found the fourth citation on its first run, and it fails on an empty
+   > match set as well as on a missing job — a check that matches nothing cannot fail,
+   > which is the state it exists to prevent. It checks one direction only: a job nobody
+   > documents is fine; a document naming a job that does not exist is a lie.
+
 2. **Should the demo marker live in the `migrations` table at all?** Step 1 filters it out
    at the read. A `demo_data_generated` row in a settings table, or a dedicated column,
    would mean nothing has to remember the exception — at the cost of a migration and a
    compatibility path for databases carrying the `-1` row today. Filter now and move it
    later, or move it once?
 
+   > **Response:** Filter now, and probably never move it. The filter is on *negative*
+   > numbers rather than on "numbers with no file", which is what lets it coexist with a
+   > genuine rollback still being refused — the two halves are schema gate cases 6 and 7,
+   > and case 6 was confirmed to fail against the unfixed tree before it was kept. A
+   > migration to relocate one boolean would cost a compatibility path for every database
+   > carrying the row today and buy nothing the comment does not already say.
+
 3. **How much runs in `frontend-security`?** `s29-payload.js` alone is the security gate.
    `routes-smoke.js` needs the same booted instance and would catch a console error on any
    view route. `baseline.js` is a much longer run and belongs on demand. Probe only, or
    probe plus smoke?
 
+   > **Response:** Probe only. `routes-smoke.js` is worth running and is not a security
+   > gate; putting it in a job called `frontend-security` would blur what a red result
+   > means, and this plan is entirely about a gate whose meaning nobody could check. It can
+   > have its own job when someone wants one.
+
 4. **How wide is the `local-input` family?** One `.custom-file-input` probe proves the
    sink; six prove every form. The sink is one shared handler in `victual.js`, so one is
    arguably honest and six is arguably theatre — but the six differ in what sits next to
    the input, which is what `.next()` resolves.
+
+   > **Response:** One, and the four Blade blocks were read before deciding rather than
+   > after. `productform`, `recipeform`, `equipmentform` and `userform` carry the same
+   > markup copied — `<div class="custom-file">`, input, then label — and the sink is a
+   > single delegated handler in `victual.js`. A second probe would assert that a copy is
+   > still a copy. The probe does pin the label *by id* rather than by class: `/product/new`
+   > carries a second `.custom-file-label` ("No file selected") that is never written to,
+   > and a class selector reads that one instead and reports a clean sink forever. That
+   > cost a first run to find, and is the kind of thing six probes would have hidden six
+   > times over.
 
 5. **What does the DOMPurify allowlist permit?** Two defensible answers. Match the toolbar
    exactly, which is tightest and silently drops anything an existing description already
@@ -230,10 +264,23 @@ which is the only kind of convention that survives.
    `SELECT description FROM shopping_lists` and the equivalent for recipes and products is
    the whole population.
 
+   > **Response:** Moot — there is no DOMPurify, because the boundary this step was going
+   > to build already exists on the server and holds. See
+   > [Executed — step 4](#executed--step-4-the-question-that-overturned-the-step).
+
 6. **Does anything else render a `wysiwyg-editor` value?** Step 4 covers summernote's own
    init and `shoppinglist.js:560`. `productform.js:444` pastes a source product's
    description into the editor on copy. A grep for the class plus the fields that use it
    settles this before the step, not during it.
+
+   > **Response:** Yes, five more, and answering this is what overturned step 4. Four
+   > templates carry a `wysiwyg-editor` textarea (product, recipe, shopping list,
+   > equipment), and their stored values are rendered as HTML in six places:
+   > `shoppinglist.js:560`, `equipment.js:47`, `productcard.js:19`, `chorecard.js:20`,
+   > `views/recipes.blade.php:574` (server-side `{!! !!}`) and summernote's own init. That
+   > server-side one is the finding: a browser-side sanitiser cannot defend markup that is
+   > already in the document before any script runs. Following that led to
+   > `BaseApiController::HTML_RENDERED_COLUMNS`, and to the answer below.
 
 ## Verification
 
@@ -254,3 +301,146 @@ which is the only kind of convention that survives.
    `.devtools/frontend/two-pickers.js` covers the datetimepicker pair already.
 6. **Whole plan** — CodeQL reports zero open alerts on `master`, and the `frontend-security`
    job has failed at least once, on purpose, on a branch.
+
+## Executed
+
+Landed 2026-09-04 in one pull request on `claude/github-security-vulnerabilities-8lguas`,
+after step 0 (`bdfa00c`). Everything below was run against a demo instance and, where it is
+a gate, run once against a tree where it had to fail.
+
+### Executed — steps 1, 2, 3 and 5
+
+**Step 1.** The filter went into `GetAppliedMigrationNumbers()` rather than into
+`GetUnknownMigrationNumbers()` as the plan says. That method's contract is "every migration
+number this database has recorded", and `-1` is not one — filtering at the read keeps the
+contract true and fixes both derived methods and `GetAppliedMigrationNumber()` at once,
+where filtering in the caller would have left the maximum reporting `-1` for a demo
+database that had recorded nothing else.
+
+`.devtools/pgsql/schemagatetest.php` gains cases 6 and 7 as a pair: the demo marker is not
+a migration, and a genuinely rolled-back database is still refused. Case 7 is the reason
+the filter is on negative numbers rather than on "numbers with no file" — a filter wide
+enough to swallow the marker and the rollback together would leave nothing to notice a
+rollback. Verified: 11 cases pass on SQLite; with the filter reverted, case 6 fails
+(`-1 present, unknown [-1]`) and case 7 still passes. A demo instance now serves
+`/stockoverview`, `/shoppinglist`, `/recipes`, `/products`, `/barcodescannertesting` and
+`/purchase` with the `-1` row present, all 200 — every one of which was 503 before.
+
+**Step 2.** `frontend-security` in `.github/workflows/tests.yml`. It runs PHP **8.5**, not
+the 8.4 the `suite` job uses: this job boots the application through `public/index.php`,
+where `PrerequisiteChecker` enforces `REQUIRED_PHP_VERSION`, and `composer.json` pins
+`8.5.*` — so nothing has to be ignored to install against it. It installs the frontend
+packages too, without which every probe would report "the sink was never reached" for want
+of jQuery. Per **Q3** it runs the probe and nothing else.
+
+**Step 3.** Two probes, `file-name` and `barcode-echo`, and the `sink` argument became a
+lookup in a `SINKS` map so a probe can name where its payload lands. The two original
+families read `innerText`; the local-input sinks read `textContent`, because
+`#scanned_codes` is a `<select>` whose `innerText` is not its options' text and
+`.custom-file-label` carries `d-none` until a picture exists — neither is a statement about
+whether markup was injected. Both probes report `xss=1` against a tree with step 0's two
+fixes reverted, and clean against the fixed tree.
+
+**Step 5.** Twelve sites in six picker components converted to `$(document).find()`. The
+convention is now a bullet in [AGENTS.md](../../AGENTS.md), stated as two rules — DOM
+strings reach jQuery through `.find()`, and markup is built as nodes — with a pointer at
+the job that checks them.
+
+**Q1's script**, `.devtools/check-cited-jobs.php`, runs in `lint`. It reads every
+`` `<name>` job `` citation in the Markdown corpus back against `.github/workflows/`. On its
+first run it found a **fourth** document making the claim — `docs/security-sweep.md:343` —
+which the by-hand search had missed, and reading whole files rather than lines found two
+more citations that hard-wrapping had hidden. Renaming the job makes it report ten
+citations across five files and exit 1.
+
+### Executed — step 4, the question that overturned the step
+
+**Step 4 was not built, and should not be.** Q6 asked whether anything else renders a
+`wysiwyg-editor` value. It does — six sinks across five columns, one of them
+`views/recipes.blade.php:574`, a server-side `{!! !!}`. A browser-side sanitiser cannot
+defend markup that is in the document before any script runs, so answering Q6 meant
+looking at where those columns are written, and that is
+`BaseApiController::GetParsedAndFilteredRequestBody`:
+
+- `HTML_RENDERED_COLUMNS` names exactly five columns — `products`, `recipes`, `equipment`,
+  `chores` and `shopping_lists`, each `description` — and they are exactly the five with
+  HTML render sinks.
+- Every write through the API is purified by `ezyang/htmlpurifier`, already a dependency,
+  with an allowlist narrowed by sweep findings S1 and S7 (no `iframe`, no `id`).
+- For those five, the purified output is what is stored. For every other column the entity
+  encoding is undone afterwards, which is what S1 was about.
+
+Asked of the running application rather than of the source: `PUT /api/objects/…` with
+`<img src=x onerror=…>` stores `<img src="x" alt="x" />`; `<script>`, `<svg onload>` and
+`<iframe>` store as `null`; `<a href="javascript:…">` stores as `<a>click</a>`; and a
+paragraph of real summernote formatting comes back intact. **The boundary already exists,
+on the server, which is the only place it can cover a Blade `{!! !!}`.**
+
+So alert #17 is a false positive, and this plan said otherwise because the evidence behind
+it was bad. The payload that "proved" it was written into SQLite with a `PDO::exec`, a path
+no attacker has. A finding proved by putting the payload where the attacker cannot put it
+proves nothing, and it is worth saying plainly because everything else in this plan was
+checked properly.
+
+What was missing was not a sanitiser but the assertion that the one in the tree still
+works. `HTML_RENDERED_COLUMNS` is a hand-maintained list of five entities, its purifier is
+configured by four settings, six sinks sit behind it, and nothing anywhere asserted any of
+it. So step 4 became a probe family instead:
+
+- `html-column:*` writes nine payloads to each of the five columns through the API and
+  reads each back, failing on any stored value still carrying an event handler, a script,
+  an iframe, an object, an svg or a `javascript:` URI. The ninth payload is *legitimate*
+  summernote formatting, which has to survive — a purifier that deleted everything would
+  otherwise pass.
+- `description-render` leaves a live payload in a shopping list's description and opens the
+  print dialog, which is the only way to reach `shoppinglist.js:560` — CodeQL's alert #17 —
+  and asserts nothing executed and no element carries an inline handler.
+
+Both were shown capable of failing by making `GetParsedAndFilteredRequestBody` skip
+`description`: every column then reports ten offences, and `description-render` reports
+`THE PAYLOAD EXECUTED`. Restored, the full suite is 26/26 clean.
+
+This leaves one thing deliberately not done, and it is the residual risk to record: nothing
+purifies these columns in the *browser*. If the server-side purifier is ever misconfigured
+or bypassed, the render sinks have no second line. Adding DOMPurify would give one, at the
+cost of a second allowlist that has to agree with `HTML.Allowed` forever — and a client
+allowlist narrower than the server's silently eats formatting users already have. The
+`html-column` family is the cheaper form of the same assurance, because it fails loudly at
+the boundary rather than papering over it at the sink. Revisit if that purifier is ever
+changed.
+
+### Found on the way, not fixed here
+
+Two things surfaced while verifying, neither in this plan's scope and both worth a line so
+the next reader does not have to rediscover them.
+
+**A startup failure answers 200.** `public/index.php` catches `ERequirementNotMet` and
+prints "Unable to run Victual: PHP 8.5.0 is required…" with the default status. Every route
+on a misconfigured instance is therefore a 200 carrying an error page, and
+`.devtools/frontend/routes-smoke.js`, which asserts on status codes, reports 80 healthy
+routes for an application that cannot boot — this was found by it doing exactly that. The
+`frontend-security` job is not exposed to it (a probe whose sink never appears fails, by
+that suite's own rule, which is why it survives this), and `SchemaVersionMiddleware`
+already answers 503 for the analogous case, so the house answer exists. One line, someone
+else's PR.
+
+**Two view routes have pre-existing console errors**, unrelated to anything here:
+`productbarcodeform.js:99` dereferences `Victual.EditObjectProduct.id` unconditionally and
+the template emits `null` on `/productbarcodes/new`, and `/api` throws
+`require is not defined` from the bundled Swagger UI. Both were traced to their source
+lines and to commits predating this work.
+
+A like-for-like `routes-smoke.js` baseline against `master` could not be taken, and the
+reason is itself the point: `master` cannot boot a demo instance at all until step 1 lands.
+
+### What this plan got wrong
+
+Two things, both worth keeping:
+
+1. **A verdict was published on evidence that could not have been negative.** `#17` was
+   called real because a payload written straight into the database rendered. The write
+   path was never tested, and the write path was the answer.
+2. **The plan proposed a dependency before reading the code that would have made it
+   unnecessary.** Q6 was written as a tidy-up question — "does anything else render one of
+   these?" — and it was the question that mattered. It was answered after the decision
+   rather than before it, and only the order of work saved that from shipping.
