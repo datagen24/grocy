@@ -409,6 +409,33 @@ allowlist narrower than the server's silently eats formatting users already have
 the boundary rather than papering over it at the sink. Revisit if that purifier is ever
 changed.
 
+### Executed — the round CodeQL sent back
+
+Step 0 fixed `productpicker.js`'s three `replace("'", "\\'")` sites by making the regex
+global. CodeQL's first run on the pull request reported **three new high alerts**, all
+`js/incomplete-sanitization`, all in that file — and the accurate one (alert 38, line 131)
+says why: *"This does not escape backslash characters in the input."* Escaping the quote
+without escaping the backslash in front of it is still broken. `a\'b` becomes `a\\'b` —
+two literal backslashes, then a quote that closes the string and resumes the selector as
+syntax. Confirmed in the browser: the old expression throws
+`Syntax error, unrecognized expression` on that input.
+
+So step 0's fix was a smaller version of the same mistake: it treated "the escaper is
+wrong" as "the escaper needs one more character handled". The third version would have
+been wrong too. **There is no third version.** The four sites that built a selector string
+from a value — three flagged, plus an unflagged `option[value="…"]` in `FinishFlow()` that
+is the identical shape — now call three predicates on `#product_id`'s options, so nothing
+is parsed and nothing needs escaping.
+
+Proved equivalent rather than assumed: over all 30 options on `/purchase`, each predicate
+and the selector it replaces select the same option, with zero mismatches; prefill by name
+still resolves and moves focus; and the payload that made the old expression throw returns
+an empty set. 26/26 probes still clean.
+
+The lesson is the one this plan already carries once, in a different costume: an escaper
+hand-written against a parser you do not control is a defect waiting for its next input.
+The fix is to stop parsing, not to escape harder.
+
 ### Found on the way, not fixed here
 
 Two things surfaced while verifying, neither in this plan's scope and both worth a line so
