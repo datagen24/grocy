@@ -17,3 +17,8 @@ embedded.txt
 # Nix build results
 /result
 /result-*
+
+# Parity suite output and its one npm dependency
+.devtools/parity/reports/
+.devtools/parity/harness/node_modules/
+.devtools/parity/harness/package-lock.json

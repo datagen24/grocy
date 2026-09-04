@@ -1,0 +1,15 @@
+{
+	"name": "victual-parity-harness",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Drives the same scenario against this fork and against upstream grocy at the version it forked from, and diffs what came back. Deliberately not part of the app's package.json: the repo root package.json is a yarn manifest that installs into public/packages.",
+	"type": "commonjs",
+	"scripts": {
+		"api": "node run-api.js",
+		"ui": "node run-ui.js",
+		"side-effects": "node run-side-effects.js"
+	},
+	"dependencies": {
+		"playwright": "1.56.1"
+	}
+}
