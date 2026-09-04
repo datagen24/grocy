@@ -6,9 +6,10 @@ else.
 **Depends on:** [ADR-0013](../adr/0013-nix-built-container-images.md) for the decision
 (Proposed). [10](10-cold-start-statelessness.md) has landed and supplies most of what this
 plan used to have to work around.
-**Status:** draft. The flake under [`nix/`](../../nix/README.md) and the manifest under
-[`deploy/`](../../deploy/README.md) landed with this plan and **have never been built or
-applied**. Piece 1 is the first build, and it is also ADR-0013's acceptance gate.
+**Status:** **piece 1 complete, 2026-09-04.** The flake under [`nix/`](../../nix/README.md)
+builds and the manifest under [`deploy/`](../../deploy/README.md) serves; the two Executed
+sections below record what the first build and the first run each found. Pieces 2 to 5
+remain. Piece 1 was ADR-0013's acceptance gate.
 
 ## Today
 
@@ -81,8 +82,10 @@ laptop and k3s in the cluster agree about what loopback means.
 **Assertions instead of greps.** `nix flake check` asserts a non-root uid, no shell or
 foreign interpreter in the runtime closure, no PHP in the web tier's document root, that
 every file the request path opens by `__DIR__`-relative path is present, that the view
-cache is actually warm, that the entrypoint's seed path is installed, that the web tier's
-closure does not contain the application, and that the image tag matches `version.json`.
+cache is actually warm, that `app.php` does not require a `config.php` that may not exist,
+that the web tier's closure does not contain the application, and that the image tag
+matches `version.json`. (That sixth assertion read "the entrypoint's seed path is
+installed" until the entrypoint was deleted — see the second Executed section.)
 
 ## What the first review corrected
 
