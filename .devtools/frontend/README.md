@@ -59,9 +59,12 @@ no page executes it. Run it against an unfixed tree first — there it must repo
 on every probe, or it is not capable of failing and proves nothing. It leaves its seeded
 records behind, named with a per-run token, so it needs a throwaway database too.
 
-**`s29-payload.js` is a gate, and it is the one this repository runs on every pull
-request** — the `frontend-security` job in `.github/workflows/tests.yml` boots a demo
-instance and runs it. It prints a `PASS`/`FAIL` line per probe with the reason, and exits
+**`s29-payload.js` is the gate this repository intends to run on every pull request — and
+as of 2026-09-04 nothing runs it.** The `frontend-security` job in
+`.github/workflows/tests.yml` was described here before it was written and never was;
+adding it is [plan 21](../../docs/plans/21-frontend-sink-discipline.md) step 2, which is
+blocked on step 1 because a demo instance currently 503s after seeding. Run it by hand
+until then. It prints a `PASS`/`FAIL` line per probe with the reason, and exits
 non-zero if any probe is not clean. Everything that makes a probe uninformative counts as
 a failure, deliberately: a payload that executed, an injected `<img>`, a payload not
 visible as text, a record that was never seeded, a **sink that never appeared** and an
