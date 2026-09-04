@@ -179,6 +179,16 @@ answered 500.
 >   anonymous visitors, and an exception message is the one string on that page that can
 >   carry request data.
 >
+> **One defect this move introduced, found by reading the code it now wraps rather than by
+> a failing test, and fixed the same day.** `JsonMiddleware` set `Content-Type` on every API
+> response and recognised the two that choose their own — a file download and the calendar
+> feed — by their `Content-Disposition`. Out here it also wraps `SchemaVersionMiddleware`,
+> whose schema-mismatch 503 is deliberately `text/plain`, and which has no
+> `Content-Disposition` to be recognised by. It now leaves any response that set a type
+> alone, which covers all three by the rule rather than two by the symptom. Stamping
+> `application/json` on a plain-text body would have been a lie in the one response an
+> operator reads when a deployment is misconfigured.
+>
 > Verified on a booted instance, both modes: unauthenticated `GET /api/system/info`
 > answers `401` with the JSON body and content type; `OPTIONS` answers `204`, with the
 > CORS headers for a configured origin and without them for any other; a UI page carries

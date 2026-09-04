@@ -424,9 +424,11 @@ Anything else that reasons about schema versions, including
 and `trigdifftest.php` (trigger behaviour). New views must return identical output on both
 engines unless the plan says otherwise and explains why.
 
-**Cite symbols, not line numbers.** `ApiKeyAuthMiddleware::IsValidApiKey` rather than
+**Cite symbols, not line numbers.** `ApiKeyService::IsValidApiKey` rather than
 `ApiKeyAuthMiddleware.php:50` — which the MCP spec cited, and which was already `:49` by
-the time anyone read it. Where a line is worth quoting, quote the code next to it so the
+the time anyone read it. **That example has since made a second point for itself**: wave 2
+deleted `ApiKeyAuthMiddleware` outright (15-C1), so the line number now names a file that
+does not exist while the symbol it was standing in for survived the refactor unchanged. Where a line is worth quoting, quote the code next to it so the
 reference survives the shift. The security sweep adopted this in its own preamble and the
 plans have not; the older bare line numbers are left alone rather than swept, because
 rewriting a hundred of them by hand is how a wrong one gets introduced. New citations
