@@ -28,7 +28,7 @@ nesting outlives it and will be read by people who never open plan 13.
 
 ## Lifecycle
 
-**Decider.** This fork serves one household and the maintainer decides. The field exists
+**Decider.** This fork has one maintainer, and the maintainer decides. The field exists
 anyway, because "who decides" is the question a corpus of proposals is worst at answering
 implicitly, and because a Proposed record with no named decider is one nobody is obliged
 to resolve. Backfilled records name the maintainer retrospectively.

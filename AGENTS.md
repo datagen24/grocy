@@ -1,6 +1,6 @@
 # Working in this repository
 
-Victual is a hard fork of [grocy](https://github.com/grocy/grocy) serving one household,
+Victual is a hard fork of [grocy](https://github.com/grocy/grocy),
 governed by a documentation corpus that is taken seriously. Read in this order before
 changing anything: this file, then [docs/constitution.md](docs/constitution.md) (standing
 principles), then the [ADR index](docs/adr/README.md) (decisions in force), then the
@@ -13,9 +13,12 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
   bookkeeping only — status line, index row, supersede pointers — never substantive edits.
   A plan that makes a new architectural decision on its way to shipping leaves an ADR
   behind.
-- **The dual-engine discipline is live** until [ADR-0008](docs/adr/0008-postgresql-only-runtime-engine.md)
-  is accepted: every view exists on both engines and is proved equivalent, migrations
-  from 0256 on are portable or marked pairs per
+- **The dual-engine discipline is live** — and stays live even though
+  [ADR-0008](docs/adr/0008-postgresql-only-runtime-engine.md) was **accepted 2026-08-31**.
+  The record makes PostgreSQL the sole runtime and SQLite an import format; the retirement
+  work it calls for is not yet scheduled in the roadmap's wave order, so until that lands
+  nothing about the current discipline relaxes: every view exists on both engines and is
+  proved equivalent, migrations from 0256 on are portable or marked pairs per
   [ADR-0004](docs/adr/0004-engine-specific-migrations.md), `check-migrations.php` guards
   the marker discipline, and the differential harness in `.devtools/pgsql/` is the proof.
 - **The wire contract is the invariant** ([ADR-0005](docs/adr/0005-wire-contract-is-the-invariant.md)).
@@ -57,17 +60,22 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
 ## Running things
 
 - Boot the app locally (PHP built-in server, SQLite demo mode — legitimate until
-  ADR-0008 lands): [.agents/skills/run-app/SKILL.md](.agents/skills/run-app/SKILL.md).
+  ADR-0008's retirement work lands, not merely until the record was accepted):
+  [.agents/skills/run-app/SKILL.md](.agents/skills/run-app/SKILL.md).
 - PostgreSQL work: baseline DDL in `db/pgsql/baseline/`, differential test phases in
   `.devtools/pgsql/` (see its README), CI runs both engines against `postgres:16`.
 - Business logic lives in `services/`; routes in `routes.php`; permissions are the 30
   constants in `controllers/Users/User.php` resolved through `user_permissions_resolved`.
-- Container images: two answers currently exist and that is temporary. The root
-  `Dockerfile` builds the `dev` image the suite runs in and a `production` image that
-  [10](docs/plans/10-cold-start-statelessness.md) landed, which the `images` CI job
-  asserts. [ADR-0013](docs/adr/0013-nix-built-container-images.md) (Proposed) proposes
-  building production images with Nix instead — `flake.nix` and `nix/`, see
-  [nix/README.md](nix/README.md) — and **supersedes the `production` target if accepted**,
-  never the `dev` one. The work and the manifests are
-  [plan 20](docs/plans/20-container-infrastructure.md) and [deploy/](deploy/README.md);
-  **none of the Nix has been built**, so treat a first build as part of the work.
+- Container images: there is one answer now.
+  [ADR-0013](docs/adr/0013-nix-built-container-images.md) was **accepted 2026-09-04** and
+  production images are built by Nix — `flake.nix` and `nix/`, three images on no base
+  image, see [nix/README.md](nix/README.md). The `Dockerfile`'s `production` target was
+  retired with the acceptance, per that record's question 5, so the root `Dockerfile`
+  builds the `dev` image the suite runs in and nothing else; the `images` CI job's five
+  assertions moved to `nix/checks.nix` and the `nix` workflow's boot test rather than
+  disappearing. The flake **has** been built and the pod **does** serve
+  ([deploy/](deploy/README.md), applied 2026-09-04) — a sentence here said otherwise until
+  2026-09-04 and treating a first build as part of the work was right while it lasted:
+  that build found nine defects in two rounds. What is still open is
+  [plan 20](docs/plans/20-container-infrastructure.md) pieces 2–5 and two of its ten
+  verification checks (the credential split, and the SIGTERM half of the signal check).

@@ -9,9 +9,12 @@ change to it is a change to how the project is governed, reviewed accordingly.
 
 ## Authority
 
-This fork serves one household. The maintainer (datagen24) decides. Proposals are argued
-on their merits and records are written to be argued with — but "who decides" is never
-implicit, and nothing is adopted by momentum. An ADR is accepted in its own pull request,
+The maintainer (datagen24) decides. That is a statement about how this project is
+governed — one maintainer, accountable for the tree — and not about how many people are
+expected to run it: anyone is welcome to, and the records here are written to be read by
+someone who does. Proposals are argued on their merits and records are written to be
+argued with — but "who decides" is never implicit, and nothing is adopted by momentum. An
+ADR is accepted in its own pull request,
 carrying bookkeeping only; a record is not accepted by a plan that assumes it, a PR that
 implements it, or by not being argued with. Acceptance prerequisites are gates, not
 suggestions.
@@ -33,9 +36,11 @@ household member is a finding, not a curiosity.
 [ADR-0006](adr/0006-authenticated-issues-in-scope.md).
 
 **A Proposed record constrains nothing; an Accepted one constrains everything.** Work in
-flight follows the accepted state of the world. While
-[ADR-0008](adr/0008-postgresql-only-runtime-engine.md) is Proposed, the dual-engine
-discipline holds in full.
+flight follows the accepted state of the world. Acceptance is also not delivery:
+[ADR-0008](adr/0008-postgresql-only-runtime-engine.md) was accepted 2026-08-31 and the
+dual-engine discipline still holds in full, because the retirement work it calls for is
+not scheduled yet. An accepted record binds the next decision; it does not retroactively
+relax a discipline the tree is still running on.
 
 ## The workload standard
 

@@ -16,11 +16,21 @@ formality" — turned out to be right: the first build found five defects, three
 contradicting ADR-0013's claim that these images carry no shell. Every one was fixed in the
 source rather than in [`checks.nix`](checks.nix), which is what found them.
 
-What remains unproved is the *deployment*. `deploy/podman/victual.yaml` does not start
-under `podman kube play`: `fsGroup` is not honoured for `emptyDir` volumes, so uid 65532
-cannot write `/data` and the migrate initContainer exits 1. See
-[issue #49](https://github.com/datagen24/victual/issues/49). Plan 20's verification section
-is still the list of what has to be established, and this closes part of it, not all.
+**The pod runs, as of the same day.** `deploy/podman/victual.yaml` serves under
+`podman kube play` — [issue #49](https://github.com/datagen24/victual/issues/49) is closed
+and [ADR-0013](../docs/adr/0013-nix-built-container-images.md) was accepted on the strength
+of it. That took two more defects that were invisible in the YAML, both of them this
+manifest meaning something different under podman than under Kubernetes: `fsGroup` is not
+honoured for `emptyDir` (fixed by making `config.php` optional, which removed the writable
+mount entirely rather than working around it), and `httpGet` probes are rewritten into
+`CMD-SHELL curl -f …` and run *inside* the container, which an image with no shell and no
+curl cannot pass. Plus a third that no check could have found: every error page on these
+images was a fatal error, because `GetSystemInfo()` opened a SQLite connection these images
+have no driver for.
+
+Plan 20's verification section is still the list, and two of its ten are open: the
+credential split (check 8) needs a role with no DDL rights, where the bootstrap uses one
+superuser, and the SIGTERM half of the signal check (9) is not done.
 
 ## What gets built
 
@@ -38,10 +48,15 @@ app tier holds the credential and no document root; the migrate tier is the only
 that should ever hold a role able to run DDL. That is ADR-0010's "its own credential,
 its own database role, least privilege for the one job it does".
 
-**What separates them is the credential, not the bytes.** `migrations/` and `db/` ship in
-every image, because `SystemController::Root` still calls `MigrateDatabase()` and
-`GetMigrationFiles()` throws on a missing directory. The first draft of this tree
-stripped them and turned `/` into a 500; plan 10 is what makes stripping them possible.
+**What separates them is the credential, not the bytes.** The application tree is identical
+in all three images and is meant to be. `migrations/` and `db/` ship in every one because
+they are read on the request path — `SchemaVersionMiddleware` asks
+`GetLatestMigrationNumber($dialect)` on every request, which reads the migration
+directory, and the check is deliberately unconditional even though auto-migration
+(`MIGRATE_ON_ROOT_REQUEST`) is off by default. Trimming them is not blocked on plan 10, as
+an earlier draft of this file said; it is ruled out by the view cache below, whose compiled
+file names hash the application root, so a trimmed root would warm a cache the serving
+image could not use.
 
 ## Building it
 
