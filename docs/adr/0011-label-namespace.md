@@ -1,16 +1,44 @@
 # ADR-0011: Labels carry stable opaque identifiers; grocycode becomes an input symbology
 
-- **Status: Proposed.** Written to be argued with.
+- **Status: Accepted, 2026-09-04.** **Label payloads carry opaque uids the database
+  resolves; grocycode is parsed forever and emitted never.** Both acceptance prerequisites
+  below are met, each annotated in place. The uid format is chosen and written into
+  decision item 1 by this acceptance — as that gate directs, and it is the only substantive
+  edit the lifecycle rule admits here. Plan [06](../plans/06-location-barcodes.md) is
+  reconciled by **narrowing rather than absorption**: what is left of it once this record
+  takes the payload, the symbology and the print path is work nobody else owns — label
+  placement, the locations UI, and the current-location notion interactive scanning needs —
+  so it keeps its number and its file and says at the top what was taken from it. Nothing
+  else was revised: no consequence softened, no argument improved on the way through, no
+  prerequisite dropped.
+- **Accepting decides the namespace, not the schedule.** No `labels` table exists, no print
+  outbox exists, and the fork still emits Grocycodes through the webhook. The work is not in
+  the roadmap's wave order; until it lands, what the tree actually does is what
+  [docs/grocycode.md](../grocycode.md) and [docs/label-printing.md](../label-printing.md)
+  describe. What changes today is what may be built: no new Grocycode type is added, and no
+  new label payload carries a row id.
+- **Two statements in the body were checked at acceptance rather than edited.** *Consequences*
+  calls the two new tables a dual-engine liability "while ADR-0008 is Proposed";
+  [0008](0008-postgresql-only-runtime-engine.md) was accepted 2026-08-31, the same day this
+  record was written, and the liability is unchanged by that — the dual-engine discipline
+  stays live until 0008's retirement work is scheduled, which it is not. The same section
+  asks that plan [17](../plans/17-ecosystem-clients.md)'s catalogue be checked for clients
+  that *generate* Grocycodes before this acceptance claims the blast radius is zero. It was:
+  neither tracked client does. Grocy-SwiftUI scans them, the Home Assistant integration does
+  not model them, and decision item 3 keeps the parser — so the print-time blast radius is
+  zero and the scan-time one stays zero.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
   lifecycle rule in [the index](README.md).
-- **Recorded:** 2026-08-31.
+- **Recorded:** 2026-08-31, which is when it was written; accepted 2026-09-04, which is
+  when the decision was made.
 - **Relationship:** generalizes the reasoning [06](../plans/06-location-barcodes.md)
   already wrote for locations to every labelled thing; the print path it replaces is the
   webhook the [security sweep](../security-sweep.md) notes as the tree's only outbound
   call. The drainer it introduces is a workload under
   [ADR-0010](0010-workload-standard.md). Pairs with
   [ADR-0008](0008-postgresql-only-runtime-engine.md)'s importer without depending on it.
-- **Would affect:** [06](../plans/06-location-barcodes.md) (largely absorbed),
+- **Would affect:** [06](../plans/06-location-barcodes.md) (**narrowed** by this
+  acceptance — see its header),
   [08](../plans/08-nested-locations.md), [17](../plans/17-ecosystem-clients.md),
   [18](../plans/18-mqtt-state-publication.md).
 
@@ -40,13 +68,24 @@ labels on:
    in, exactly as grocy's SQLite file is a door in for
    [ADR-0008](0008-postgresql-only-runtime-engine.md)'s importer.
 
-## Decision (proposed)
+## Decision
 
 **Label payloads carry stable opaque identifiers; a mapping the database owns resolves
 them; no row id ever leaves the database on paper.**
 
 1. **A new namespace.** A label payload is `vctl:<uid>`, where `<uid>` is random,
-   generated at label creation, and meaningless. A `labels` table maps
+   generated at label creation, and meaningless. **The uid is 64 random bits from a
+   CSPRNG, rendered as 13 characters of Crockford base32 in uppercase** — alphabet
+   `0123456789ABCDEFGHJKMNPQRSTVWXYZ`, no `I`, `L`, `O` or `U`, and no check symbol.
+   Uppercase is not cosmetic: `VCTL:` plus 13 characters is 18 characters drawn entirely
+   from QR's alphanumeric mode, so the payload fits QR version 1 at error correction
+   level L and the label stays small at a given read distance. Resolution canonicalizes
+   before lookup — case-insensitively, and folding Crockford's decode aliases (`I`, `L`
+   → `1`, `O` → `0`) — so a uid read by eye or off a marginal scan still resolves to the
+   label it names. The collision stance is structural rather than probabilistic: 64 bits
+   makes a collision ignorable at household label volumes, and a unique index on
+   `labels.uid` makes one impossible — a generator that draws a duplicate fails its
+   insert and draws again. A `labels` table maps
    `uid → (kind, target id, created_at, retired_at)`, with kinds for at least stock
    entries, products, and locations. Resolution of a retired or unknown uid fails
    loudly and distinctly — a retired label seen in the world is a discrepancy signal,
@@ -108,10 +147,27 @@ stays) and lose nothing at print time they could name — but
 
 ## Acceptance prerequisites
 
+Gates, not suggestions. **Both are met**, by the acceptance of 2026-09-04; neither was
+amended, relaxed or dropped, and each carries what met it.
+
 - **The uid format is chosen** — alphabet, length, collision stance — and written into
   this record by the accepting PR (open question 1 carries the lean).
+  — **met**, as the lean stood: 64 random bits, Crockford base32, uppercase, 13
+  characters, no check symbol, collisions made impossible by a unique index rather than
+  argued away by probability. It is decision item 1 above, which is where a reader looks
+  for it; open question 1 is annotated with the fact that it was decided, not with the
+  decision.
 - **Plan [06](../plans/06-location-barcodes.md) is reconciled** — absorbed into this
   record with a superseded note, or narrowed to what remains (placement, UI).
+  — **met, by narrowing.** 06 keeps its number and its file and gains a header saying
+  what this record took from it — the payload format, label stability, the symbology
+  choice and the print path — and what it still owns: label placement and the tree path
+  on the human-readable line (its Q5, which interacts with
+  [08](../plans/08-nested-locations.md)), the locations print action and UI, and the
+  current-location notion interactive scanning needs. Its Q1 and Q3 responses are marked
+  superseded in place rather than deleted; its Q2 was already routed out to what became
+  [ADR-0012](0012-observations-are-proposals.md). Absorption was the alternative and was
+  declined because it would have retired a plan that still has unowned work in it.
 
 ## Open questions
 
@@ -119,6 +175,10 @@ stays) and lose nothing at print time they could name — but
    so `VCTL:` plus uid stays inside QR version 1's alphanumeric capacity, which is what
    keeps a label small at a given read distance. Collision odds at household label
    volumes are ignorable; a unique index makes them impossible.*
+
+   > **Decided 2026-09-04 by this record's acceptance**, as the lean stood and with
+   > canonicalization and the collision stance spelled out. The answer is decision item 1;
+   > the question stays here because this is where a reader asks *why* that format.
 2. **Symbology.** The namespace is symbology-agnostic; the printed form is not. *Lean:
    QR for new labels — better perspective tolerance and tunable error correction for
    reading at distance and angle; DataMatrix support retained for reading legacy

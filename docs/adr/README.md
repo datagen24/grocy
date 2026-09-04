@@ -78,7 +78,7 @@ readers most often need and least often have.
 | [0008](0008-postgresql-only-runtime-engine.md) | PostgreSQL becomes the only runtime engine; SQLite becomes an import format | **Accepted** 2026-08-31, **supersedes [0001](0001-postgresql-alongside-sqlite.md)** | — |
 | [0009](0009-database-as-the-logic-layer.md) | The database is the logic layer | **Proposed**, depends on 0008 | — |
 | [0010](0010-workload-standard.md) | Fork-owned workloads are stateless, idempotent, unprivileged and declared | **Proposed** | [constitution](../constitution.md) |
-| [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Proposed** | [06](../plans/06-location-barcodes.md) |
+| [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Accepted** 2026-09-04 | [06](../plans/06-location-barcodes.md) (narrowed by it) |
 | [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Proposed** | — |
 | [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Accepted** 2026-09-04, **supersedes the `Dockerfile`'s `production` target** | [20](../plans/20-container-infrastructure.md), [nix/](../../nix/README.md), [deploy/](../../deploy/README.md) |
 
@@ -118,10 +118,16 @@ nothing here counts as one.
   cheap greps work, as `.devtools/check-cited-jobs.php` and
   `.devtools/pgsql/check-runtime-sql.php` both demonstrate. **The most acceptable of the
   five, and the one whose acceptance would cost the least.**
-- **[0011](0011-label-namespace.md) — the label namespace.** Two gates, both answerable at
-  a desk: choose the uid format (question 1 carries a specific lean) and reconcile plan
-  [06](../plans/06-location-barcodes.md), which is either absorbed or narrowed. Neither
-  needs code. **Ready to decide whenever 06 comes up the queue; nothing is waiting on it.**
+- **[0011](0011-label-namespace.md) — the label namespace.** **Accepted 2026-09-04**, with
+  both gates met as written: the uid format is chosen at the desk this section said it
+  could be chosen at — 64 random bits, Crockford base32, uppercase, 13 characters, a unique
+  index instead of a probability argument — and plan
+  [06](../plans/06-location-barcodes.md) is reconciled by narrowing rather than absorption,
+  because what remains of it (placement, the locations UI, the current-location notion) is
+  work no other record owns. It is listed here so a reader of this section is not left
+  thinking it is still open. **Accepting it decided the namespace, not the schedule:** no
+  table exists yet and the fork still prints Grocycodes, so what changed on 2026-09-04 is
+  what may be built — no new Grocycode type, and no new label payload carrying a row id.
 - **[0012](0012-observations-are-proposals.md) — observations are proposals.** Two gates,
   both design statements: the absent-versus-redacted-versus-unknown contract for proposal
   payloads, and the confirm permission (question 2 carries the lean). The first is

@@ -29,6 +29,17 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
   ([ADR-0006](docs/adr/0006-authenticated-issues-in-scope.md)). Sweep findings are
   tracked by S-number in the plans README; do not introduce user-configurable outbound
   URLs (the tree currently has no SSRF surface — keep it that way).
+- **Labels are opaque; grocycode is read-only.**
+  [ADR-0011](docs/adr/0011-label-namespace.md) was **accepted 2026-09-04**: a new label
+  payload is `vctl:<uid>` — 13 uppercase Crockford base32 characters over a `labels`
+  mapping table — and no row id leaves the database on paper. The fork parses `grcy:*`
+  indefinitely and emits it never, so no new Grocycode type is added and `grcy:l:` is not
+  minted; printing becomes an outbox a drainer consumes, so nothing new extends
+  `VICTUAL_LABEL_PRINTER_WEBHOOK`. None of that is built or scheduled — the tree still
+  prints Grocycodes through the webhook, as [docs/grocycode.md](docs/grocycode.md) and
+  [docs/label-printing.md](docs/label-printing.md) describe — so the record constrains new
+  work rather than describing the code. Plan [06](docs/plans/06-location-barcodes.md) was
+  narrowed to match: placement, the locations UI, and the current-location notion.
 - **Frontend sinks, two rules.** A string that came out of the DOM reaches jQuery through
   `$(document).find(sel)`, never `$(sel)` — `$()` parses a string beginning with `<` as
   HTML. And markup is built as nodes (`$("<option>").text(value)`), never by concatenating
