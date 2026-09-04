@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+#
+# The parity suite: does this fork still behave like the grocy it forked from?
+#
+#   .devtools/parity/bin/parity all         build what is missing, boot both, run everything
+#   .devtools/parity/bin/parity up          boot both stacks and leave them running
+#   .devtools/parity/bin/parity api         the API scenarios
+#   .devtools/parity/bin/parity ui          the browser walk
+#   .devtools/parity/bin/parity side-effects  MQTT and InfluxDB (fork-only, no upstream)
+#   .devtools/parity/bin/parity reset       throw both databases away and re-migrate
+#   .devtools/parity/bin/parity status      what is running
+#   .devtools/parity/bin/parity logs <name> podman logs for one container
+#   .devtools/parity/bin/parity down        stop everything and delete the volumes
+#
+# This is the *other* differential suite and the difference matters. `.devtools/pgsql/`
+# asks whether this fork behaves the same on SQLite as on PostgreSQL — an internal
+# question, answered by driving SQL at both engines. This one asks whether the fork behaves
+# the same as **upstream grocy 4.6.0**, which is the version version.json says this tree
+# forked from, and answers it by driving the HTTP surface of two running instances. Neither
+# subsumes the other: the pgsql suite would pass on a fork that had quietly changed an API
+# response on both engines, and this one would pass on a fork whose SQLite path was broken,
+# because there is no SQLite path left to break (ADR-0008).
+#
+# See ../README.md for what a difference here means and what to do with one.
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PARITY_ROOT="$(cd "$HERE/.." && pwd)"
+REPO_ROOT="$(cd "$PARITY_ROOT/../.." && pwd)"
+
+# shellcheck source=../stack/stack.sh
+source "$PARITY_ROOT/stack/stack.sh"
+
+HARNESS="$PARITY_ROOT/harness"
+REPORTS="${PARITY_REPORTS:-$PARITY_ROOT/reports}"
+
+VICTUAL_URL="http://127.0.0.1:${VICTUAL_PORT}"
+UPSTREAM_URL="http://127.0.0.1:${UPSTREAM_PORT}"
+
+# --- Prerequisites ------------------------------------------------------------------------
+
+require_node() {
+	command -v node >/dev/null 2>&1 || die "node is not on PATH (Node 18 or newer — the harness uses built-in fetch)"
+	local major
+	major="$(node -p 'process.versions.node.split(".")[0]')"
+	[ "$major" -ge 18 ] || die "node $major is too old; the harness uses the built-in fetch (Node 18+)"
+}
+
+ensure_harness_deps() {
+	require_node
+	if [ ! -d "$HARNESS/node_modules/playwright" ]; then
+		log "installing the harness's one dependency (playwright)"
+		( cd "$HARNESS" && npm install --no-audit --no-fund )
+	fi
+}
+
+# The Victual image is built from this working tree, so it is the thing under test and has
+# to be rebuilt when the tree changes. `--build` forces it; otherwise an existing image is
+# reused, because a five-minute build on every run is how a suite stops being run.
+ensure_victual_image() {
+	local force="${1:-no}"
+	if [ "$force" = "force" ] || ! "$ENGINE" image exists "$VICTUAL_IMAGE" 2>/dev/null; then
+		log "building $VICTUAL_IMAGE from the working tree (Dockerfile, production target)"
+		"$ENGINE" build --target production -t "$VICTUAL_IMAGE" "$REPO_ROOT"
+	else
+		log "reusing $VICTUAL_IMAGE (pass --build to rebuild it from the current tree)"
+	fi
+}
+
+ensure_upstream_image() {
+	if ! "$ENGINE" image exists "$UPSTREAM_IMAGE" 2>/dev/null; then
+		log "pulling $UPSTREAM_IMAGE"
+		"$ENGINE" pull "$UPSTREAM_IMAGE"
+	fi
+}
+
+# --- Phases -------------------------------------------------------------------------------
+
+phase_api() {
+	ensure_harness_deps
+	log "API scenarios"
+	node "$HARNESS/run-api.js" \
+		--victual "$VICTUAL_URL" \
+		--upstream "$UPSTREAM_URL" \
+		--upstream-image "$UPSTREAM_IMAGE" \
+		--out "$REPORTS" \
+		"$@"
+}
+
+phase_ui() {
+	ensure_harness_deps
+	log "browser walk"
+	node "$HARNESS/run-ui.js" \
+		--victual "$VICTUAL_URL" \
+		--upstream "$UPSTREAM_URL" \
+		--out "$REPORTS" \
+		"$@"
+}
+
+phase_side_effects() {
+	ensure_harness_deps
+	log "fork-only side effects (MQTT, InfluxDB)"
+	PARITY_INFLUX_TOKEN="$INFLUX_TOKEN" \
+	PARITY_INFLUX_ORG="$INFLUX_ORG" \
+	PARITY_INFLUX_BUCKET="$INFLUX_BUCKET" \
+	node "$HARNESS/run-side-effects.js" \
+		--victual "$VICTUAL_URL" \
+		--mqtt "127.0.0.1:${MQTT_PORT}" \
+		--influx "http://127.0.0.1:${INFLUX_PORT}" \
+		--out "$REPORTS" \
+		"$@"
+}
+
+# The three phases run in a fixed order and **the order is load-bearing**: `api` is what
+# puts data into both instances, so the browser walk has tables with rows in them and the
+# MQTT check has a stock level to publish. Running `ui` against a cold stack compares two
+# empty applications, which is a comparison that cannot fail and therefore proves nothing.
+#
+# Every phase runs even when an earlier one failed. A partial report from three phases is
+# worth more than a complete report from one, and the exit code still reflects the worst.
+phase_all() {
+	local rc=0
+	phase_api          || rc=1
+	phase_ui           || rc=1
+	phase_side_effects || rc=1
+	return "$rc"
+}
+
+usage() {
+	# tail -n +2 drops the shebang, which `grep '^#'` would otherwise print as
+	# "!/usr/bin/env bash" at the top of the help.
+	tail -n +2 "${BASH_SOURCE[0]}" | grep '^#' | head -14 | sed 's/^# \{0,1\}//'
+}
+
+# --- Dispatch -------------------------------------------------------------------------------
+
+BUILD=no
+ARGS=()
+for arg in "$@"; do
+	case "$arg" in
+		--build) BUILD=force ;;
+		*) ARGS+=("$arg") ;;
+	esac
+done
+set -- "${ARGS[@]:-}"
+
+case "${1:-all}" in
+	up)
+		ensure_victual_image "$BUILD"
+		ensure_upstream_image
+		stack_up
+		;;
+	down)
+		stack_down
+		;;
+	reset)
+		stack_reset
+		;;
+	status)
+		stack_status
+		;;
+	logs)
+		shift || true
+		name="${1:-victual}"
+		"$ENGINE" logs --tail 200 "${PARITY_PREFIX}-${name}"
+		;;
+	api)
+		shift || true
+		phase_api "$@"
+		;;
+	ui)
+		shift || true
+		phase_ui "$@"
+		;;
+	side-effects)
+		shift || true
+		phase_side_effects "$@"
+		;;
+	all)
+		ensure_victual_image "$BUILD"
+		ensure_upstream_image
+		stack_up
+		phase_all
+		;;
+	-h|--help|help)
+		usage
+		;;
+	*)
+		die "unknown command '${1}' — try '$0 --help'"
+		;;
+esac
