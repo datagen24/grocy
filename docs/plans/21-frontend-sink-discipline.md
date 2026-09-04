@@ -503,6 +503,19 @@ typed, because rewriting those would be data loss dressed as a security fix. Wit
 End to end on a real upgrade: a payload planted directly in `shopping_lists.description`,
 then `bin/victual-migrate`, comes back `<img src="x" alt="x" />`, with 0260 recorded.
 
+**The phase's own first CI run failed, and was right to.** `build_pgsql` hands it a freshly
+migrated PostgreSQL database, where `shopping_lists` is the only HTML-rendered table with a
+row in it — the base fixture is applied to the SQLite side. Four of the five columns
+reported themselves untestable, which is exactly the "a phase that quietly tested four of
+five" failure the case was written to produce rather than swallow. The fix is the ordering
+every other PostgreSQL phase in this suite already uses: import first, which is both the
+case the finding asked for *and* how the target gets its rows. It was found by running a
+local PostgreSQL 16 and reproducing the CI failure verbatim, rather than by reading the log
+and guessing — the whole suite now passes locally on both engines, nine phases.
+
+And the import case is capable of failing: with `Import()`'s `purifyStoredHtml` default
+flipped to `false`, it reports an inline event handler surviving in all five columns.
+
 ### Found on the way, not fixed here
 
 Two things surfaced while verifying, neither in this plan's scope and both worth a line so

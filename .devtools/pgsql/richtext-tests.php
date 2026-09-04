@@ -29,9 +29,11 @@
 // StoredHtmlPurifier, and this asserts that they work - by planting payloads the way the
 // gap does, with a direct write, rather than through the API that would have cleaned them.
 //
-// Case 4 is the one that keeps the rest honest: the same payloads written to a column that
-// is *not* HTML-rendered must survive untouched, because those columns are escaped at
-// every sink and rewriting them would be data loss dressed up as a security fix.
+// Two of the cases are controls rather than assertions about danger, and they are what keep
+// the rest honest: legitimate summernote formatting has to survive, and the same payloads
+// written to a column that is *not* HTML-rendered have to be left untouched - those columns
+// are escaped at every sink, and rewriting them would be data loss dressed as a security
+// fix. A routine that emptied every column would pass every other case here.
 //
 // The database is mutated as each case needs and restored in a finally, for the reason
 // schemagatetest.php gives: the runner builds this database from nothing, but a phase that
@@ -112,6 +114,70 @@ const PAYLOADS = [
 echo 'Stored rich text (' . $engine . ")\n\n";
 
 $q = fn(string $name) => $dialect->QuoteIdentifier($name);
+
+// --- 0. The import path ------------------------------------------------------------
+//
+// The other way a row arrives without having met the purifier, and the one the review
+// finding named. The cases below prove StoredHtmlPurifier works; this proves the importer
+// calls it, which is a different claim and the one an operator depends on.
+//
+// It runs first, and not only for narrative order. build_pgsql hands this phase a freshly
+// migrated PostgreSQL database, where the only HTML-rendered column with a row in it is
+// shopping_lists - the fixture is applied to the SQLite side. Importing here is how every
+// other PostgreSQL phase in this suite gets its data, and it leaves all five tables
+// populated for the cases below. Without it those cases correctly report four of the five
+// columns as untestable, which is what the first CI run of this phase did.
+
+$sourceArgument = array_search('--source', $argv, true);
+$sourcePath = $sourceArgument === false ? null : ($argv[$sourceArgument + 1] ?? null);
+
+if ($sourcePath !== null)
+{
+	$source = new PDO('sqlite:' . $sourcePath);
+	$source->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+	// Planted with a direct write, exactly as a database that predates the purifier holds
+	// it. The importer copies rows verbatim, so this is what lands in the target.
+	foreach (BaseApiController::HTML_RENDERED_COLUMNS as $table => $columns)
+	{
+		foreach ($columns as $column)
+		{
+			$source->exec('UPDATE "' . $table . '" SET "' . $column . '" = '
+				. $source->quote('<img src=x onerror=window.__xss=1>'));
+		}
+	}
+
+	(new Victual\Services\Database\DatabaseImporter($source, $pdo, $dialect, fn($m) => null))->Import(true);
+
+	$survived = [];
+	$importedColumns = 0;
+
+	foreach (BaseApiController::HTML_RENDERED_COLUMNS as $table => $columns)
+	{
+		foreach ($columns as $column)
+		{
+			$importedColumns++;
+			$rows = $pdo->query('SELECT ' . $q($column) . ' FROM ' . $q($table)
+				. ' WHERE ' . $q($column) . ' IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN);
+
+			foreach ($rows as $stored)
+			{
+				foreach (DANGEROUS as $pattern => $description)
+				{
+					if (preg_match($pattern, (string)$stored))
+					{
+						$survived[] = $table . '.' . $column . ': ' . $description;
+					}
+				}
+			}
+		}
+	}
+
+	Check('an imported payload is neutralised',
+		empty($survived),
+		'nothing dangerous anywhere in the imported target',
+		empty($survived) ? 'clean across all ' . $importedColumns . ' imported columns' : implode('; ', array_unique($survived)));
+}
 
 // --- Plant one payload-bearing row per HTML-rendered column ------------------------
 //
@@ -271,61 +337,6 @@ finally
 		$restore = $pdo->prepare('UPDATE ' . $q($table) . ' SET ' . $q($column) . ' = ? WHERE ' . $q('id') . ' = ?');
 		$restore->execute([$value, $id]);
 	}
-}
-
-// --- 5. The import path ------------------------------------------------------------
-//
-// The other way a row arrives without having met the purifier, and the one the review
-// finding named. Everything above proves StoredHtmlPurifier works; this proves the importer
-// calls it, which is a different claim and the one an operator depends on.
-
-$sourceArgument = array_search('--source', $argv, true);
-$sourcePath = $sourceArgument === false ? null : ($argv[$sourceArgument + 1] ?? null);
-
-if ($sourcePath !== null)
-{
-	$source = new PDO('sqlite:' . $sourcePath);
-	$source->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-	// Planted with a direct write, exactly as a database that predates the purifier holds
-	// it. The importer copies rows verbatim, so this is what lands in the target.
-	foreach (BaseApiController::HTML_RENDERED_COLUMNS as $table => $columns)
-	{
-		foreach ($columns as $column)
-		{
-			$source->exec('UPDATE "' . $table . '" SET "' . $column . '" = '
-				. $source->quote('<img src=x onerror=window.__xss=1>'));
-		}
-	}
-
-	(new Victual\Services\Database\DatabaseImporter($source, $pdo, $dialect, fn($m) => null))->Import(true);
-
-	$survived = [];
-
-	foreach (BaseApiController::HTML_RENDERED_COLUMNS as $table => $columns)
-	{
-		foreach ($columns as $column)
-		{
-			$rows = $pdo->query('SELECT ' . $q($column) . ' FROM ' . $q($table)
-				. ' WHERE ' . $q($column) . ' IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN);
-
-			foreach ($rows as $stored)
-			{
-				foreach (DANGEROUS as $pattern => $description)
-				{
-					if (preg_match($pattern, (string)$stored))
-					{
-						$survived[] = $table . '.' . $column . ': ' . $description;
-					}
-				}
-			}
-		}
-	}
-
-	Check('an imported payload is neutralised',
-		empty($survived),
-		'nothing dangerous anywhere in the imported target',
-		empty($survived) ? 'clean across all ' . count($planted) . ' imported columns' : implode('; ', array_unique($survived)));
 }
 
 echo "\n";
