@@ -147,6 +147,14 @@ module.exports = {
 		// refusal. It is a deliberate 400 here and a 404 upstream; see
 		// non-integer-object-id in accepted.js.
 		await api.get('/objects/locations/undefined', { label: 'non-integer object id' });
+		// A body that sets no column of the entity. Refused 400 here since wave 2 and
+		// answered 200 with a fabricated created_object_id upstream; see
+		// create-with-no-fields-refused in accepted.js.
 		await api.post('/objects/locations', {}, { label: 'create with no fields' });
+		// PUT and DELETE against an id that does not exist. Both were 400 here until wave
+		// 2 and are now 404, which is what upstream answers for the GET of the same id -
+		// the verb deciding the status was the inconsistency plan 11 closed.
+		await api.put('/objects/locations/999999', { name: 'nope' }, { label: 'edit missing object id' });
+		await api.delete('/objects/locations/999999', { label: 'delete missing object id' });
 	}
 };

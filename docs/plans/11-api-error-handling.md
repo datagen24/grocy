@@ -250,6 +250,80 @@ already cut: `ExceptionController::__invoke` takes a `?LoggerInterface $logger`
 parameter and nothing ever passes one. That was deliberately deferred out of the defects
 pass; this is where it lands.
 
+> **Landed — the shared helper, the controller conversion and the mass-assignment
+> blocklist.** The first and third of the three sessions the Effort section splits this
+> plan into, 2026-09-04, in wave 2. What is still unbuilt after this is the API-key work
+> (Q4's hashing, the query-parameter form) — everything else in this plan is in the tree.
+>
+> - **`BaseApiController::HandleApiCall()` exists and every API controller method uses
+>   it.** 67 methods carried the identical
+>   `catch (\Exception $ex) { return $this->GenericErrorResponse($response, $ex->getMessage()); }`,
+>   which answers 400 to everything; they are now closures handed to one classifier.
+>   `EInvalidApiQuery` and `EObjectNotFound` are the two new types the plan called for.
+> - **The table gained two rows the plan drafted as open.** `FileTooLargeException` moves
+>   into the helper from `FilesApiController`, which is the only place it was ever caught,
+>   and keeps its 413. `PDOException` **stays a 400** rather than becoming a 500: the plan
+>   noted it "needs its own row" because the drafted `\Exception` fallback would have
+>   re-opened issue #48's leak, and the answer is that the leak is closed by the *message*
+>   rather than by the status — `GenericErrorResponse()` already replaces driver text
+>   whatever route it arrives by — while the common cause of a `PDOException` here is a
+>   request body naming a column that does not exist, which is the caller's error. It
+>   therefore needs no clause and has none. `\Error` is deliberately not caught either: a
+>   `TypeError` is this application being wrong about its own types, and 400 would file a
+>   bug as a client mistake. (`POST /api/users` with an empty body is exactly that today —
+>   a 500 from a `TypeError` in `UsersService::CreateUser` — and it is fixed by validating
+>   the body in the S5/S6 work rather than by widening this catch.)
+> - **The seven permission checks that sat inside a `try` are above the wrapper**, except
+>   the one in `TrackChoreExecution` that cannot be: it fires only when `done_by` names
+>   another user, so it needs the parsed body. The helper answers it 403 anyway, which is
+>   the point of having a helper. `UsersApiController`'s three hand-written
+>   `catch (HttpSpecializedException)` blocks — the pattern this plan generalised — are
+>   deleted, since the helper is now that pattern.
+> - **`CalculateNextExecutionAssignments` gains `PERMISSION_CHORES`** (Q2). Proved on a
+>   booted instance with a user holding the `CHORE_TRACK_EXECUTION` leaf and not its
+>   parent — the one population Q2 predicted this excludes — and with the chore
+>   assignments hashed before and after the 403 to confirm nothing ran.
+> - **`PUT` and `DELETE` on a missing object answer 404**, including the api_keys
+>   ownership guard, which deliberately answers the same "not found" as a genuinely
+>   missing row so that ids cannot be enumerated. The guard therefore moved with it rather
+>   than being left behind as the one 400.
+> - **Mass assignment is closed** by the Q5 blocklist: `id` and `row_created_timestamp`
+>   are dropped from the body in `AddObject` and `EditObject` (sweep **S16**'s first half;
+>   the body-schema validation half stays with 14 piece 2, as Q5 says). Keys are dropped
+>   rather than refused, so a client that reads an object, edits a field and PUTs the whole
+>   thing back — which the fork's own forms do — keeps working.
+> - **`ExposedEntityEditRequiresAdmin` is populated** with `userfields` and `userentities`
+>   (Q6), so the gate that could never fire now does.
+> - **A create that creates nothing is a 400.** The plan said the body is a client error
+>   and wants one; it now gets one, and the parity suite's `no-insert-no-last-insert-id`
+>   entry is replaced by `create-with-no-fields-refused` recording the refusal instead of
+>   the two ways of saying nothing happened. Note the interaction with the blocklist: a
+>   body of `{"id": 5}` is empty after stripping, and so is refused rather than silently
+>   creating a row.
+> - **`FilesApiController` and `RecipesApiController::AddNotFulfilledProductsToShoppingList`
+>   are on the helper like everything else**, which is what the two named deviants needed.
+>   `ServeFile` used to re-throw *every* failure as a 404, so an invalid group and an
+>   invalid file name were indistinguishable from a file that is not there; those are 400
+>   now and "not found" stays 404.
+> - **The spec was edited with the code, not left for 14.** The `500`/`Error500` response
+>   is gone from exactly the nine list operations this plan names — that is the one
+>   response-shape narrowing here, and the changelog names them. Every operation gained a
+>   `401`, the 40 whose handler checks a permission gained a `403`, and the operations that
+>   can now say "not found" gained a `404`; all three point at a new `ApiError` schema,
+>   identical in shape to `Error400` under a name that does not claim a status code.
+>
+> Verified on booted instances rather than by reading the diff. A 63-call snapshot of the
+> API — every list endpoint, the filter and ordering failure paths, missing ids, and
+> fifteen writes — was taken before the conversion and again after it: **every status code
+> identical, and every body identical modulo timestamps, `uniqid()` handles and the demo
+> generator's random prices.** The intended changes were then made and the same snapshot
+> re-run, which moved exactly three rows (the empty create to 400, and `PUT`/`DELETE` on a
+> missing id to 404) and nothing else. The 403s were proved separately in production mode
+> against three real users — an admin, one holding `MASTER_DATA_EDIT` and the
+> `CHORE_TRACK_EXECUTION` leaf, and one holding nothing — and the mass-assignment fix by
+> reading `products.id` and `row_created_timestamp` back after a `PUT` that tried to set
+> both.
+
 ## Proposed change
 
 ### One error helper in `BaseApiController`
@@ -369,6 +443,8 @@ codes, and that needs to be explicit rather than slipped in:
 | `OPTIONS` on an API route | 401 | 204 with CORS headers |
 | Cross-origin `GET` | `Allow-Origin: *` | no CORS header unless configured |
 | Unmatched `/api/*` path | 200, empty body | 404 |
+| `POST /api/objects/{entity}` with a body that sets no column | 200, `created_object_id` that identifies nothing | 400 |
+| `GET /api/files/...` with an invalid group or file name | 404 | 400 |
 | API key in a query parameter | accepted | 401 |
 | `POST`/`PUT`/`DELETE` `/api/objects/{userfields\|userentities}` as a non-admin | 200 | 403 |
 | `?query[]=` or `?order=` naming a field the caller may not see | 200, filtered | 400 |

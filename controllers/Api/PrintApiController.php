@@ -17,16 +17,15 @@ class PrintApiController extends BaseApiController
 	 * GET /api/print/shoppinglist/thermal - prints the given shopping list on the
 	 * configured thermal printer and returns the PrintService result (200).
 	 * Query parameters: list (shopping list id, default 1) and printHeader
-	 * ("true"/"false", default true). Requires the SHOPPINGLIST permission
-	 * (reported as a 400 error response when missing, as the check runs inside
-	 * the try block); other failures also yield a 400 error response.
+	 * ("true"/"false", default true). Requires the SHOPPINGLIST permission (403
+	 * otherwise); other failures yield a 400 error response.
 	 */
 	public function PrintShoppingListThermal(Request $request, Response $response, array $args)
 	{
-		try
-		{
-			User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST);
+		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST);
 
+		return $this->HandleApiCall($response, function () use ($request, $response)
+		{
 			$params = $request->getQueryParams();
 
 			$listId = 1;
@@ -42,10 +41,6 @@ class PrintApiController extends BaseApiController
 			}
 			$items = StockService::GetInstance()->GetShoppinglistInPrintableStrings($listId);
 			return $this->ApiResponse($response, PrintService::GetInstance()->printShoppingList($printHeader, $items));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

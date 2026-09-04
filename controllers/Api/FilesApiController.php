@@ -6,10 +6,8 @@ use Victual\Controllers\Users\PermissionMissingException;
 use Victual\Controllers\Users\User;
 use Victual\Services\FilesService;
 use Victual\Services\Storage\FileStorage;
-use Victual\Services\Storage\FileTooLargeException;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
-use Slim\Exception\HttpNotFoundException;
 use Slim\Psr7\Stream;
 
 /**
@@ -140,11 +138,11 @@ class FilesApiController extends BaseApiController
 	 */
 	public function DeleteFile(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			if (!in_array($args['group'], $this->GetOpenApispec()->components->schemas->FileGroups->enum))
 			{
-				throw new \Exception('Invalid file group');
+				throw new EInvalidApiQuery('Invalid file group');
 			}
 
 			$this->CheckGroupWritePermission($request, $args['group']);
@@ -155,7 +153,7 @@ class FilesApiController extends BaseApiController
 			}
 			else
 			{
-				throw new \Exception('Invalid filename');
+				throw new EInvalidApiQuery('Invalid filename');
 			}
 
 			// USERS_EDIT_SELF is a natural grant - it is what lets someone change their own
@@ -172,15 +170,7 @@ class FilesApiController extends BaseApiController
 			FilesService::GetInstance()->DeleteFile($args['group'], $fileName);
 
 			return $this->EmptyApiResponse($response);
-		}
-		catch (PermissionMissingException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -189,16 +179,18 @@ class FilesApiController extends BaseApiController
 	 * with a 30 day Cache-Control header. {fileName} may also be two BASE64 encoded names
 	 * joined by "_" (actual file name + download file name). Query parameters
 	 * force_serve_as=picture with optional best_fit_height/best_fit_width serve a
-	 * downscaled image variant, at the nearest of ALLOWED_BEST_FIT_SIZES. Any failure
-	 * (including an invalid group or filename) results in a 404 HttpNotFoundException.
+	 * downscaled image variant, at the nearest of ALLOWED_BEST_FIT_SIZES. A file that does
+	 * not exist is a 404; an invalid group or filename is a 400, which it was not before
+	 * wave 2 - every failure here used to be re-thrown as a 404, so "you asked wrongly"
+	 * and "it is not here" were the same answer.
 	 */
 	public function ServeFile(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			if (!in_array($args['group'], $this->GetOpenApispec()->components->schemas->FileGroups->enum))
 			{
-				throw new \Exception('Invalid file group');
+				throw new EInvalidApiQuery('Invalid file group');
 			}
 
 			if (str_contains($args['fileName'], '_'))
@@ -247,13 +239,9 @@ class FilesApiController extends BaseApiController
 			}
 			else
 			{
-				throw new HttpNotFoundException($request, 'File not found');
+				throw new EObjectNotFound('File not found');
 			}
-		}
-		catch (\Exception $ex)
-		{
-			throw new HttpNotFoundException($request, $ex->getMessage(), $ex);
-		}
+		});
 	}
 
 	/**
@@ -265,11 +253,11 @@ class FilesApiController extends BaseApiController
 	 */
 	public function UploadFile(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			if (!in_array($args['group'], $this->GetOpenApispec()->components->schemas->FileGroups->enum))
 			{
-				throw new \Exception('Invalid file group');
+				throw new EInvalidApiQuery('Invalid file group');
 			}
 
 			$this->CheckGroupWritePermission($request, $args['group']);
@@ -298,21 +286,7 @@ class FilesApiController extends BaseApiController
 			}
 
 			return $this->EmptyApiResponse($response);
-		}
-		catch (PermissionMissingException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (FileTooLargeException $ex)
-		{
-			// 413 rather than the 400 every other upload failure gets, because "this one
-			// was too big" is the one refusal a client can act on by sending less
-			return $this->GenericErrorResponse($response, $ex->getMessage(), 413);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -326,7 +300,7 @@ class FilesApiController extends BaseApiController
 		}
 		else
 		{
-			throw new \Exception('Invalid filename');
+			throw new EInvalidApiQuery('Invalid filename');
 		}
 
 		return $fileName;

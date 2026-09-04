@@ -269,28 +269,49 @@ const ACCEPTED = [
 	},
 
 	{
-		id: 'no-insert-no-last-insert-id',
+		id: 'create-with-no-fields-refused',
 		reference: 'docs/plans/11-api-error-handling.md',
 		reason:
-			'POST /objects/{entity} with a body that sets no column answers 200 with created_object_id ' +
-			'null here and the string "0" upstream. Neither side creates anything and neither refuses: ' +
-			'LessQL\'s Row::save() skips a row with no modified columns, so no INSERT is issued at all, and ' +
-			'GenericEntityApiController then asks the driver for the id of an insert that never happened. ' +
-			'The two drivers answer differently with nothing to report — pdo_sqlite returns the string "0", ' +
-			'pdo_pgsql raises SQLSTATE[55000] "lastval is not yet defined in this session", which LessQL ' +
-			'catches and turns into null (its own comment says so). Neither is fork code, and neither ' +
-			'value is an object id: the spec documents created_object_id as an integer, so "0" is a ' +
-			'fabricated one and null is the less misleading of two wrong answers.\n\n' +
-			'**That a create which created nothing answers 200 at all is the defect, it is shared with ' +
-			'upstream, and plan 11 owns it** — this entry accepts the difference between two ways of ' +
-			'saying nothing happened, not the 200. Matching upstream by returning "0" would mean copying ' +
-			'the fabricated id.',
+			'POST /objects/{entity} with a body that sets no column is a 400 here and a 200 upstream. ' +
+			'Neither side creates anything: LessQL\'s Row::save() skips a row with no modified columns, so ' +
+			'no INSERT is issued at all, and the endpoint then used to ask the driver for the id of an ' +
+			'insert that never happened. The two drivers answer differently with nothing to report — ' +
+			'pdo_sqlite returns the string "0", pdo_pgsql raises SQLSTATE[55000] "lastval is not yet ' +
+			'defined in this session", which LessQL catches and turns into null — and the spec documents ' +
+			'created_object_id as an integer, so both are fabricated.\n\n' +
+			'**The 400 is the deliberate part**, and it is what this entry accepts. Until wave 2 the fork ' +
+			'answered 200 with created_object_id null and this file accepted the null-against-"0" ' +
+			'difference while recording that the 200 itself was the defect (issue #47). Plan 11 owns that ' +
+			'defect and now refuses the request instead: a body that names no column of the entity cannot ' +
+			'mean anything, and a 200 carrying an id that identifies nothing is the worst of the three ' +
+			'available answers. Upstream still answers 200 with "0". The matcher is narrow — only this ' +
+			'status pair, and only on a POST to /objects/.',
 		match: ({ step, difference }) =>
-			difference.kind === 'type' &&
+			difference.kind === 'status' &&
+			difference.victual === 400 &&
+			difference.upstream === 200 &&
 			step.method === 'POST' &&
-			difference.pointer.endsWith('/created_object_id') &&
-			difference.victual === null &&
-			String(difference.upstream) === '0'
+			/\/objects\/[^/]+$/.test(String(step.path))
+	},
+
+	{
+		id: 'missing-object-is-404-on-every-verb',
+		reference: 'docs/plans/11-api-error-handling.md',
+		reason:
+			'PUT and DELETE against an object id that does not exist are 404 here and 400 upstream. GET of ' +
+			'the same id is 404 on both, which is the point: the status used to depend on the verb rather ' +
+			'than on the fact, in this fork exactly as in upstream, and a client could not tell "gone" ' +
+			'from "your request was wrong" on two of the three.\n\n' +
+			'**404 on all three is the deliberate part.** Plan 11 records it as a status-code correction ' +
+			'on a failure path, in the same list as the permission failures that used to answer 400. The ' +
+			'matcher is narrow — only this status pair, and only on a PUT or DELETE to an /objects/ path ' +
+			'carrying an id.',
+		match: ({ step, difference }) =>
+			difference.kind === 'status' &&
+			difference.victual === 404 &&
+			difference.upstream === 400 &&
+			(step.method === 'PUT' || step.method === 'DELETE') &&
+			/\/objects\/[^/]+\/[^/]+$/.test(String(step.path))
 	},
 
 	{

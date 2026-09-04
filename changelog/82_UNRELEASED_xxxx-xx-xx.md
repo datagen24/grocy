@@ -2,6 +2,8 @@
 
 > ⚠️ The API no longer sends `Access-Control-Allow-Origin: *`. Cross-origin browser access is now off unless the new `CORS_ALLOWED_ORIGINS` setting lists the origins that may use it
 
+> ⚠️ Several API failure paths now answer a different status code - `403` for a permission failure, `404` for a missing object on `PUT`/`DELETE`, `400` where a `500` or a `404` was returned for a malformed request. Every changed code is on a failure path and no successful response changed shape; see the API section below for the full list
+
 ### New Feature: xxxx
 
 - xxx
@@ -70,6 +72,15 @@
 - A CORS preflight (`OPTIONS`) on an API route is now answered `204` instead of `401`, and carries the CORS headers when the request's `Origin` is listed in `CORS_ALLOWED_ORIGINS`
 - Cross-origin responses no longer carry `Access-Control-Allow-Origin: *`. Set `CORS_ALLOWED_ORIGINS` to the exact origins that may call the API from a browser; the default is empty, which sends no CORS headers at all
 - An unmatched `/api/...` path is now answered `404` instead of an empty `200`
+- A permission failure is now always answered `403`. It was a `400` on `POST /chores/{id}/execute`, `POST /chores/executions/{id}/undo` and `GET /print/shoppinglist/thermal`, where the check happened to run inside the error handling rather than before it
+- `POST /chores/executions/calculate-next-assignments` now requires the `CHORES` permission. It had no permission check at all, so any authenticated key could rewrite every chore's next assignment
+- `PUT` and `DELETE` on an object that does not exist are now answered `404` instead of `400`, which is what `GET` of the same object already answered
+- `POST`, `PUT` and `DELETE` on `/objects/userfields` and `/objects/userentities` now require the `ADMIN` permission
+- The generic `POST /objects/{entity}` and `PUT /objects/{entity}/{objectId}` no longer write `id` or `row_created_timestamp` from the request body. Those keys are ignored rather than refused, so a client that reads an object, changes a field and sends the whole thing back is unaffected
+- `POST /objects/{entity}` with a body that sets no column of the entity is now answered `400`. It used to answer `200` with a `created_object_id` that identified nothing, because no row was ever inserted
+- `GET /files/{group}/{fileName}` now answers `400` for an invalid file group or file name. Every failure used to be answered `404`, so "you asked wrongly" and "it is not here" were the same answer; a file that does not exist is still `404`
+- Nine list endpoints no longer document a `500` response, because they no longer return one - an invalid filter or sort parameter has been a `400` since the previous release. The nine are `GET` `/objects/{entity}`, `/users`, `/stock/products/{productId}/locations`, `/stock/products/{productId}/entries`, `/stock/locations/{locationId}/entries`, `/recipes/fulfillment`, `/chores`, `/batteries` and `/tasks`. Clients that read `error_details` off those responses will no longer find it
+- The OpenAPI specification now documents the `401`, `403` and `404` responses that the API actually returns
 
 ### Server errors and logging
 

@@ -58,7 +58,7 @@ class SystemApiController extends BaseApiController
 	 */
 	public function GetConfig(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($response)
 		{
 			$returnArray = [];
 
@@ -91,11 +91,7 @@ class SystemApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $returnArray);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -124,7 +120,7 @@ class SystemApiController extends BaseApiController
 	 */
 	public function GetSystemTime(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$offset = 0;
 			$params = $request->getQueryParams();
@@ -139,11 +135,7 @@ class SystemApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, ApplicationService::GetInstance()->GetSystemTime($offset));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**

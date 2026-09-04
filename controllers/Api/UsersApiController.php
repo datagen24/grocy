@@ -15,15 +15,15 @@ class UsersApiController extends BaseApiController
 {
 	/**
 	 * POST /api/users/{userId}/permissions - assigns the permission given by the body
-	 * field permission_id to the user. Requires the ADMIN permission (returned as a
-	 * JSON error response with the exception's status code, i.e. 403).
+	 * field permission_id to the user. Requires the ADMIN permission (403 otherwise).
 	 * Returns 204 on success or a 400 error response.
 	 */
 	public function AddPermission(Request $request, Response $response, array $args)
 	{
-		try
+		User::CheckPermission($request, User::PERMISSION_ADMIN);
+
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
-			User::CheckPermission($request, User::PERMISSION_ADMIN);
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
 			$this->DB->user_permissions()->createRow([
@@ -31,15 +31,7 @@ class UsersApiController extends BaseApiController
 				'permission_id' => $requestBody['permission_id']
 			])->save();
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Slim\Exception\HttpSpecializedException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -53,7 +45,7 @@ class UsersApiController extends BaseApiController
 		User::CheckPermission($request, User::PERMISSION_USERS_CREATE);
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -68,11 +60,7 @@ class UsersApiController extends BaseApiController
 
 			UsersService::GetInstance()->CreateUser($requestBody['username'], $requestBody['first_name'], $requestBody['last_name'], $requestBody['password'], $requestBody['picture_file_name']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -83,15 +71,11 @@ class UsersApiController extends BaseApiController
 	public function DeleteUser(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_USERS_EDIT);
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			UsersService::GetInstance()->DeleteUser($args['userId']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -114,7 +98,7 @@ class UsersApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $requestBody, $response)
 		{
 			if (isset($requestBody['password_base64']))
 			{
@@ -124,11 +108,7 @@ class UsersApiController extends BaseApiController
 
 			UsersService::GetInstance()->EditUser($args['userId'], $requestBody['username'], $requestBody['first_name'], $requestBody['last_name'], $requestBody['password'], $requestBody['picture_file_name']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -137,15 +117,11 @@ class UsersApiController extends BaseApiController
 	 */
 	public function GetUserSetting(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$value = UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, $args['settingKey']);
 			return $this->ApiResponse($response, ['value' => $value]);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -154,14 +130,10 @@ class UsersApiController extends BaseApiController
 	 */
 	public function GetUserSettings(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($response)
 		{
 			return $this->ApiResponse($response, UsersService::GetInstance()->GetUserSettings(VICTUAL_USER_ID));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -172,14 +144,10 @@ class UsersApiController extends BaseApiController
 	public function GetUsers(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_USERS_READ);
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			return $this->FilteredApiResponse($request, $response, UsersService::GetInstance()->GetUsersAsDto(), $request->getQueryParams());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -188,55 +156,43 @@ class UsersApiController extends BaseApiController
 	 */
 	public function CurrentUser(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($response)
 		{
 			return $this->ApiResponse($response, UsersService::GetInstance()->GetUsersAsDto()->where('id', VICTUAL_USER_ID));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
 	 * GET /api/users/{userId}/permissions - returns the user_permissions rows assigned
-	 * to the given user. Requires the ADMIN permission (returned as a JSON error
-	 * response with the exception's status code, i.e. 403); 400 on other errors.
+	 * to the given user. Requires the ADMIN permission (403 otherwise); 400 on other
+	 * errors.
 	 */
 	public function ListPermissions(Request $request, Response $response, array $args)
 	{
-		try
-		{
-			User::CheckPermission($request, User::PERMISSION_ADMIN);
+		User::CheckPermission($request, User::PERMISSION_ADMIN);
 
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
+		{
 			return $this->ApiResponse(
 				$response,
 				$this->DB->user_permissions()->where('user_id', $args['userId'])
 			);
-		}
-		catch (\Slim\Exception\HttpSpecializedException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
 	 * PUT /api/users/{userId}/permissions - replaces all permission assignments of the
 	 * given user with the body field permissions (array of permission ids); in demo or
 	 * prerelease mode the user is always given the ADMIN permission instead.
-	 * Requires the ADMIN permission (returned as a JSON error response with the
-	 * exception's status code, i.e. 403). Returns 204 on success or a 400 error response.
+	 * Requires the ADMIN permission (403 otherwise). Returns 204 on success or a
+	 * 400 error response.
 	 */
 	public function SetPermissions(Request $request, Response $response, array $args)
 	{
-		try
-		{
-			User::CheckPermission($request, User::PERMISSION_ADMIN);
+		User::CheckPermission($request, User::PERMISSION_ADMIN);
 
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
+		{
 			$requestBody = $request->getParsedBody();
 			$db = $this->DB;
 			$db->user_permissions()
@@ -265,15 +221,7 @@ class UsersApiController extends BaseApiController
 			$db->insert('user_permissions', $perms, 'batch');
 
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Slim\Exception\HttpSpecializedException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -282,17 +230,13 @@ class UsersApiController extends BaseApiController
 	 */
 	public function SetUserSetting(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
 			$value = UsersService::GetInstance()->SetUserSetting(VICTUAL_USER_ID, $args['settingKey'], $requestBody['value']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -301,14 +245,10 @@ class UsersApiController extends BaseApiController
 	 */
 	public function DeleteUserSetting(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$value = UsersService::GetInstance()->DeleteUserSetting(VICTUAL_USER_ID, $args['settingKey']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }
