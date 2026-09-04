@@ -81,6 +81,8 @@ readers most often need and least often have.
 | [0011](0011-label-namespace.md) | Labels carry stable opaque identifiers; grocycode becomes an input symbology | **Proposed** | [06](../plans/06-location-barcodes.md) |
 | [0012](0012-observations-are-proposals.md) | Observations write proposals, never bookings | **Proposed** | — |
 | [0013](0013-nix-built-container-images.md) | Production images are built by Nix from a flake in this repository | **Accepted** 2026-09-04, **supersedes the `Dockerfile`'s `production` target** | [20](../plans/20-container-infrastructure.md), [nix/](../../nix/README.md), [deploy/](../../deploy/README.md) |
+| [0014](0014-medication-records-never-advises.md) | Victual records medication; it never advises | **Proposed** | [22](../plans/22-medication-tracking.md) |
+| [0015](0015-schedule-expansion-in-the-application.md) | Schedule expansion lives in the application, not the database | **Proposed**, an input to [0009](0009-database-as-the-logic-layer.md) | [22](../plans/22-medication-tracking.md) |
 
 **0008 was accepted 2026-08-31 and supersedes
 [0001](0001-postgresql-alongside-sqlite.md).** 0009 remains a proposal under active
@@ -140,6 +142,16 @@ nothing here counts as one.
   decision the maintainer never made — not a rejection later reconsidered. 0013 carries the
   correction, because the git history alone reads as a maintainer who changed their mind,
   and this corpus is the wrong place for false provenance about who decided what.
+- **[0014](0014-medication-records-never-advises.md) and
+  [0015](0015-schedule-expansion-in-the-application.md) — the two medication records.**
+  Written 2026-09-04 with [plan 22](../plans/22-medication-tracking.md) and **not yet weighed
+  by this section**, which is a review of where proposals stand and cannot review a record
+  written the same day. Listed so they are not absent. 0014 carries two prerequisites, both
+  reviews rather than builds; 0015 carries one open question that plan 22 piece 4 needs
+  answered before it starts. 0015 is also **evidence against
+  [0009](0009-database-as-the-logic-layer.md) in one domain** and says so in its own text —
+  whoever eventually decides 0009 should read it as an input rather than as an unrelated
+  carve-out.
 
 ## Known unfiled decisions
 

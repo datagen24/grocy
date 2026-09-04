@@ -25,6 +25,8 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`6a0d1fb`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7, delivered through a transactional outbox. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant. Its PR is **held behind #34** by the migration numbering rule below — it owns 0257 and 0259 while 01 owns 0258 |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
+| 22 | [Vitamin and medication tracking](22-medication-tracking.md) | — | 23, 19, 14 piece 2 | **large**, seven separable pieces | draft — governed by [ADR-0014](../adr/0014-medication-records-never-advises.md) and [ADR-0015](../adr/0015-schedule-expansion-in-the-application.md), both Proposed; Q1–Q3 answered inline. Piece 7 consumes [ADR-0011](../adr/0011-label-namespace.md) rather than proposing a code format, and answers its Q3 for the medication case |
+| 23 | [Storage classes for locations](23-storage-classes.md) | — | — (interacts with 08) | small | draft — extracted from 22 per its Q1; owns migration 0261 and lands before 22 |
 
 ## Hardening
 
