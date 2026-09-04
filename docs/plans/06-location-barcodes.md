@@ -5,7 +5,51 @@ system can tell *where* it is looking and keep stock by location current without
 typing anything.
 **Depends on:** [12](12-frontend-shared-core.md), per the README. Pairs naturally with
 [08](08-nested-locations.md) but does not need it.
-**Status:** draft for review.
+**Status:** draft for review, **narrowed 2026-09-04 by
+[ADR-0011](../adr/0011-label-namespace.md)** — see the section immediately below before
+reading the body.
+
+## What ADR-0011 took, and what is left
+
+[ADR-0011](../adr/0011-label-namespace.md) was accepted 2026-09-04 and reconciling this
+plan was one of its two acceptance gates. It generalized to every labelled thing the
+argument this plan wrote for locations — a printed label outlives the row id printed on
+it — and in doing so it decided four of the questions below. Reconciliation was by
+**narrowing**: this plan keeps its number and its file, its prose stays as written, and
+what the record took from it is marked here and in place rather than deleted.
+
+**Decided by ADR-0011, not here:**
+
+- **The payload.** A label carries `vctl:<uid>` — 13 characters of uppercase Crockford
+  base32 over a mapping table the database owns. Not `grcy:l:7`, and not the
+  `grcy:l:{uuid}` of Q1's response either: no new Grocycode type is added, because the
+  record makes Grocycode a read-only input symbology the fork parses forever and emits
+  never.
+- **Label stability.** The mapping table replaces this plan's `locations.code_uuid`
+  column, and covers stock entries and products at the same time rather than locations
+  alone.
+- **The symbology.** QR for new labels, DataMatrix retained for reading legacy
+  Grocycodes (ADR-0011 Q2). This plan's Q3 expectation of a new PHP QR dependency does
+  not follow, because rendering leaves this repository with the print drainer.
+- **The print path.** Label creation enqueues a row; a drainer renders, prints and
+  retries. The webhook this plan proposed to reuse is retired with it.
+
+**Still this plan's, and owned by nobody else:**
+
+- **Where the label goes and what it says.** Placement on a shelf, and whether the
+  human-readable line carries the tree path once [08](08-nested-locations.md) lands —
+  Q5, which ADR-0011 explicitly leaves to the plans that consume labels.
+- **The locations UI.** A print action on the locations list and form, mirroring
+  products, over whatever [12](12-frontend-shared-core.md) landed.
+- **Interactive scanning.** The "current location" notion — scan the shelf, then scan
+  items onto it — which Victual does not have today and no record has decided.
+
+Q2's machine-reporting endpoint left this plan before ADR-0011 did, and by its own
+response: it is the subject of [ADR-0012](../adr/0012-observations-are-proposals.md),
+**accepted 2026-09-04**, which decides exactly the observation-then-confirm shape that
+response reached for. Nothing here waits on it either way, and nothing here may route
+around it: a camera that reads one of this plan's labels and reports what it sees writes a
+proposal, not stock.
 
 ## The use case drives the design
 
@@ -46,10 +90,19 @@ This is the smallest item on the roadmap because the mechanism already exists.
 
 ### Grocycode
 
+**Superseded by [ADR-0011](../adr/0011-label-namespace.md) decision item 3:** no new
+Grocycode type is added, and `grcy:l:` is not minted. The paragraph below is kept as the
+reasoning that led to the record rather than as work to do.
+
 Add `public const LOCATION = 'l';` and include it in whatever validation list constrains
 the type character. Everything else — parsing, rendering, printing — is generic.
 
 ### Label stability
+
+**Decided by [ADR-0011](../adr/0011-label-namespace.md):** option two below won the
+argument and was then generalized past this plan — a `labels` table mapping opaque uids
+to targets, rather than a `code_uuid` column on `locations`. The section stands as
+written because it is where the case was first made.
 
 `Grocycode` encodes the row id, so a location label reads `grcy:l:7`. That is fine while
 the database is continuous, and wrong the first time ids shift — a restore from a seed, a
@@ -69,6 +122,10 @@ cheap insurance. It only matters for entities that get physical labels, so it ne
 apply to products. See Q1.
 
 ### Symbology
+
+**Decided by [ADR-0011](../adr/0011-label-namespace.md)'s Q2:** QR for new labels,
+DataMatrix kept for reading legacy Grocycodes. The dependency question below dissolves
+with it — rendering belongs to the print drainer, so this repository needs no QR library.
 
 `GROCYCODE_TYPE` currently offers `1D` (Code128) or `2D` (DataMatrix). DataMatrix is
 designed for small marks read close up — good for a product label, less good for a shelf
@@ -96,6 +153,12 @@ Two separate concerns:
 
 ### Label printing
 
+**Half superseded.** The print *action* is still this plan's, and so is what the label
+says — the location name, and its path once [08](08-nested-locations.md) lands. What it
+may not do is reuse the webhook: [ADR-0011](../adr/0011-label-namespace.md) decision item
+4 makes printing an outbox row a drainer consumes, and retires
+`VICTUAL_LABEL_PRINTER_WEBHOOK` with the tree's only outbound call.
+
 Locations get a "print label" action, reusing the existing webhook/thermal printer paths.
 The label wants the location name and, once [08](08-nested-locations.md) lands, probably
 its path rather than the bare name.
@@ -104,6 +167,13 @@ its path rather than the bare name.
 
 Additive. If products expose a `grocycode` field, locations should expose the same in the
 same shape. No existing response changes.
+
+**Client impact, as written — and as ADR-0011 changed it.** The non-numeric-id hazard
+below was real for `grcy:l:{uuid}` and is now moot: no location Grocycode is minted, so no
+client meets a non-numeric id in a `grcy:` code. The hazard it is replaced by is smaller
+and different — a scanner that only knows `grcy:` does not recognise `vctl:` at all, which
+fails visibly rather than resolving to the wrong shelf. [17](17-ecosystem-clients.md)'s
+coupling 4 carries it.
 
 **Client impact: additive, and one thing a parser can choke on.** `/objects/locations`
 gains a field, which is safe. The real item is Q1's answer: `grcy:l:{uuid}` puts a
@@ -128,6 +198,12 @@ A print action on the locations list and form, mirroring products.
    > parser that accepts non-numeric ids) is cleaner than appending the uuid as
    > extra data while the row id stays authoritative. Labels carry only the stable
    > identifier.
+
+   > **Superseded 2026-09-04 by [ADR-0011](../adr/0011-label-namespace.md).** The
+   > response's principle survives intact — labels carry only the stable identifier —
+   > and its mechanism does not. The stable identifier is a `vctl:<uid>` over a mapping
+   > table, not a `code_uuid` column read through a Grocycode type that was never added.
+   > Kept because it is the reasoning the record generalized.
 2. **What shape should the machine reporting endpoint take?** The interesting one. A camera
    reporting "I see 3 of product X at location 7" is an *observation*, and Victual has no
    concept of one — it has authoritative stock that humans mutate. Options range from
@@ -140,12 +216,24 @@ A print action on the locations list and form, mirroring products.
    > When it comes, the observation-then-accept shape (a staging record a human
    > confirms) is the one that cannot silently corrupt stock; a camera writing
    > straight through the inventory endpoint is the trapdoor to avoid.
+
+   > **Decided 2026-09-04 by [ADR-0012](../adr/0012-observations-are-proposals.md)**, which
+   > is this response generalized past cameras to anything carrying a confidence value: a
+   > `proposals` entity, creation as its own narrow grant, confirmation executing the
+   > booking through the existing write paths, and a unique source-event id making
+   > redelivery harmless. The record owns the question now; it did not become a plan, and it
+   > is scheduled in no wave. Kept because it is the reasoning the record generalized.
 3. **Add `QR` to `GROCYCODE_TYPE`?** I think yes, specifically for this use case. Needs a
    check that the bundled barcode library can produce it.
 
    > **Response:** Yes — and expect a new dependency: the bundled generation is
    > 1D/DataMatrix oriented, and a GD/SVG-capable QR library (e.g.
    > chillerlan/php-qrcode) is the usual PHP answer. Verify before assuming.
+
+   > **Superseded 2026-09-04 by [ADR-0011](../adr/0011-label-namespace.md).** QR yes,
+   > for the new namespace's labels; the new PHP dependency no. Rendering leaves this
+   > repository with the drainer, so the library the response told us to verify is one
+   > this repository never adds.
 4. **Should other master data get codes at the same time?** `shopping_locations`,
    `quantity_units`, `product_groups` are the same one-line change. Cheap together,
    another round of work later.

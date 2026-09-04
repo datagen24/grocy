@@ -76,7 +76,7 @@ empty answer on any engine and proves nothing.
 | Scenario | Covers |
 |---|---|
 | `system` | `/system/info`, `/system/config`, `/system/time`, localization |
-| `entities` | Full CRUD over 9 writable entities, 8 read-only views, 3 failure paths |
+| `entities` | Full CRUD over 9 writable entities, 8 read-only views, 4 failure paths |
 | `stock` | Purchase, consume, open, transfer, inventory, entries, price history, the ledger |
 | `barcodes-and-undo` | All 6 by-barcode operations, undo by booking and by transaction |
 | `shoppinglist` | Explicit and derived membership, clear, the uihelper view |
@@ -97,12 +97,15 @@ say whether any of it is exposed, and cite the record that decided it. "It has a
 that" is not a reason, and neither is "no endpoint returns it" — ADR-0005 records that
 exact reasoning being withdrawn once already, over `qu_factor`.
 
-Thirteen entries exist today, plus an explicit `FORK_ADDED_FIELDS` list for fields the
+Sixteen entries exist today, plus an explicit `FORK_ADDED_FIELDS` list for fields the
 fork adds that upstream never had — deliberately a named list rather than a blanket "extra
 fields are fine", so that a field arriving by accident is still a difference somebody has
-to explain. Two entries are ADR-0005's own accepted exceptions; the rest are the fork's
-deliberate divergences, and two of those are worth knowing about because they are the fork
-being *more careful* than upstream rather than merely different:
+to explain. Two entries are ADR-0005's own accepted exceptions, and a third is the second
+of those seen downstream — `chores.next_estimated_execution_time`, which is `null` upstream
+because a date-only `start_date` breaks the positional `SUBSTR` upstream slices the time of
+day out of. The rest are the fork's deliberate divergences, and three of those are worth
+knowing about because they are the fork being *more careful* than upstream rather than
+merely different:
 
 - **`exposed-settings-allowlist`** — `GET /api/system/config` returns 21 fewer settings
   here. `SystemApiController::EXPOSED_SETTINGS` is an allowlist; upstream returns
@@ -111,6 +114,10 @@ being *more careful* than upstream rather than merely different:
 - **`error-details-not-returned`** — upstream's API errors carry an `error_details` object
   with an absolute path, a line number and a stack frame from inside the container. This
   fork does not send it.
+- **`non-integer-object-id`** — an id-taking endpoint given something that is not an
+  integer is a `400` here and a `404` upstream, where SQLite's dynamic typing makes the
+  comparison a silent non-match. The fork used to answer `500` and quote the failing
+  statement; see [issue #48](https://github.com/datagen24/victual/issues/48).
 
 What normalisation erases is listed in [`harness/lib/normalize.js`](harness/lib/normalize.js)
 and is deliberately thin: wall-clock moments, `uniqid()`-derived opaque handles, the

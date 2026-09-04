@@ -408,6 +408,48 @@ via one helper, so the instance-wide flag and the per-user leaf collapse to a si
 condition. The feature flag stays: it is still the right knob for "this household does not
 track prices at all".
 
+#### What ADR-0012 fixes about this plan, and what it leaves open
+
+[ADR-0012](../adr/0012-observations-are-proposals.md) was **accepted 2026-09-04** and calls
+this plan "the shape it exists to express". No `proposals` table exists and no plan owns
+that work, so nothing below is a change to this plan's pieces — it is what this plan must
+already be able to express, recorded here rather than rediscovered when proposals are
+built.
+
+**Two permission facts are decided, and neither adds a role.**
+
+1. **Creating a proposal is its own narrow grant** — one leaf (this plan names it; 0012
+   does not), held by the user an observer's API key resolves to and by nothing else. It
+   belongs in no seed role: Adult and Child are people, and a camera is not a household
+   member with a small role. That is a fourth *identity* shape rather than a fourth role,
+   and it is the case Q7's "Guest" question is not.
+2. **Confirming a proposal requires exactly the permission the proposed booking requires
+   directly, and rejecting requires the same** — so no `PROPOSALS_CONFIRM` leaf, no reviewer
+   role, and the seed table above is unchanged. This is a property of the tree this plan
+   already builds rather than an addition to it: a Child holding `STOCK_CONSUME` may confirm
+   a proposed consume and nothing else, which falls out of the leaves-only Child row without
+   any further design. Worth asserting when it is built rather than assuming, since it is
+   exactly the shape of risk verification 10 exists for — a rule written against direct
+   grants and not re-checked against inherited ones.
+
+**One thing is named and not decided: the field policy has no path form.** `FIELD_POLICY`
+above is keyed `(entity → column)`, and a proposal's price is not a column — it is a key
+inside a payload that is partial by design. 0012's decision item 6 handles the *reader's*
+half of that (`proposed_fields` carries the key set as submitted and is never redacted, so a
+key missing from the payload means redacted and a key missing from both means unobserved),
+which is what makes redaction expressible on a partial object at all. What it does not
+decide is which side of this plan's funnel does the removing: a `proposals` row would need
+either a `FIELD_POLICY` entry that can name `payload.price`, or a rule that a reader without
+`STOCK_PRICES_VIEW` is refused priced proposal *kinds* wholesale. Q2's constant-versus-table
+question is the natural place for it, and it is cheaper to answer while the constant is
+still being written than after.
+
+Note what this does **not** wait on. 0012's payload contract is settled against the two
+rules of this plan that are decided — redaction removes the key rather than nulling it, and
+a redacted field is already distinguishable from a refused call — and not against
+[Q8](#open-questions). Either answer to Q8 leaves it intact: a proposal a reader may not see
+at all is a refusal, and a proposal they may partly see is the redacted case.
+
 ## Client impact
 
 **Piece 1: one additive field. Piece 2: fields that were always present become optional,

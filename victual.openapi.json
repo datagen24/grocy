@@ -3388,7 +3388,7 @@
 						"required": true,
 						"description": "A valid recipe id",
 						"schema": {
-							"type": "string"
+							"type": "integer"
 						}
 					}
 				],
@@ -3431,7 +3431,7 @@
 						"required": true,
 						"description": "A valid recipe id",
 						"schema": {
-							"type": "string"
+							"type": "integer"
 						}
 					}
 				],
@@ -3472,7 +3472,7 @@
 						"required": true,
 						"description": "A valid recipe id",
 						"schema": {
-							"type": "string"
+							"type": "integer"
 						}
 					}
 				],

@@ -18,7 +18,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft — may grow a parent column, per 07-Q6 |
 | 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium | draft |
 | 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | 12 | medium | draft |
-| 06 | [Location barcodes](06-location-barcodes.md) | — | 12 | small | draft |
+| 06 | [Location barcodes](06-location-barcodes.md) | — | 12 | small | draft, **narrowed by [ADR-0011](../adr/0011-label-namespace.md)** (accepted 2026-09-04) — the payload, label stability, the symbology and the print path are decided there, and `grcy:l:` is not minted; what remains here is label placement, the locations print action and UI, and the current-location notion interactive scanning needs |
 | 07 | [Deeply nested products](07-nested-products.md) | — | — | **large**, or very small | **blocked on its own Q6** |
 | 08 | [Deeply nested locations](08-nested-locations.md) | — | 12, 14 | medium | draft |
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
@@ -91,11 +91,11 @@ The first run's findings are routed rather than parked:
 |---|---|
 | `IFNULL` in PHP → `/locationcontentsheet` 500s, shopping-list "clear done" 400s | **fixed** — [#44](https://github.com/datagen24/victual/issues/44), plus a CI guard on request-time SQL strings |
 | `COUNT(*)` with `ORDER BY` → `/shoppinglist` and `/mealplan` 500 | **fixed** — [#45](https://github.com/datagen24/victual/issues/45) |
-| `products_average_price` / `products_last_purchased` disagree with upstream about which bookings count | **open** — [#46](https://github.com/datagen24/victual/issues/46). Not the ~1e-15 float drift [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md) accepts; a real disagreement needing a decision, not a fix |
-| Two unrecorded wire-contract differences: chores `next_estimated_execution_time`, `created_object_id` on a rejected create | **open** — [#47](https://github.com/datagen24/victual/issues/47). [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md)'s bar applies: accept them in the record or fix them, but do not leave them undescribed |
-| A non-integer object id answers 500 **and quotes the SQL back** where upstream answers 404 | **open** — [#48](https://github.com/datagen24/victual/issues/48). Belongs to [11](11-api-error-handling.md) in wave 2, which owns the error surface; the SQL in the response body is the part that should not wait for it |
+| `products_average_price` / `products_last_purchased` disagree with upstream about which bookings count | **fixed** — [#46](https://github.com/datagen24/victual/issues/46), migration `0261`. Neither of the issue's two hypotheses was right: the SQL of both views is byte-identical to upstream, so nothing was ported differently and nothing was changed on purpose. They are two engine bugs. `products_last_purchased.price` orders by `purchased_date` alone and takes `LIMIT 1`, which is **not a total order** — bookings sharing a day are common — so the answer was whatever the plan reached first; the ledger row id is now the tie-break, and both engines return upstream's 2.50. `products_average_price` divides `SUM` by `SUM` over `DECIMAL(15,2)` columns, which is NUMERIC affinity on SQLite, so whole-number amounts and prices were **integer-divided** — 20/9 answered as 2. That one is an upstream bug the fork inherited, and the SQLite side of the pair fixes it. The worst of it was never the reporting: `StockService::InventoryProduct()` uses `last_price` as the default price of a new inventory booking, so the undefined answer had been writing itself into the ledger |
+| Two unrecorded wire-contract differences: chores `next_estimated_execution_time`, `created_object_id` on a rejected create | **recorded** — [#47](https://github.com/datagen24/victual/issues/47). Both are accepted, and in both the fork is the better-behaved side. `next_estimated_execution_time` is [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md)'s second exception seen downstream: upstream slices the time of day out of `start_date` positionally, so a date-only start date makes `DATETIME()` return `NULL` for the whole chore, and the ADR's bullet now says so. `created_object_id` is two PDO drivers answering differently about an insert that never happened — the real defect, a create that creates nothing answering 200, is shared with upstream and belongs to [11](11-api-error-handling.md) |
+| A non-integer object id answers 500 **and quotes the SQL back** where upstream answers 404 | **fixed** — [#48](https://github.com/datagen24/victual/issues/48). `PathParameterMiddleware` refuses a non-integer id before any statement is built, reading which parameters are ids from the OpenAPI spec, with `.devtools/check-path-id-validation.php` in the `suite` job keeping the spec honest. Wider than the title: the leak was **not** confined to the six 500s — 45 endpoints answered 400 with the failing statement in the body, because `PDOException` is an `\Exception` and every `catch (\Exception)` handed its message to `GenericErrorResponse`, which now refuses driver text. The deliberate 400 (upstream 404) is recorded as `non-integer-object-id`. Landed early against [11](11-api-error-handling.md), which still owns the rest |
 
-Ten differences are **accepted** rather than reported, each citing the record that
+The differences that are **accepted** rather than reported each cite the record that
 accepted them, per ADR-0005's bar — including the fork returning 21 fewer settings from
 `GET /api/system/config` and withholding upstream's `error_details` stack frames. Both
 are the fork being more careful than upstream, and both are still wire-contract
@@ -160,6 +160,27 @@ one is now decided:
   **proposed**; its dependency on 0008 is now satisfied. Claims on
   [18](18-mqtt-state-publication.md), [02](02-mcp-endpoint.md) and [19](19-rbac.md).
 
+Three more were written on 2026-08-31 and are not in the list above;
+[0010](../adr/0010-workload-standard.md) (the workload standard) is still **proposed**,
+[0011](../adr/0011-label-namespace.md) (the label namespace) was **accepted 2026-09-04** and
+narrowed [06](06-location-barcodes.md), and:
+
+- **[ADR-0012](../adr/0012-observations-are-proposals.md)** — a client with a confidence
+  value writes a proposal, never a booking, and a person confirming it is what books.
+  **Accepted 2026-09-04**, both gates met as written. It owns no plan and is in no wave, so
+  nothing in the table above moves; what it does is fix three things before anyone builds
+  them. Creating a proposal is its own narrow grant and confirming (or rejecting) one needs
+  exactly the permission the proposed booking needs — a fact [19](19-rbac.md) now carries,
+  and the reason it mints no reviewer role. A proposal payload carries `proposed_fields` so
+  that a redacted key and an unobserved key are not the same bytes, which is 19 piece 2's
+  redaction rule applied to a payload that is partial by design. And the pending count is an
+  eighth ambient sensor on [18](18-mqtt-state-publication.md), whose price guard means the
+  count may be published and the payload may not — 18 carries that note. It leaves
+  [14](14-contract-and-regression-scaffolding.md) and [02](02-mcp-endpoint.md) alone: the
+  wire surface is additive and lands under 14's snapshot discipline when it is built, and
+  02 reads through a Victual user like any other client. It also routes
+  [06](06-location-barcodes.md)'s Q2 out of that plan for good.
+
 One more was written on 2026-09-03:
 
 - **[ADR-0013](../adr/0013-nix-built-container-images.md)** — production container images
@@ -202,8 +223,10 @@ so `GROCY_*` is `VICTUAL_*`, the namespace is `Victual\`, the database file is
 `victual.db`, the bin scripts are `bin/victual-*`, the spec is
 `victual.openapi.json`, and `GET /api/system/info` answers `victual_version`.
 Anything written from here forward uses those names. What is *not* renamed, ever,
-is the `grcy:` grocycode magic and the format's name — see 16's Tier 0. The repo
-rename and the registry claims happen at announcement time, not in a commit.
+is the `grcy:` grocycode magic and the format's name — see 16's Tier 0, and note that
+under [ADR-0011](../adr/0011-label-namespace.md) (accepted 2026-09-04) the fork parses
+that format forever and emits it never. The repo rename and the registry claims happen at
+announcement time, not in a commit.
 
 **Blocking and de-risking, in one place:**
 

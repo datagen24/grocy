@@ -49,14 +49,43 @@ class BaseApiController extends BaseController
 
 	/**
 	 * Returns a JSON error body of the shape { "error_message": string } with the given status code (default 400).
+	 *
+	 * A driver message never reaches the caller. Most controller methods are written as
+	 * `catch (\Exception $ex) { return $this->GenericErrorResponse($response, $ex->getMessage()); }`,
+	 * and `PDOException` is an `\Exception`, so every one of them was a way for the
+	 * database's own words - SQLSTATE, column types, the engine, and the failing
+	 * statement quoted back with the caller's value in it - to be answered as a 400. That
+	 * is the same leak MaterialiseFiltered() refuses one layer down, and issue #48 is
+	 * where it was found reaching a household's browser console.
+	 *
+	 * Sanitising here rather than at the 45 call sites is deliberate: it cannot be
+	 * forgotten by the next method written, and it leaves those methods for
+	 * docs/plans/11-api-error-handling.md, which owns classifying exceptions properly.
+	 * PDO's message format is fixed - it always begins "SQLSTATE[" - so the test is on
+	 * the message rather than on a type this function never sees.
 	 */
 	protected function GenericErrorResponse(Response $response, $errorMessage, $status = 400)
 	{
 		$response = $response->withStatus($status);
 
 		return $this->ApiResponse($response, [
-			'error_message' => $errorMessage
+			'error_message' => self::WithoutDriverText($errorMessage)
 		]);
+	}
+
+	/**
+	 * The message to put on the wire in place of a database driver's own.
+	 *
+	 * Anything that is not a driver message is returned unchanged.
+	 */
+	public static function WithoutDriverText($errorMessage)
+	{
+		if (is_string($errorMessage) && string_starts_with($errorMessage, 'SQLSTATE['))
+		{
+			return 'The database rejected this request - check that every value it carries suits the field it is for';
+		}
+
+		return $errorMessage;
 	}
 
 	/**

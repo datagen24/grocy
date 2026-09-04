@@ -1,6 +1,16 @@
 Label printing
 ====
 
+> **This document describes the path that exists today, and
+> [ADR-0011](adr/0011-label-namespace.md) (accepted 2026-09-04) retires it.** Under that
+> record, label creation enqueues a print job row and a drainer — its own workload, not
+> this repository's process — renders, prints and retries; a reprint is resetting a row
+> rather than re-triggering the booking that caused it. The webhook below and its
+> `VICTUAL_LABEL_PRINTER_WEBHOOK` constant go with it, taking the tree's only outbound HTTP
+> call. None of that is built or scheduled, so everything below is still how printing
+> works — but no new work should extend the webhook, and the payload a label carries is
+> `vctl:<uid>` from here forward rather than the `grcy:` code the request below shows.
+
 To enable label printing, set `FEATURE_FLAG_LABEL_PRINTER` to `true`in your `config.php`. You also need to provide a webhook target that is responsible for printing.
 
 Why webhook?

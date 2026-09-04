@@ -1142,6 +1142,26 @@ Home Assistant and no InfluxDB in the suite, so "Home Assistant creates the enti
 broker retains the payload across a restart" and "InfluxDB accepts this line protocol" remain
 hand verifications — the same three the Executed section already lists as outstanding.
 
+### What a later record adds to this
+
+[ADR-0012](../adr/0012-observations-are-proposals.md), **accepted 2026-09-04**, names this
+plan's published snapshot as where a household is nagged about pending proposals. Nothing
+of it is built — no `proposals` table, no endpoint, no plan owns the work — so this is a
+constraint on the addition rather than a description of it, recorded here because the
+addition would otherwise be designed against a shipped publisher nobody re-read.
+
+- It is an **eighth ambient sensor**, `victual/state/pending_proposals`, on the topic layout
+  above and in whichever discovery mode is configured. It is not a per-product entity.
+- **The count is publishable; a proposal payload is not.** A proposal proposes a booking, so
+  its payload can carry a price — and `StateSnapshotAssembler`'s `/price|cost|value/i` guard
+  refuses to publish a column matching that whatever the allow-list says. That guard is the
+  right answer here and not an obstacle to route around: the retained topic has no reader
+  identity, question 8 settled on publishing no price or cost field on any topic, and a
+  household that needs the detail opens the queue. `state` is the count; attributes carry
+  at most non-priced identification of what is waiting.
+- Publication follows the same after-commit seam as everything else, so confirming or
+  rejecting a proposal republishes the snapshot exactly as a booking does.
+
 ### What this changes in the record above
 
 The security notes' third bullet understates the dependency: two packages are installed,
