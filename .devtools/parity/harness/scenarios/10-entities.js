@@ -137,11 +137,16 @@ module.exports = {
 			await api.get(`/objects/${entity}`, { label: `${entity}: read-only list` });
 		}
 
-		// Two failure paths, because plan 11 is about the fork's error handling and the
-		// only way to compare error handling is to cause errors. An unknown entity and a
-		// missing id are the two an ecosystem client hits first.
+		// Three failure paths, because plan 11 is about the fork's error handling and the
+		// only way to compare error handling is to cause errors. An unknown entity, a
+		// missing id and a malformed one are the three an ecosystem client hits first.
 		await api.get('/objects/not_an_entity', { label: 'unknown entity' });
 		await api.get('/objects/locations/999999', { label: 'missing object id' });
+		// Issue #48. A page sending "undefined" is how this was found, and on PostgreSQL
+		// it used to be a 500 quoting the failing statement rather than any kind of
+		// refusal. It is a deliberate 400 here and a 404 upstream; see
+		// non-integer-object-id in accepted.js.
+		await api.get('/objects/locations/undefined', { label: 'non-integer object id' });
 		await api.post('/objects/locations', {}, { label: 'create with no fields' });
 	}
 };

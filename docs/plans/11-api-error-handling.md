@@ -89,6 +89,45 @@ answered 500.
 > field in the wrong case. Nothing that was already `400` moved, and no successful response
 > changed shape.
 
+> **Landed early — the same validation approach, applied to path parameters.** Found by
+> the parity suite and filed as issue #48, and recorded here because this plan owns the
+> error surface. The rest of the plan is still unbuilt.
+>
+> - **An integer id is validated before any SQL is built**, by
+>   `middleware/PathParameterMiddleware.php` on the `/api` group. A non-integer where the
+>   endpoint takes an integer id is `400 Invalid path parameter: {name} has to be an
+>   integer`, on every id-taking endpoint, from one place.
+> - **Which parameters those are is read from `victual.openapi.json`**, not from a list in
+>   the middleware. The spec already draws the distinction a list keyed on the parameter
+>   name cannot: `{objectId}` is an integer on `/objects/{entity}/{objectId}` and a string
+>   on `/userfields/{entity}/{objectId}`, because `userfield_values.object_id` is `TEXT`
+>   and carries a grocycode for the `stock` entity.
+> - **`.devtools/check-path-id-validation.php` in the `suite` job** fails when a route takes
+>   a path parameter the spec does not type, so "the spec did not say" cannot quietly mean
+>   "unvalidated". Three `/recipes/{recipeId}` parameters were typed `string` while
+>   `recipes.id` is `INTEGER` when this landed — one of them on a route that answered 500 —
+>   which is the drift it exists to catch.
+> - **No response carries the driver's message any more.** `GenericErrorResponse()` refuses
+>   a message beginning `SQLSTATE[`, and `ExceptionController` does the same for one that
+>   escaped. This matters beyond the 500s: most controller methods are written as
+>   `catch (\Exception $ex) { … $ex->getMessage() … }`, and `PDOException` is an
+>   `\Exception`, so **45 endpoints answered 400 with the failing statement in the body** —
+>   `PUT /api/objects/equipment/undefined` was one. Fixing only the 500s would have left
+>   every one of those.
+>
+> Sanitising in `GenericErrorResponse()` rather than at the 45 call sites is deliberate: it
+> cannot be forgotten by the next method written, and it leaves those methods to this
+> plan's `HandleApiCall()`, which is what should classify exceptions properly. When that
+> lands, `PDOException` needs its own row in its table — as drafted, its `\Exception`
+> fallback of "400, exactly as today" would have re-opened the leak.
+>
+> **Client-visible, and so belongs in this plan's breaking-changes list**: a non-integer id
+> answered `500` (six endpoints) or `400` with driver text (the rest) and now answers `400`
+> with a fixed message everywhere. Upstream answers `404` for the same request, because
+> SQLite's dynamic typing makes it a silent non-match; the fork's `400` is deliberate — a
+> malformed id is a request that cannot be parsed, not a row that is absent — and is
+> recorded in the parity suite as `non-integer-object-id`.
+
 **A related divergence in the same method was *not* a status-code question, and has since
 been fixed** — noted here because it is the reason `FilterData` no longer spells its own
 operators. `FilterData`'s `~` and `!~` emitted `LIKE`, which is case-insensitive on SQLite
@@ -98,9 +137,11 @@ mirroring `GetRegexpCondition()`, and PostgreSQL gets `ILIKE`. SQLite's behaviou
 as the reference, so no client pointed at a SQLite instance sees any change; a client
 pointed at PostgreSQL now gets the rows the API always documented.
 
-**Missing objects are 404 or 400 depending on the verb.** `GetObject` throws a Slim
-`HttpNotFoundException`; `EditObject` and `DeleteObject` return
-`GenericErrorResponse($response, 'Object not found', 400)`.
+**Missing objects are 404 or 400 depending on the verb.** `GetObject` returns
+`GenericErrorResponse($response, 'Object not found', 404)`; `EditObject` and `DeleteObject`
+return `GenericErrorResponse($response, 'Object not found', 400)`. (This paragraph used to
+say `GetObject` throws a Slim `HttpNotFoundException`, which stopped being true before
+issue #48 was written; the verb-dependent inconsistency it describes is still real.)
 
 Alongside those, five smaller things on the same surface:
 
