@@ -651,11 +651,31 @@ topic, and has no Response yet. See Q5.
    more times — and turns piece 1 from a bundling layer into a model change with real
    upgrade risk; (b) gate reads in piece 2, where the redaction funnel already has to
    inspect every response and can refuse the whole object as easily as a field; or
-   (c) declare read-gating out of scope and say so in the plan, accepting that roles
-   restrict what a user can *do* and only prices restrict what they can *see*. Option (c)
-   is coherent and is what the family actually asked for — it is only unacceptable if
-   left unsaid. This question is worth answering before piece 1 is scheduled, because (a)
-   changes piece 1's size and its wave.
+   (c) declare read-gating out of scope *for roles* and say so in the plan, accepting that
+   roles restrict what a user can *do*, that prices restrict what they can *see*, and that
+   a domain needing its own read predicate owns it locally rather than waiting for a
+   general mechanism. Option (c) is coherent and is what the family actually asked for — it
+   is only unacceptable if left unsaid. This question is worth answering before
+   piece 1 is scheduled, because (a) changes piece 1's size and its wave.
+
+   **One read gate now exists outside this plan, decided 2026-09-04.**
+   [22](22-medication-tracking.md) Q5 ships subject-scoped visibility for regimens and
+   administrations in `MedicationService`, rather than waiting for this plan — because
+   waiting would hold half of 22 behind several waves, and because the medication case is
+   **row filtering** (an invisible subject is absent) rather than field redaction, so it does
+   not touch the absent-versus-redacted contract that makes piece 2 hard. It is explicitly
+   narrow and explicitly a client of whatever this plan builds. Two things follow for this
+   question, and **neither answers it** — this plan stays a draft, unscheduled, and blocked
+   on this question exactly as before.
+
+   Option (c) was reworded rather than left standing: as originally written it said only
+   prices restrict what a user can see, and that is now false, so it reads *read-gating out
+   of scope for roles*, with a domain that needs its own predicate owning it locally. The
+   substance of the option is unchanged and it is no more or less favoured than it was. And
+   option (a) gains a worked example of what a `*_VIEW` leaf costs when the domain is
+   row-shaped, which is much less than the general case: no wire-contract question, no
+   redaction funnel. Whether that generalises to stock, which is not row-shaped in the same
+   way, is precisely what this question still has to decide.
 
 9. **The permissions page's `ADMIN`-versus-`USERS_READ` mismatch, which
    [14](14-contract-and-regression-scaffolding.md)'s section 2b deferred to this plan.**
