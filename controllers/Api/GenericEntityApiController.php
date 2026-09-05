@@ -23,8 +23,11 @@ class GenericEntityApiController extends BaseApiController
 	 * equipment or MASTER_DATA_EDIT as fallback; some entities additionally ADMIN),
 	 * answered with 403 when missing. As a side effect, creating a product may add
 	 * below-min-stock products to the shopping list (per user setting).
+	 * The columns the server owns (id, row_created_timestamp) are dropped from the body
+	 * before it is written - see WithoutServerOwnedColumns().
 	 * Returns { "created_object_id": int|string } (200) or a 400 error response
-	 * (unknown/not exposed/not editable entity or invalid body).
+	 * (unknown/not exposed/not editable entity, invalid body, or a body that sets no
+	 * column at all and would therefore create nothing).
 	 */
 	public function AddObject(Request $request, Response $response, array $args)
 	{
@@ -58,11 +61,22 @@ class GenericEntityApiController extends BaseApiController
 
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request, $args['entity']);
 
-			try
+			return $this->HandleApiCall($response, function () use ($args, $requestBody, $response)
 			{
 				if ($requestBody === null)
 				{
 					throw new \Exception('Request body could not be parsed (probably invalid JSON format or missing/wrong Content-Type header)');
+				}
+
+				$requestBody = self::WithoutServerOwnedColumns($requestBody);
+
+				if (empty($requestBody))
+				{
+					// LessQL skips the insert for a row with no modified columns, so the
+					// endpoint used to ask the driver for the id of an insert that never
+					// happened and answer 200 with whatever it said - "0" on SQLite, null
+					// on PostgreSQL, an object id on neither. See issue #47.
+					throw new EInvalidApiQuery('The request body sets no column of this entity, so there is nothing to create');
 				}
 
 				$newRow = $this->DB->{$args['entity']}()->createRow($requestBody);
@@ -98,11 +112,7 @@ class GenericEntityApiController extends BaseApiController
 				return $this->ApiResponse($response, [
 					'created_object_id' => $newObjectId
 				]);
-			}
-			catch (\Exception $ex)
-			{
-				return $this->GenericErrorResponse($response, $ex->getMessage());
-			}
+			});
 		}
 		else
 		{
@@ -115,8 +125,8 @@ class GenericEntityApiController extends BaseApiController
 	 * Requires an entity-dependent permission (as in AddObject), answered with 403
 	 * when missing; api_keys need no such permission, but non-admins can only delete
 	 * their own keys.
-	 * Returns 204 on success or a 400 error response (invalid/undeletable entity
-	 * or object not found).
+	 * Returns 204 on success, 404 when the object does not exist, or a 400 error
+	 * response for an invalid/undeletable entity.
 	 */
 	public function DeleteObject(Request $request, Response $response, array $args)
 	{
@@ -155,7 +165,7 @@ class GenericEntityApiController extends BaseApiController
 			$row = $this->DB->{$args['entity']}($args['objectId']);
 			if ($row == null)
 			{
-				return $this->GenericErrorResponse($response, 'Object not found', 400);
+				return $this->GenericErrorResponse($response, 'Object not found', 404);
 			}
 
 			// API keys can only be deleted by their owner (or by any admin), otherwise
@@ -166,7 +176,7 @@ class GenericEntityApiController extends BaseApiController
 			{
 				if (!User::HasPermissions(User::PERMISSION_ADMIN))
 				{
-					return $this->GenericErrorResponse($response, 'Object not found', 400);
+					return $this->GenericErrorResponse($response, 'Object not found', 404);
 				}
 			}
 
@@ -185,8 +195,10 @@ class GenericEntityApiController extends BaseApiController
 	 * request body. Requires an entity-dependent permission (as in AddObject),
 	 * answered with 403 when missing. As a side effect, editing a product may add
 	 * below-min-stock products to the shopping list (per user setting).
-	 * Returns 204 on success or a 400 error response (invalid/not editable entity,
-	 * invalid body or object not found).
+	 * The columns the server owns (id, row_created_timestamp) are dropped from the body
+	 * before it is written - see WithoutServerOwnedColumns().
+	 * Returns 204 on success, 404 when the object does not exist, or a 400 error
+	 * response (invalid/not editable entity or invalid body).
 	 */
 	public function EditObject(Request $request, Response $response, array $args)
 	{
@@ -220,7 +232,7 @@ class GenericEntityApiController extends BaseApiController
 
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request, $args['entity']);
 
-			try
+			return $this->HandleApiCall($response, function () use ($args, $requestBody, $response)
 			{
 				if ($requestBody === null)
 				{
@@ -230,10 +242,10 @@ class GenericEntityApiController extends BaseApiController
 				$row = $this->DB->{$args['entity']}($args['objectId']);
 				if ($row == null)
 				{
-					return $this->GenericErrorResponse($response, 'Object not found', 400);
+					throw new EObjectNotFound('Object not found');
 				}
 
-				$row->update($requestBody);
+				$row->update(self::WithoutServerOwnedColumns($requestBody));
 
 				// TODO: This should be better done somehow in StockService
 				if ($args['entity'] == 'products' && boolval(UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, 'shopping_list_auto_add_below_min_stock_amount')))
@@ -242,11 +254,7 @@ class GenericEntityApiController extends BaseApiController
 				}
 
 				return $this->EmptyApiResponse($response);
-			}
-			catch (\Exception $ex)
-			{
-				return $this->GenericErrorResponse($response, $ex->getMessage());
-			}
+			});
 		}
 		else
 		{
@@ -345,14 +353,10 @@ class GenericEntityApiController extends BaseApiController
 	 */
 	public function GetUserfields(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			return $this->ApiResponse($response, UserfieldsService::GetInstance()->GetValues($args['entity'], $args['objectId']));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -367,7 +371,7 @@ class GenericEntityApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -376,16 +380,49 @@ class GenericEntityApiController extends BaseApiController
 
 			UserfieldsService::GetInstance()->SetValues($args['entity'], $args['objectId'], $requestBody);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
 	 * Whether editing the given entity additionally requires the ADMIN permission (per OpenAPI spec enum).
 	 */
+	/**
+	 * The request body with the columns the server owns removed.
+	 *
+	 * AddObject() and EditObject() hand the parsed body straight to LessQL's createRow()
+	 * and update(), which write whatever keys it contains - so any account that may edit
+	 * master data could rewrite a row's primary key and its creation timestamp on every
+	 * exposed entity (sweep finding S16). Rewriting an id relocates a row out from under
+	 * every foreign key that names it; rewriting row_created_timestamp rewrites history.
+	 *
+	 * A blocklist of two rather than a per-entity allowlist derived from the spec's entity
+	 * schemas, deliberately and for now: the allowlist is only correct if those schemas are
+	 * complete, which has never been tested. Plan 11 question 5 parks it behind
+	 * plan 14 piece 2, which is what will make them trustworthy.
+	 *
+	 * The keys are dropped rather than refused, so a client that reads an object, edits one
+	 * field and PUTs the whole thing back - which is what the fork's own forms do - keeps
+	 * working.
+	 *
+	 * @param array $requestBody The parsed and purified request body
+	 * @return array
+	 */
+	private static function WithoutServerOwnedColumns(array $requestBody): array
+	{
+		foreach (self::SERVER_OWNED_COLUMNS as $column)
+		{
+			unset($requestBody[$column]);
+		}
+
+		return $requestBody;
+	}
+
+	/**
+	 * Columns of an exposed entity that no client may write through the generic CRUD
+	 * endpoints, whatever permission it holds. See WithoutServerOwnedColumns().
+	 */
+	private const SERVER_OWNED_COLUMNS = ['id', 'row_created_timestamp'];
+
 	private function IsEntityWithEditRequiresAdmin($entity)
 	{
 		return in_array($entity, $this->GetOpenApispec()->components->schemas->ExposedEntityEditRequiresAdmin->enum);

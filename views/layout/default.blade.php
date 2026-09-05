@@ -483,8 +483,14 @@
 					</a>
 
 					<div class="dropdown-menu dropdown-menu-right">
-						<a class="dropdown-item logout-button discrete-link"
-							href="{{ $U('/logout') }}"><i class="fa-solid fa-fw fa-sign-out-alt"></i>&nbsp;{{ $__t('Logout') }}</a>
+						{{-- A form rather than a link: logging out is a state change, and as a GET
+						     it fires from any <img src> a page happens to carry. Sweep finding S8. --}}
+						<form method="post"
+							action="{{ $U('/logout') }}"
+							class="m-0">
+							<button type="submit"
+								class="dropdown-item logout-button discrete-link"><i class="fa-solid fa-fw fa-sign-out-alt"></i>&nbsp;{{ $__t('Logout') }}</button>
+						</form>
 						<div class="dropdown-divider"></div>
 						@if(!defined('VICTUAL_EXTERNALLY_MANAGED_AUTHENTICATION'))
 						<a class="dropdown-item logout-button discrete-link"

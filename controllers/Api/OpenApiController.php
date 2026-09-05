@@ -17,8 +17,7 @@ class OpenApiController extends BaseApiController
 {
 	/**
 	 * GET /manageapikeys - renders the API key management page; non-admins only see
-	 * their own keys. The optional integer query parameter "key" preselects a key
-	 * (used to highlight a freshly created one).
+	 * their own keys. The optional integer query parameter "key" preselects a key.
 	 */
 	public function ApiKeysList(Request $request, Response $response, array $args)
 	{
@@ -28,6 +27,21 @@ class OpenApiController extends BaseApiController
 			$selectedKeyId = $request->getQueryParams()['key'];
 		}
 
+		return $this->RenderApiKeysPage($response, $selectedKeyId);
+	}
+
+	/**
+	 * Renders the manage-keys page, optionally highlighting one key and showing the
+	 * plaintext of one that has just been created.
+	 *
+	 * @param int $selectedKeyId Row id to highlight, or -1
+	 * @param string|null $newApiKey The plaintext of a key created by this request - the
+	 *                               only moment it exists, since what is stored is a hash
+	 * @param string|null $newApiKeyDescription That key's description, so the one-time
+	 *                                          reveal says which key it is showing
+	 */
+	private function RenderApiKeysPage(Response $response, int $selectedKeyId, ?string $newApiKey = null, ?string $newApiKeyDescription = null)
+	{
 		$apiKeys = $this->DB->api_keys();
 		if (!User::HasPermissions(User::PERMISSION_ADMIN))
 		{
@@ -37,25 +51,35 @@ class OpenApiController extends BaseApiController
 		return $this->RenderPage($response, 'manageapikeys', [
 			'apiKeys' => $apiKeys,
 			'users' => $this->DB->users(),
-			'selectedKeyId' => $selectedKeyId
+			'selectedKeyId' => $selectedKeyId,
+			'newApiKey' => $newApiKey,
+			'newApiKeyDescription' => $newApiKeyDescription
 		]);
 	}
 
 	/**
-	 * GET /manageapikeys/new - creates a new API key (optional "description" query
-	 * parameter) and redirects to /manageapikeys?key={newKeyId}.
+	 * POST /manageapikeys/new - creates a new API key (optional "description" form
+	 * parameter) and renders the manage-keys page showing it, once.
 	 */
 	public function CreateNewApiKey(Request $request, Response $response, array $args)
 	{
 		$description = null;
-		if (isset($request->getQueryParams()['description']))
+		$postParams = $request->getParsedBody();
+
+		if (is_array($postParams) && isset($postParams['description']))
 		{
-			$description = $request->getQueryParams()['description'];
+			$description = $postParams['description'];
 		}
 
 		$newApiKey = ApiKeyService::GetInstance()->CreateApiKey(ApiKeyService::API_KEY_TYPE_DEFAULT, $description);
 		$newApiKeyId = ApiKeyService::GetInstance()->GetApiKeyId($newApiKey);
-		return $response->withRedirect($this->AppContainer->get('UrlManager')->ConstructUrl("/manageapikeys?key=$newApiKeyId"));
+
+		// Rendered here rather than redirected to, because this response is the only place
+		// the key can ever be shown: what is stored is a SHA-256 hash (plan 11, question
+		// 4), so nothing can produce the plaintext again. The obvious alternative - putting
+		// it in the redirect URL - is the query-string key path sweep finding S11 exists to
+		// remove, in the one place it would be most durable: browser history.
+		return $this->RenderApiKeysPage($response, (int)$newApiKeyId, $newApiKey, $description);
 	}
 
 	/**

@@ -118,6 +118,15 @@ merely different:
   integer is a `400` here and a `404` upstream, where SQLite's dynamic typing makes the
   comparison a silent non-match. The fork used to answer `500` and quote the failing
   statement; see [issue #48](https://github.com/datagen24/victual/issues/48).
+- **`missing-object-is-404-on-every-verb`** — `PUT` and `DELETE` against an id that does
+  not exist are `404` here and `400` upstream. `GET` of the same id is `404` on both,
+  which is the point: the status used to depend on the verb rather than on the fact.
+- **`create-with-no-fields-refused`** — `POST /api/objects/{entity}` with a body that sets
+  no column of the entity is a `400` here and a `200` upstream. Neither side creates
+  anything; upstream answers with a `created_object_id` of `"0"`, which identifies no
+  object. This suite's first run recorded the `null`-against-`"0"` difference and said the
+  `200` was the defect; [plan 11](../../docs/plans/11-api-error-handling.md) has since
+  refused the request instead.
 
 What normalisation erases is listed in [`harness/lib/normalize.js`](harness/lib/normalize.js)
 and is deliberately thin: wall-clock moments, `uniqid()`-derived opaque handles, the

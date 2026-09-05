@@ -35,6 +35,13 @@ have recorded it.
 | 0259 | [plan 18](../docs/plans/18-mqtt-state-publication.md) — `outbox` | in this tree |
 | 0260 | [plan 21](../docs/plans/21-frontend-sink-discipline.md) — purify stored rich text that predates the API purifier | in this tree |
 | 0261 | [issue #46](https://github.com/datagen24/victual/issues/46) — a total order for `products_last_purchased.price`, and SQLite's integer division in `products_average_price` | in this tree |
+| 0262 | [security sweep S12](../docs/security-sweep.md) via wave 2 — `login_attempts`, the login throttle's out-of-process state | in this tree |
+
+The file under 0262 was edited in place during review rather than followed by a migration that drops a column, because it has never existed in `master`: the retirement rule above is about numbers that have, and a branch that has not merged is still deciding what its migration says. What changed is that `login_attempts` lost its `ip_address` column — see that file for why a per-address count is the proxy's job and not this application's.
+
+| 0263 | [plan 11](../docs/plans/11-api-error-handling.md) question 4 — `api_keys.key_hint` | in this tree |
+| 0264 | [plan 11](../docs/plans/11-api-error-handling.md) question 4 — hash the stored API keys, backfill the hint | in this tree |
+| 0265 | [security sweep S12](../docs/security-sweep.md) via wave 2 — `users.must_change_password`, moved out of `user_settings` in review | in this tree |
 
 ## The merge order this implies — discharged
 
@@ -52,7 +59,13 @@ nothing, and it runs `StoredHtmlPurifier` over the five columns in
 `BaseApiController::HTML_RENDERED_COLUMNS`. It is portable in one file because PDO is, so it
 needs no engine pair under [ADR-0004](../docs/adr/0004-engine-specific-migrations.md).
 
-The next migration takes **0262** and claims it here first.
+The next migration takes **0266** and claims it here first.
+
+0263 and 0264 are one change in two numbers on purpose: the column has to exist before the
+data migration that fills it runs, and a number selects a file rather than an ordering
+within one. 0264 is PHP for the same reason 0260 is — it is PDO doing arithmetic on rows,
+which is portable in one file, and [ADR-0004](../docs/adr/0004-engine-specific-migrations.md)
+asks for a pair only where the two engines genuinely need different SQL.
 
 **The waiver stays.** `--allow-reserved-holes` (and `SUITE_ALLOW_RESERVED_HOLES=1`) is not
 scaffolding for this one branch: the situation recurs by construction, because parallel plan

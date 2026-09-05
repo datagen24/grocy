@@ -1,0 +1,23 @@
+-- users.must_change_password: whether this account is still on the password migration 0027
+-- seeds, and so must change it before it may do anything else.
+--
+-- It lived in user_settings until review of PR #68 pointed out what that means: a user
+-- setting is a bag the user owns, and `DELETE /api/user/settings/must_change_password`
+-- lifted the restriction without changing any password. Authentication state does not
+-- belong somewhere its subject can reach. `users` is not an exposed entity, and
+-- UsersService::EditUser writes only the columns it names, so the only writers of this
+-- column are the login path that sets it and the password change that clears it.
+--
+-- Why a stored flag at all rather than a check: answering "is this the seeded password?"
+-- means an Argon2id verification, which is expensive by design, and the login path is the
+-- only place a plaintext password exists. Sweep finding S12's second half; see
+-- ADR-0007's consequences for how that is the mirror of, not an exception to, the rule
+-- that this kind of state outlives the process.
+--
+-- A pair rather than one portable file because adding a column is DDL, and DDL is where
+-- the two engines diverge. Both engines run migration 265 and end with the same column, so
+-- the pair is complete and needs no @engine-exclusive marker.
+--
+-- SMALLINT with a CHECK is the baseline's spelling for a boolean (db/pgsql/baseline).
+
+ALTER TABLE users ADD COLUMN must_change_password SMALLINT NOT NULL DEFAULT 0 CHECK(must_change_password IN (0, 1));

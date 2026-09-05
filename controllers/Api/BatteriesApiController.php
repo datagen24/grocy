@@ -21,14 +21,10 @@ class BatteriesApiController extends BaseApiController
 	 */
 	public function BatteryDetails(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			return $this->ApiResponse($response, BatteriesService::GetInstance()->GetBatteryDetails($args['batteryId']));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -52,7 +48,7 @@ class BatteriesApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $requestBody, $response)
 		{
 			$trackedTime = date('Y-m-d H:i:s');
 			if (array_key_exists('tracked_time', $requestBody) && IsIsoDateTime($requestBody['tracked_time']))
@@ -62,11 +58,7 @@ class BatteriesApiController extends BaseApiController
 
 			$chargeCycleId = BatteriesService::GetInstance()->TrackChargeCycle($args['batteryId'], $trackedTime);
 			return $this->ApiResponse($response, $this->DB->battery_charge_cycles($chargeCycleId));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -78,15 +70,11 @@ class BatteriesApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_BATTERIES_UNDO_CHARGE_CYCLE);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$this->ApiResponse($response, BatteriesService::GetInstance()->UndoChargeCycle($args['chargeCycleId']));
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -97,7 +85,7 @@ class BatteriesApiController extends BaseApiController
 	 */
 	public function BatteryPrintLabel(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$batteryDetails = (object)BatteriesService::GetInstance()->GetBatteryDetails($args['batteryId']);
 
@@ -113,10 +101,6 @@ class BatteriesApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $webhookData);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

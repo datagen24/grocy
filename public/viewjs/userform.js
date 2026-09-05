@@ -66,6 +66,18 @@ $('#save-user-button').on('click', function (e)
 	delete jsonData.password_confirm;
 	delete jsonData.change_password;
 
+	// Only present when editing your own account, and only filled in when the password is
+	// actually being changed - the API requires it in exactly that case (sweep finding S6)
+	if (jsonData.hasOwnProperty("current_password"))
+	{
+		if (jsonData.current_password)
+		{
+			jsonData.current_password_base64 = btoa(jsonData.current_password);
+		}
+
+		delete jsonData.current_password;
+	}
+
 	if (Victual.EditMode === 'create')
 	{
 		Victual.Api.Post('users', jsonData,
@@ -172,6 +184,7 @@ $("#change_password").click(function ()
 {
 	$("#password").attr("disabled", !this.checked);
 	$("#password_confirm").attr("disabled", !this.checked);
+	$("#current_password").attr("disabled", !this.checked);
 
 	setTimeout(function ()
 	{

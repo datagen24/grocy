@@ -2,8 +2,6 @@
 
 namespace Victual\Middleware\Auth;
 
-use Victual\Services\DatabaseService;
-use Victual\Services\SessionService;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
@@ -22,27 +20,23 @@ class DefaultAuthMiddleware extends BaseAuthMiddleware
 	 */
 	protected function AuthenticateRequest(Request $request)
 	{
+		$user = (new SessionAuthenticator($this->AppContainer))->Authenticate($request);
+
+		if ($user !== null)
+		{
+			$this->AuthenticatedByCookie = true;
+
+			return $user;
+		}
+
 		if ($this->IsApiRoute)
 		{
-			// Session cookie or API Key is ok
-			$auth = new SessionAuthMiddleware($this->AppContainer, $this->ResponseFactory);
-			$user = $auth->AuthenticateRequest($request);
-			if ($user !== null)
-			{
-				return $user;
-			}
+			// An API key is a credential for the API and nothing else: it cannot open a
+			// rendered page, which is why this branch is the only one that consults it
+			return (new ApiKeyAuthenticator($this->AppContainer))->Authenticate($request);
+		}
 
-			$auth = new ApiKeyAuthMiddleware($this->AppContainer, $this->ResponseFactory);
-			$user = $auth->AuthenticateRequest($request);
-			return $user;
-		}
-		else
-		{
-			// Only session cookie is ok
-			$auth = new SessionAuthMiddleware($this->AppContainer, $this->ResponseFactory);
-			$user = $auth->AuthenticateRequest($request);
-			return $user;
-		}
+		return null;
 	}
 
 	/**
@@ -54,34 +48,6 @@ class DefaultAuthMiddleware extends BaseAuthMiddleware
 	 */
 	public static function ProcessLogin(array $postParams)
 	{
-		if (empty($postParams['username']) || empty($postParams['password']))
-		{
-			return false;
-		}
-
-		$db = DatabaseService::GetInstance()->GetDbConnection();
-
-		$user = $db->users()->where('username', $postParams['username'])->fetch();
-		$inputPassword = $postParams['password'];
-		$stayLoggedInPermanently = $postParams['stay_logged_in'] == 'on';
-
-		if ($user !== null && password_verify($inputPassword, $user->password))
-		{
-			$sessionKey = SessionService::GetInstance()->CreateSession($user->id, $stayLoggedInPermanently);
-			self::SetSessionCookie($sessionKey, $stayLoggedInPermanently);
-
-			if (password_needs_rehash($user->password, PASSWORD_ARGON2ID))
-			{
-				$user->update([
-					'password' => password_hash($inputPassword, PASSWORD_ARGON2ID)
-				]);
-			}
-
-			return true;
-		}
-		else
-		{
-			return false;
-		}
+		return PasswordLogin::Process($postParams);
 	}
 }

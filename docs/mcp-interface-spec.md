@@ -120,13 +120,21 @@ and it is small:
 
 1. **`ApiKeyService::API_KEY_TYPE_MCP = 'mcp'`** alongside the two existing constants
    (`services/ApiKeyService.php:15-16`).
-2. **`ApiKeyAuthMiddleware` accepts MCP-type keys.** Today the header path validates
-   against `API_KEY_TYPE_DEFAULT` only
-   (`middleware/Auth/ApiKeyAuthMiddleware.php:50`, via `IsValidApiKey`'s default
-   parameter) — an MCP-type key in `VICTUAL-API-KEY` is currently rejected. The
-   middleware checks the header against both `default` and `mcp` types. Everything
-   downstream — `GetUserByApiKey`, the 30 permission constants, per-route checks — is
-   untouched and already works.
+2. **`ApiKeyAuthenticator` accepts MCP-type keys.** Today the header path validates
+   against `API_KEY_TYPE_DEFAULT` only (`ApiKeyAuthenticator::Authenticate`, via
+   `IsValidApiKey`'s default parameter) — an MCP-type key in `VICTUAL-API-KEY` is
+   currently rejected. The authenticator checks the header against both `default` and
+   `mcp` types. Everything downstream — `GetUserByApiKey`, the 30 permission constants,
+   per-route checks — is untouched and already works.
+
+   **This is smaller than it was when the spec was written, and one part of it is now
+   decided rather than free.** Wave 2's 15-C1 replaced `ApiKeyAuthMiddleware` with
+   `ApiKeyAuthenticator`, a plain object with one method, so the change is to one class
+   that does one job. But wave 2 also made regular keys **stored as a SHA-256 hash**
+   (plan 11, question 4): an MCP key is a regular key in that sense, so
+   `ApiKeyService::StoredValueOf()` decides what the lookup compares, and the key is
+   readable exactly once — at creation. A sidecar that expects to read its key back out
+   of the database will not be able to.
 3. **A per-key `read_only` flag** (02-Q3's response): one column on `api_keys`, set at
    creation from the key-management screen. Enforcement is one rule in the same
    middleware: a request authenticated by a `read_only` key that is not `GET`, `HEAD`,

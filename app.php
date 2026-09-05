@@ -4,6 +4,9 @@ use Victual\Controllers\ExceptionController;
 use Victual\Helpers\CachePaths;
 use Victual\Helpers\SlimBladeView;
 use Victual\Helpers\UrlManager;
+use Victual\Helpers\StderrLogger;
+use Victual\Middleware\CorsMiddleware;
+use Victual\Middleware\JsonMiddleware;
 use Victual\Middleware\LocaleMiddleware;
 use Victual\Middleware\SchemaVersionMiddleware;
 use Psr\Container\ContainerInterface as Container;
@@ -123,10 +126,31 @@ $app->addRoutingMiddleware();
 // this code cannot be trusted to resolve a route or identify a user, and the answer is
 // the same for every route anyway
 $app->add(new SchemaVersionMiddleware($container, $app->getResponseFactory()));
-// Error details (including stack traces) are only displayed in dev mode
+// Error details (including stack traces) are only displayed in dev mode, and are always
+// recorded: before this, a 500 in production left no trace anywhere, because gating the
+// display on dev mode was not accompanied by anything taking over the operator's copy.
 // (arguments are displayErrorDetails, logErrors, logErrorDetails)
-$errorMiddleware = $app->addErrorMiddleware(VICTUAL_MODE === 'dev', false, false);
-$errorMiddleware->setDefaultErrorHandler(new ExceptionController($container, $app->getResponseFactory()));
+//
+// The logger is handed to the handler rather than to the middleware. Slim's error
+// middleware only passes its logger to its own ErrorHandler, and this application replaces
+// that with ExceptionController. Plan 11.
+$errorLogger = new StderrLogger();
+$errorMiddleware = $app->addErrorMiddleware(VICTUAL_MODE === 'dev', true, true);
+$errorMiddleware->setDefaultErrorHandler(new ExceptionController($container, $app->getResponseFactory(), $errorLogger));
+
+// Outermost of everything, which is what these two have to be and what registering them on
+// the API route group could never make them (Slim's add() is LIFO - outermost last).
+// Inside the group they ran after authentication and after routing, so an unauthenticated
+// API call was answered with a bodyless, untyped 401 carrying no CORS headers, and an
+// OPTIONS preflight - which matches no registered route - was refused by routing before
+// CorsMiddleware could answer it. A catch-all `$app->any('/api/{routes:.+}', ...)` existed
+// in routes.php to work around exactly that; it is deleted with this move.
+//
+// Out here they also wrap the error middleware, so a 404, a 405 and a 500 are typed and
+// get their CORS headers like any other response. Both decide by path whether a request is
+// theirs, so the rendered pages are unaffected. Plan 11.
+$app->add(new JsonMiddleware($container, $app->getResponseFactory()));
+$app->add(new CorsMiddleware($container, $app->getResponseFactory()));
 
 $app->getRouteCollector()->setCacheFile(CachePaths::RouteCacheFile());
 

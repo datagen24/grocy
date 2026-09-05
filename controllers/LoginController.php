@@ -2,6 +2,7 @@
 
 namespace Victual\Controllers;
 
+use Victual\Middleware\Auth\SessionCookie;
 use Victual\Services\SessionService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -22,10 +23,25 @@ class LoginController extends BaseController
 
 	/**
 	 * Destroys the current session and redirects to the root page (route GET /logout).
+	 *
+	 * The cookie is expired as well as the session row deleted. Deleting only the row
+	 * left the browser holding a string that looks like a credential and is refused -
+	 * harmless to the server, and a confusing thing to leave behind on a shared machine
+	 * (sweep finding S19). The cookie parameter is read from the request rather than from
+	 * $_COOKIE, and its absence is no longer a warning: logging out twice is a thing
+	 * people do.
 	 */
 	public function Logout(Request $request, Response $response, array $args)
 	{
-		SessionService::GetInstance()->RemoveSession($_COOKIE[SessionService::SESSION_COOKIE_NAME]);
+		$sessionKey = $request->getCookieParams()[SessionService::SESSION_COOKIE_NAME] ?? null;
+
+		if ($sessionKey !== null)
+		{
+			SessionService::GetInstance()->RemoveSession($sessionKey);
+		}
+
+		SessionCookie::Clear();
+
 		return $response->withRedirect($this->AppContainer->get('UrlManager')->ConstructUrl('/'));
 	}
 

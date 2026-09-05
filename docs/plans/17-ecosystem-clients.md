@@ -97,8 +97,10 @@ to put this document in front of that decision, and it did not happen.
 Two things changed, and they are not the same size:
 
 **The API key header, `GROCY-API-KEY` → `VICTUAL-API-KEY`** (`app.php:96`). This is the
-transport, not a field. `ApiKeyAuthMiddleware` looks for exactly one header name, resolved
-from the `ApiKeyHeaderName` container binding, plus a query parameter of the same name.
+transport, not a field. `ApiKeyAuthenticator` — `ApiKeyAuthMiddleware` when this was
+written; wave 2's 15-C1 renamed it and gave it one job — looks for exactly one header name,
+resolved from the `ApiKeyHeaderName` container binding. The query parameter of the same
+name that this sentence also named is gone, with sweep S11.
 Both tracked clients send `GROCY-API-KEY` on every request, because it is the only API
 authentication grocy has. Against the current tree every one of those requests is
 unauthenticated: not a warning banner, not a degraded feature — Grocy-SwiftUI cannot log
@@ -644,7 +646,7 @@ Q4 exists because that rename took a decision this document was supposed to hold
      before there is anyone else. It also makes the Q3 distribution problem load-bearing:
      if the forked iOS app cannot be got onto a device, there is no iOS access at all.
    - **Accept both, indefinitely.** One extra string in the `ApiKeyHeaderName` binding and
-     one extra lookup in `ApiKeyAuthMiddleware`. Cheap to write, and the sort of
+     one extra lookup in `ApiKeyAuthenticator`. Cheap to write, and the sort of
      compatibility shim that is never removed — upstream's name stays in the auth path
      forever, which is precisely the outcome [16](16-project-rename.md)'s Tier 0/Tier 1
      split exists to make deliberate rather than accidental.
@@ -749,8 +751,11 @@ roadmap is held to. Lint is not verification, and neither is reading a client's 
    > **Reduced by Q4's answer.** There is no shim, so the pair collapses to one case:
    > confirm `GROCY-API-KEY` is rejected as an unauthenticated request rather than
    > silently accepted anywhere. Still worth doing once — "we removed it" and "it is gone
-   > from every path" are different claims, and `ApiKeyAuthMiddleware` has more than one
-   > way in (sweep S11's query-string path, S17's iCal `secret` branch).
+   > from every path" are different claims, and the API key path had more than one way in
+   > when this was written (sweep S11's query-string path, S17's iCal `secret` branch).
+   > **Wave 2 reduced it to two**, which makes the check smaller rather than unnecessary:
+   > S11's query-string path is deleted and S17's branch now works, so what is left to
+   > confirm is the header and the calendar `secret` parameter.
 7. **After [07](07-nested-products.md)/[08](08-nested-locations.md), look at the pickers.**
    Screenshot Grocy-SwiftUI's product-group and location pickers against a seeded tree
    three levels deep. The failure mode is visual and correct-looking, so it has to be

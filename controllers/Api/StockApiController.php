@@ -29,7 +29,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
 
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
@@ -42,11 +42,7 @@ class StockApiController extends BaseApiController
 
 			StockService::GetInstance()->AddMissingProductsToShoppingList($listId);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -59,7 +55,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
 
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
@@ -71,11 +67,7 @@ class StockApiController extends BaseApiController
 
 			StockService::GetInstance()->AddOverdueProductsToShoppingList($listId);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -88,7 +80,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
 
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
@@ -100,11 +92,7 @@ class StockApiController extends BaseApiController
 
 			StockService::GetInstance()->AddExpiredProductsToShoppingList($listId);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -121,7 +109,7 @@ class StockApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -185,11 +173,7 @@ class StockApiController extends BaseApiController
 
 			$args['transactionId'] = $transactionId;
 			return $this->StockTransactions($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -199,15 +183,11 @@ class StockApiController extends BaseApiController
 	 */
 	public function AddProductByBarcode(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$args['productId'] = StockService::GetInstance()->GetProductIdFromBarcode($args['barcode']);
 			return $this->AddProduct($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -221,7 +201,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
 
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
@@ -263,11 +243,7 @@ class StockApiController extends BaseApiController
 
 			StockService::GetInstance()->AddProductToShoppingList($productId, $amount, $quId, $note, $listId);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -281,7 +257,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_DELETE);
 
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
@@ -299,11 +275,7 @@ class StockApiController extends BaseApiController
 
 			StockService::GetInstance()->ClearShoppingList($listId, $doneOnly);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -320,7 +292,7 @@ class StockApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -378,11 +350,7 @@ class StockApiController extends BaseApiController
 			$transactionId = StockService::GetInstance()->ConsumeProduct($args['productId'], $requestBody['amount'], $spoiled, $transactionType, $specificStockEntryId, $recipeId, $locationId, $transactionId, $allowSubproductSubstitution, $consumeExact);
 			$args['transactionId'] = $transactionId;
 			return $this->StockTransactions($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -393,7 +361,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function ConsumeProductByBarcode(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$args['productId'] = StockService::GetInstance()->GetProductIdFromBarcode($args['barcode']);
 
@@ -409,11 +377,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->ConsumeProduct($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -464,7 +428,7 @@ class StockApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -509,11 +473,7 @@ class StockApiController extends BaseApiController
 			$transactionId = StockService::GetInstance()->EditStockEntry($args['entryId'], $requestBody['amount'], $bestBeforeDate, $locationId, $shoppingLocationId, $price, $requestBody['open'], $requestBody['purchased_date'], $note);
 			$args['transactionId'] = $transactionId;
 			return $this->StockTransactions($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -526,7 +486,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_MASTER_DATA_EDIT);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$addFoundProduct = false;
 			if (isset($request->getQueryParams()['add']) && ($request->getQueryParams()['add'] === 'true' || $request->getQueryParams()['add'] === 1))
@@ -535,11 +495,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, StockService::GetInstance()->ExternalBarcodeLookup($args['barcode'], $addFoundProduct));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -557,7 +513,7 @@ class StockApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -614,11 +570,7 @@ class StockApiController extends BaseApiController
 			$transactionId = StockService::GetInstance()->InventoryProduct($args['productId'], $requestBody['new_amount'], $bestBeforeDate, $locationId, $price, $shoppingLocationId, $purchasedDate, $stockLabelType, $note);
 			$args['transactionId'] = $transactionId;
 			return $this->StockTransactions($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -628,15 +580,11 @@ class StockApiController extends BaseApiController
 	 */
 	public function InventoryProductByBarcode(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$args['productId'] = StockService::GetInstance()->GetProductIdFromBarcode($args['barcode']);
 			return $this->InventoryProduct($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -652,7 +600,7 @@ class StockApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -680,11 +628,7 @@ class StockApiController extends BaseApiController
 			$transactionId = StockService::GetInstance()->OpenProduct($args['productId'], $requestBody['amount'], $specificStockEntryId, $transactionId, $allowSubproductSubstitution);
 			$args['transactionId'] = $transactionId;
 			return $this->StockTransactions($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -695,7 +639,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function OpenProductByBarcode(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$args['productId'] = StockService::GetInstance()->GetProductIdFromBarcode($args['barcode']);
 
@@ -711,11 +655,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->OpenProduct($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -725,14 +665,10 @@ class StockApiController extends BaseApiController
 	 */
 	public function ProductDetails(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			return $this->ApiResponse($response, StockService::GetInstance()->GetProductDetails($args['productId']));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -742,15 +678,11 @@ class StockApiController extends BaseApiController
 	 */
 	public function ProductDetailsByBarcode(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$productId = StockService::GetInstance()->GetProductIdFromBarcode($args['barcode']);
 			return $this->ApiResponse($response, StockService::GetInstance()->GetProductDetails($productId));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -760,14 +692,10 @@ class StockApiController extends BaseApiController
 	 */
 	public function ProductPriceHistory(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			return $this->ApiResponse($response, StockService::GetInstance()->GetProductPriceHistory($args['productId']));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -824,7 +752,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function ProductPrintLabel(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$productDetails = (object)StockService::GetInstance()->GetProductDetails($args['productId']);
 
@@ -840,11 +768,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $webhookData);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -858,7 +782,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function StockEntryPrintLabel(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$stockEntry = $this->DB->stock()->where('id', $args['entryId'])->fetch();
 			$productDetails = (object)StockService::GetInstance()->GetProductDetails($stockEntry->product_id);
@@ -881,11 +805,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $webhookData);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -899,7 +819,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_DELETE);
 
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
@@ -929,11 +849,7 @@ class StockApiController extends BaseApiController
 
 			StockService::GetInstance()->RemoveProductFromShoppingList($productId, $amount, $listId);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -942,7 +858,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function StockBooking(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$stockLogRow = $this->DB->stock_log($args['bookingId']);
 
@@ -952,11 +868,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $stockLogRow);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -976,7 +888,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function StockTransactions(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$transactionRows = $this->DB->stock_log()->where('transaction_id = :1', $args['transactionId'])->fetchAll();
 			if (count($transactionRows) === 0)
@@ -985,11 +897,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $transactionRows);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -1005,7 +913,7 @@ class StockApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
@@ -1037,11 +945,7 @@ class StockApiController extends BaseApiController
 			$transactionId = StockService::GetInstance()->TransferProduct($args['productId'], $requestBody['amount'], $requestBody['location_id_from'], $requestBody['location_id_to'], $specificStockEntryId);
 			$args['transactionId'] = $transactionId;
 			return $this->StockTransactions($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -1052,7 +956,7 @@ class StockApiController extends BaseApiController
 	 */
 	public function TransferProductByBarcode(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$args['productId'] = StockService::GetInstance()->GetProductIdFromBarcode($args['barcode']);
 
@@ -1068,11 +972,7 @@ class StockApiController extends BaseApiController
 			}
 
 			return $this->TransferProduct($request, $response, $args);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -1084,15 +984,11 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_EDIT);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$this->ApiResponse($response, StockService::GetInstance()->UndoBooking($args['bookingId']));
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -1104,15 +1000,11 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_EDIT);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$this->ApiResponse($response, StockService::GetInstance()->UndoTransaction($args['transactionId']));
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -1126,7 +1018,7 @@ class StockApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_EDIT);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			if (filter_var($args['productIdToKeep'], FILTER_VALIDATE_INT) === false || filter_var($args['productIdToRemove'], FILTER_VALIDATE_INT) === false)
 			{
@@ -1135,10 +1027,6 @@ class StockApiController extends BaseApiController
 
 			$this->ApiResponse($response, StockService::GetInstance()->MergeProducts($args['productIdToKeep'], $args['productIdToRemove']));
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

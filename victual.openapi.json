@@ -99,6 +99,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -116,6 +126,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/DbChangedTimeResponse"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -147,6 +167,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -185,6 +215,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -203,6 +243,16 @@
 								"schema": {
 									"type": "object",
 									"description": "A gettext JSON representation"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -238,6 +288,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -326,12 +386,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -419,6 +479,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -495,6 +575,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -588,6 +678,36 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "The object named by the request does not exist",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			},
@@ -626,6 +746,36 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "The object named by the request does not exist",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -680,6 +830,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			},
@@ -729,6 +889,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -814,6 +994,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "The object named by the request does not exist",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			},
@@ -866,6 +1066,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			},
@@ -904,6 +1124,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -955,12 +1195,22 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -993,6 +1243,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1041,6 +1311,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			},
@@ -1070,6 +1360,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1126,6 +1436,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			},
@@ -1172,6 +1502,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1227,6 +1577,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1260,6 +1630,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1288,6 +1668,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1329,6 +1719,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1375,6 +1775,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			},
@@ -1407,6 +1817,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1427,6 +1847,16 @@
 									"items": {
 										"$ref": "#/components/schemas/CurrentStockResponse"
 									}
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1468,6 +1898,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1564,6 +2004,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1606,6 +2066,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1635,6 +2105,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/CurrentVolatilStockResponse"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1676,6 +2156,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1745,12 +2235,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1820,12 +2310,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1870,6 +2360,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -1967,6 +2467,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2059,6 +2579,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2133,6 +2673,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -2221,6 +2781,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2292,6 +2872,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2331,6 +2931,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -2377,6 +2987,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2415,6 +3045,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -2497,6 +3137,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -2592,6 +3242,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2669,6 +3329,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2739,6 +3409,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -2813,6 +3493,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2870,12 +3560,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -2921,6 +3611,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -2963,6 +3673,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3002,6 +3732,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3049,6 +3799,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3114,6 +3884,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3167,6 +3957,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3208,6 +4018,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3239,6 +4059,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3286,6 +4126,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3317,6 +4167,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3371,6 +4241,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3414,6 +4304,26 @@
 				"responses": {
 					"204": {
 						"description": "The operation was successful"
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3455,6 +4365,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3486,6 +4406,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3537,12 +4477,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3593,6 +4533,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3635,6 +4585,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3673,12 +4633,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3720,6 +4680,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3790,6 +4760,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3821,6 +4811,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3866,6 +4876,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3905,6 +4935,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -3951,6 +4991,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -3989,12 +5049,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -4036,6 +5096,16 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -4097,6 +5167,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -4128,6 +5218,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -4173,6 +5283,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -4211,12 +5331,12 @@
 							}
 						}
 					},
-					"500": {
-						"description": "The operation was not successful (possible errors are invalid field names or conditions in filter parameters provided)",
+					"401": {
+						"description": "The request carried no valid API key or session",
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "#/components/schemas/Error500"
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -4271,6 +5391,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -4305,6 +5445,26 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -4335,6 +5495,16 @@
 								}
 							}
 						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -4357,6 +5527,16 @@
 											"type": "string"
 										}
 									}
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -4414,6 +5594,26 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Error400"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "The request carried no valid API key or session",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "The authenticated user lacks a permission this operation requires",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ApiError"
 								}
 							}
 						}
@@ -5279,7 +6479,12 @@
 						"type": "integer"
 					},
 					"api_key": {
-						"type": "string"
+						"type": "string",
+						"description": "The SHA-256 hash of the key, not the key itself. A regular key is only ever readable at the moment it is created; a special-purpose calendar key is stored as issued, because the sharing link has to be reproducible."
+					},
+					"key_hint": {
+						"type": "string",
+						"description": "The last four characters of the key, kept so that two keys can be told apart once neither can be read."
 					},
 					"expires": {
 						"type": "string",
@@ -5615,6 +6820,18 @@
 			},
 			"Error400": {
 				"type": "object",
+				"properties": {
+					"error_message": {
+						"type": "string"
+					}
+				},
+				"example": {
+					"error_message": "The error message..."
+				}
+			},
+			"ApiError": {
+				"type": "object",
+				"description": "The error body every non-2xx answer carries: one message, no detail object. The same shape as Error400, under a name that does not claim a status code - it is what a 401, a 403 and a 404 return too.",
 				"properties": {
 					"error_message": {
 						"type": "string"
@@ -6008,7 +7225,10 @@
 			},
 			"ExposedEntityEditRequiresAdmin": {
 				"type": "string",
-				"enum": []
+				"enum": [
+					"userfields",
+					"userentities"
+				]
 			},
 			"StockTransactionType": {
 				"type": "string",

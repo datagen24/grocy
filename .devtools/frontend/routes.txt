@@ -3,7 +3,6 @@
 /manifest
 /barcodescannertesting
 /login
-/logout
 /userfields
 /userfield/{userfieldId}
 /userentities
@@ -79,4 +78,3 @@
 /calendar
 /api
 /manageapikeys
-/manageapikeys/new

@@ -509,6 +509,21 @@ msgstr ""
 msgid "Change password"
 msgstr ""
 
+msgid "Current password"
+msgstr ""
+
+msgid "Your new API key"
+msgstr ""
+
+msgid "Copy it now - it cannot be shown again"
+msgstr ""
+
+msgid "This request could not be handled"
+msgstr ""
+
+msgid "Your current password is required to set a new one"
+msgstr ""
+
 msgid "Done by"
 msgstr ""
 

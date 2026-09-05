@@ -35,6 +35,36 @@
 	</div>
 </div>
 
+@if(!empty($newApiKey))
+{{-- The only moment this string exists. api_keys.api_key holds a SHA-256 hash (plan 11,
+     question 4), so nothing - not this page on its next load, not an administrator, not a
+     database dump - can produce it again. Hence the wording and the QR code here rather
+     than a row action in the table below. --}}
+<div class="row mt-2">
+	<div class="col">
+		<div class="alert alert-success">
+			<h4>{{ $__t('Your new API key') }}</h4>
+			@if(!empty($newApiKeyDescription))
+			<h5 class="text-muted">{{ $newApiKeyDescription }}</h5>
+			@endif
+			<p>{{ $__t('Copy it now - it cannot be shown again') }}</p>
+			<pre class="user-select-all mb-2"><code id="new-api-key-value">{{ $newApiKey }}</code></pre>
+			{{-- The description carried here is the one just typed, so that the QR dialog says
+			     which key it is showing. It is user input reaching a bootbox message, which
+			     renders as HTML - manageapikeys.js escapes it at the point of use, and the
+			     s29-payload probe's manageapikeys-qr case is what holds that true. --}}
+			<a class="btn btn-info btn-sm apikey-show-qr-button"
+				href="#"
+				data-apikey-key="{{ $newApiKey }}"
+				data-apikey-type="default"
+				data-apikey-description="{{ empty($newApiKeyDescription) ? $__t('Your new API key') : $newApiKeyDescription }}">
+				<i class="fa-solid fa-qrcode"></i>&nbsp;{{ $__t('Show a QR-Code for this API key') }}
+			</a>
+		</div>
+	</div>
+</div>
+@endif
+
 <hr class="my-2">
 
 <div class="row collapse d-md-flex"
@@ -90,17 +120,20 @@
 						<a class="btn btn-danger btn-sm apikey-delete-button"
 							href="#"
 							data-apikey-id="{{ $apiKey->id }}"
-							data-apikey-key="{{ $apiKey->api_key }}"
 							data-apikey-description="{{ $apiKey->description }}"
 							{{-- What the delete confirmation names the key: its description when it has
-							one, the key itself otherwise. Resolved here rather than in the view script
-							so the shared delete confirmation can read one attribute like every other
-							list does. --}}
-							data-apikey-name="{{ empty($apiKey->description) ? $apiKey->api_key : $apiKey->description }}"
+							one, its hint otherwise. Resolved here rather than in the view script so the
+							shared delete confirmation can read one attribute like every other list
+							does. It used to be the key itself, which is no longer readable. --}}
+							data-apikey-name="{{ empty($apiKey->description) ? ApiKeyDisplayValue($apiKey) : $apiKey->description }}"
 							data-toggle="tooltip"
 							title="{{ $__t('Delete this item') }}">
 							<i class="fa-solid fa-trash"></i>
 						</a>
+						@if(ApiKeyIsReadable($apiKey))
+						{{-- Only a special-purpose key can still be shown: it is stored as issued,
+						because the sharing dialog has to hand its URL back. A regular key is a hash
+						here and there is nothing to encode. --}}
 						<a class="btn btn-info btn-sm apikey-show-qr-button"
 							href="#"
 							data-apikey-key="{{ $apiKey->api_key }}"
@@ -110,12 +143,13 @@
 							title="{{ $__t('Show a QR-Code for this API key') }}">
 							<i class="fa-solid fa-qrcode"></i>
 						</a>
+						@endif
 					</td>
 					<td>
 						{{ $apiKey->description }}
 					</td>
 					<td>
-						{{ $apiKey->api_key }}
+						{{ ApiKeyDisplayValue($apiKey) }}
 					</td>
 					<td>
 						{{ GetUserDisplayName(FindObjectInArrayByPropertyValue($users, 'id', $apiKey->user_id)) }}
