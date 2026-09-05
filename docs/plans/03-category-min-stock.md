@@ -3,7 +3,10 @@
 **Goal:** Set a fallback minimum for a product group — "always have *some* milk" — instead
 of having to set one on every individual product.
 **Upstream:** [grocy/grocy#2616](https://github.com/grocy/grocy/issues/2616)
-**Status:** draft for review.
+**Status:** draft for review; scheduled for wave 3b **as written**. Decided 2026-09-04:
+this plan does not wait on [07](07-nested-products.md)'s Q6. If Q6 lands on *taxonomy*,
+the nullable `parent_product_group_id` column lands as an additive follow-on to this plan,
+not as a change to its scope now.
 
 ## Today
 

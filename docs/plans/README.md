@@ -15,7 +15,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | — | [Database abstraction / PostgreSQL](../../db/pgsql/README.md) | — | — | — | **landed** |
 | 01 | [File storage in the database](01-file-storage.md) | — | PostgreSQL | small | **landed** (`4174129`…`99ca61b`, 2026-09-02) — `BYTEA` behind `FILE_STORAGE=database` (default stays `filesystem`), `bin/victual-files-import`, sweep **S10** closed; the migration is `0258.pgsql.sql`, not the 0257 the plan text names |
 | 02 | [MCP endpoint](02-mcp-endpoint.md) ([interface spec](../mcp-interface-spec.md)) | — | 11, 13, 14 piece 2, 15-C1 | medium | draft — body superseded by the spec |
-| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft — may grow a parent column, per 07-Q6 |
+| 03 | [Category level minimum stock](03-category-min-stock.md) | [#2616](https://github.com/grocy/grocy/issues/2616) | — | small | draft — **wave 3b as written** (2026-09-04); a parent column is an additive follow-on if 07-Q6 says taxonomy |
 | 04 | [Seed product datasets](04-seed-datasets.md) | [#2679](https://github.com/grocy/grocy/issues/2679) | — | medium | draft |
 | 05 | [Store specific shopping lists](05-store-shopping-lists.md) | [#2702](https://github.com/grocy/grocy/issues/2702) | 12 | medium | draft |
 | 06 | [Location barcodes](06-location-barcodes.md) | — | 12 | small | draft, **narrowed by [ADR-0011](../adr/0011-label-namespace.md)** (accepted 2026-09-04) — the payload, label stability, the symbology and the print path are decided there, and `grcy:l:` is not minted; what remains here is label placement, the locations print action and UI, and the current-location notion interactive scanning needs |
@@ -24,7 +24,7 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 09 | [Barcode lookup sources for US products](09-barcode-lookup-sources.md) | — | — | small | **deferred** |
 | 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`6a0d1fb`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7, delivered through a transactional outbox. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant. Its PR is **held behind #34** by the migration numbering rule below — it owns 0257 and 0259 while 01 owns 0258 |
 
-| 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
+| 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **Q1–Q3, Q6–Q9 answered 2026-09-04**; Q8 = (a), so piece 1 is a model change and is **wave 3a on its own** |
 | 22 | [Vitamin and medication tracking](22-medication-tracking.md) | — | 23, 14 piece 2 | **large**, seven separable pieces | draft — governed by [ADR-0015](../adr/0015-medication-records-never-advises.md) and [ADR-0016](../adr/0016-schedule-expansion-in-the-application.md), both Proposed; Q1–Q3 and **Q5** answered inline. **No longer blocked on [19](19-rbac.md)**: Q5 ships narrow subject-scoped visibility itself, because the medication case is row filtering rather than field redaction, and 19 Q8 carries a note that it exists. Piece 7 consumes accepted [ADR-0011](../adr/0011-label-namespace.md) rather than proposing a code format and answers its open Q3, but **0011 is accepted and unbuilt** — Q6 asks whether this plan should own that machinery, and leans no. Claims migrations 0267–0268 |
 | 23 | [Storage classes for locations](23-storage-classes.md) | — | — (interacts with 08) | small | draft — extracted from 22 per its Q1; **Q1/Q2 answered**: `is_freezer` is derived, and the derivation lives in the application, not a trigger — Q2's lean was overturned because its trigger case was the importer, and an upstream grocy database carries no class to derive. Claims migration 0266 and lands before 22 |
 
@@ -149,8 +149,10 @@ one is now decided:
 - **[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)** — retire SQLite as a
   runtime engine, keep it as an import format behind fixture-based importer tests.
   **Accepted 2026-08-31**, superseding
-  [ADR-0001](../adr/0001-postgresql-alongside-sqlite.md). The retirement *work* is not
-  yet scheduled in a wave, but the decision stands now, and it materially shortens
+  [ADR-0001](../adr/0001-postgresql-alongside-sqlite.md). The retirement *work* is
+  scheduled as of 2026-09-04: **its own PR in the retirements sitting between wave 2 and
+  wave 3a** (see below), so that no wave 3 migration ships a SQLite twin that is deleted a
+  wave later. The decision stood before that, and it materially shortened
   [10](10-cold-start-statelessness.md) — whoever opens track A reads 10 against it
   first, since 10's SQLite-conditional sections plan around paths 0008 has marked for
   deletion. The supported import span is 0255 through the SQLite dialect's latest
@@ -197,6 +199,7 @@ One more was written on 2026-09-03:
   It **supersedes the `Dockerfile`'s `production` target**, not its `dev` target — which
   is now the `Dockerfile`'s only remaining job — and the acceptance *schedules* that
   retirement as [20](20-container-infrastructure.md)'s piece 3 rather than performing it.
+  Piece 3 is scheduled with 0008's retirement work, in the same sitting.
   Its acceptance prerequisites were unusually literal, because it was written from
   interfaces read rather than run: **all five are met as written**, two by piece 1's build
   and three by the run that closed [#49](https://github.com/datagen24/victual/issues/49).
@@ -260,10 +263,10 @@ announcement time, not in a commit.
   later. And the two parked decisions are 19's: `STOCK_PRICES_VIEW` is what makes exposing
   `products_price_history` a bounded widening rather than an open one, and 19's question 9
   carries the permissions-page mismatch that 14's 2b handed it. The first needs no waiting
-  at all. The second is available to wave 2 as an *extension* of the rule 19 states for its
-  own role endpoints — read behind `USERS_READ`, write behind `USERS_EDIT` — rather than as
-  an answer 19 has recorded, since 19 still lists `GET /users/{id}/permissions` as
-  unchanged. Taking it early is a decision wave 2 makes, not one it inherits.
+  at all. The second was split 2026-09-04: wave 2 took the **read** half
+  (`GET /users/{id}/permissions` behind `USERS_READ`, raw shape unchanged), and 19's Q9
+  Response gives piece 1 the **write** half (`USERS_EDIT` through `CheckMayGrant()`) and
+  the **shape** (resolved rows with `via_roles`).
 - **10 pairs with [01](01-file-storage.md)** — 01 removes `data/storage`, 10 removes
   everything else writable; only both together give a pod with no volume.
 - **18 wants 10 to be real, and 10 wants 18 to exist.** 18's whole justification is a pod
@@ -496,7 +499,7 @@ from *draft* to *landed* is not finished until the Order of operations text that
 plan has been re-read.
 
 A third thing has since been added without a wave of its own: [19](19-rbac.md), written
-2026-08-30. It is placed rather than pending — piece 1 in wave 3, piece 2 in wave 5 — and
+2026-08-30. It is placed rather than pending — piece 1 in wave 3a, alone, piece 2 in wave 5 — and
 its arrival unparks four permission findings back into wave 2, which is the one change it
 makes to work already scheduled. See the tail for that reversal and its reasoning.
 
@@ -744,9 +747,9 @@ one only next to what it diverged from.
   [19](19-rbac.md) — see the tail below for why that parking was wrong. Wave 2 should be
   read against 19 before it starts, in the way 17 was supposed to be read before 11 and 16,
   but as a consistency check on the rule it writes rather than as a blocker: 19's questions
-  4, 5 and 9 land in 02, 18 and here respectively, and the read/write split 19 states
-  for its own role endpoints is available to the permissions page as an extension wave 2
-  may take, not an answer 19 has already recorded.
+  4 and 5 land in 02 and 18, and its Q9 — the existing `GET /users/{id}/permissions` —
+  was split: wave 2 took the read half, and 19 piece 1 takes the write half and the
+  shape, by its own Response (2026-09-04).
 
   **S6 is worse than the sweep first recorded**, and wave 2 should be written against the
   fact rather than the finding: the `USERS` subtree is a chain and the tree resolves
@@ -762,27 +765,55 @@ one only next to what it diverged from.
   (S9 — 11 already owns the error surface); login throttling and a forced change while
   the seeded `admin`/`admin` hash is in use (S12).
 
-### Wave 3 — first features on the new platform (four tracks)
+### Wave 2.5 — the retirements (one sitting, two PRs)
 
-- **09 implementation**, if wave 0's experiment justified it — inheriting sweep S14
-  first (filter `__barcode` to a filename-safe class, allow-list the image extension,
-  refuse loopback and private hosts before fetching `__image_url`), since every source
-  09 adds is another party that chooses that URL.
-- **06 location barcodes** — the first shipped dual-engine migration (deliberately
-  small), on the locations list/form pair 12 just converted. Codes, printing, UUID, QR;
-  camera ingest stays unscoped.
-- **03 category minimums** — one column, one new view, group shortfalls kept out of
-  `stock_missing_products`. If 07-Q6 lands on *taxonomy*, this row grows a
-  `parent_product_group_id` column and most of 07 with it; see wave 4.
-- **[19](19-rbac.md) piece 1 — roles**, as its own track, and **only if its Q8 answers
-  (b) or (c)**. It is here rather than later because it grows the API read surface, which
-  the rule above requires to happen before 14 piece 2 freezes the contract. It touches
-  `User.php`, `0110`-successor views, `UsersApiController` and the users views, none of
-  which 03, 06 or 09 open; the two files the tracks share are `routes.php` and
-  `victual.openapi.json`, additively in every case, which is worth naming because the wave
-  rule says disjoint rather than mostly disjoint. If Q8 answers (a) — gate reads in piece 1
-  — this is not a wave 3 track at all but a model change with real upgrade risk, and the
-  wave is re-planned around it.
+Re-planned 2026-09-04 with wave 3. Neither is a feature and neither is a wave; both are
+removals of a path a record has already superseded, and both belong *before* wave 3a
+because wave 3 ships migrations and images.
+
+- **[ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)'s retirement work** — drop
+  the SQLite dialect and its migration line (frozen at its final number), keep SQLite as an
+  import format with the fixture-based importer tests, the import span named as 0255
+  through that final number. Its own PR. Every migration from wave 3a onward is
+  PostgreSQL-only.
+- **[20](20-container-infrastructure.md) piece 3** — retire the `Dockerfile`'s `production`
+  target; the Nix images are the only production build, and `dev` is the `Dockerfile`'s
+  only job. Its own PR, same sitting.
+
+### Wave 3a — roles and read gating (one track, alone)
+
+- **[19](19-rbac.md) piece 1**, with **Q8 answered (a)** on 2026-09-04: gate reads, in
+  piece 1. That makes it the model change the earlier text warned about, and the wave is
+  re-planned around it exactly as that text said it would be: piece 1 runs **alone**, before
+  any feature adds a read path of its own. Six `*_VIEW` leaves (Q1, Q3), a `CheckPermission`
+  on every read in five subtrees, a behaviour-preserving backfill that grants each view leaf
+  to every existing user, the `permission_fields` table seeded from the migration (Q2),
+  four seed roles including Guest (Q7), `STOCK_PURCHASE` implying `STOCK_PRICES_VIEW` (Q6),
+  and the Q9 endpoint change. It still grows the API read surface before 14 piece 2
+  freezes the contract, which is why it is here rather than later. The disjoint-files rule
+  is not bent: nothing else runs in 3a.
+
+### Wave 3b — first features on the gated platform (two or three tracks)
+
+- **03 category minimums** — **as written** (2026-09-04): one column, one new view, group
+  shortfalls kept out of `stock_missing_products`. It no longer waits on 07-Q6; if Q6 lands
+  on *taxonomy*, `parent_product_group_id` is an additive follow-on to 03, not a change to
+  this track. New reads sit behind 3a's `STOCK_VIEW`.
+- **06 location barcodes** — as narrowed by [ADR-0011](../adr/0011-label-namespace.md):
+  the mapping-table uid on locations, the print action on the locations list/form pair 12
+  converted, the label's human-readable line. **Interactive "current location" scanning is
+  out** (decided 2026-09-04) and gets its own plan after 08. PostgreSQL-only migration, per
+  wave 2.5.
+- **09 implementation**, *only if* the 09-Q1 experiment has been run by then — it is still
+  deferred on a trip to the kitchen and its own Q1–Q5 carry no Responses. If it has,
+  it inherits sweep S14 first (filter `__barcode` to a filename-safe class, allow-list the
+  image extension, refuse loopback and private hosts before fetching `__image_url`), since
+  every source 09 adds is another party that chooses that URL. If it has not, 3b is two
+  tracks and 09 waits without blocking anything.
+
+The two files 3b's tracks share are `routes.php` and `victual.openapi.json`, additively;
+the rule says disjoint, and with 19 out of this wave the overlap is two feature plans
+adding routes, which is the case the rule was written to tolerate.
 
 ### Wave 4 — the hierarchy work
 
@@ -798,8 +829,8 @@ one only next to what it diverged from.
   that response existed and still treats 07 as its centrepiece. It is not one until Q6
   says so. The question cannot be answered from the code; it needs the real catalogue.
 - **Then whichever of these Q6 selects:**
-  - *Taxonomy* — nested `product_groups` folds into **03**, which moves to wave 3 with
-    a parent column added to its scope, and 07 shrinks to whatever genuine
+  - *Taxonomy* — nested `product_groups` lands as an additive follow-on to **03** (one
+    nullable parent column; 03 itself shipped in wave 3b as written), and 07 shrinks to whatever genuine
     same-product-different-packaging cases remain. Wave 4 stops being the large wave.
   - *Packaging relation* — **07 nested products** as written: only after 08 is merged
     and used, fixtures before any change per its own verification section, the largest
