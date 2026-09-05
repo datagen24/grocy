@@ -21,9 +21,8 @@ that view and is called after purchase, consume and product edits.
 
 `product_groups` is a plain lookup table: `id, name, description, active`.
 
-So the shape of the feature already exists — "a minimum satisfied by any of a set of
-products" is exactly what cumulated parent products do. The gap is that it only works if
-you model the group as a parent product, which forces a fake product into your master data.
+A group minimum would support the same requirement without creating a parent product
+solely to represent a category.
 
 ## Proposed change
 
@@ -40,23 +39,12 @@ holds fractions).
 each group with `min_stock_amount != 0`, one row carrying the group, its minimum and the
 missing amount — the minimum less the summed stock of its active products.
 
-This is Q1's response rather than the design this section first proposed, and the two
-differ in a way worth stating plainly, because the earlier one is the obvious one. The
-first draft added a *third `UNION` branch* to `stock_missing_products`, which is where
-group shortfalls naturally belong if you are thinking about the view. The problem is what
-that view is *for*: every one of its rows is keyed by a `products.id`, and
-`AddMissingProductsToShoppingList` reads that key to add a shopping list item. A group
-shortfall has no single product to add — that is the whole point of the feature, that you
-do not care which milk — so a third branch would either emit a null-keyed row into a
-consumer that dereferences the key, or invent a product to name. Putting the rows in
-their own view removes the question instead of answering it carefully.
+`stock_missing_products` must retain product-keyed rows because
+`StockService::AddMissingProductsToShoppingList()` uses each row's product id. A group
+shortfall has no single product to add, so it needs a separate view (Q1).
 
-The sum is built from each product's **own, non-aggregated** stock across the group's
-members, not from `stock_current`'s aggregated rows. Q3 has the trap: if the sum came from
-rows that already fold children into parents *and* both are in the same group, the stock
-counts twice — which is true today for nothing, and becomes true the moment
-[07](07-nested-products.md) makes the tree deep. Building it the right way now costs
-nothing.
+Sum each member product's own, non-aggregated stock. Summing rows that already include
+child stock would double-count it when both parent and child belong to the group (Q3).
 
 Inactive products are excluded, matching the existing branches' `IFNULL(p.active, 0) = 1`
 (Q4). Group minimums and per product minimums are independent: a product below its own
@@ -68,14 +56,12 @@ regardless of its members (Q2).
 `product_groups` is in `ExposedEntity`, so `/objects/product_groups` gains a field —
 additive.
 
-**`/stock/volatile` does not change shape.** It is fed by `stock_missing_products`, which
-this plan no longer touches; that is the second reason Q1 landed where it did, and it is
-what keeps goal 1 intact without an argument. `product_groups_missing` is a new view and
-reaches clients only if it is added to `ExposedEntity`, which is additive when it happens.
+`/stock/volatile` retains its existing shape because `stock_missing_products` is
+unchanged. Exposing `product_groups_missing` through `ExposedEntity` would add a new
+read entity.
 
-**Client impact: none.** No existing response changes shape or field set; a new column on
-an existing entity and, optionally, a new entity. Per [17](17-ecosystem-clients.md)'s
-mechanism, this line is here even though it reads "none".
+**Client impact:** additive `min_stock_amount` field on `product_groups`, and optionally
+a new read entity. Existing fields and `/stock/volatile` remain unchanged.
 
 ### UI
 
@@ -124,18 +110,12 @@ a group is short. Reusing the existing "below minimum stock" styling is the chea
 
    > **Response:** Agreed, exclude.
 
-## Effort
+## Scope and dependencies
 
-Small. Q1 is settled, so this is one column, one new view and one form field, with no
-shopping list interaction and no `/stock/volatile` compatibility question — both were
-costs of the auto-adding design Q1 declined. The note-only shopping list row remains the
-follow-up if the feature proves itself.
+Small: one column, one view, a form field, and an overview indication. Automatic
+shopping-list entries are out of scope for v1.
 
-**If [07](07-nested-products.md)'s Q6 lands on *taxonomy*, this plan grows.** Q6's
-response says that if the requirement is a classification rather than a packaging
-relation, then nesting `product_groups` is the right change and most of 07 is
-unnecessary — which puts a `parent_product_group_id` column in this plan's territory and
-makes the group sum above recursive. That would move 03 from small to medium and pull it
-to the front of wave 3. It cannot be settled from the code; it needs the real catalogue.
-Until Q6 answers, this plan is scoped as written and the roadmap's Status row records the
-contingency.
+This plan is scheduled for wave 3b and does not wait for [07](07-nested-products.md)'s Q6.
+If Q6 selects taxonomy, nested product groups are an additive follow-up. That follow-up
+would require a parent-group column and recursive aggregation; it does not expand this
+plan's current scope.
