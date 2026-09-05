@@ -16,8 +16,7 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
 - **The dual-engine discipline is live** — and stays live even though
   [ADR-0008](docs/adr/0008-postgresql-only-runtime-engine.md) was **accepted 2026-08-31**.
   The record makes PostgreSQL the sole runtime and SQLite an import format; the retirement
-  work it calls for is not yet scheduled in the roadmap's wave order, so until that lands
-  nothing about the current discipline relaxes: every view exists on both engines and is
+  work has not landed, so the current discipline still applies: every view exists on both engines and is
   proved equivalent, migrations from 0256 on are portable or marked pairs per
   [ADR-0004](docs/adr/0004-engine-specific-migrations.md), `check-migrations.php` guards
   the marker discipline, and the differential harness in `.devtools/pgsql/` is the proof.
@@ -61,6 +60,9 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
 
 ## Documentation conventions
 
+- Follow [docs/documentation.md](docs/documentation.md) for document purpose and prose.
+  READMEs orient readers; ADRs explain decisions; plans provide research and design inputs
+  from which implementation steps can be prepared.
 - Plans carry numbered **Open questions**; review answers go inline as `> **Response:**`
   blocks under the question, so question and answer read together.
 - A landed plan gains an **Executed** section recording what actually shipped, including
