@@ -9,6 +9,15 @@ namespace Victual\Services\Database;
  * SQL in the migrations and a handful of services (not portable). This class is the seam
  * for the second part - connection setup, engine specific functions, and the few SQL
  * fragments that leak into PHP.
+ *
+ * Since ADR-0008's retirement there is one runtime engine, so the seam has one runtime
+ * implementation. It is not therefore dead weight: ADR-0017 (**Proposed**, not accepted)
+ * argues that this class stays as the boundary and that Doctrine DBAL replaces the roughly
+ * half of its methods DBAL already answers - connection, quoting, platform expressions,
+ * schema introspection and error translation - leaving advisory locks, the changed-time
+ * bookkeeping and the optimize statement fork-owned. Read that record before removing or
+ * inlining anything here; until it is accepted or rejected, neither its direction nor its
+ * removal is decided.
  */
 abstract class DatabaseDialect
 {

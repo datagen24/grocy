@@ -121,6 +121,13 @@ retires the harness.
 the suite writes it. The serving images already dropped it with plan 10 and stay as they
 are.
 
+The dialect seam itself outlives all three, and what happens to it is a separate decision:
+[ADR-0017](../adr/0017-doctrine-dbal-is-the-persistence-seam.md) (Proposed) argues that
+`DatabaseDialect` stays as a boundary and becomes Doctrine DBAL, so that engine choice is a
+structural affordance for a successor rather than a supported feature. That record has to be
+decided before [14](14-contract-and-regression-scaffolding.md) piece 2 removes the
+differential suite, which is currently the only remaining caller with a second dialect.
+
 ## Alternatives
 
 **Retire the harness in the same change** (ADR-0008's option B). Rejected there and again

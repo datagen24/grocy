@@ -68,6 +68,7 @@ choice and rationale.
 | [0014](0014-administering-a-user-is-a-subset-question.md) | Administering a user means holding everything they hold | **Proposed** | [security sweep](../security-sweep.md) S5, S6, S27 |
 | [0015](0015-medication-records-never-advises.md) | Victual records medication; it never advises | **Proposed** | [22](../plans/22-medication-tracking.md) |
 | [0016](0016-schedule-expansion-in-the-application.md) | Schedule expansion lives in the application, not the database | **Proposed**, an input to [0009](0009-database-as-the-logic-layer.md) | [22](../plans/22-medication-tracking.md) |
+| [0017](0017-doctrine-dbal-is-the-persistence-seam.md) | Doctrine DBAL is the persistence seam; engine portability is an affordance, not a promise | **Proposed**, depends on 0008 | [24](../plans/24-sqlite-runtime-retirement.md), [15](../plans/15-deliberate-cleanup.md) |
 
 ## Review and implementation notes
 
@@ -82,6 +83,7 @@ Gate review recorded 2026-09-04; consult each record for its full requirements.
 | 0013 | Accepted with all five gates met. Images build and serve; production Docker target retired. Remaining deployment work is in plan 20. |
 | 0014 | Proposed; see the record for the user-administration rule and its existing implementation. |
 | 0015 / 0016 | Proposed, not assessed by the 2026-09-04 gate review. 0015 requires two reviews; 0016 requires a snapshot-table decision before plan 22 piece 4. Read 0016 when evaluating 0009. |
+| 0017 | Proposed. Three acceptance prerequisites: a view-introspection spike, 14 piece 2 before its stage 3, and a measured image closure. Decide it before 14 piece 2 removes the differential suite, which is what currently justifies the dialect seam. Read it when evaluating 0009, whose direction reduces what the seam can carry. |
 
 ## Known unfiled decisions
 
