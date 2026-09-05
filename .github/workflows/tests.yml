@@ -1,4 +1,4 @@
-# The differential test suite, on every pull request.
+# The differential test suite, on every pull request with non-Markdown changes.
 #
 # What this gates is the one thing this fork can most easily break without noticing:
 # that the application behaves identically on SQLite and PostgreSQL. A view that quietly
@@ -10,9 +10,7 @@
 # the feedback loop for no extra coverage. Both paths run the same runner script, so
 # there is one definition of what "the suite" means.
 #
-# The images themselves are built in their own job, because the file now produces a
-# production image as well and an image nobody builds is an image that quietly stops
-# building.
+# The development image is built in its own job; production images use nix.yml.
 
 name: tests
 
@@ -28,14 +26,25 @@ on:
     branches: [master]
 
 jobs:
+  changes:
+    uses: ./.github/workflows/changes.yml
+
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+
+      - name: Check CI validation scripts
+        run: python3 -m unittest discover -s .devtools/ci
+
+      - name: Check changed ADR headers
+        run: python3 .devtools/ci/check_adr_headers.py
 
       # There is no configured linter in this repository, so this is a syntax sweep
       # rather than a style check. It is cheap and it catches the parse error that
@@ -68,6 +77,8 @@ jobs:
         run: php .devtools/check-cited-jobs.php
 
   suite:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run-tests == 'true')
     runs-on: ubuntu-latest
 
     services:
@@ -157,6 +168,8 @@ jobs:
   # exactly the class S29 closed reached master and stayed open until an external scanner
   # reported them. See docs/plans/21-frontend-sink-discipline.md.
   frontend-security:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run-tests == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -236,6 +249,8 @@ jobs:
         run: tail -50 /tmp/php-server.log || true
 
   images:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run-tests == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
