@@ -37,8 +37,10 @@ class OpenApiController extends BaseApiController
 	 * @param int $selectedKeyId Row id to highlight, or -1
 	 * @param string|null $newApiKey The plaintext of a key created by this request - the
 	 *                               only moment it exists, since what is stored is a hash
+	 * @param string|null $newApiKeyDescription That key's description, so the one-time
+	 *                                          reveal says which key it is showing
 	 */
-	private function RenderApiKeysPage(Response $response, int $selectedKeyId, ?string $newApiKey = null)
+	private function RenderApiKeysPage(Response $response, int $selectedKeyId, ?string $newApiKey = null, ?string $newApiKeyDescription = null)
 	{
 		$apiKeys = $this->DB->api_keys();
 		if (!User::HasPermissions(User::PERMISSION_ADMIN))
@@ -50,7 +52,8 @@ class OpenApiController extends BaseApiController
 			'apiKeys' => $apiKeys,
 			'users' => $this->DB->users(),
 			'selectedKeyId' => $selectedKeyId,
-			'newApiKey' => $newApiKey
+			'newApiKey' => $newApiKey,
+			'newApiKeyDescription' => $newApiKeyDescription
 		]);
 	}
 
@@ -76,7 +79,7 @@ class OpenApiController extends BaseApiController
 		// 4), so nothing can produce the plaintext again. The obvious alternative - putting
 		// it in the redirect URL - is the query-string key path sweep finding S11 exists to
 		// remove, in the one place it would be most durable: browser history.
-		return $this->RenderApiKeysPage($response, (int)$newApiKeyId, $newApiKey);
+		return $this->RenderApiKeysPage($response, (int)$newApiKeyId, $newApiKey, $description);
 	}
 
 	/**

@@ -6,7 +6,7 @@
 
 > ⚠️ Changing your own password now requires your current password
 
-> ⚠️ API keys are now stored as a SHA-256 hash. Your existing keys keep working unchanged - only what is on disk changes - but the manage-keys page can no longer show you a key you already have. It shows the last four characters instead, and a newly created key is displayed once, on the page that creates it. Copy it then; nothing can produce it again
+> ⚠️ API keys are now stored as a SHA-256 hash. Your existing keys keep working unchanged - only what is on disk changes - but the manage-keys page can no longer show you a key you already have. It shows the last four characters instead, and a newly created key is displayed once, with its description, on the page that creates it. Copy it then; nothing can produce it again
 
 > ⚠️ `/logout` and `/manageapikeys/new` are `POST` routes now, not `GET`. As `GET`s they fired from any page that could get a browser to load a URL - the second one creating an API key with a description of the requester's choosing. The links in the interface were updated; a bookmark or a script calling either as a `GET` gets a `405`
 

@@ -44,13 +44,20 @@
 	<div class="col">
 		<div class="alert alert-success">
 			<h4>{{ $__t('Your new API key') }}</h4>
+			@if(!empty($newApiKeyDescription))
+			<h5 class="text-muted">{{ $newApiKeyDescription }}</h5>
+			@endif
 			<p>{{ $__t('Copy it now - it cannot be shown again') }}</p>
 			<pre class="user-select-all mb-2"><code id="new-api-key-value">{{ $newApiKey }}</code></pre>
+			{{-- The description carried here is the one just typed, so that the QR dialog says
+			     which key it is showing. It is user input reaching a bootbox message, which
+			     renders as HTML - manageapikeys.js escapes it at the point of use, and the
+			     s29-payload probe's manageapikeys-qr case is what holds that true. --}}
 			<a class="btn btn-info btn-sm apikey-show-qr-button"
 				href="#"
 				data-apikey-key="{{ $newApiKey }}"
 				data-apikey-type="default"
-				data-apikey-description="{{ $__t('Your new API key') }}">
+				data-apikey-description="{{ empty($newApiKeyDescription) ? $__t('Your new API key') : $newApiKeyDescription }}">
 				<i class="fa-solid fa-qrcode"></i>&nbsp;{{ $__t('Show a QR-Code for this API key') }}
 			</a>
 		</div>

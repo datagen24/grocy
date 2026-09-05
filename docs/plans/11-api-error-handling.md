@@ -420,6 +420,17 @@ should instead preserve today's behaviour.
 > the response to the create is the only moment the plaintext exists. Putting it in the
 > redirect URL was the obvious alternative and is exactly the query-string key path S11
 > exists to remove, in the place it would be most durable — browser history.
+>
+> **That moved a sweep S29 sink rather than removing one, and the payload probe follows
+> it.** The QR dialog interpolates a key's description into a `bootbox` message, which
+> renders as HTML; with no plaintext left on a regular key's row there is nothing to encode
+> there, so the dialog now exists only on the one-time reveal — which carries the
+> description just typed, both so a person can tell which key they are looking at and so the
+> sink stays a real one. `.devtools/frontend/s29-payload.js`'s `manageapikeys-qr` case
+> creates a key rather than finding one, for the same reason. **The `frontend-security` job
+> would have failed without that**, and not for the interesting reason: its seed read the new
+> key's id out of the redirect this change removed, so *both* API-key probes reported "the
+> sink was never reached". Found by running the probe locally rather than by watching CI.
 
 - **Drop the query-parameter form** of `VICTUAL-API-KEY`. The iCal `?secret=` path is
   separate, is scoped to `API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL`, is the reason that
