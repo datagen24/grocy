@@ -52,8 +52,12 @@ this ADR is its first concrete instance.
   the ADR is where a reader looks.** S12's second half — force a password change while the
   seeded `admin`/`admin` hash is in use — has the same shape and a different answer. The
   question "is this account still on the default password?" can only be asked where a
-  plaintext password exists, which is the login path, so the *answer* is stored (a
-  `must_change_password` user setting) rather than recomputed. Recomputing it would mean an
+  plaintext password exists, which is the login path, so the *answer* is stored (the
+  `users.must_change_password` column, migration 0265) rather than recomputed. It was a
+  *user setting* first, and review of PR #68 named the flaw in one line: a setting is a bag
+  its owner can empty, so `DELETE /api/user/settings/must_change_password` lifted the
+  restriction without changing any password. Where state outlives the process is only half
+  the question; the other half is who can reach it. Recomputing it would mean an
   Argon2id verification on every request, which is expensive by design. That is the mirror
   of this record rather than an exception to it: state that must outlive the process goes in
   the database either way, and what changes is whether the process could cheaply derive it

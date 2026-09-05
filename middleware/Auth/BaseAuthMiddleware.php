@@ -141,12 +141,19 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 	 * exception to it: a key has to be put in a header deliberately, so a page on another
 	 * origin cannot cause one to be sent. The forgery being refused is of the ambient kind.
 	 *
-	 * **An absent Origin is allowed**, deliberately and with a cost worth stating. Browsers
-	 * send `Origin` on every cross-origin request and on same-origin non-GET requests too,
-	 * so refusing only a mismatch closes the browser case; refusing an absent one would
+	 * **An absent Origin is allowed; a present one that is not ours is not**, and the
+	 * distinction is the whole of the rule. Browsers send `Origin` on every cross-origin
+	 * request and on same-origin non-GET requests too, so refusing every header that does
+	 * not resolve to this origin closes the browser case; refusing an *absent* one would
 	 * also refuse a script or a command-line client driving the API with a session cookie,
-	 * which is a legitimate if unusual thing to do. `Referer` is consulted when `Origin` is
-	 * missing, so a browser that only sends the older header is still covered.
+	 * which is a legitimate if unusual thing to do. `Referer` is consulted only when
+	 * `Origin` is missing, so a browser that sends only the older header is still covered.
+	 *
+	 * **`Origin: null` is a refusal, not an absence.** It is what a sandboxed iframe, a
+	 * `data:` document and some redirect chains send, and it is precisely not this origin -
+	 * treating it as "no header" was a bypass, and one a page can produce deliberately.
+	 * Found in review of PR #68. A header that is present and does not parse into an origin
+	 * is refused for the same reason: something sent it, and it is not us.
 	 */
 	private function CrossOriginRefusal(Request $request): ?Response
 	{
@@ -160,14 +167,21 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 			return null;
 		}
 
-		$claimed = self::OriginOf($request->getHeaderLine('Origin'));
+		// Origin first and alone when it is there: a request that carries one has said what
+		// it is, and falling through to Referer would let a weaker header overrule it
+		$header = trim($request->getHeaderLine('Origin'));
 
-		if ($claimed === null)
+		if ($header === '')
 		{
-			$claimed = self::OriginOf($request->getHeaderLine('Referer'));
+			$header = trim($request->getHeaderLine('Referer'));
 		}
 
-		if ($claimed === null || $claimed === self::OwnOrigin($request))
+		if ($header === '')
+		{
+			return null;
+		}
+
+		if (self::OriginOf($header) === self::OwnOrigin($request))
 		{
 			return null;
 		}
@@ -180,12 +194,17 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 
 	/**
 	 * The scheme://host[:port] of a URL, or null when there is not one to read.
+	 *
+	 * Null is "this is not an origin", which the caller treats as a refusal rather than as
+	 * an absence - the opaque literal `null` and anything unparseable both land here, and
+	 * neither is this origin. Whether the header was sent at all is the caller's question
+	 * and is asked before this is called.
 	 */
 	private static function OriginOf(string $url): ?string
 	{
 		$url = trim($url);
 
-		if ($url === '' || $url === 'null')
+		if ($url === '')
 		{
 			return null;
 		}
@@ -240,9 +259,10 @@ abstract class BaseAuthMiddleware extends BaseMiddleware
 	 * the one page that cannot work. An API key is also a credential of its own, issued
 	 * deliberately, rather than a default nobody chose.
 	 *
-	 * It costs a settings read rather than a password hash - see
-	 * UsersService::SETTING_MUST_CHANGE_PASSWORD for why that distinction is the whole
-	 * design.
+	 * It costs one row read rather than a password hash - see
+	 * UsersService::RecordPasswordUsedAtLogin() for why that distinction is the whole
+	 * design, and why the flag is a column on `users` rather than a setting the account
+	 * could delete.
 	 */
 	private function PasswordChangeRedirect(Request $request, int $userId): ?Response
 	{

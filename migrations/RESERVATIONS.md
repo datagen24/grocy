@@ -38,6 +38,7 @@ have recorded it.
 | 0262 | [security sweep S12](../docs/security-sweep.md) via wave 2 — `login_attempts`, the login throttle's out-of-process state | in this tree |
 | 0263 | [plan 11](../docs/plans/11-api-error-handling.md) question 4 — `api_keys.key_hint` | in this tree |
 | 0264 | [plan 11](../docs/plans/11-api-error-handling.md) question 4 — hash the stored API keys, backfill the hint | in this tree |
+| 0265 | [security sweep S12](../docs/security-sweep.md) via wave 2 — `users.must_change_password`, moved out of `user_settings` in review | in this tree |
 
 ## The merge order this implies — discharged
 
@@ -55,7 +56,7 @@ nothing, and it runs `StoredHtmlPurifier` over the five columns in
 `BaseApiController::HTML_RENDERED_COLUMNS`. It is portable in one file because PDO is, so it
 needs no engine pair under [ADR-0004](../docs/adr/0004-engine-specific-migrations.md).
 
-The next migration takes **0265** and claims it here first.
+The next migration takes **0266** and claims it here first.
 
 0263 and 0264 are one change in two numbers on purpose: the column has to exist before the
 data migration that fills it runs, and a number selects a file rather than an ordering

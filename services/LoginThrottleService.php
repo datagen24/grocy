@@ -64,14 +64,26 @@ class LoginThrottleService extends BaseService
 	}
 
 	/**
-	 * Clears the counters a successful login earns back - this username, and the address
-	 * it came from.
+	 * Clears the counter a successful login earns back: this username's, and only this
+	 * username's.
+	 *
+	 * It used to clear the address's rows too, and that was a bypass rather than a
+	 * convenience. Those rows are failures against *other* usernames, and a success proves
+	 * nothing about them - so on a household behind one address, anybody could make nine
+	 * guesses at `admin`, log in to their own account to wipe the slate, and repeat
+	 * indefinitely. Found in review of PR #68.
+	 *
+	 * The cost of the narrower rule is real and is the right cost: ten fumbled attempts
+	 * from one address hold that address for the rest of the window even after somebody
+	 * else logs in successfully. That is what a per-address limit *is*, it self-heals in
+	 * LOGIN_THROTTLE_WINDOW_MINUTES, and behind a reverse proxy the address is the proxy
+	 * anyway - which is why the per-username limit is the one that carries the load there.
 	 */
 	public function ClearAttempts(string $username, string $ipAddress): void
 	{
 		$dbModTime = DatabaseService::GetInstance()->GetDbChangedTime();
 
-		$this->DB->login_attempts()->where('username = :1 OR ip_address = :2', $username, $ipAddress)->delete();
+		$this->DB->login_attempts()->where('username', $username)->delete();
 
 		DatabaseService::GetInstance()->SetDbChangedTime($dbModTime);
 	}

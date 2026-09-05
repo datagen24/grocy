@@ -86,7 +86,7 @@
 - A CORS preflight (`OPTIONS`) on an API route is now answered `204` instead of `401`, and carries the CORS headers when the request's `Origin` is listed in `CORS_ALLOWED_ORIGINS`
 - Cross-origin responses no longer carry `Access-Control-Allow-Origin: *`. Set `CORS_ALLOWED_ORIGINS` to the exact origins that may call the API from a browser; the default is empty, which sends no CORS headers at all
 - An unmatched `/api/...` path is now answered `404` instead of an empty `200`
-- A state-changing API request authenticated by a session cookie (rather than by an API key) is refused `403` when its `Origin` or `Referer` names another site. Requests carrying an API key are unaffected, and so are requests with no `Origin` at all
+- A state-changing API request authenticated by a session cookie (rather than by an API key) is refused `403` unless its `Origin` - or, when there is none, its `Referer` - is this site. An opaque `Origin: null`, as a sandboxed frame sends, is refused like any other. Requests carrying an API key are unaffected, and so are requests carrying neither header
 - A permission failure is now always answered `403`. It was a `400` on `POST /chores/{id}/execute`, `POST /chores/executions/{id}/undo` and `GET /print/shoppinglist/thermal`, where the check happened to run inside the error handling rather than before it
 - `POST /chores/executions/calculate-next-assignments` now requires the `CHORES` permission. It had no permission check at all, so any authenticated key could rewrite every chore's next assignment
 - `PUT` and `DELETE` on an object that does not exist are now answered `404` instead of `400`, which is what `GET` of the same object already answered
@@ -121,7 +121,7 @@
 
 ### Login
 
-- Failed logins are rate limited - see the note at the top. The counters live in the database rather than in the process, so they survive a restart
+- Failed logins are rate limited - see the note at the top. The counters live in the database rather than in the process, so they survive a restart. A successful login clears its own username's failures and nobody else's, so one account's success cannot wipe another's counter
 - An account still using the seeded `admin`/`admin` password is redirected to its own password change form from every page until the password is changed. The API is not gated, because that form saves through it
 
 ### Server errors and logging

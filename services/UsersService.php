@@ -97,17 +97,6 @@ class UsersService extends BaseService
 	}
 
 	/**
-	 * The setting that marks an account as still using the password migration 0027 seeds.
-	 *
-	 * It is a stored flag rather than a check, because checking means running
-	 * password_verify() against the seeded password on every request - an Argon2id
-	 * verification, which is expensive by design. Only the login path ever sees a
-	 * plaintext password, so that is where the question is answered and this is where the
-	 * answer is kept. Sweep finding S12's second half.
-	 */
-	const SETTING_MUST_CHANGE_PASSWORD = 'must_change_password';
-
-	/**
 	 * The password migration 0027 gives the account it creates.
 	 */
 	const SEEDED_DEFAULT_PASSWORD = 'admin';
@@ -116,15 +105,27 @@ class UsersService extends BaseService
 	 * Records whether the password just used to log in is the seeded default, so that
 	 * MustChangePassword() can answer without hashing anything.
 	 *
+	 * A stored flag rather than a check, because checking means running password_verify()
+	 * against the seeded password on every request - an Argon2id verification, which is
+	 * expensive by design. Only the login path ever sees a plaintext password, so that is
+	 * where the question is answered.
+	 *
+	 * It is a column on `users` (migration 0265) and not a user setting. It was a setting
+	 * until review of PR #68 pointed out what that means: a setting is a bag its owner can
+	 * empty, and `DELETE /api/user/settings/must_change_password` lifted the restriction
+	 * without changing any password. Authentication state does not go somewhere its subject
+	 * can reach.
+	 *
 	 * Written only when the answer changes, so an ordinary login is still a read.
 	 */
 	public function RecordPasswordUsedAtLogin(int $userId, string $plaintextPassword): void
 	{
-		$mustChange = ($plaintextPassword === self::SEEDED_DEFAULT_PASSWORD) ? '1' : '0';
+		$mustChange = ($plaintextPassword === self::SEEDED_DEFAULT_PASSWORD) ? 1 : 0;
+		$user = $this->DB->users($userId);
 
-		if ((string)$this->GetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD) !== $mustChange)
+		if ($user !== null && (int)$user->must_change_password !== $mustChange)
 		{
-			$this->SetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD, $mustChange);
+			$user->update(['must_change_password' => $mustChange]);
 		}
 	}
 
@@ -134,7 +135,9 @@ class UsersService extends BaseService
 	 */
 	public function MustChangePassword($userId): bool
 	{
-		return (string)$this->GetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD) === '1';
+		$user = $this->DB->users($userId);
+
+		return $user !== null && (int)$user->must_change_password === 1;
 	}
 
 	/**
@@ -178,12 +181,12 @@ class UsersService extends BaseService
 				'first_name' => $firstName,
 				'last_name' => $lastName,
 				'password' => password_hash($password, PASSWORD_ARGON2ID),
-				'picture_file_name' => $pictureFileName
+				'picture_file_name' => $pictureFileName,
+				// Whatever it is now, it is not the seeded default any more - unless somebody
+				// deliberately set it back to that, which the next login will notice. Written
+				// in the same update as the password so the two cannot come apart.
+				'must_change_password' => 0
 			]);
-
-			// Whatever it is now, it is not the seeded default any more - unless somebody
-			// deliberately set it back to that, which the next login will notice
-			$this->SetUserSetting($userId, self::SETTING_MUST_CHANGE_PASSWORD, '0');
 		}
 	}
 
