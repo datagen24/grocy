@@ -1,12 +1,14 @@
 ---
 name: run-app
-description: Boot this app locally (PHP built-in server, SQLite demo mode) and drive it with Playwright for screenshots. Use when asked to run, start, boot, or screenshot the app, or to verify a change on a running instance.
+description: Boot this app locally (PHP built-in server, PostgreSQL demo mode) and drive it with Playwright for screenshots. Use when asked to run, start, boot, or screenshot the app, or to verify a change on a running instance.
 ---
 
 # Run the app locally
 
 Verified cold-start from a fresh Linux container (Claude Code web session,
-2026-08). Total time ~2 minutes. All commands from the repo root.
+2026-08; re-verified on PostgreSQL 2026-09-05, when ADR-0008's retirement
+removed the SQLite boot). Total time ~3 minutes, most of it the demo
+generation. All commands from the repo root.
 
 ## 1. PHP dependencies
 
@@ -46,32 +48,71 @@ repo state:
 git checkout helpers/PrerequisiteChecker.php
 ```
 
-## 4. Data directory and boot
+## 4. PostgreSQL
+
+Since [ADR-0008](../../../docs/adr/0008-postgresql-only-runtime-engine.md)'s
+retirement landed there is no SQLite boot: `DB_DRIVER` accepts `pgsql` and
+nothing else, and demo mode runs on it like everything else. A container
+that has the `postgresql` packages but no running cluster - which is the
+usual state - starts one and gets a role in two commands:
 
 ```bash
-mkdir -p data && cp config-dist.php data/config.php
-VICTUAL_MODE=demo VICTUAL_DATAPATH=$PWD/data php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
-sleep 2 && curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8085/
+pg_ctlcluster 16 main start          # or: service postgresql start
+su postgres -c "psql -c \"CREATE ROLE victual LOGIN SUPERUSER PASSWORD 'victual'\""
+export PGHOST=127.0.0.1 PGPORT=5432 PGUSER=victual PGPASSWORD=victual
+createdb victual_demo
 ```
 
-Demo mode seeds a SQLite database (`data/victual_en.db`) with sample data and
-auto-logs-in as "Demo User" — no credentials needed. First `GET /` runs
-migrations and demo generation, then 302s to the entry page.
+`pg_isready` says whether the cluster came up. If PostgreSQL is not
+installed at all, `docker-compose.yml` has a service for it.
 
-**If a page later 500s with `no such table: migrations`** (a race on the
-very first boot), run migrations directly and retry:
+## 5. Data directory and boot
+
+Use a throwaway data directory - never `./data`, which may hold a real
+local `config.php` and database that an unconditional copy would destroy.
+The config is written rather than copied from `config-dist.php`: the
+distributed defaults name a server on localhost with an empty password,
+which is not the one just created.
 
 ```bash
-VICTUAL_MODE=demo VICTUAL_DATAPATH=$PWD/data php bin/victual-migrate
+export VDATA=$(mktemp -d)
+cat > "$VDATA/config.php" <<'PHPCONFIG'
+<?php
+Setting('DB_DRIVER', 'pgsql');
+Setting('DB_HOST', '127.0.0.1');
+Setting('DB_PORT', 5432);
+Setting('DB_NAME', 'victual_demo');
+Setting('DB_USER', 'victual');
+Setting('DB_PASSWORD', 'victual');
+PHPCONFIG
+VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php bin/victual-migrate
+VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &
+sleep 2 && curl -s -o /dev/null -w "%{http_code}\n" --max-time 300 http://127.0.0.1:8085/
 ```
 
-Smoke check — expect 200 with a large HTML body:
+Migrate first: a request no longer migrates the database unless
+`MIGRATE_ON_ROOT_REQUEST` is on, and an application whose schema is behind
+its code answers **503** with a message saying exactly this (plan 10). The
+alternative is `VICTUAL_MIGRATE_ON_ROOT_REQUEST=true` in the environment of
+both commands, which restores the old "just hit the page" behaviour.
+
+Demo mode seeds the database with sample data and auto-logs-in as "Demo
+User" - no credentials needed. The first `GET /` generates the demo data and
+then 302s to the entry page. It takes a minute or so, mostly waiting on the
+picture downloads below, so give that request a generous timeout; a 302 back
+means it finished.
+
+Smoke check - expect 200 with a large HTML body:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" http://127.0.0.1:8085/stockoverview
 ```
 
-## 5. Screenshots (Playwright)
+If the demo tables are empty afterwards, read `/tmp/php-server.log`: a boot
+that fails a prerequisite answers 200 with an error page, which looks like
+success to `curl -o /dev/null`.
+
+## 6. Screenshots (Playwright)
 
 Chromium is pre-installed at `/opt/pw-browsers/chromium`; do NOT run
 `playwright install`. `playwright-core` is not in this repo's
@@ -104,10 +145,9 @@ icons on `/mealplan`. For presentable screenshots, clear the references
 first:
 
 ```bash
-php -r '$d = new PDO("sqlite:data/victual_en.db");
-  $d->exec("UPDATE recipes SET picture_file_name = NULL");
-  $d->exec("UPDATE products SET picture_file_name = NULL");'
-find data/storage -type f -size 0 -delete
+psql -d victual_demo -c "UPDATE recipes SET picture_file_name = NULL" \
+  -c "UPDATE products SET picture_file_name = NULL"
+find "$VDATA/storage" -type f -size 0 -delete
 ```
 
 Check for the problem rather than assuming: after loading a page,
@@ -119,6 +159,7 @@ is a `d-none` template element.
 
 - **Dev mode instead of demo data**: `VICTUAL_MODE=dev` — empty database,
   auth also bypassed (user id 1).
-- **PostgreSQL**: `docker-compose.yml` has a PostgreSQL service and the
-  `DB_*` settings in `data/config.php` switch the driver; SQLite demo mode
-  is the fastest path for UI checks and needs no services.
+- **A database that is not local**: point the `DB_*` settings at it. There
+  is no engine to switch to any more - see
+  [ADR-0008](../../../docs/adr/0008-postgresql-only-runtime-engine.md), and
+  `bin/victual-db-import` for moving an old SQLite installation across.

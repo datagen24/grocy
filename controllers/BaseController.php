@@ -35,7 +35,7 @@ class BaseController
 	/** @var \Victual\Helpers\SlimBladeView The shared Blade view engine */
 	protected $View;
 
-	/** @var \LessQL\Database Fluent database connection (SQLite or PostgreSQL, depending on configuration) */
+	/** @var \LessQL\Database Fluent database connection (PostgreSQL; see ADR-0008) */
 	protected $DB;
 
 	/**

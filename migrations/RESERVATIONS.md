@@ -21,6 +21,15 @@ check says so by name rather than leaving it to be noticed in review. The branch
 lower number merges first; alternatively the higher number is moved down at merge time,
 which is only safe while no database anywhere has run it.
 
+**Above 0265 a migration is PostgreSQL-only.** ADR-0008's retirement froze the SQLite line
+at `DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID` = 0265, because SQLite is an input
+format now and an input format's upper bound has to stop moving: nothing here migrates a
+SQLite database past that number, so a `NNNN.sqlite.sql` above it is a file no engine can run
+and no source `bin/victual-db-import` accepts could have applied. Write the `.pgsql.sql` — or
+a portable `NNNN.sql`, which now means the same thing — and `check-migrations.php` refuses
+the SQLite half. Numbers 0256-0265 keep the two-engine rules they were written under; that
+range is history and the differential suite still replays it.
+
 **A number is retired, never reused.** Once a file has existed under a number in `master`,
 that number is spent even if the migration is later reverted — some database somewhere may
 have recorded it.

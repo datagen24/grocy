@@ -42,18 +42,37 @@ builds use Nix under [ADR-0013](adr/0013-nix-built-container-images.md).
 
 ### PostgreSQL
 
-Set `DB_DRIVER` to `pgsql` in `data/config.php` along with the `DB_*` connection settings.
-A fresh, empty database is a valid target — the schema is created on first migration from
-a squashed baseline rather than by replaying grocy's SQLite migration history.
+`DB_DRIVER` is `pgsql` and there is no other value:
+[ADR-0008](adr/0008-postgresql-only-runtime-engine.md) made PostgreSQL the sole runtime
+engine, and its retirement has landed. Set the `DB_*` connection settings in
+`data/config.php` (or as `VICTUAL_DB_*` environment variables). A fresh, empty database is a
+valid target — the schema is created on first migration from a squashed baseline rather than
+by replaying grocy's SQLite migration history.
 
-To move an existing SQLite installation across, use `bin/victual-db-import`, which preserves
-row ids exactly. See [db/pgsql/README.md](../db/pgsql/README.md) for the porting rules, the
-seventeen documented porting hazards and the two accepted behavioural differences between
-the engines.
+An installation whose `config.php` still says `sqlite` is refused at startup, with the
+command that moves it across in the message.
 
-`DB_DRIVER` still defaults to `sqlite`. [ADR-0008](adr/0008-postgresql-only-runtime-engine.md)
-selects PostgreSQL as the sole runtime, but SQLite retirement has not landed. Until then,
-changes retain the dual-engine checks. See the [work order](plans/README.md#order-of-operations).
+### Moving an existing SQLite installation across
+
+```
+php bin/victual-migrate            # create the schema in the empty PostgreSQL database
+php bin/victual-db-import /path/to/victual.db --force
+```
+
+`bin/victual-db-import` preserves row ids exactly. It accepts a grocy or Victual SQLite
+database whose schema is between migrations **0255 and 0265** inclusive and refuses anything
+outside that span, naming both numbers. 0255 is where upstream grocy 4.x stops, so a database
+from a grocy installation qualifies once that installation has been started once on the
+version that wrote it; 0265 is the last migration the SQLite line will ever have.
+
+Two things the import does that a migration cannot, because the target is migrated before the
+rows arrive: it runs the HTML purifier over the five rich-text columns, and it replaces any
+plaintext API key with its hash. Calendar sharing keys stay readable, as they are in an
+in-place upgrade.
+
+See [db/pgsql/README.md](../db/pgsql/README.md) for the porting rules, the seventeen
+documented porting hazards and the two accepted behavioural differences between the
+engines.
 
 ### File storage
 
@@ -102,10 +121,9 @@ InfluxDB cost the caller the sum of those two timeouts.
 - PHP 8.5 — what `composer.json` declares; the real language floor is 8.4 and reconciling
   the two is [plan 15](plans/15-deliberate-cleanup.md)
   - Required extensions: `fileinfo`, `gd`, `ctype`, `intl`, `zlib`, `mbstring`
-  - Plus the PDO driver for the engine in use — `pdo_sqlite` (SQLite 3.40+) *or*
-    `pdo_pgsql`, checked per `DB_DRIVER` since
-    [plan 10](plans/10-cold-start-statelessness.md) landed. The Nix PHP
-    images ship only `pdo_pgsql`
+  - Plus `pdo_pgsql`. `pdo_sqlite` is needed only by `bin/victual-db-import` and by the
+    differential suite, which is why the Nix migrate image carries it and the serving
+    images do not
 - Recent Firefox, Chrome or Edge
 
 ## How to update
@@ -231,8 +249,9 @@ Feature flags per major feature set hide and disable the related UI — see
 
 When `MODE` is set to `dev`, `demo` or `prerelease`, the application runs in demo mode:
 **authentication is disabled** and demo data is generated on a request to the root (`/`)
-route (pass `?nodemodata` to skip that). Demo data generation is SQLite-only in this fork
-and is skipped with a line on stderr on any other driver.
+route (pass `?nodemodata` to skip that). It runs against the configured PostgreSQL database
+like everything else; it used to be skipped on any driver but SQLite, which meant a
+PostgreSQL demo instance was an empty one.
 
 ### Configuration outside `config.php`
 

@@ -10,7 +10,10 @@
 # workers by default, and every setting in config-dist.php is resolved through
 # `Setting()`, which reads `getenv('VICTUAL_…')`. With the default, a ConfigMap full of
 # VICTUAL_* variables is silently ignored and the application runs on its defaults —
-# including DB_DRIVER=sqlite against a database that is not there.
+# including DB_HOST=localhost against a database that is not there. (It used to be worse:
+# the default driver was SQLite, so the pod opened a file instead of failing to reach a
+# server. ADR-0008's retirement made the default `pgsql`, which turns that into a
+# connection error rather than an application quietly serving an empty database.)
 {
   writeText,
   lib,

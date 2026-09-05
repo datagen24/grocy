@@ -4,7 +4,6 @@ namespace Victual\Controllers;
 
 use Victual\Services\ApplicationService;
 use Victual\Services\DatabaseMigrationService;
-use Victual\Services\DatabaseService;
 use Victual\Services\DemoDataGeneratorService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -38,8 +37,7 @@ class SystemController extends BaseController
 
 	/**
 	 * Handles the application root (route GET /): populates demo data in
-	 * dev/demo/prerelease mode (on SQLite only, as the demo data generator uses SQLite
-	 * specific SQL) and redirects to the configured entry page.
+	 * dev/demo/prerelease mode and redirects to the configured entry page.
 	 *
 	 * It also migrates the schema when MIGRATE_ON_ROOT_REQUEST says so, which is off by
 	 * default. Migrating inside a request made this route special - it was the only one
@@ -57,18 +55,12 @@ class SystemController extends BaseController
 
 		if (VICTUAL_MODE === 'dev' || VICTUAL_MODE === 'demo' || VICTUAL_MODE === 'prerelease')
 		{
-			// The demo data generator uses SQLite specific SQL, so it can only run there -
-			// on any other driver demo data is skipped and the app just continues
-			$databaseDialectName = DatabaseService::GetInstance()->GetDialect()->GetName();
-			if ($databaseDialectName === 'sqlite')
-			{
-				$demoDataGeneratorService = DemoDataGeneratorService::GetInstance();
-				$demoDataGeneratorService->PopulateDemoData(isset($request->getQueryParams()['nodemodata']));
-			}
-			else
-			{
-				file_put_contents('php://stderr', 'Demo data generation is SQLite only and was skipped for the ' . $databaseDialectName . " driver\n");
-			}
+			// This used to run on SQLite alone, because the generator's raw SQL was SQLite
+			// flavoured - so a PostgreSQL demo instance silently stayed empty and said so on
+			// stderr. ADR-0008's retirement left that branch with no engine to be true on,
+			// and DemoDataGeneratorService is portable now, so there is nothing left to
+			// decide here.
+			DemoDataGeneratorService::GetInstance()->PopulateDemoData(isset($request->getQueryParams()['nodemodata']));
 		}
 
 		return $response->withRedirect($this->AppContainer->get('UrlManager')->ConstructUrl($this->GetEntryPageRelative()));

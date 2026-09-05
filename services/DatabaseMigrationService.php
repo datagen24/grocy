@@ -6,13 +6,16 @@ use Victual\Services\Database\DatabaseDialect;
 use Victual\Services\Database\InitialDataSeeder;
 
 /**
- * Brings the database schema up to date on application start, for either engine.
+ * Brings the database schema up to date on application start.
  *
- * SQLite databases replay the numbered files in migrations/ from the beginning;
- * PostgreSQL (added later) instead loads a squashed baseline schema from db/pgsql/baseline/
- * equivalent to migrations 0001-0255, records those as applied and continues with the
- * regular migration path from 0256 on. Applied migration numbers are tracked in the
- * "migrations" table.
+ * PostgreSQL loads a squashed baseline schema from db/pgsql/baseline/ equivalent to
+ * migrations 0001-0255, records those as applied and continues with the regular migration
+ * path from 0256 on. Applied migration numbers are tracked in the "migrations" table.
+ *
+ * SQLite replays the numbered files from the beginning instead, and since ADR-0008's
+ * retirement that path is reachable only from the differential suite (see
+ * DatabaseDialect::SQLITE_TOOLING_ENV) and describes only the schemas
+ * bin/victual-db-import accepts. Its line is frozen at SQLITE_FROZEN_MIGRATION_ID below.
  */
 class DatabaseMigrationService extends BaseService
 {
@@ -31,14 +34,31 @@ class DatabaseMigrationService extends BaseService
 	 * Engines added later start from a squashed baseline equivalent to that end state
 	 * rather than replaying a history they were never part of.
 	 *
-	 * Consequently every migration from here on has to work on all supported engines -
-	 * either as a portable NNNN.sql, as per engine NNNN.sqlite.sql / NNNN.pgsql.sql, or
-	 * as a documented engine-exclusive file where the other engine genuinely needs no
-	 * change. The last case means the two engines can sit at different numbers while
-	 * both being fully migrated, which is why GetLatestMigrationNumber() takes a
-	 * dialect.
+	 * From here up to SQLITE_FROZEN_MIGRATION_ID the two engines were maintained together,
+	 * so a migration in that range is a portable NNNN.sql, a per engine
+	 * NNNN.sqlite.sql / NNNN.pgsql.sql pair, or a documented engine-exclusive file where
+	 * the other engine genuinely needed no change. The last case means the two engines sit
+	 * at different numbers while both being fully migrated, which is why
+	 * GetLatestMigrationNumber() takes a dialect. Above the freeze there is only
+	 * PostgreSQL to migrate.
 	 */
 	const BASELINE_MIGRATION_ID = 255;
+
+	/**
+	 * The last migration the SQLite line will ever have.
+	 *
+	 * ADR-0008 retired SQLite as a runtime engine and kept it as an import format, and an
+	 * import format needs a fixed upper bound rather than a moving one: past this number
+	 * no SQLite database is produced by anything in this repository, so a
+	 * NNNN.sqlite.sql above it would be a file no engine here can ever run and no source
+	 * database can ever have applied. .devtools/pgsql/check-migrations.php refuses one,
+	 * and DatabaseImporter uses this as the upper end of the supported import span.
+	 *
+	 * 265 rather than "whatever the highest sqlite file happens to be", because the point
+	 * of a freeze is that it stops being computed from the tree. The two agree today, and
+	 * check-migrations.php asserts they still do.
+	 */
+	const SQLITE_FROZEN_MIGRATION_ID = 265;
 
 	/**
 	 * Applies all pending migrations: ensures the migrations table exists, loads the
@@ -304,11 +324,11 @@ class DatabaseMigrationService extends BaseService
 				// otherwise be skipped in silence on every engine — the migration simply
 				// never runs, and nothing says so. A typo here is indistinguishable from
 				// a deliberate omission at runtime, so refuse to start instead.
-				if (!in_array($matches[2], DatabaseDialect::SUPPORTED_DRIVERS, true))
+				if (!in_array($matches[2], DatabaseDialect::MIGRATION_DRIVERS, true))
 				{
 					throw new \Exception('Migration "' . $name . '" is suffixed "' . $matches[2]
-						. '", which is not a supported database driver. Expected one of: '
-						. implode(', ', DatabaseDialect::SUPPORTED_DRIVERS) . '.');
+						. '", which is not a database driver this fork has migrations for. '
+						. 'Expected one of: ' . implode(', ', DatabaseDialect::MIGRATION_DRIVERS) . '.');
 				}
 
 				if ($matches[2] === $dialect->GetName())

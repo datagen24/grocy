@@ -41,9 +41,12 @@ Infrastructure and feature work remain in progress; there is no regular release 
 | Household features | Category minimums, shopping-list improvements, nested locations, barcode sources, and medication tracking are planned. |
 | Assistants and clients | MCP and first-party client work are planned. |
 
-PostgreSQL is the chosen runtime under [ADR-0008](docs/adr/0008-postgresql-only-runtime-engine.md).
-SQLite still works in the current tree; its runtime retirement has not landed. Until then,
-changes must retain the existing dual-engine checks.
+PostgreSQL is the only runtime engine under
+[ADR-0008](docs/adr/0008-postgresql-only-runtime-engine.md), and since that record's
+retirement landed `DB_DRIVER` accepts nothing else. SQLite is an import format: an existing
+installation moves across with `bin/victual-db-import`, which reads grocy and Victual
+databases within a stated migration span and refuses anything outside it. New migrations are
+PostgreSQL-only.
 
 Opaque labels and human-confirmed observation proposals have accepted ADRs but are not
 implemented. The [plan index](docs/plans/README.md) records delivery status and remaining

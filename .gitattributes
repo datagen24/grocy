@@ -1,2 +1,7 @@
 * text=auto
 *.sh text eol=lf
+
+# The SQLite import fixtures. Explicit because `text=auto` above decides by sniffing, and a
+# fixture that got line-ending normalisation applied to it would be a corrupt database that
+# fails somewhere far from the cause.
+*.db binary

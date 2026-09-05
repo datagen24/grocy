@@ -13,16 +13,42 @@ namespace Victual\Services\Database;
 abstract class DatabaseDialect
 {
 	/**
-	 * Every driver name this fork supports, which is also every suffix a migration file
-	 * may carry. Kept here rather than inline in Create() because the migration loader
-	 * needs the same list: a file named NNNN.<something>.sql is only meaningful if
-	 * <something> names a real engine, and a list that exists twice is a list that will
-	 * eventually disagree with itself.
+	 * Every driver a running installation may be configured for.
+	 *
+	 * One entry, since ADR-0008's retirement landed: PostgreSQL is the sole runtime and
+	 * the sole behavioural authority. DB_DRIVER accepts nothing else, and Create() below
+	 * refuses "sqlite" outright rather than falling back to it.
 	 */
-	const SUPPORTED_DRIVERS = ['sqlite', 'pgsql'];
+	const RUNTIME_DRIVERS = ['pgsql'];
 
 	/**
-	 * "sqlite" or "pgsql", matching the value of the DB_DRIVER setting.
+	 * Every suffix a migration file may carry.
+	 *
+	 * Wider than RUNTIME_DRIVERS and deliberately so: the SQLite migration line is frozen
+	 * rather than deleted (DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID), because
+	 * the files up to the freeze are what produced the schemas bin/victual-db-import
+	 * accepts and what the differential suite still builds its SQLite side from. A file
+	 * named NNNN.<something>.sql is only meaningful if <something> is in this list, and a
+	 * list that exists twice is a list that will eventually disagree with itself - so the
+	 * migration loader and .devtools/pgsql/check-migrations.php both read it from here.
+	 */
+	const MIGRATION_DRIVERS = ['pgsql', 'sqlite'];
+
+	/**
+	 * The environment variable the differential suite sets to construct a SQLite dialect.
+	 *
+	 * Not a Setting() and deliberately not one: a configuration setting is exactly the
+	 * thing ADR-0008 retired, and anything spelled that way would be a supported way to
+	 * run this fork on SQLite. This is a named escape hatch for the one caller that has to
+	 * keep working through the transition - the harness in .devtools/pgsql/, which proves
+	 * the retirement itself changed nothing and which ADR-0008 keeps until
+	 * plan 14 piece 2's response snapshot replaces it. It goes when the harness goes.
+	 */
+	const SQLITE_TOOLING_ENV = 'DIFFTEST_SQLITE_RUNTIME';
+
+	/**
+	 * "pgsql" for a running installation; "sqlite" only for the import and suite dialect,
+	 * which no DB_DRIVER value selects (see SQLITE_TOOLING_ENV).
 	 */
 	abstract public function GetName(): string;
 
@@ -344,26 +370,64 @@ abstract class DatabaseDialect
 	}
 
 	/**
-	 * Factory: picks the dialect matching the VICTUAL_DB_DRIVER setting
-	 * ("sqlite" when undefined). Called once per request by DatabaseService.
+	 * Factory: picks the dialect matching the VICTUAL_DB_DRIVER setting ("pgsql" when
+	 * undefined). Called once per request by DatabaseService.
+	 *
+	 * The default is PostgreSQL rather than SQLite as it was before ADR-0008's retirement,
+	 * and that change is louder than it looks: an installation whose config.php never named
+	 * a driver used to open a file and now needs connection settings. That is the retirement
+	 * rather than a side effect of it - there is no engine left for the old default to mean -
+	 * and ConfigurationValidator says so in the message an operator actually reads.
 	 *
 	 * @throws \Exception On an unsupported driver value
 	 */
 	public static function Create(): self
 	{
-		$driver = defined('VICTUAL_DB_DRIVER') ? strtolower(VICTUAL_DB_DRIVER) : 'sqlite';
+		$driver = defined('VICTUAL_DB_DRIVER') ? strtolower(VICTUAL_DB_DRIVER) : 'pgsql';
 
 		switch ($driver)
 		{
-			case 'sqlite':
-				return new SqliteDialect();
-
 			case 'pgsql':
 				return new PostgresDialect();
 
+			case 'sqlite':
+				// Not a supported configuration: see SQLITE_TOOLING_ENV for the one caller
+				// that may still ask, and why it is an environment variable rather than a
+				// setting. Everyone else gets the message that names the way out.
+				if (self::SqliteToolingIsPermitted())
+				{
+					return new SqliteDialect();
+				}
+
+				throw new \Exception('SQLite is no longer a runtime database engine (ADR-0008): '
+					. 'set DB_DRIVER to "pgsql" and the DB_* connection settings, then move the '
+					. 'existing database across with "php bin/victual-db-import '
+					. '/path/to/victual.db".');
+
 			default:
 				throw new \Exception('Unsupported database driver "' . $driver . '", only '
-					. implode(' and ', self::SUPPORTED_DRIVERS) . ' are supported');
+					. implode(' and ', self::RUNTIME_DRIVERS) . ' is supported');
 		}
+	}
+
+	/**
+	 * Whether this process is the differential suite, which may still build a SQLite
+	 * database. See SQLITE_TOOLING_ENV.
+	 *
+	 * Public because ConfigurationValidator has to give the same answer: it runs first, from
+	 * bin/victual-migrate and from app.php, so a suite run would be refused there before
+	 * Create() was ever reached. One method rather than the same getenv() in two files, for
+	 * the reason MIGRATION_DRIVERS gives - the copy is what eventually disagrees.
+	 *
+	 * Read from the environment on every call rather than memoized: the suite sets it once
+	 * for a whole run and nothing in a run flips it, so there is nothing to cache, and a
+	 * memo here would be process state about configuration - the category ADR-0007 keeps
+	 * out of this layer.
+	 */
+	public static function SqliteToolingIsPermitted(): bool
+	{
+		$value = getenv(self::SQLITE_TOOLING_ENV);
+
+		return $value !== false && $value !== '' && $value !== '0';
 	}
 }

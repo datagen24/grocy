@@ -13,13 +13,23 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
   bookkeeping only — status line, index row, supersede pointers — never substantive edits.
   A plan that makes a new architectural decision on its way to shipping leaves an ADR
   behind.
-- **The dual-engine discipline is live** — and stays live even though
-  [ADR-0008](docs/adr/0008-postgresql-only-runtime-engine.md) was **accepted 2026-08-31**.
-  The record makes PostgreSQL the sole runtime and SQLite an import format; the retirement
-  work has not landed, so the current discipline still applies: every view exists on both engines and is
-  proved equivalent, migrations from 0256 on are portable or marked pairs per
-  [ADR-0004](docs/adr/0004-engine-specific-migrations.md), `check-migrations.php` guards
-  the marker discipline, and the differential harness in `.devtools/pgsql/` is the proof.
+- **PostgreSQL is the only engine, and SQLite is an input format.**
+  [ADR-0008](docs/adr/0008-postgresql-only-runtime-engine.md) was accepted 2026-08-31 and
+  its retirement landed with [plan 24](docs/plans/24-sqlite-runtime-retirement.md):
+  `DB_DRIVER` accepts `pgsql` alone, **new migrations are PostgreSQL-only** (the SQLite line
+  is frozen at 0265 and `check-migrations.php` refuses a `.sqlite.sql` above it), and
+  `bin/victual-db-import` reads SQLite within a stated span that committed fixtures hold it
+  to.
+  Two things survive the retirement and are not oversights. The differential harness in
+  `.devtools/pgsql/` still builds a SQLite side — ADR-0008's option C keeps it until
+  [14](docs/plans/14-contract-and-regression-scaffolding.md) piece 2's response snapshot
+  replaces it, so **do not delete SQLite behaviour the suite compares against**; it is
+  permitted to construct that dialect only through
+  `DatabaseDialect::SQLITE_TOOLING_ENV`, which is an environment variable rather than a
+  setting precisely so it is not a way to run this fork. And migrations 0256–0265 stay a
+  matched two-engine set per
+  [ADR-0004](docs/adr/0004-engine-specific-migrations.md), because that range is history and
+  the suite replays it.
 - **The wire contract is the invariant** ([ADR-0005](docs/adr/0005-wire-contract-is-the-invariant.md)).
   Response shapes do not change casually; two accepted exceptions are documented there.
 - **No state in process memory** between requests ([ADR-0007](docs/adr/0007-auth-state-outlives-the-process.md)) —

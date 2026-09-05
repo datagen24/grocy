@@ -21,10 +21,15 @@ const REQUIRED_PHP_EXTENSIONS = ['fileinfo', 'gd', 'ctype', 'intl', 'zlib', 'mbs
  *
  * pdo_sqlite used to be in the list above, so a PostgreSQL deployment required an
  * extension it never used and paid for an in-memory SQLite connection on every request
- * to read a version number it never consulted. Under ADR-0008 PostgreSQL is the only
- * runtime engine and the sqlite entry here - like the version check below it - is what
- * the retirement PR deletes; until then a SQLite dev boot still has to fail loudly when
- * its driver is missing.
+ * to read a version number it never consulted. ADR-0008's retirement made PostgreSQL the
+ * only engine a deployment can be configured for, so the sqlite entry is now unreachable
+ * from any supported configuration.
+ *
+ * It stays anyway, and the reason is worth stating rather than leaving as an oversight:
+ * the differential suite still builds a SQLite side through
+ * DatabaseDialect::SQLITE_TOOLING_ENV, and a suite run on a PHP without pdo_sqlite should
+ * fail here - naming the missing extension - rather than several steps later inside a
+ * migration. It goes when the harness goes.
  */
 const REQUIRED_DRIVER_EXTENSIONS = ['sqlite' => 'pdo_sqlite', 'pgsql' => 'pdo_pgsql'];
 
@@ -133,9 +138,9 @@ class PrerequisiteChecker
 	}
 
 	/**
-	 * Only reached on a SQLite installation: it opens a throwaway in-memory database to
-	 * read the library version, which is a connection a PostgreSQL deployment has no
-	 * reason to make on every request.
+	 * Only reached from the differential suite (see REQUIRED_DRIVER_EXTENSIONS above): it
+	 * opens a throwaway in-memory database to read the library version, which is a
+	 * connection a PostgreSQL deployment has no reason to make on every request.
 	 */
 	private function checkForSqliteVersion()
 	{

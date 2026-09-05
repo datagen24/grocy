@@ -2,6 +2,7 @@
 
 namespace Victual\Helpers;
 
+use Victual\Services\Database\DatabaseDialect;
 use Victual\Services\Storage\FileSizeLimit;
 
 /**
@@ -78,14 +79,34 @@ class ConfigurationValidator
 		}
 	}
 
+	/**
+	 * DB_DRIVER, and the connection settings PostgreSQL needs.
+	 *
+	 * "sqlite" is refused by name rather than falling through to the generic "invalid
+	 * driver" message, because it is the one wrong value an existing installation is
+	 * likely to hold: it was this fork's default until ADR-0008's retirement, so an
+	 * operator upgrading meets this check with a config.php that was correct yesterday.
+	 * The message therefore has to say what to do, not just that the value is wrong -
+	 * bin/victual-db-import is the whole answer, and it still reads that file.
+	 */
 	private function checkDatabaseDriver()
 	{
-		$allowedDrivers = ['sqlite', 'pgsql'];
 		$driver = strtolower(VICTUAL_DB_DRIVER);
 
-		if (!in_array($driver, $allowedDrivers))
+		if ($driver === 'sqlite')
 		{
-			throw new EInvalidConfig('Invalid database driver "' . VICTUAL_DB_DRIVER . '" set, only ' . implode(', ', $allowedDrivers) . ' allowed');
+			if (!DatabaseDialect::SqliteToolingIsPermitted())
+			{
+				throw new EInvalidConfig('DB_DRIVER "sqlite" is no longer a runtime database engine '
+					. '(ADR-0008). SQLite is an import format now: set DB_DRIVER to "pgsql" with the '
+					. 'DB_HOST, DB_NAME and DB_USER settings, run "php bin/victual-migrate", and then '
+					. 'move the existing database across with "php bin/victual-db-import '
+					. '/path/to/victual.db".');
+			}
+		}
+		elseif (!in_array($driver, DatabaseDialect::RUNTIME_DRIVERS))
+		{
+			throw new EInvalidConfig('Invalid database driver "' . VICTUAL_DB_DRIVER . '" set, only ' . implode(', ', DatabaseDialect::RUNTIME_DRIVERS) . ' allowed');
 		}
 
 		if (!in_array($driver, \PDO::getAvailableDrivers()))
