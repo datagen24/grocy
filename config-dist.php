@@ -19,15 +19,14 @@
 // (pass the query parameter "nodemodata", e.g. https://victual.example.com/?nodemodata to skip that)
 Setting('MODE', 'production');
 
-// The database engine to use, either "sqlite" or "pgsql"
-// "sqlite" is the default and needs no further configuration - the database is a single
-// file at /data/victual.db
-// "pgsql" stores everything in a PostgreSQL server, which is worth it when you want
-// concurrent writers, pg_dump based backups or replication; it needs the settings below
-// and PostgreSQL 13 or newer
-Setting('DB_DRIVER', 'sqlite');
+// The database engine to use. "pgsql" is the only value there is: ADR-0008 made
+// PostgreSQL the sole runtime engine and turned SQLite into an import format, so a
+// config.php still saying "sqlite" is refused at startup with the command that moves the
+// database across ("php bin/victual-db-import /path/to/victual.db").
+// PostgreSQL 13 or newer, configured with the settings below.
+Setting('DB_DRIVER', 'pgsql');
 
-// Connection settings, only used when DB_DRIVER is "pgsql"
+// Connection settings
 Setting('DB_HOST', 'localhost');
 Setting('DB_PORT', 5432);
 Setting('DB_NAME', 'victual');

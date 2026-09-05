@@ -36,6 +36,25 @@ class DatabaseImporter
 	const NOT_COPIED_TABLES = ['migrations'];
 
 	/**
+	 * The oldest source schema this importer accepts, as a migration number.
+	 *
+	 * 0255 is the fork's squashed baseline, and it is also where upstream grocy 4.x stops -
+	 * so the honest lower bound costs an adopter one boot of the software they are leaving
+	 * rather than costing this fork an import surface across every historical schema delta.
+	 * ADR-0008 question 1, answered at acceptance.
+	 */
+	const SUPPORTED_SOURCE_MIGRATION_MIN = DatabaseMigrationService::BASELINE_MIGRATION_ID;
+
+	/**
+	 * The newest source schema this importer accepts, as a migration number.
+	 *
+	 * The SQLite line's freeze: nothing in this repository produces a SQLite database past
+	 * it, so a source claiming a higher number was written by something this fork does not
+	 * know about, and guessing at it is worse than declining.
+	 */
+	const SUPPORTED_SOURCE_MIGRATION_MAX = DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID;
+
+	/**
 	 * Rows per multi-row INSERT. 250 keeps the placeholder count well under
 	 * PostgreSQL's 65535 bind parameter limit even for wide tables.
 	 */
@@ -68,13 +87,15 @@ class DatabaseImporter
 	 * (unless $force) when the target already holds data.
 	 *
 	 * @param bool $force Skip the target-is-empty check; existing rows are truncated away
-	 * @param bool $purifyStoredHtml Clean the HTML-rendered columns afterwards - see below.
-	 * Defaults to true so an operator's import is protected without asking for it; the
-	 * differential test scripts pass false because they compare the two engines row for row
-	 * and a target the importer had rewritten would read as a copy it had corrupted.
+	 * @param bool $applyRowMigrations Re-apply the migrations that rewrite rows rather than
+	 * schema - the HTML purifier and the API key hashing - to the rows this copy brought in;
+	 * see below for why they cannot be left to the target's own migration run. Defaults to
+	 * true so an operator's import is protected without asking for it; the differential test
+	 * scripts pass false because they compare the two engines row for row and a target the
+	 * importer had rewritten would read as a copy it had corrupted.
 	 * @return array Row counts per table, keyed by table name
 	 */
-	public function Import(bool $force = false, bool $purifyStoredHtml = true): array
+	public function Import(bool $force = false, bool $applyRowMigrations = true): array
 	{
 		$tables = $this->GetCommonTables();
 
@@ -135,16 +156,23 @@ class DatabaseImporter
 		$this->AssertValuesMatch($tables);
 
 		// After the assertions, never before them. The copy's job is to be verbatim and
-		// AssertValuesMatch is what proves it was; purifying mid-copy would make every
-		// rewritten description read as a value the importer had corrupted. So the target
-		// is first shown to be an exact copy, and only then cleaned.
+		// AssertValuesMatch is what proves it was; rewriting rows mid-copy would make every
+		// changed value read as one the importer had corrupted. So the target is first shown
+		// to be an exact copy, and only then brought up to date.
 		//
-		// It has to happen here rather than in a migration, because bin/victual-db-import
-		// migrates the target *before* copying into it - migration 0260 therefore runs
-		// against an empty database and finds nothing. A source predating the API's
-		// purifier (upstream grocy, or this fork before sweep finding S1) otherwise lands
-		// its stored payloads in the target untouched. Review finding P1 on #41.
-		if ($purifyStoredHtml)
+		// Both of these have to happen here rather than being left to a migration, and for
+		// the same reason: bin/victual-db-import migrates the target *before* copying into
+		// it, so migrations 0260 and 0264 run against an empty database and find nothing to
+		// rewrite. What arrives afterwards has met neither.
+		//
+		// - The purifier, because a source predating the API's purifier (upstream grocy, or
+		//   this fork before sweep finding S1) otherwise lands its stored payloads in the
+		//   target untouched. Review finding P1 on #41.
+		// - The key hashing, because the supported import span now reaches back to 0255 and
+		//   a source at that number stores its API keys in plaintext. See
+		//   StoredApiKeyHasher, which also explains why this could not happen before the
+		//   span existed.
+		if ($applyRowMigrations)
 		{
 			$purified = StoredHtmlPurifier::Purify($this->Target, $this->TargetDialect, $this->Progress);
 
@@ -152,6 +180,8 @@ class DatabaseImporter
 			{
 				($this->Progress)('  purified ' . array_sum($purified) . ' stored description(s) that predate the API purifier');
 			}
+
+			StoredApiKeyHasher::HashPlaintextKeys($this->Target, $this->Progress);
 		}
 
 		return $report;
@@ -288,8 +318,17 @@ class DatabaseImporter
 	}
 
 	/**
-	 * Importing into a schema at a different migration level would put rows into columns
-	 * that mean something else, so refuse rather than guess.
+	 * The source has to be a schema this importer understands, and the target has to be
+	 * fully migrated. Refuse rather than guess: rows put into columns that mean something
+	 * else are not a failure anyone notices at the time.
+	 *
+	 * The two sides are asked different questions, and that asymmetry is the retirement.
+	 * The target is the engine this fork runs, so "fully migrated" is a single number and
+	 * anything else is an operator error with an obvious fix. The source is a format now -
+	 * a file some other installation wrote, on its own schedule - so what it has to satisfy
+	 * is a *span*: SUPPORTED_SOURCE_MIGRATION_MIN through SUPPORTED_SOURCE_MIGRATION_MAX,
+	 * frozen, with both numbers named on refusal so the message says what would be accepted
+	 * rather than only that this was not.
 	 */
 	private function AssertSchemaVersionsMatch()
 	{
@@ -309,24 +348,36 @@ class DatabaseImporter
 			);
 		}
 
-		// Each side is checked against the latest migration for ITS OWN engine, rather
-		// than against the other side's number. A migration can be engine-exclusive —
-		// 0256.sqlite.sql fixes a SQLite-only defect and PostgreSQL correctly never runs
-		// it — so two fully migrated databases legitimately sit at different numbers, and
-		// comparing the two maxima to each other would refuse every import from then on.
-		// Static, and deliberately so: this reads the migrations directory and nothing
-		// else. Going through GetInstance() would drag in BaseService's constructor,
-		// which opens the *configured* database — a connection this class has no use for
-		// and no reason to require, since it is handed both of its connections.
-		$expectedSource = DatabaseMigrationService::GetLatestMigrationNumber(new SqliteDialect());
+		// The source's number is compared against the frozen span rather than against the
+		// migrations directory. Reading the directory was right while both engines were
+		// maintained here — 0256.sqlite.sql fixes a SQLite-only defect PostgreSQL correctly
+		// never runs, so the two engines legitimately sit at different numbers and each side
+		// had to be measured against its own. It is wrong now: the span is a promise about
+		// which foreign schemas this importer understands, and a promise computed from
+		// whatever files happen to be in the tree is one that changes when somebody moves a
+		// file.
+		//
+		// The target is still measured against the directory, because the target is this
+		// fork's own engine and "fully migrated" is exactly that question. Static, and
+		// deliberately so: it reads the migrations directory and nothing else. Going through
+		// GetInstance() would drag in BaseService's constructor, which opens the
+		// *configured* database — a connection this class has no use for and no reason to
+		// require, since it is handed both of its connections.
 		$expectedTarget = DatabaseMigrationService::GetLatestMigrationNumber($this->TargetDialect);
 
-		if (intval($sourceVersion) !== $expectedSource)
+		if (intval($sourceVersion) < self::SUPPORTED_SOURCE_MIGRATION_MIN
+			|| intval($sourceVersion) > self::SUPPORTED_SOURCE_MIGRATION_MAX)
 		{
 			throw new \Exception(
-				'The source database is at migration ' . $sourceVersion . ' but SQLite is now at '
-				. $expectedSource . '. '
-				. 'Start the source installation once so it migrates itself up to date, then import again.'
+				'The source database is at migration ' . $sourceVersion . ', and this importer '
+				. 'reads SQLite databases from migration ' . self::SUPPORTED_SOURCE_MIGRATION_MIN
+				. ' through ' . self::SUPPORTED_SOURCE_MIGRATION_MAX . '. '
+				. (intval($sourceVersion) < self::SUPPORTED_SOURCE_MIGRATION_MIN
+					? 'Start the source installation once with the software that wrote it, so it '
+						. 'migrates itself up to ' . self::SUPPORTED_SOURCE_MIGRATION_MIN
+						. ' or beyond, then import again.'
+					: 'That is newer than anything this version knows about, and importing it '
+						. 'would put rows into columns that may mean something else.')
 			);
 		}
 

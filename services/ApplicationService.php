@@ -190,11 +190,30 @@ class ApplicationService extends BaseService
 	}
 
 	/**
-	 * The current local time as SQLite itself computes it (shifted by $offset seconds),
-	 * so clock skew between PHP and SQLite can be diagnosed.
+	 * The current local time as SQLite itself computes it (shifted by $offset seconds), or
+	 * an empty string where the driver is not installed.
+	 *
+	 * The guard is the same defect GetSqliteVersion() above documents, in the one place the
+	 * fix for that one missed: this also opened `new PDO('sqlite::memory:')`
+	 * unconditionally, so on an image without pdo_sqlite - which since ADR-0008's
+	 * retirement is every serving image - `GET /api/system/time` answered a fatal
+	 * "could not find driver" rather than a time. It survived plan 20's verification
+	 * because that walked the pages and the endpoints a browser reaches, and nothing in the
+	 * UI calls this one.
+	 *
+	 * The key stays in the response, per
+	 * [ADR-0005](../docs/adr/0005-wire-contract-is-the-invariant.md), and reports "" for
+	 * the same reason the version does. What it was for - diagnosing clock skew between PHP
+	 * and the storage engine - is not answered by a second engine's client library anyway
+	 * once that engine stores nothing; `time_local` and PostgreSQL's own now() are.
 	 */
 	private static function getSqliteLocaltime(int $offset): string
 	{
+		if (!in_array('sqlite', \PDO::getAvailableDrivers()))
+		{
+			return '';
+		}
+
 		$pdo = new \PDO('sqlite::memory:');
 		if ($offset > 0)
 		{

@@ -5,7 +5,14 @@ namespace Victual\Services;
 /**
  * Fills an empty database with localized sample data (products, stock, chores,
  * batteries, tasks, recipes, meal plan, ...) for the demo/prerelease instances.
- * The raw SQL used here is SQLite flavored, matching the demo setup.
+ *
+ * The raw SQL used here was SQLite flavoured, because until ADR-0008's retirement the demo
+ * ran on SQLite and nothing else - SystemController skipped demo generation outright on any
+ * other driver, so a PostgreSQL demo instance was an empty one. With SQLite gone as a
+ * runtime engine that would have left the demo mode with no engine at all, so the dozen
+ * engine-specific expressions are now portable: every date is computed in PHP and
+ * interpolated as a literal, which is the convention DatabaseService already documents for
+ * date cut-offs (the engines disagree about date arithmetic, and PHP agrees with itself).
  */
 class DemoDataGeneratorService extends BaseService
 {
@@ -46,6 +53,23 @@ class DemoDataGeneratorService extends BaseService
 			$fridayThisWeek = date('Y-m-d', strtotime('friday this week'));
 			$saturdayThisWeek = date('Y-m-d', strtotime('saturday this week'));
 			$sundayThisWeek = date('Y-m-d', strtotime('sunday this week'));
+
+			// The days the meal plan puts a product on, and the dates the tasks and the one
+			// rescheduled chore are due. Computed here rather than in SQL for the reason the
+			// class comment gives: SQLite's DATE(x, '-1 days') has no PostgreSQL spelling,
+			// and PHP has one both engines accept - a literal.
+			$dayBeforeMonday = date('Y-m-d', strtotime($mondayThisWeek . ' -1 day'));
+			$dayBeforeTuesday = date('Y-m-d', strtotime($tuesdayThisWeek . ' -1 day'));
+			$dayBeforeThursday = date('Y-m-d', strtotime($thursdayThisWeek . ' -1 day'));
+
+			$today = date('Y-m-d');
+			$yesterday = date('Y-m-d', strtotime('-1 day'));
+			$inFourDays = date('Y-m-d', strtotime('+4 days'));
+			$inTenDays = date('Y-m-d', strtotime('+10 days'));
+			$inTwentyDays = date('Y-m-d', strtotime('+20 days'));
+			$tenDaysAgo = date('Y-m-d', strtotime('-10 days'));
+			$twentyDaysAgo = date('Y-m-d', strtotime('-20 days'));
+			$startOfLastYear = (date('Y') - 1) . '-01-01';
 
 			$db->ExecuteDbStatement("
 				UPDATE users SET username = '{$this->__t_sql('Demo User')}' WHERE id = 1;
@@ -105,7 +129,6 @@ class DemoDataGeneratorService extends BaseService
 			");
 
 			$db->ExecuteDbStatement("
-				DELETE FROM sqlite_sequence WHERE name = 'products'; --Just to keep IDs in order as mentioned here...
 				INSERT INTO products (name, location_id, qu_id_purchase, qu_id_stock, min_stock_amount, product_group_id, picture_file_name) VALUES ('{$this->__t_sql('Cookies')}', 4, 3, 3, 8, 1, 'cookies.jpg'); --1
 				INSERT INTO products (name, location_id, qu_id_purchase, qu_id_stock, min_stock_amount, product_group_id, cumulate_min_stock_amount_of_sub_products) VALUES ('{$this->__t_sql('Chocolate')}', 4, 3, 3, 8, 1, 1); --2
 				INSERT INTO products (name, location_id, qu_id_purchase, qu_id_stock, min_stock_amount, product_group_id, picture_file_name) VALUES ('{$this->__t_sql('Gummy bears')}', 4, 3, 3, 8, 1, 'gummybears.jpg'); --3
@@ -208,9 +231,9 @@ class DemoDataGeneratorService extends BaseService
 				INSERT INTO meal_plan(day, recipe_id, section_id) VALUES ('{$saturdayThisWeek}', 1, 2);
 				INSERT INTO meal_plan(day, recipe_id, section_id) VALUES ('{$sundayThisWeek}', 4, 2);
 				INSERT INTO meal_plan(day, type, note, section_id) VALUES ('{$tuesdayThisWeek}', 'note', '{$this->__t_sql('This is a note')}', 1);
-				INSERT INTO meal_plan(day, type, product_id, product_amount, section_id) VALUES (DATE('{$mondayThisWeek}', '-1 days'), 'product', 3, 1, 3);
-				INSERT INTO meal_plan(day, type, product_id, product_amount, section_id) VALUES (DATE('{$tuesdayThisWeek}', '-1 days'), 'product', 9, 1, 1);
-				INSERT INTO meal_plan(day, type, product_id, product_amount, section_id) VALUES (DATE('{$thursdayThisWeek}', '-1 days'), 'product', 25, 1, 1);
+				INSERT INTO meal_plan(day, type, product_id, product_amount, section_id) VALUES ('{$dayBeforeMonday}', 'product', 3, 1, 3);
+				INSERT INTO meal_plan(day, type, product_id, product_amount, section_id) VALUES ('{$dayBeforeTuesday}', 'product', 9, 1, 1);
+				INSERT INTO meal_plan(day, type, product_id, product_amount, section_id) VALUES ('{$dayBeforeThursday}', 'product', 25, 1, 1);
 				INSERT INTO meal_plan(day, type, note, section_id) VALUES ('{$saturdayThisWeek}', 'note', '{$this->__t_sql('Some good snacks')}', 3);
 			");
 
@@ -221,7 +244,7 @@ class DemoDataGeneratorService extends BaseService
 				INSERT INTO chores (name, period_type, period_interval, period_config, track_date_only, assignment_type) VALUES ('{$this->__t_sql('Vacuum the living room floor')}', 'weekly', 1, 'saturday', 1, 'no-assignment'); --4
 				INSERT INTO chores (name, period_type, period_interval, track_date_only, assignment_type, assignment_config, next_execution_assigned_to_user_id) VALUES ('{$this->__t_sql('Clean the litter box')}', 'hourly', 1*24, 1, 'random', '1,2,3,4', 3); --5
 				INSERT INTO chores (name, period_type, period_interval, period_config, track_date_only, assignment_type) VALUES ('{$this->__t_sql('Change the bed sheets')}', 'weekly', 3, 'monday', 1, 'no-assignment'); --6
-				UPDATE chores SET start_date = DATE((CAST(STRFTIME('%Y', DATE('now')) AS INT) - 1) || '-01-01');
+				UPDATE chores SET start_date = '{$startOfLastYear}';
 			");
 
 			$db->ExecuteDbStatement("
@@ -239,12 +262,12 @@ class DemoDataGeneratorService extends BaseService
 
 			$db->ExecuteDbStatement("
 				INSERT INTO tasks (name) VALUES ('{$this->__t_sql('Task')}1');
-				INSERT INTO tasks (name, category_id, due_date, assigned_to_user_id) VALUES ('{$this->__t_sql('Task')}2', 1, date(datetime('now', 'localtime'), '-1 day'), 1);
-				INSERT INTO tasks (name, category_id, due_date, assigned_to_user_id) VALUES ('{$this->__t_sql('Task')}3', 1, date(datetime('now', 'localtime')), 1);
-				INSERT INTO tasks (name, due_date, assigned_to_user_id) VALUES ('{$this->__t_sql('Task')}4', date(datetime('now', 'localtime'), '+4 day'), 1);
-				INSERT INTO tasks (name, due_date) VALUES ('{$this->__t_sql('Task')}5', date(datetime('now', 'localtime'), '+20 day'));
-				INSERT INTO tasks (name, due_date, done) VALUES ('{$this->__t_sql('Task')}6', date(datetime('now', 'localtime'), '-10 day'), 1);
-				INSERT INTO tasks (name, due_date, done) VALUES ('{$this->__t_sql('Task')}7', date(datetime('now', 'localtime'), '-20 day'), 1);
+				INSERT INTO tasks (name, category_id, due_date, assigned_to_user_id) VALUES ('{$this->__t_sql('Task')}2', 1, '{$yesterday}', 1);
+				INSERT INTO tasks (name, category_id, due_date, assigned_to_user_id) VALUES ('{$this->__t_sql('Task')}3', 1, '{$today}', 1);
+				INSERT INTO tasks (name, due_date, assigned_to_user_id) VALUES ('{$this->__t_sql('Task')}4', '{$inFourDays}', 1);
+				INSERT INTO tasks (name, due_date) VALUES ('{$this->__t_sql('Task')}5', '{$inTwentyDays}');
+				INSERT INTO tasks (name, due_date, done) VALUES ('{$this->__t_sql('Task')}6', '{$tenDaysAgo}', 1);
+				INSERT INTO tasks (name, due_date, done) VALUES ('{$this->__t_sql('Task')}7', '{$twentyDaysAgo}', 1);
 			");
 
 			$db->ExecuteDbStatement("
@@ -281,6 +304,18 @@ class DemoDataGeneratorService extends BaseService
 			$db->ExecuteDbStatement('
 				INSERT INTO migrations (migration) VALUES (-1);
 			');
+
+			// Everything above this line inserts explicit ids - the quantity units it
+			// replaces, the meal plan sections, the userfields. PostgreSQL's identity
+			// columns are GENERATED BY DEFAULT, so an explicit id does not move the
+			// sequence behind it, and the next row the application generates an id for
+			// collides with one of these. SQLite moved its counter on its own, which is why
+			// nothing here needed this while the demo was SQLite-only. Migrations have the
+			// same problem and DatabaseMigrationService calls the same method for it.
+			//
+			// Here rather than at the end of the method: the service calls below generate
+			// ids of their own.
+			$db->GetDialect()->ResyncGeneratedIdCounters($db->GetDbConnectionRaw());
 
 			$stockTransactionId = uniqid();
 			$stockService = new StockService();
@@ -396,7 +431,7 @@ class DemoDataGeneratorService extends BaseService
 			}
 			$choresService->TrackChore(1, date('Y-m-d'), array_rand([1, 2, 3, 4]) + 1);
 			$choresService->TrackChore(4, date('Y-m-d'), array_rand([1, 2, 3, 4]) + 1);
-			$db->ExecuteDbStatement("UPDATE chores SET rescheduled_date = DATE(DATE('now', 'localtime'), '+10 days') WHERE id = 6");
+			$db->ExecuteDbStatement("UPDATE chores SET rescheduled_date = '{$inTenDays}' WHERE id = 6");
 
 			$batteriesService = new BatteriesService();
 			$batteriesService->TrackChargeCycle(1, date('Y-m-d H:i:s', strtotime('-720 days')));

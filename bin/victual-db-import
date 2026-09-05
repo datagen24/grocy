@@ -6,10 +6,21 @@
 //   php bin/victual-db-import [/path/to/victual.db] [--force]
 //
 // The source defaults to victual.db in the data path. The target is whatever config.php
-// selects, which has to be an engine other than SQLite.
+// selects, which since ADR-0008's retirement is PostgreSQL and nothing else - this command
+// is the way across.
+//
+// The source has to be a grocy or Victual SQLite database within the supported migration
+// span (DatabaseImporter::SUPPORTED_SOURCE_MIGRATION_MIN through
+// SUPPORTED_SOURCE_MIGRATION_MAX); anything outside it is refused with both numbers named.
 //
 // The target schema is created if it does not exist yet, so a fresh, empty PostgreSQL
 // database is a valid target.
+
+// Every refusal below writes to STDERR and exits non-zero. That is worth stating because it
+// was not true until the import phase of the differential suite asserted it: `exit('...')`
+// with a string argument prints the string and exits **0**, so a source file that did not
+// exist, a config.php with an invalid setting, and a target that was itself SQLite each
+// reported success. An operator chaining this with && carried on.
 
 use Victual\Services\Database\DatabaseImporter;
 use Victual\Services\DatabaseMigrationService;
@@ -17,20 +28,13 @@ use Victual\Services\DatabaseService;
 
 if (PHP_SAPI !== 'cli')
 {
-	exit('This is a command line script');
+	fwrite(STDERR, 'This is a command line script' . PHP_EOL);
+	exit(1);
 }
 
 $arguments = array_slice($argv, 1);
 $force = in_array('--force', $arguments, true);
 $positional = array_values(array_filter($arguments, fn($a) => !str_starts_with($a, '--')));
-
-if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
-{
-	echo "Usage: php bin/victual-db-import [/path/to/victual.db] [--force]\n\n";
-	echo "  Copies an existing SQLite database into the database configured in config.php.\n";
-	echo "  --force  Overwrite a target that already contains data.\n";
-	exit(0);
-}
 
 if (!defined('VICTUAL_DATAPATH'))
 {
@@ -38,7 +42,27 @@ if (!defined('VICTUAL_DATAPATH'))
 }
 
 require_once __DIR__ . '/../packages/autoload.php';
-require_once VICTUAL_DATAPATH . '/config.php';
+
+if (in_array('--help', $arguments, true) || in_array('-h', $arguments, true))
+{
+	echo "Usage: php bin/victual-db-import [/path/to/victual.db] [--force]\n\n";
+	echo "  Copies an existing SQLite database into the database configured in config.php.\n";
+	echo '  The source must be at migration ' . DatabaseImporter::SUPPORTED_SOURCE_MIGRATION_MIN
+		. ' through ' . DatabaseImporter::SUPPORTED_SOURCE_MIGRATION_MAX . ".\n";
+	echo "  --force  Overwrite a target that already contains data.\n";
+	exit(0);
+}
+
+// config.php is optional, for the reason bin/victual-migrate states: every setting it can
+// carry is also reachable as a VICTUAL_* environment variable, and a container that
+// configures itself that way has no such file to require. Requiring it unconditionally made
+// this command - the one an operator reaches for on exactly such a deployment - fail on a
+// missing file rather than on anything to do with the import.
+if (file_exists(VICTUAL_DATAPATH . '/config.php'))
+{
+	require_once VICTUAL_DATAPATH . '/config.php';
+}
+
 require_once __DIR__ . '/../config-dist.php';
 
 // Migrations and the demo location fixup expect a user context
@@ -53,22 +77,28 @@ try
 }
 catch (\Victual\Helpers\EInvalidConfig $ex)
 {
-	exit('Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+	fwrite(STDERR, 'Invalid setting in config.php: ' . $ex->getMessage() . PHP_EOL);
+	exit(1);
 }
 
 $sourcePath = $positional[0] ?? (VICTUAL_DATAPATH . '/victual.db');
 
 if (!file_exists($sourcePath))
 {
-	exit('Source database not found: ' . $sourcePath . PHP_EOL);
+	fwrite(STDERR, 'Source database not found: ' . $sourcePath . PHP_EOL);
+	exit(1);
 }
 
 $targetDialect = DatabaseService::GetInstance()->GetDialect();
 
 if ($targetDialect->GetName() === 'sqlite')
 {
-	exit('The configured database is SQLite, so there is nothing to import into.' . PHP_EOL
+	// Only reachable from the differential suite, which is the one caller that may still
+	// construct a SQLite dialect (DatabaseDialect::SQLITE_TOOLING_ENV). A configured
+	// installation is refused several steps earlier, by ConfigurationValidator.
+	fwrite(STDERR, 'The configured database is SQLite, so there is nothing to import into.' . PHP_EOL
 		. 'Set DB_DRIVER (and the DB_* connection settings) to the target engine first.' . PHP_EOL);
+	exit(1);
 }
 
 echo 'Source: ' . $sourcePath . ' (sqlite)' . PHP_EOL;
@@ -109,6 +139,6 @@ try
 }
 catch (\Exception $ex)
 {
-	echo PHP_EOL . 'Import failed: ' . $ex->getMessage() . PHP_EOL;
+	fwrite(STDERR, PHP_EOL . 'Import failed: ' . $ex->getMessage() . PHP_EOL);
 	exit(1);
 }

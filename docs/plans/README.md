@@ -41,6 +41,7 @@ implemented; outstanding verification and follow-up work are listed separately. 
 | 21 | [Frontend sink discipline](21-frontend-sink-discipline.md) | Landed | CI payload checks and stored-HTML cleanup on upgrade/import included. |
 | 22 | [Medication tracking](22-medication-tracking.md) | Draft, unscheduled | 23 and 14 piece 2; ADR-0015/0016 remain Proposed. Q6 leaves ownership of label infrastructure unresolved. Reservations 0267–0268. |
 | 23 | [Storage classes](23-storage-classes.md) | Draft, unscheduled | Before 22; interacts with 08. Q1/Q2 answered: derive `is_freezer` in the application. Reservation 0266. |
+| 24 | [SQLite runtime retirement](24-sqlite-runtime-retirement.md) | Landed | ADR-0008's retirement work. The differential harness and migrations 0001–0255 stay until 14 piece 2. |
 
 ## Order of operations
 
@@ -52,21 +53,26 @@ meet its plan's verification criteria. Claim migration numbers in
 |---|---|---|
 | 0–1 | Scaffolding, security hotfix, platform work | Complete. Details are in the owning plans' Executed sections and the security sweep. |
 | 2 | API correctness and authentication | Complete, 2026-09-04, with the follow-ups listed above. |
-| 2.5 | SQLite runtime retirement under ADR-0008 | Before wave 3a. Retire the dialect and freeze its migration line; retain fixture-tested imports from 0255 through the final SQLite migration. The separately planned production Docker retirement is already complete. |
+| 2.5 | [24](24-sqlite-runtime-retirement.md): SQLite runtime retirement under ADR-0008 | Complete, 2026-09-05. `DB_DRIVER` accepts `pgsql` alone, the SQLite migration line is frozen at 0265, and fixture-tested imports run from 0255 through it. The separately planned production Docker retirement was already complete. |
 | 3a | 19 piece 1: roles and read gating | Runs alone before features add read paths. Includes view permissions, existing-user backfill, seed roles, and the permissions endpoint changes. |
 | 3b | 03 category minimums; 06 location labels; optionally 09 | New reads use 3a's permissions. 09 joins only after its experiment and S14 work. Shared route/spec edits need coordination. |
 | 4 | 08 nested locations, then the hierarchy selected by 07-Q6 | Taxonomy means an additive parent-group change after 03; packaging means 07 after 08 has been used. Resolve Q6 before scheduling the product work. |
 | 5 | 14 piece 2 and 19 piece 2; then 02 read-only MCP and 05 A/C | Complete missing API reads and price-visibility checks before freezing the contract. MCP uses the calling user's permissions. |
 
-After the SQLite retirement lands, new migrations are PostgreSQL-only. Until it lands,
-the existing dual-engine migration and differential verification rules remain in force.
+New migrations are PostgreSQL-only: the SQLite line is frozen at 0265 and
+`check-migrations.php` refuses a `.sqlite.sql` above it. Migrations 0256–0265 keep the
+dual-engine rules they were written under, and the differential harness in `.devtools/pgsql/`
+still runs — ADR-0008 keeps it until 14 piece 2's response snapshot replaces it, so SQLite
+behaviour the suite compares against is not to be deleted before then.
 
 Swift transport generation follows the API error contract and response snapshot. Swift UI
 work follows 19 piece 2, which makes price fields optional. Home Assistant uses 18's MQTT
 publication. See [17](17-ecosystem-clients.md) for client contracts and impact requirements.
 
 Unscheduled work includes MCP writes after read-only use is proven, 05 B if shopping trips
-justify it, 04's importer and datasets, remaining container work, and plans 22/23. Opaque
+justify it, 04's importer and datasets, remaining container work, plans 22/23, and the two
+retirements 24 deferred: archiving migrations 0001–0255, and the differential harness itself,
+both of which wait on 14 piece 2. Opaque
 label infrastructure (ADR-0011) and observation proposals (ADR-0012) are accepted but
 unbuilt; acceptance does not assign implementation ownership or a delivery slot.
 

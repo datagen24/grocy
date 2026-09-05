@@ -1,0 +1,283 @@
+# 24. SQLite runtime retirement
+
+**Goal:** PostgreSQL is the only engine a Victual installation can be configured for, and
+SQLite is an input format that committed fixtures hold `bin/victual-db-import` to.
+**Depends on:** [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md), accepted
+2026-08-31. This plan is the retirement work that record's Consequences describe and that
+the wave 2.5 row of the [work order](README.md) schedules.
+**Status:** landed 2026-09-05. Verification results, and the limits of what was verified,
+are in **Executed**.
+
+## Behavior before this change
+
+`DB_DRIVER` accepts `sqlite` and `pgsql`, and `sqlite` is the default, so a `config.php`
+that names no driver opens a file. Every view exists on both engines and is proved
+equivalent by the differential harness in `.devtools/pgsql/`. Every migration from 0256 on
+is portable or a matched pair under
+[ADR-0004](../adr/0004-engine-specific-migrations.md). The deployment target has been
+PostgreSQL since the fork began.
+
+ADR-0008 decided that SQLite stops being a runtime engine without stating how the work is
+sequenced. Its option C keeps the differential harness through the transition, as the check
+that the retirement itself changed nothing, and that harness runs the application against
+SQLite. A retirement that deleted the engine outright would delete that check with it.
+
+## Proposed change
+
+### The runtime
+
+`DB_DRIVER` accepts `pgsql` and nothing else, and the default becomes `pgsql`.
+`ConfigurationValidator` refuses `sqlite` by name rather than through the generic "invalid
+driver" message: it was the default until this change, so an operator upgrading meets the
+check with a file that was previously correct, and the message names
+`bin/victual-db-import` as the way across.
+
+Changing the default is part of the decision rather than a consequence of it. No engine
+remains for `sqlite` to select.
+
+### The migration line
+
+The SQLite line freezes at 0265, its highest migration at retirement time, recorded as
+`DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID`. A `NNNN.sqlite.sql` above that
+number is a file no engine in this repository can run and no importable source can have
+applied, so `.devtools/pgsql/check-migrations.php` refuses one. It also refuses a freeze
+constant that no file in the tree reaches, which is the same disagreement in the other
+direction. Migrations 0256 to 0265 keep the two-engine rules they were written under,
+because the differential suite replays that range.
+
+The freeze requires the driver list to split in two. `DatabaseDialect::SUPPORTED_DRIVERS`
+answered both "which engines may be configured" and "which suffixes may a migration file
+carry", and those are no longer the same set. They become `RUNTIME_DRIVERS` and
+`MIGRATION_DRIVERS`.
+
+### The import span
+
+`bin/victual-db-import` accepts a source whose recorded schema version is between 0255 and
+0265 inclusive, and refuses anything outside that span with both numbers named. This
+implements ADR-0008 question 1's recorded answer. It replaces a check requiring the source
+to be at exactly the SQLite line's latest migration, which was correct while this
+repository produced that number and is wrong once the input is a format other installations
+write.
+
+Accepting a span rather than one version requires one further change. The importer migrates
+the target before copying rows into it, so migrations that rewrite rows rather than schema
+run against an empty database and find nothing to rewrite. Migration 0260's HTML purifier
+was already re-applied after the copy for this reason (review finding P1 on #41). Migration
+0264's API key hashing was not, because a source at 0265 had already run 0264 itself. A
+source at 0255 has not: 0255 is where upstream grocy stops, and grocy stores API keys in
+plaintext. Importing from the lower end of the span would therefore leave readable keys in a
+target whose authenticated requests hash what they are given, so the keys stop working
+without an error, and the table that is sweep finding S12's subject holds live credentials
+again.
+
+The importer therefore applies both after the copy. `StoredApiKeyHasher` states migration
+0264's rule where a second caller can reach it.
+
+### Demo mode
+
+Demo data generation ran on SQLite alone, because the generator's raw SQL was SQLite
+flavoured; `SystemController::Root()` skipped it on any other driver and wrote a line to
+stderr. Retiring SQLite would leave that branch with no engine to run on, so a demo instance
+would serve pages and hold no data.
+
+The generator becomes portable. The engine-specific SQL is one `DELETE FROM
+sqlite_sequence` and a dozen date expressions, replaced by dates computed in PHP and
+interpolated as literals — the convention `DatabaseService` documents for date cut-offs,
+because the engines disagree about date arithmetic.
+
+It also gains a call it did not need on SQLite: `ResyncGeneratedIdCounters()` after the
+reference rows. PostgreSQL's identity columns are `GENERATED BY DEFAULT`, so the explicit
+ids the generator inserts do not advance the sequence, and the next id the application
+generates collides with one of them. SQLite's `AUTOINCREMENT` advanced its counter without
+being asked.
+
+This is the answer to ADR-0008 question 3: demo mode and `run-app` move to PostgreSQL, at
+the cost of requiring a database where a file was enough.
+
+### Retained components
+
+Three parts of the SQLite support survive the retirement, each for a stated reason.
+
+`SqliteDialect` remains constructible, but only when the `DIFFTEST_SQLITE_RUNTIME`
+environment variable is set, which `.devtools/pgsql/run-tests.sh` exports once per run.
+ADR-0008's option C keeps the differential harness until
+[14](14-contract-and-regression-scaffolding.md) piece 2's response snapshot exists, and the
+harness builds its SQLite databases by running this fork's migration path. The gate is an
+environment variable rather than a `Setting()` because a setting would appear in
+`config-dist.php` and be indistinguishable from a supported configuration. It is removed
+when the harness is.
+
+Migrations 0001–0255 stay in `migrations/`. ADR-0008 states they can be archived rather
+than maintained; this plan does not archive them. The suite replays them to build its SQLite
+side, and moving them would require `GetRequiredMigrationNumbers()` to synthesise 1–255 for
+PostgreSQL, so that the schema gate does not read a baseline-loaded database as carrying 255
+unknown migrations. That changes the check deciding whether a deployment serves, which is
+not a change to make for tidiness alongside the retirement. It belongs to
+[15](15-deliberate-cleanup.md) or to the change that retires the harness.
+
+`pdo_sqlite` stays in the development image and in the `victual-migrate` image, because
+`bin/victual-db-import` reads SQLite and the suite writes it. The serving images dropped it
+with [10](10-cold-start-statelessness.md) and are unchanged.
+
+The dialect seam itself outlives all three, and its future is a separate decision.
+[ADR-0017](../adr/0017-doctrine-dbal-is-the-persistence-seam.md) (Proposed) argues that
+`DatabaseDialect` stays as a boundary and becomes Doctrine DBAL, making engine choice a
+structural affordance for a successor rather than a supported feature. That record requires
+a decision before [14](14-contract-and-regression-scaffolding.md) piece 2 removes the
+differential suite, which is the remaining caller that constructs a second dialect.
+
+## Alternatives
+
+**Retire the harness in the same change** (ADR-0008's option B). Rejected for the reason
+that record gives: it removes, in one change, the only tool that can show the retirement
+preserved behaviour. A second reason applies here. The import fixtures this plan commits
+were produced by the SQLite migration path, so a change removing that path while adding the
+fixtures would be asserting the correctness of its own output.
+
+**Keep `sqlite` configurable and deprecate it.** An unenforced deprecation leaves a second
+engine in the supported set, and every later PostgreSQL-only change has to account for it.
+ADR-0008's stated benefit is that PostgreSQL-only work stops needing that justification.
+
+**Make the tooling gate a `Setting()` rather than an environment variable.** It would be
+simpler to wire, and it would document SQLite in `config-dist.php` as a configuration
+option, which is what the retirement removes.
+
+## Open questions
+
+ADR-0008 left three of its four open questions to be answered by this work. They are
+answered here rather than by editing that record.
+
+1. **How many import fixtures, and how are they generated?** (ADR-0008 question 2; its lean
+   was two.)
+
+   > **Response:** Two, at 0255 and 0265, consistent with the lean. The importer's failure
+   > modes are schema-shaped rather than version-shaped — a table the source does not have,
+   > a column the target gained, a row transformation the target's migration ran before the
+   > rows arrived — and each is most pronounced between the two ends of the span. The 0255
+   > fixture has 36 tables comparable with the target and the 0265 fixture 40; an
+   > intermediate fixture would test the same properties across a smaller delta.
+   >
+   > `.devtools/pgsql/fixtures/import/make-fixtures.sh` generates them. It hard-links the
+   > tree into a scratch directory, unlinks the migrations above the target number there,
+   > and runs the migration runner against that copy. The runner resolves `migrations/`
+   > relative to its own file, so it has no "migrate as far as N" option; hard-linking makes
+   > a per-version tree cheap and keeps the script from modifying the real one.
+   >
+   > They are committed as `.db` files rather than SQL dumps. What the importer relies on is
+   > SQLite type affinity (porting hazards 1–14): the type a value returns as depends on how
+   > its column was declared and what was stored in it, and a dump reconstituted by a
+   > different writer is not the artefact under test.
+
+2. **What happens to `run-app` and the demo mode?** (ADR-0008 question 3; its lean was that
+   they move to the compose PostgreSQL.)
+
+   > **Response:** They move, with one item the lean did not identify: the demo data
+   > generator had to become portable first. `SystemController` obscured the need, because a
+   > PostgreSQL demo instance already served pages while generating no data. See
+   > *Demo mode* above.
+   >
+   > `run-app` starts a local cluster rather than assuming a service. On a container with the
+   > PostgreSQL packages installed, `pg_ctlcluster 16 main start` and one `CREATE ROLE` are
+   > the whole difference, which is less than the lean's "needs a container" implied.
+
+3. **Which parts of `.devtools/pgsql/` survive the transition, and for how long?**
+   (ADR-0008 question 4; its lean was to accept losing `migratedifftest.php`.)
+
+   > **Response:** All of them, including `migratedifftest.php`. This answer differs from
+   > the lean.
+   >
+   > The lean's premise was that `migratedifftest.php` migrates both sides from nothing and
+   > so needs a live SQLite migration path. It does, and that path exists: option C requires
+   > it for the other phases, which populate PostgreSQL from an already-migrated SQLite
+   > database that something has to migrate. Given the path, the phase that caught the
+   > PostgreSQL baseline having no seed data costs nothing to keep, and it is the phase that
+   > measures whether the retirement changed the migrated schema.
+   >
+   > Its remaining life is shorter than the other phases'. Under the freeze, the first
+   > PostgreSQL-only migration that changes a column makes the two migrated schemas
+   > legitimately differ, and the phase reports that as a failure. A migration that adds a
+   > table already has a mechanism: `ENGINE_EXCLUSIVE_TABLES` at the top of the script.
+   > Retiring the phase is the right response to the first column change, and is a decision
+   > better made against that migration than in advance.
+   >
+   > Everything in `.devtools/pgsql/` is removed when 14 piece 2 lands, which is the
+   > ordering constraint ADR-0008 states.
+
+## Verification
+
+1. **The differential suite passes**, with its SQLite side built through the tooling gate
+   rather than through a default driver, and asserting what it asserted before.
+2. **`DB_DRIVER=sqlite` is refused** with a message naming `bin/victual-db-import`.
+3. **The import phase passes:** both fixtures import, per-table row counts match, the HTML
+   purifier and the key hashing are applied, a second import of the same source does not
+   hash an already-hashed key, and a source outside the span is refused with both numbers
+   named.
+4. **A demo instance boots on PostgreSQL and the demo tables hold rows.** Status codes are
+   not sufficient evidence: an application failing a prerequisite check answers 200 with an
+   error page.
+5. **`check-migrations.php` refuses a `NNNN.sqlite.sql` above the freeze**, and refuses a
+   freeze constant that no file reaches.
+6. **The `frontend-security` job runs the S29 probe** against a PostgreSQL-backed demo
+   instance.
+
+## Executed — 2026-09-05
+
+All six criteria were met against the working copy of 2026-09-05, on PHP 8.4.19 and
+PostgreSQL 16.13, run locally. CI has not run this branch, so none of the results below is
+evidence that the workflows execute these checks; the workflow changes are reviewed rather
+than observed.
+
+### Suite and engine configuration
+
+The differential suite passes, ten phases including the new `import` one, with its SQLite
+side built through `DIFFTEST_SQLITE_RUNTIME`.
+
+Two places needed to be told which engine they used. A data directory with no `config.php`
+produced a SQLite database before this change and afterwards attempts to reach a PostgreSQL
+server, so `run-tests.sh`'s five SQLite data directories and `.devtools/mqtt/engine-diff.sh`
+each gained an explicit configuration file. `engine-diff.sh` failed with
+`fe_sendauth: no password supplied`, which names a connection problem rather than the
+missing driver setting that caused it. `run-tests.sh` gained a `write_sqlite_config` helper
+rather than five copies of the same two lines.
+
+### Defects found
+
+Three, none of them introduced by the retirement. All three were found by writing the import
+phase.
+
+| # | Defect | Where |
+|---|---|---|
+| 1 | Refusals were printed and the process exited **0**. `exit('...')` with a string argument prints the string and exits zero, so a missing source file, an invalid `config.php`, and a target that was itself SQLite each reported success to a caller chaining commands with `&&`. | `bin/victual-db-import` |
+| 2 | `data/config.php` was required unconditionally, so the command failed on a missing file when run on a deployment configured entirely through `VICTUAL_*` environment variables, which is the deployment [`deploy/`](../../deploy/README.md) describes. | `bin/victual-db-import` |
+| 3 | `getSqliteLocaltime()` opened `new PDO('sqlite::memory:')` without checking for the driver, so `GET /api/system/time` raised a fatal "could not find driver" on any image without `pdo_sqlite` — every serving image since [10](10-cold-start-statelessness.md). | `services/ApplicationService.php` |
+
+Defect 3 is the same defect [20](20-container-infrastructure.md)'s verification found in
+`GetSqliteVersion()` and fixed in the method immediately above it. That verification walked
+the pages and endpoints a browser reaches, and no page calls `GET /api/system/time`.
+
+### Demo mode
+
+`bin/victual-migrate` against a fresh PostgreSQL database, then the built-in server, then
+`GET /`, which returns 302 after generating 29 products, 83 stock rows, 23 recipes, 12 meal
+plan entries, 7 tasks, 6 chores and 4 batteries. All 21 top-level pages and `GET /api/stock`
+answer 200. The S29 payload probe reports 26 of 26 probes clean against that instance, which
+is criterion 6's assertion measured outside CI.
+
+The first attempt reported success and had generated nothing. PHP 8.4 is below
+`REQUIRED_PHP_VERSION`, and a failed prerequisite check answers 200 with an error page, so
+every page in the walk was that error page. Criterion 4 states the resulting requirement,
+and the `run-app` skill records the same failure mode.
+
+### Fixture size
+
+The fixtures are 580 KB and 632 KB on disk and compress to roughly 29 KB and 30 KB, which is
+what the repository stores. Both are mostly empty pages: 145 and 158 pages of 4 KB, holding
+37 and 41 tables respectively, with 45 views and 55 triggers each. The repository cost is
+therefore around 60 KB rather than the 1.2 MB the file sizes suggest.
+
+### Unchanged
+
+The `ENGINE_EXCLUSIVE_TABLES` list in `migratedifftest.php` and the seventeen porting
+hazards in [db/pgsql/README.md](../../db/pgsql/README.md) are unchanged. ADR-0008 states
+that hazards 15 to 17 die with the retirement; they do not, because the harness that depends
+on them outlives it. They are removed with 14 piece 2.

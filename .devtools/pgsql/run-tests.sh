@@ -3,9 +3,15 @@
 # The differential test suite: does this fork behave identically on SQLite and
 # PostgreSQL?
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|richtext|files|mqtt]
+# That question outlives the engine, deliberately. ADR-0008 retired SQLite as a runtime
+# engine and its option C keeps this harness through the transition, as the check that the
+# retirement itself changed nothing - until plan 14 piece 2's response snapshot replaces it.
+# So the suite still builds a SQLite side, through an escape hatch no installation has (see
+# DIFFTEST_SQLITE_RUNTIME below), and everything here goes when that snapshot lands.
 #
-# Nine kinds of check, for nine reasons. Views are compared by what they return, because
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|richtext|files|mqtt|import]
+#
+# Ten kinds of check, for ten reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
 # change other rows — so those scripts are applied to both engines and every table is
 # compared afterwards.
@@ -70,6 +76,15 @@
 # InfluxDB, a PHP stream socket for the broker - which is what keeps the phase dependency
 # free, and is also the limit of what it proves.
 #
+# The tenth is what ADR-0008's retirement left behind. SQLite is an import format now, so
+# bin/victual-db-import reads something no engine here produces and nothing else in this
+# suite would notice it drifting. The import phase drives that command against committed
+# fixtures at both ends of the supported migration span and asserts what the target holds
+# afterwards - including the two row transformations the target's own migration run cannot
+# see, because it migrates an empty database and the rows arrive after it. It is the only
+# phase whose input is a file in the repository rather than a database this script built,
+# and that is the point of it.
+#
 # This script is deliberately thin: it builds the databases, loops, and collects exit
 # codes. Everything that has to decide whether two result sets are the same is PHP, in
 # difftest.php, trigdifftest.php and migratedifftest.php, which share their normalisation
@@ -89,6 +104,7 @@
 #   SUITE_PGSQL_RICHTEXT_DB              database for the rich text phase (default victual_richtext)
 #   SUITE_PGSQL_FILES_DB                 database for the file import tests (default victual_files)
 #   SUITE_PGSQL_MQTT_DB                  database for the mqtt tests    (default victual_mqtt)
+#   SUITE_PGSQL_IMPORT_DB                database for the import tests  (default victual_import)
 #   SUITE_MQTT_STANDIN_PORT              port for the stand-in InfluxDB (default 8390)
 #   SUITE_MQTT_BROKER_PORT               port for the recording MQTT stand-in (default 8391)
 #   SUITE_SCRATCH                        where the throwaway databases go
@@ -126,8 +142,17 @@ SCHEMA_DB="${SUITE_PGSQL_SCHEMA_DB:-victual_schema}"
 RICHTEXT_DB="${SUITE_PGSQL_RICHTEXT_DB:-victual_richtext}"
 FILES_DB="${SUITE_PGSQL_FILES_DB:-victual_files}"
 MQTT_DB="${SUITE_PGSQL_MQTT_DB:-victual_mqtt}"
+IMPORT_DB="${SUITE_PGSQL_IMPORT_DB:-victual_import}"
 MQTT_STANDIN_PORT="${SUITE_MQTT_STANDIN_PORT:-8390}"
 MQTT_BROKER_PORT="${SUITE_MQTT_BROKER_PORT:-8391}"
+
+# ADR-0008 retired SQLite as a runtime engine: DB_DRIVER no longer accepts it and
+# DatabaseDialect::Create() refuses to construct the dialect. This suite is the one caller
+# that still has to, because what it measures is that the retirement changed nothing - see
+# DatabaseDialect::SQLITE_TOOLING_ENV, and ADR-0008's option C for why the harness outlives
+# the engine it compares against. Exported once, here, so that every phase and every child
+# process the phases start inherits it and no phase has to remember.
+export DIFFTEST_SQLITE_RUNTIME=1
 
 WHICH="${1:-all}"
 
@@ -196,7 +221,7 @@ build_pristine() {
 	local datapath="$SUITE_SCRATCH/pristine-data"
 
 	rm -rf "$datapath"
-	mkdir -p "$datapath"
+	write_sqlite_config "$datapath"
 
 	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
 		|| fail 'could not migrate the pristine SQLite database'
@@ -321,7 +346,7 @@ run_rollback_tests() {
 	# SQLite first, from a fresh database with the base fixture, exactly as the pristine
 	# database is built.
 	rm -rf "$datapath"
-	mkdir -p "$datapath"
+	write_sqlite_config "$datapath"
 
 	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
 		|| fail 'could not migrate the rollback test database'
@@ -436,7 +461,7 @@ run_schema_tests() {
 	local datapath="$SUITE_SCRATCH/schema-sqlite"
 
 	rm -rf "$datapath"
-	mkdir -p "$datapath"
+	write_sqlite_config "$datapath"
 
 	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
 		|| fail 'could not migrate the schema gate test database'
@@ -488,7 +513,7 @@ run_richtext_tests() {
 	local datapath="$SUITE_SCRATCH/richtext-sqlite"
 
 	rm -rf "$datapath"
-	mkdir -p "$datapath"
+	write_sqlite_config "$datapath"
 
 	VICTUAL_DATAPATH="$datapath" php "$VICTUAL_ROOT/bin/victual-migrate" --quiet \
 		|| fail 'could not migrate the rich text test database'
@@ -710,7 +735,8 @@ run_mqtt_probe_on_both_engines() {
 	mkdir -p "$scratch/sqlite"
 
 	cp "$PRISTINE" "$scratch/sqlite/victual.db" || fail "could not copy the pristine database for $probe"
-	write_influx_config "$scratch/sqlite"
+	write_sqlite_config "$scratch/sqlite"
+	write_influx_config "$scratch/sqlite" append
 
 	say ""
 	if ! VICTUAL_DATAPATH="$scratch/sqlite" \
@@ -743,6 +769,20 @@ run_mqtt_probe_on_both_engines() {
 		php "$VICTUAL_ROOT/.devtools/mqtt/$probe.php"; then
 		failures=$((failures + 1))
 	fi
+}
+
+# The SQLite side needs a config.php of its own now. It used to need none: "sqlite" was
+# config-dist.php's default, so a data directory with nothing in it produced a SQLite
+# database. ADR-0008's retirement made "pgsql" the default and DB_DRIVER stopped accepting
+# "sqlite" at all, so each SQLite data directory has to say so explicitly - and is only
+# accepted because DIFFTEST_SQLITE_RUNTIME is exported at the top of this file.
+write_sqlite_config() {
+	mkdir -p "$1"
+
+	cat > "$1/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'sqlite');
+	PHPCONFIG
 }
 
 # The PostgreSQL connection settings, read from the environment rather than interpolated for
@@ -833,6 +873,26 @@ run_files_import_tests() {
 	rm -rf "$datapath"
 }
 
+# --- SQLite import tests ----------------------------------------------------------
+#
+# The one phase whose source is a file in the repository. bin/victual-db-import reads a
+# format nothing here produces any more, so the fixtures under fixtures/import/ are what
+# stands in for the engine that used to be the check - one at each end of the supported
+# span, plus the refusals outside it.
+#
+# The target is migrated by bin/victual-migrate first, which is what an operator's target
+# is: a freshly created database with a fresh installation's seed rows in it. That is why
+# the phase imports with --force.
+
+run_import_tests() {
+	build_pgsql "$IMPORT_DB"
+
+	say ""
+	if ! IMPORTTEST_DB_NAME="$IMPORT_DB" php "$SUITE_DIR/import-tests.php"; then
+		failures=$((failures + 1))
+	fi
+}
+
 # Before anything is built: a migration numbering mistake means the two engines are not
 # running the same set of changes, which would make every comparison below meaningless
 # rather than merely wrong. The same script also refuses a hole in the sequence above the
@@ -870,8 +930,9 @@ case "$WHICH" in
 	richtext) run_richtext_tests ;;
 	files) run_files_import_tests ;;
 	mqtt) run_mqtt_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_richtext_tests; run_files_import_tests; run_mqtt_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, richtext, files, mqtt or all)" ;;
+	import) run_import_tests ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_richtext_tests; run_files_import_tests; run_mqtt_tests; run_import_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, richtext, files, mqtt, import or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then

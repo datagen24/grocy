@@ -22,3 +22,6 @@ embedded.txt
 .devtools/parity/reports/
 .devtools/parity/harness/node_modules/
 .devtools/parity/harness/package-lock.json
+
+# Left behind by "python3 -m unittest discover -s .devtools/ci", which the lint job runs.
+__pycache__/

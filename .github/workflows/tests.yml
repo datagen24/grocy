@@ -171,6 +171,26 @@ jobs:
     needs: changes
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run-tests == 'true')
     runs-on: ubuntu-latest
+
+    # The probe drives a demo instance, and since ADR-0008's retirement a demo instance is a
+    # PostgreSQL one: DB_DRIVER no longer accepts "sqlite", and DemoDataGeneratorService is
+    # portable so that this mode still has an engine to run on. The job therefore needs a
+    # database where it previously needed a file.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: victual
+          POSTGRES_PASSWORD: victual
+          POSTGRES_DB: victual
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U victual"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -181,7 +201,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
-          extensions: pdo_sqlite, gd, intl, zip, mbstring, fileinfo, ctype
+          extensions: pdo_pgsql, gd, intl, zip, mbstring, fileinfo, ctype
 
       - name: Cache Composer packages
         uses: actions/cache@v4
@@ -205,13 +225,30 @@ jobs:
           npm install
           npx playwright install --with-deps chromium
 
-      # Demo mode seeds a SQLite database and auto-logs-in, which is what the probe needs:
-      # it drives real pages as a real session. Migrating first is required - a request no
+      # Demo mode seeds a database and auto-logs-in, which is what the probe needs: it
+      # drives real pages as a real session. Migrating first is required - a request no
       # longer migrates the database - and the first GET / is what generates the demo data.
+      #
+      # The config is written rather than copied from config-dist.php, which is what this
+      # step used to do: the distributed defaults name a PostgreSQL server on localhost with
+      # no password, and the one this job has is the service container above.
       - name: Boot a demo instance
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: victual
+          PGPASSWORD: victual
         run: |
           VDATA=$(mktemp -d)
-          cp config-dist.php "$VDATA/config.php"
+          cat > "$VDATA/config.php" <<'PHPCONFIG'
+          <?php
+          Setting('DB_DRIVER', 'pgsql');
+          Setting('DB_HOST', getenv('PGHOST'));
+          Setting('DB_PORT', intval(getenv('PGPORT')));
+          Setting('DB_NAME', 'victual');
+          Setting('DB_USER', getenv('PGUSER'));
+          Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+          PHPCONFIG
           VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" php bin/victual-migrate --quiet
           VICTUAL_MODE=demo VICTUAL_DATAPATH="$VDATA" \
             php -S 127.0.0.1:8085 -t public > /tmp/php-server.log 2>&1 &

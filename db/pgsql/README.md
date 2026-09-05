@@ -1,7 +1,15 @@
 # PostgreSQL support
 
-Victual stores its data in SQLite by default. This directory holds what a PostgreSQL
-installation needs instead.
+PostgreSQL is the only engine Victual runs on, since
+[ADR-0008](../../docs/adr/0008-postgresql-only-runtime-engine.md)'s retirement landed
+([plan 24](../../docs/plans/24-sqlite-runtime-retirement.md)). This directory holds what an
+installation needs.
+
+SQLite is still all over the pages below, and deliberately so: this is where the porting
+work is written down, and the two things that keep needing it are `bin/victual-db-import`,
+which reads SQLite as an input format, and the differential suite, which still builds a
+SQLite side to prove the port did not change behaviour. Both are read-only uses of an engine
+nothing here serves from.
 
 ## Layout
 
@@ -60,7 +68,25 @@ about to fill the database from the source and every seeded row would be one it 
 That also keeps its "target already contains data" check meaning what it says. Migrating
 first and importing afterwards therefore needs `--force`, and the error message says so.
 
-**Every migration from 0256 on has to leave both engines correct.** Write a portable
+The source has to be within the supported span,
+`DatabaseImporter::SUPPORTED_SOURCE_MIGRATION_MIN` through `SUPPORTED_SOURCE_MIGRATION_MAX`
+(0255-0265); outside it the command refuses and names both numbers. Committed fixtures at
+each end live in `.devtools/pgsql/fixtures/import/`, are rebuilt by `make-fixtures.sh` there,
+and are what `run-tests.sh import` asserts against - the check that replaces the second
+engine now that nothing here produces the input format.
+
+**Migrations above 0265 are PostgreSQL-only.** The SQLite line is frozen at
+`DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID` = 265: nothing here migrates a SQLite
+database past that number, so a `NNNN.sqlite.sql` above it would be a file no engine can run
+and no importable source can have applied. `check-migrations.php` refuses one, and refuses a
+freeze constant that no file reaches.
+
+The rest of this section describes the range 0256-0265, where both engines were maintained
+together. It is kept rather than deleted because those files are still read - the suite
+replays them to build its SQLite side, and the fixtures under
+`.devtools/pgsql/fixtures/import/` were produced by them.
+
+**Every migration from 0256 to 0265 had to leave both engines correct.** A portable
 `migrations/0256.sql`, or a pair of `migrations/0256.sqlite.sql` and
 `migrations/0256.pgsql.sql` - an engine specific file wins over a generic one with the
 same number.

@@ -7,10 +7,12 @@
 
 <!-- Answer each line, or write "none" if nothing here applies. -->
 
-- **Schema change?** State the migration shape — a portable `NNNN.sql`, a per engine
-  `NNNN.sqlite.sql` / `NNNN.pgsql.sql` pair, or a documented engine-exclusive migration
-  carrying `@engine-exclusive` (or `@overrides-generic`, if it shadows a portable file of
-  the same number). See `db/pgsql/README.md`.
+- **Schema change?** State the migration number and claim it in `migrations/RESERVATIONS.md`.
+  Migrations above 0265 are PostgreSQL-only: the SQLite line is frozen there under
+  ADR-0008, and `.devtools/pgsql/check-migrations.php` refuses a `NNNN.sqlite.sql` above it.
+  Within 0256-0265 the two-engine rules still apply — a portable `NNNN.sql`, a per engine
+  pair, or an engine-exclusive file carrying `@engine-exclusive` (or `@overrides-generic`,
+  if it shadows a portable file of the same number). See `db/pgsql/README.md`.
 - **Changes an existing API response?** Say which endpoint and which field or status code.
   New entities and fields are additive and just need a note; anything that changes an
   existing response shape is called out explicitly rather than slipped in.
@@ -23,8 +25,10 @@
      cleanly" and "lint passes" are not verification. -->
 
 - [ ] Exercised the changed paths on a running instance
-- [ ] Both engines, where the change touches SQL — `.devtools/pgsql/difftest.php` for
-      views, `trigdifftest.php` for trigger behaviour
+- [ ] `.devtools/pgsql/run-tests.sh`, where the change touches SQL. The suite still
+      compares both engines over the schema as it stood at the SQLite freeze; a new
+      PostgreSQL-only view or trigger has no counterpart to be compared against, so say
+      what you checked it against instead
 - [ ] Result sets compared before and after, where the change rewrites a query
 
 ## Notes for review

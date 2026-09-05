@@ -102,7 +102,7 @@ The minimum for a PostgreSQL deployment:
 
 | Variable | Why |
 |---|---|
-| `VICTUAL_DB_DRIVER=pgsql` | The default is `sqlite`, and a container that quietly runs on SQLite against a file in a tmpfs is the worst available failure |
+| `VICTUAL_DB_DRIVER=pgsql` | The only value there is, since ADR-0008's retirement; set explicitly so the pod's configuration says what it runs on rather than relying on a default |
 | `VICTUAL_DB_HOST`, `_PORT`, `_NAME`, `_USER` | Connection |
 | `VICTUAL_DB_PASSWORD` | A Secret, never a ConfigMap |
 | `VICTUAL_BASE_URL` | What the ingress publishes |

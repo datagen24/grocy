@@ -34,6 +34,14 @@
 //
 // Migrations up to the baseline (0001-0255) are SQLite-only history that PostgreSQL
 // replaces wholesale, so they are exempt by definition.
+//
+// The third check is the freeze. ADR-0008 retired SQLite as a runtime engine and kept it as
+// an import format, and an import format's upper bound has to stop moving: past
+// DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID nothing in this repository produces
+// a SQLite database, so a NNNN.sqlite.sql above it is a file no engine here can run and no
+// source database can have applied - it would look like coverage and be none. Below the
+// freeze the old two-engine rules still apply unchanged, because that range is history and
+// history does not get rewritten. Above it, "a complete per engine set" means PostgreSQL.
 
 require_once (getenv('VICTUAL_ROOT') ?: dirname(__DIR__, 2)) . '/packages/autoload.php';
 
@@ -136,7 +144,25 @@ foreach ($byNumber as $number => $files)
 	$generic = $files['generic'] ?? null;
 	$specific = $files['specific'] ?? [];
 	$drivers = array_keys($specific);
-	$missing = array_diff(DatabaseDialect::SUPPORTED_DRIVERS, $drivers);
+
+	// Which engines a migration at this number has to satisfy. Below the freeze, both -
+	// that is the range the two engines were maintained together over. Above it, only the
+	// engines a running installation can be configured for.
+	$frozen = $number > DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID;
+	$expectedDrivers = $frozen ? DatabaseDialect::RUNTIME_DRIVERS : DatabaseDialect::MIGRATION_DRIVERS;
+	$missing = array_diff($expectedDrivers, $drivers);
+
+	if ($frozen && isset($specific['sqlite']))
+	{
+		$problems[] = "$number: \"" . $specific['sqlite'] . '" is a SQLite migration above the '
+			. 'frozen SQLite line (DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID = '
+			. DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID . '). Nothing in this '
+			. 'repository migrates a SQLite database past that number, so this file would '
+			. 'never run anywhere and no database bin/victual-db-import accepts could have '
+			. 'applied it. Write the PostgreSQL migration alone.';
+
+		continue;
+	}
 
 	if ($generic !== null && !empty($specific))
 	{
@@ -183,6 +209,28 @@ foreach ($byNumber as $number => $files)
 				. 'the counterpart is missing.';
 		}
 	}
+}
+
+// --- The freeze constant still describes the tree ----------------------------------------
+//
+// SQLITE_FROZEN_MIGRATION_ID is a decision rather than a measurement - that is the point of
+// freezing it - so nothing recomputes it at runtime. But a decision that has quietly stopped
+// describing the tree is worse than a measurement: DatabaseImporter would advertise a span
+// whose upper end names a schema no file here produces. The per-number check above refuses a
+// new SQLite migration past the freeze; this refuses the other direction, a freeze number
+// that no SQLite migration reaches.
+
+$sqliteNumbers = array_keys(array_filter($byNumber, fn($files) => isset($files['specific']['sqlite'])));
+$highestSqlite = empty($sqliteNumbers) ? 0 : max($sqliteNumbers);
+
+if ($highestSqlite !== DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID)
+{
+	$problems[] = 'The SQLite line is frozen at '
+		. DatabaseMigrationService::SQLITE_FROZEN_MIGRATION_ID . ' (DatabaseMigrationService::'
+		. 'SQLITE_FROZEN_MIGRATION_ID), but the highest NNNN.sqlite migration in the tree is '
+		. $highestSqlite . '. The freeze is the upper end of the import span '
+		. 'bin/victual-db-import advertises, so the two have to agree: either a file was '
+		. 'removed, or the constant was changed without one.';
 }
 
 // --- The sequence has no holes, and the record says who owns each number -----------------

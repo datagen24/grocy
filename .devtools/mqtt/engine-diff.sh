@@ -51,6 +51,19 @@ PGSQL_DATA="$SCRATCH/mqtt-pgsql"
 rm -rf "$SQLITE_DATA" "$PGSQL_DATA"
 mkdir -p "$SQLITE_DATA" "$PGSQL_DATA"
 
+# The SQLite side has to name its engine, and be allowed to. ADR-0008's retirement made
+# "pgsql" config-dist.php's default and stopped DB_DRIVER accepting "sqlite" at all, so a
+# data directory with no config.php now produces an attempt to reach a PostgreSQL server -
+# which is what this failed with, silently enough to look like a connection problem.
+# DIFFTEST_SQLITE_RUNTIME is what permits the dialect; run-tests.sh exports it, and this
+# script sets it too so it can still be run on its own.
+export DIFFTEST_SQLITE_RUNTIME="${DIFFTEST_SQLITE_RUNTIME:-1}"
+
+cat > "$SQLITE_DATA/config.php" <<'PHPCONF'
+<?php
+Setting('DB_DRIVER', 'sqlite');
+PHPCONF
+
 echo "== SQLite: migrate =="
 VICTUAL_DATAPATH="$SQLITE_DATA" php "$ROOT/bin/victual-migrate" --quiet
 
