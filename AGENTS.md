@@ -99,7 +99,7 @@ principles), then the [ADR index](docs/adr/README.md) (decisions in force), then
   [.agents/skills/run-app/SKILL.md](.agents/skills/run-app/SKILL.md).
 - PostgreSQL work: baseline DDL in `db/pgsql/baseline/`, differential test phases in
   `.devtools/pgsql/` (see its README), CI runs both engines against `postgres:16`.
-- Business logic lives in `services/`; routes in `routes.php`; permissions are the 30
+- Business logic lives in `services/`; routes in `routes.php`; permissions are the 36
   constants in `controllers/Users/User.php` resolved through `user_permissions_resolved`.
 - Container images: there is one answer now.
   [ADR-0013](docs/adr/0013-nix-built-container-images.md) was **accepted 2026-09-04** and

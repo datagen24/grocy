@@ -9,7 +9,7 @@
 # So the suite still builds a SQLite side, through an escape hatch no installation has (see
 # DIFFTEST_SQLITE_RUNTIME below), and everything here goes when that snapshot lands.
 #
-#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|richtext|files|mqtt|import]
+#   .devtools/pgsql/run-tests.sh [migrate|views|triggers|rollback|filter|schema|richtext|files|mqtt|import|rbac]
 #
 # Ten kinds of check, for ten reasons. Views are compared by what they return, because
 # that is all a view is. Triggers cannot be compared that way — what a trigger does is
@@ -272,6 +272,26 @@ build_pgsql() {
 }
 
 failures=0
+
+# PostgreSQL-only role and read model, alongside the frozen differential contract.
+run_rbac_tests() {
+	local dbname="victual_rbac"
+	build_pgsql "$dbname"
+	local datapath="$SUITE_SCRATCH/rbac-data"
+	mkdir -p "$datapath"
+	cat > "$datapath/config.php" <<-'PHPCONFIG'
+		<?php
+		Setting('DB_DRIVER', 'pgsql');
+		Setting('DB_HOST', getenv('PGHOST'));
+		Setting('DB_PORT', intval(getenv('PGPORT')));
+		Setting('DB_NAME', 'victual_rbac');
+		Setting('DB_USER', getenv('PGUSER'));
+		Setting('DB_PASSWORD', getenv('PGPASSWORD'));
+	PHPCONFIG
+	if ! VICTUAL_DATAPATH="$datapath" php "$SUITE_DIR/rbac-tests.php"; then
+		failures=$((failures + 1))
+	fi
+}
 
 # --- Migration tests --------------------------------------------------------------
 #
@@ -921,6 +941,7 @@ say "building the pristine SQLite database"
 build_pristine
 
 case "$WHICH" in
+	rbac) run_rbac_tests ;;
 	migrate) run_migration_tests ;;
 	views) run_view_tests ;;
 	triggers) run_trigger_tests ;;
@@ -931,8 +952,8 @@ case "$WHICH" in
 	files) run_files_import_tests ;;
 	mqtt) run_mqtt_tests ;;
 	import) run_import_tests ;;
-	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_richtext_tests; run_files_import_tests; run_mqtt_tests; run_import_tests ;;
-	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, richtext, files, mqtt, import or all)" ;;
+	all) run_migration_tests; run_view_tests; run_trigger_tests; run_rollback_tests; run_filter_tests; run_schema_tests; run_richtext_tests; run_files_import_tests; run_mqtt_tests; run_import_tests; run_rbac_tests ;;
+	*) fail "unknown target: $WHICH (expected migrate, views, triggers, rollback, filter, schema, richtext, files, mqtt, import, rbac or all)" ;;
 esac
 
 if [ -n "$COVERAGE_DIR" ]; then
