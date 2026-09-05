@@ -6,10 +6,8 @@ use Victual\Controllers\Users\PermissionMissingException;
 use Victual\Controllers\Users\User;
 use Victual\Services\FilesService;
 use Victual\Services\Storage\FileStorage;
-use Victual\Services\Storage\FileTooLargeException;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
-use Slim\Exception\HttpNotFoundException;
 use Slim\Psr7\Stream;
 
 /**
@@ -140,11 +138,11 @@ class FilesApiController extends BaseApiController
 	 */
 	public function DeleteFile(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			if (!in_array($args['group'], $this->GetOpenApispec()->components->schemas->FileGroups->enum))
 			{
-				throw new \Exception('Invalid file group');
+				throw new EInvalidApiQuery('Invalid file group');
 			}
 
 			$this->CheckGroupWritePermission($request, $args['group']);
@@ -155,32 +153,18 @@ class FilesApiController extends BaseApiController
 			}
 			else
 			{
-				throw new \Exception('Invalid filename');
+				throw new EInvalidApiQuery('Invalid filename');
 			}
 
-			// USERS_EDIT_SELF is a natural grant - it is what lets someone change their own
-			// password - and without this it would also let them delete every other user's
-			// picture, since the route carries no user id. Uploading needs no equivalent
-			// check: the name is new, so there is nothing to take away.
-			if ($args['group'] === 'userpictures'
-				&& !User::HasPermissions(User::PERMISSION_USERS_EDIT)
-				&& (!defined('VICTUAL_USER_PICTURE_FILE_NAME') || $fileName !== VICTUAL_USER_PICTURE_FILE_NAME))
+			if ($args['group'] === 'userpictures')
 			{
-				throw new PermissionMissingException($request, User::PERMISSION_USERS_EDIT);
+				$this->CheckUserPictureDeletion($request, $fileName);
 			}
 
 			FilesService::GetInstance()->DeleteFile($args['group'], $fileName);
 
 			return $this->EmptyApiResponse($response);
-		}
-		catch (PermissionMissingException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -189,16 +173,18 @@ class FilesApiController extends BaseApiController
 	 * with a 30 day Cache-Control header. {fileName} may also be two BASE64 encoded names
 	 * joined by "_" (actual file name + download file name). Query parameters
 	 * force_serve_as=picture with optional best_fit_height/best_fit_width serve a
-	 * downscaled image variant, at the nearest of ALLOWED_BEST_FIT_SIZES. Any failure
-	 * (including an invalid group or filename) results in a 404 HttpNotFoundException.
+	 * downscaled image variant, at the nearest of ALLOWED_BEST_FIT_SIZES. A file that does
+	 * not exist is a 404; an invalid group or filename is a 400, which it was not before
+	 * wave 2 - every failure here used to be re-thrown as a 404, so "you asked wrongly"
+	 * and "it is not here" were the same answer.
 	 */
 	public function ServeFile(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			if (!in_array($args['group'], $this->GetOpenApispec()->components->schemas->FileGroups->enum))
 			{
-				throw new \Exception('Invalid file group');
+				throw new EInvalidApiQuery('Invalid file group');
 			}
 
 			if (str_contains($args['fileName'], '_'))
@@ -247,13 +233,9 @@ class FilesApiController extends BaseApiController
 			}
 			else
 			{
-				throw new HttpNotFoundException($request, 'File not found');
+				throw new EObjectNotFound('File not found');
 			}
-		}
-		catch (\Exception $ex)
-		{
-			throw new HttpNotFoundException($request, $ex->getMessage(), $ex);
-		}
+		});
 	}
 
 	/**
@@ -265,11 +247,11 @@ class FilesApiController extends BaseApiController
 	 */
 	public function UploadFile(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			if (!in_array($args['group'], $this->GetOpenApispec()->components->schemas->FileGroups->enum))
 			{
-				throw new \Exception('Invalid file group');
+				throw new EInvalidApiQuery('Invalid file group');
 			}
 
 			$this->CheckGroupWritePermission($request, $args['group']);
@@ -298,20 +280,47 @@ class FilesApiController extends BaseApiController
 			}
 
 			return $this->EmptyApiResponse($response);
-		}
-		catch (PermissionMissingException $ex)
+		});
+	}
+
+	/**
+	 * Refuses the deletion of somebody else's user picture.
+	 *
+	 * The route carries no user id, so the group permission alone is "may edit some user"
+	 * rather than "may edit this user" - and USERS_EDIT_SELF is a natural grant, since it
+	 * is what lets a person change their own password. Without this check it would also
+	 * let them delete every other user's picture. Uploading needs no equivalent check: the
+	 * name is new, so there is nothing to take away.
+	 *
+	 * The owner is recovered from users.picture_file_name, which is what makes this a
+	 * route gap rather than a model gap - the id is missing from the request, not from the
+	 * data. On top of "may edit some user" the caller has to be able to administer the one
+	 * whose picture this is, which is the same subset rule EditUser applies (sweep finding
+	 * S6). The sweep left that as an open question in either direction; it is answered
+	 * yes, because deleting the avatar of someone whose permissions you do not hold is the
+	 * same act of administering them, and because answering no would make this the one
+	 * place the rule does not reach.
+	 *
+	 * A picture no user row claims is orphaned, and deleting it needs USERS_EDIT and
+	 * nothing more: there is no owner to compare against.
+	 *
+	 * @throws PermissionMissingException
+	 */
+	private function CheckUserPictureDeletion(Request $request, string $fileName): void
+	{
+		if (defined('VICTUAL_USER_PICTURE_FILE_NAME') && $fileName === VICTUAL_USER_PICTURE_FILE_NAME)
 		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
+			// Own picture - the group permission was enough
+			return;
 		}
-		catch (FileTooLargeException $ex)
+
+		User::CheckPermission($request, User::PERMISSION_USERS_EDIT);
+
+		$owner = $this->DB->users()->where('picture_file_name', $fileName)->fetch();
+
+		if ($owner !== null)
 		{
-			// 413 rather than the 400 every other upload failure gets, because "this one
-			// was too big" is the one refusal a client can act on by sending less
-			return $this->GenericErrorResponse($response, $ex->getMessage(), 413);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
+			User::CheckMayAdminister($request, (int)$owner->id);
 		}
 	}
 
@@ -326,7 +335,7 @@ class FilesApiController extends BaseApiController
 		}
 		else
 		{
-			throw new \Exception('Invalid filename');
+			throw new EInvalidApiQuery('Invalid filename');
 		}
 
 		return $fileName;

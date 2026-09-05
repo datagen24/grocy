@@ -19,23 +19,27 @@ class RecipesApiController extends BaseApiController
 	 * POST /api/recipes/{recipeId}/add-not-fulfilled-products-to-shoppinglist - puts all
 	 * ingredients not currently in stock onto the shopping list; the optional body field
 	 * excludedProductIds (array of product ids) skips the given products.
-	 * Requires the SHOPPINGLIST_ITEMS_ADD permission (403 otherwise). Returns 204;
-	 * service errors are not caught here and surface via the Slim error handler.
+	 * Requires the SHOPPINGLIST_ITEMS_ADD permission (403 otherwise).
+	 * Returns 204 on success or a 400 error response.
 	 */
 	public function AddNotFulfilledProductsToShoppingList(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_SHOPPINGLIST_ITEMS_ADD);
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
-		$excludedProductIds = null;
 
-		if ($requestBody !== null && array_key_exists('excludedProductIds', $requestBody))
+		return $this->HandleApiCall($response, function () use ($args, $requestBody, $response)
 		{
-			$excludedProductIds = $requestBody['excludedProductIds'];
-		}
+			$excludedProductIds = null;
 
-		RecipesService::GetInstance()->AddNotFulfilledProductsToShoppingList($args['recipeId'], $excludedProductIds);
-		return $this->EmptyApiResponse($response);
+			if ($requestBody !== null && array_key_exists('excludedProductIds', $requestBody))
+			{
+				$excludedProductIds = $requestBody['excludedProductIds'];
+			}
+
+			RecipesService::GetInstance()->AddNotFulfilledProductsToShoppingList($args['recipeId'], $excludedProductIds);
+			return $this->EmptyApiResponse($response);
+		});
 	}
 
 	/**
@@ -47,15 +51,11 @@ class RecipesApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_STOCK_CONSUME);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			RecipesService::GetInstance()->ConsumeRecipe($args['recipeId']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -66,7 +66,7 @@ class RecipesApiController extends BaseApiController
 	 */
 	public function GetRecipeFulfillment(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			if (!isset($args['recipeId']))
 			{
@@ -83,11 +83,7 @@ class RecipesApiController extends BaseApiController
 			{
 				return $this->ApiResponse($response, $recipeResolved);
 			}
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -96,16 +92,12 @@ class RecipesApiController extends BaseApiController
 	 */
 	public function CopyRecipe(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			return $this->ApiResponse($response, [
 				'created_object_id' => RecipesService::GetInstance()->CopyRecipe($args['recipeId'])
 			]);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -116,7 +108,7 @@ class RecipesApiController extends BaseApiController
 	 */
 	public function RecipePrintLabel(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$recipe = $this->DB->recipes()->where('id', $args['recipeId'])->fetch();
 
@@ -132,10 +124,6 @@ class RecipesApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $webhookData);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

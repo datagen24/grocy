@@ -113,6 +113,25 @@ class SessionService extends BaseService
 	}
 
 	/**
+	 * Deletes every session whose expiry has passed.
+	 *
+	 * Nothing pruned this table before, so it grew for the life of the installation and
+	 * kept a row for every session anybody ever had - which is a needless record of who
+	 * was logged in from when, and a needless thing for a database dump to carry (sweep
+	 * finding S19). It runs on login: the one moment there is already a reason to be
+	 * writing here, and the one that scales with logins rather than with requests.
+	 *
+	 * Like IsValidSession()'s bookkeeping write, this restores the database changed time
+	 * afterwards - housekeeping is not a data change and clients poll on that value.
+	 */
+	public function RemoveExpiredSessions()
+	{
+		$dbModTime = DatabaseService::GetInstance()->GetDbChangedTime();
+		$this->DB->sessions()->where('expires <= :1', date('Y-m-d H:i:s', time()))->delete();
+		DatabaseService::GetInstance()->SetDbChangedTime($dbModTime);
+	}
+
+	/**
 	 * Deletes the session (logout); unknown keys are a no-op.
 	 */
 	public function RemoveSession($sessionKey)

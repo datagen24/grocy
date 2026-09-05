@@ -19,11 +19,22 @@ class ChoresApiController extends BaseApiController
 	 * POST /api/chores/executions/calculate-next-assignments - (re)calculates who is
 	 * assigned to the next execution, either for the chore given via the numeric body
 	 * field chore_id or for all chores when omitted.
+	 *
+	 * Requires the CHORES permission (403 otherwise). It had no check at all until wave 2,
+	 * so any authenticated key could rewrite every chore's assignment. CHORES rather than
+	 * something finer because it is the parent of CHORE_TRACK_EXECUTION in the permission
+	 * hierarchy, so this excludes exactly one population - a user granted the leaf without
+	 * its parent - and carves out no new tier. All four callers in the front end fire
+	 * after a write the caller has just performed, so none of them is a render refresh
+	 * that a viewer could reach. Plan 11, question 2.
+	 *
 	 * Returns 204 on success or a 400 error response.
 	 */
 	public function CalculateNextExecutionAssignments(Request $request, Response $response, array $args)
 	{
-		try
+		User::CheckPermission($request, User::PERMISSION_CHORES);
+
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
@@ -47,11 +58,7 @@ class ChoresApiController extends BaseApiController
 			}
 
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -60,14 +67,10 @@ class ChoresApiController extends BaseApiController
 	 */
 	public function ChoreDetails(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			return $this->ApiResponse($response, ChoresService::GetInstance()->GetChoreDetails($args['choreId']));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -83,18 +86,17 @@ class ChoresApiController extends BaseApiController
 	 * POST /api/chores/{choreId}/execute - tracks an execution of the given chore.
 	 * Optional body fields: tracked_time (ISO date or datetime, defaults to now),
 	 * skipped (boolean, defaults to false), done_by (user id, defaults to the current user).
-	 * Requires the CHORE_TRACK_EXECUTION permission; since the check runs inside the
-	 * try block, a missing permission is reported as a 400 error response.
+	 * Requires the CHORE_TRACK_EXECUTION permission (403 otherwise).
 	 * Returns the created chores_log row (200) or a 400 error response.
 	 */
 	public function TrackChoreExecution(Request $request, Response $response, array $args)
 	{
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
-		{
-			User::CheckPermission($request, User::PERMISSION_CHORE_TRACK_EXECUTION);
+		User::CheckPermission($request, User::PERMISSION_CHORE_TRACK_EXECUTION);
 
+		return $this->HandleApiCall($response, function () use ($args, $request, $requestBody, $response)
+		{
 			$trackedTime = date('Y-m-d H:i:s');
 			if (array_key_exists('tracked_time', $requestBody) && (IsIsoDateTime($requestBody['tracked_time']) || IsIsoDate($requestBody['tracked_time'])))
 			{
@@ -120,32 +122,23 @@ class ChoresApiController extends BaseApiController
 
 			$choreExecutionId = ChoresService::GetInstance()->TrackChore($args['choreId'], $trackedTime, $doneBy, $skipped);
 			return $this->ApiResponse($response, $this->DB->chores_log($choreExecutionId));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
 	 * POST /api/chores/executions/{executionId}/undo - undoes a tracked chore execution.
-	 * Requires the CHORE_UNDO_EXECUTION permission (reported as a 400 error response
-	 * when missing, as the check runs inside the try block).
+	 * Requires the CHORE_UNDO_EXECUTION permission (403 otherwise).
 	 * Returns 204 on success or a 400 error response.
 	 */
 	public function UndoChoreExecution(Request $request, Response $response, array $args)
 	{
-		try
-		{
-			User::CheckPermission($request, User::PERMISSION_CHORE_UNDO_EXECUTION);
+		User::CheckPermission($request, User::PERMISSION_CHORE_UNDO_EXECUTION);
 
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
+		{
 			$this->ApiResponse($response, ChoresService::GetInstance()->UndoChoreExecution($args['executionId']));
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -156,7 +149,7 @@ class ChoresApiController extends BaseApiController
 	 */
 	public function ChorePrintLabel(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$choreDetails = (object)ChoresService::GetInstance()->GetChoreDetails($args['choreId']);
 
@@ -172,11 +165,7 @@ class ChoresApiController extends BaseApiController
 			}
 
 			return $this->ApiResponse($response, $webhookData);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -188,7 +177,7 @@ class ChoresApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_MASTER_DATA_EDIT);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			if (filter_var($args['choreIdToKeep'], FILTER_VALIDATE_INT) === false || filter_var($args['choreIdToRemove'], FILTER_VALIDATE_INT) === false)
 			{
@@ -197,10 +186,6 @@ class ChoresApiController extends BaseApiController
 
 			$this->ApiResponse($response, ChoresService::GetInstance()->MergeChores($args['choreIdToKeep'], $args['choreIdToRemove']));
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

@@ -15,31 +15,33 @@ class UsersApiController extends BaseApiController
 {
 	/**
 	 * POST /api/users/{userId}/permissions - assigns the permission given by the body
-	 * field permission_id to the user. Requires the ADMIN permission (returned as a
-	 * JSON error response with the exception's status code, i.e. 403).
-	 * Returns 204 on success or a 400 error response.
+	 * field permission_id to the user. Requires the ADMIN permission (403 otherwise), that
+	 * the caller may administer the target user, and that the caller holds everything the
+	 * grant would confer. Returns 204 on success, 400 when permission_id names no
+	 * permission, or a 400 error response.
 	 */
 	public function AddPermission(Request $request, Response $response, array $args)
 	{
-		try
+		User::CheckPermission($request, User::PERMISSION_ADMIN);
+
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
-			User::CheckPermission($request, User::PERMISSION_ADMIN);
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
+
+			if (!isset($requestBody['permission_id']))
+			{
+				throw new EInvalidApiQuery('permission_id is required');
+			}
+
+			User::CheckMayAdminister($request, (int)$args['userId']);
+			User::CheckMayGrant($request, [$requestBody['permission_id']]);
 
 			$this->DB->user_permissions()->createRow([
 				'user_id' => $args['userId'],
 				'permission_id' => $requestBody['permission_id']
 			])->save();
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Slim\Exception\HttpSpecializedException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -51,28 +53,34 @@ class UsersApiController extends BaseApiController
 	public function CreateUser(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_USERS_CREATE);
+
+		// DEFAULT_PERMISSIONS is what the new account is given, so creating a user is a
+		// grant and is bounded by what the creator holds. It used to be ['ADMIN'], which
+		// meant an account holding only USERS_CREATE could create an administrator and log
+		// in as it - a direct escalation past the permission model. Sweep finding S5.
+		User::CheckMayGrant($request, UsersService::GetInstance()->GetDefaultPermissionIds());
+
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($requestBody, $response)
 		{
 			if ($requestBody === null)
 			{
-				throw new \Exception('Request body could not be parsed (probably invalid JSON format or missing/wrong Content-Type header)');
+				throw new EInvalidApiQuery('Request body could not be parsed (probably invalid JSON format or missing/wrong Content-Type header)');
 			}
 
-			if (isset($requestBody['password_base64']))
-			{
-				$requestBody['password'] = base64_decode($requestBody['password_base64']);
-			}
-			unset($requestBody['password_base64']);
+			$requestBody = self::WithDecodedPassword($requestBody, 'password');
 
-			UsersService::GetInstance()->CreateUser($requestBody['username'], $requestBody['first_name'], $requestBody['last_name'], $requestBody['password'], $requestBody['picture_file_name']);
+			UsersService::GetInstance()->CreateUser(
+				self::RequiredField($requestBody, 'username'),
+				$requestBody['first_name'] ?? null,
+				$requestBody['last_name'] ?? null,
+				self::RequiredField($requestBody, 'password'),
+				$requestBody['picture_file_name'] ?? null
+			);
+
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -83,52 +91,113 @@ class UsersApiController extends BaseApiController
 	public function DeleteUser(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_USERS_EDIT);
-		try
+		User::CheckMayAdminister($request, (int)$args['userId']);
+
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			UsersService::GetInstance()->DeleteUser($args['userId']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
 	 * PUT /api/users/{userId} - updates the given user with the body fields username,
 	 * first_name, last_name, password (alternatively password_base64) and
 	 * picture_file_name. Requires USERS_EDIT_SELF when editing the own account,
-	 * USERS_EDIT otherwise (403 when missing).
+	 * USERS_EDIT otherwise (403 when missing), and in the second case that the target
+	 * holds nothing the caller does not.
+	 *
+	 * Changing one's own password additionally requires the current one, in the body field
+	 * current_password (or current_password_base64). Sweep finding S6: without it, a
+	 * borrowed session or an unlocked browser is enough to take an account over
+	 * permanently, and the person it belongs to finds out when they cannot log in.
+	 *
 	 * Returns 204 on success or a 400 error response.
 	 */
 	public function EditUser(Request $request, Response $response, array $args)
 	{
-		if ($args['userId'] == VICTUAL_USER_ID)
+		$isSelf = $args['userId'] == VICTUAL_USER_ID;
+
+		if ($isSelf)
 		{
 			User::CheckPermission($request, User::PERMISSION_USERS_EDIT_SELF);
 		}
 		else
 		{
 			User::CheckPermission($request, User::PERMISSION_USERS_EDIT);
+			// USERS_EDIT used to be enough to rewrite an administrator's password - and
+			// USERS_CREATE resolves to USERS_EDIT, so creating users was enough too.
+			// Sweep finding S6.
+			User::CheckMayAdminister($request, (int)$args['userId']);
 		}
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $isSelf, $requestBody, $response)
 		{
-			if (isset($requestBody['password_base64']))
+			if ($requestBody === null)
 			{
-				$requestBody['password'] = base64_decode($requestBody['password_base64']);
+				throw new EInvalidApiQuery('Request body could not be parsed (probably invalid JSON format or missing/wrong Content-Type header)');
 			}
-			unset($requestBody['password_base64']);
 
-			UsersService::GetInstance()->EditUser($args['userId'], $requestBody['username'], $requestBody['first_name'], $requestBody['last_name'], $requestBody['password'], $requestBody['picture_file_name']);
+			$requestBody = self::WithDecodedPassword($requestBody, 'password');
+			$requestBody = self::WithDecodedPassword($requestBody, 'current_password');
+
+			if ($isSelf && !empty($requestBody['password'] ?? null))
+			{
+				UsersService::GetInstance()->CheckCurrentPassword((int)$args['userId'], $requestBody['current_password'] ?? null);
+			}
+
+			UsersService::GetInstance()->EditUser(
+				$args['userId'],
+				self::RequiredField($requestBody, 'username'),
+				$requestBody['first_name'] ?? null,
+				$requestBody['last_name'] ?? null,
+				$requestBody['password'] ?? null,
+				$requestBody['picture_file_name'] ?? null
+			);
+
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
+		});
+	}
+
+	/**
+	 * The body with a "<field>_base64" variant decoded into "<field>" and removed.
+	 *
+	 * The base64 form exists because a password may contain characters a client finds
+	 * awkward to send; it is not a secret-keeping measure and never was.
+	 */
+	private static function WithDecodedPassword(array $requestBody, string $field): array
+	{
+		if (isset($requestBody[$field . '_base64']))
 		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
+			$requestBody[$field] = base64_decode($requestBody[$field . '_base64']);
 		}
+
+		unset($requestBody[$field . '_base64']);
+
+		return $requestBody;
+	}
+
+	/**
+	 * A body field that has to be there, refused as a client error when it is not.
+	 *
+	 * These used to be read straight out of the array and passed to a typed service
+	 * parameter, so an absent one was a TypeError - which is an \Error rather than an
+	 * \Exception, so it escaped HandleApiCall() and every catch before it and answered
+	 * 500 with PHP's own message naming the file and line. POST /api/users with an empty
+	 * body was exactly that.
+	 *
+	 * @throws EInvalidApiQuery
+	 */
+	private static function RequiredField(array $requestBody, string $field): string
+	{
+		if (!isset($requestBody[$field]) || !is_string($requestBody[$field]) || trim($requestBody[$field]) === '')
+		{
+			throw new EInvalidApiQuery($field . ' is required');
+		}
+
+		return $requestBody[$field];
 	}
 
 	/**
@@ -137,15 +206,11 @@ class UsersApiController extends BaseApiController
 	 */
 	public function GetUserSetting(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$value = UsersService::GetInstance()->GetUserSetting(VICTUAL_USER_ID, $args['settingKey']);
 			return $this->ApiResponse($response, ['value' => $value]);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -154,14 +219,10 @@ class UsersApiController extends BaseApiController
 	 */
 	public function GetUserSettings(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($response)
 		{
 			return $this->ApiResponse($response, UsersService::GetInstance()->GetUserSettings(VICTUAL_USER_ID));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -172,14 +233,10 @@ class UsersApiController extends BaseApiController
 	public function GetUsers(Request $request, Response $response, array $args)
 	{
 		User::CheckPermission($request, User::PERMISSION_USERS_READ);
-		try
+		return $this->HandleApiCall($response, function () use ($request, $response)
 		{
 			return $this->FilteredApiResponse($request, $response, UsersService::GetInstance()->GetUsersAsDto(), $request->getQueryParams());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -188,56 +245,68 @@ class UsersApiController extends BaseApiController
 	 */
 	public function CurrentUser(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($response)
 		{
 			return $this->ApiResponse($response, UsersService::GetInstance()->GetUsersAsDto()->where('id', VICTUAL_USER_ID));
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
 	 * GET /api/users/{userId}/permissions - returns the user_permissions rows assigned
-	 * to the given user. Requires the ADMIN permission (returned as a JSON error
-	 * response with the exception's status code, i.e. 403); 400 on other errors.
+	 * to the given user. Requires the USERS_READ permission (403 otherwise); 400 on other
+	 * errors.
+	 *
+	 * USERS_READ rather than ADMIN closes a mismatch plan 14's section 2b recorded: the
+	 * server-rendered permissions page has always required only USERS_READ, so the two
+	 * halves of the same screen disagreed about who may look at it, and the strict half
+	 * was the one nothing rendered from. Reading who holds what is a read of the users
+	 * surface. Plan 19 states the same rule for the role endpoints it will add.
+	 *
+	 * Only the read half moves. The two write endpoints below stay on ADMIN: loosening a
+	 * *grant* path to USERS_EDIT is a decision about the permission model, which 19 has
+	 * not recorded, and the roadmap's own lesson about parking findings on that plan cuts
+	 * both ways - a wave that would not guess at the model should not guess at it here
+	 * either.
 	 */
 	public function ListPermissions(Request $request, Response $response, array $args)
 	{
-		try
-		{
-			User::CheckPermission($request, User::PERMISSION_ADMIN);
+		User::CheckPermission($request, User::PERMISSION_USERS_READ);
 
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
+		{
 			return $this->ApiResponse(
 				$response,
 				$this->DB->user_permissions()->where('user_id', $args['userId'])
 			);
-		}
-		catch (\Slim\Exception\HttpSpecializedException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
 	 * PUT /api/users/{userId}/permissions - replaces all permission assignments of the
 	 * given user with the body field permissions (array of permission ids); in demo or
 	 * prerelease mode the user is always given the ADMIN permission instead.
-	 * Requires the ADMIN permission (returned as a JSON error response with the
-	 * exception's status code, i.e. 403). Returns 204 on success or a 400 error response.
+	 * Requires the ADMIN permission (403 otherwise). Returns 204 on success or a
+	 * 400 error response.
 	 */
 	public function SetPermissions(Request $request, Response $response, array $args)
 	{
-		try
-		{
-			User::CheckPermission($request, User::PERMISSION_ADMIN);
+		User::CheckPermission($request, User::PERMISSION_ADMIN);
 
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
+		{
 			$requestBody = $request->getParsedBody();
+			$requested = $requestBody['permissions'] ?? [];
+
+			if (!is_array($requested))
+			{
+				throw new EInvalidApiQuery('permissions has to be an array of permission ids');
+			}
+
+			// Both checks before anything is deleted: this endpoint replaces the whole set,
+			// so a refusal halfway through would leave the user holding nothing
+			User::CheckMayAdminister($request, (int)$args['userId']);
+			User::CheckMayGrant($request, $requested);
+
 			$db = $this->DB;
 			$db->user_permissions()
 				->where('user_id', $args['userId'])
@@ -254,7 +323,7 @@ class UsersApiController extends BaseApiController
 			}
 			else
 			{
-				foreach ($requestBody['permissions'] as $perm_id)
+				foreach ($requested as $perm_id)
 				{
 					$perms[] = [
 						'user_id' => $args['userId'],
@@ -265,15 +334,7 @@ class UsersApiController extends BaseApiController
 			$db->insert('user_permissions', $perms, 'batch');
 
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Slim\Exception\HttpSpecializedException $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -282,17 +343,13 @@ class UsersApiController extends BaseApiController
 	 */
 	public function SetUserSetting(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $request, $response)
 		{
 			$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
 			$value = UsersService::GetInstance()->SetUserSetting(VICTUAL_USER_ID, $args['settingKey'], $requestBody['value']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -301,14 +358,10 @@ class UsersApiController extends BaseApiController
 	 */
 	public function DeleteUserSetting(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			$value = UsersService::GetInstance()->DeleteUserSetting(VICTUAL_USER_ID, $args['settingKey']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

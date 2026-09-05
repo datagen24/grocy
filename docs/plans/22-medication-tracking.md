@@ -9,8 +9,8 @@ per Q1) and [14](14-contract-and-regression-scaffolding.md) piece 2 (this surfac
 to the parity suite and contract tests are its only guard). Builds on
 [12](12-frontend-shared-core.md), landed. **Not** blocked on [19](19-rbac.md) — Q5 decided
 this ships its own narrow visibility enforcement and becomes a client of 19 later.
-**Governed by:** [ADR-0014](../adr/0014-medication-records-never-advises.md) (scope boundary)
-and [ADR-0015](../adr/0015-schedule-expansion-in-the-application.md) (where expansion lives),
+**Governed by:** [ADR-0015](../adr/0015-medication-records-never-advises.md) (scope boundary)
+and [ADR-0016](../adr/0016-schedule-expansion-in-the-application.md) (where expansion lives),
 both **Proposed** and written alongside this plan.
 **Consumes:** [ADR-0011](../adr/0011-label-namespace.md), **accepted 2026-09-04**, for labels
 — this plan proposes no code format of its own — and answers its still-open Q3 for the
@@ -74,7 +74,7 @@ Columns: form (tablet / capsule / inhaler / vial / pen / drops / patch / suspens
 `splittable` and `min_dose_increment` exist because half tablets are real and enteric-coated
 or extended-release tablets must not be split. The regimen form validates a dose against them.
 This is not clinical validation under
-[ADR-0014](../adr/0014-medication-records-never-advises.md): it compares a dose against a
+[ADR-0015](../adr/0015-medication-records-never-advises.md): it compares a dose against a
 physical fact about a tablet that the household itself recorded, and asserts nothing the
 household did not already know.
 
@@ -130,7 +130,7 @@ have to build 0012's machinery first, for one caller, ahead of any plan that own
 
 The application records the excursion, surfaces it against the entries that were resident, and
 stops. Whether a vial is still good is a judgement a person makes —
-[ADR-0014](../adr/0014-medication-records-never-advises.md).
+[ADR-0015](../adr/0015-medication-records-never-advises.md).
 
 ### Piece 3 — Subjects
 
@@ -168,6 +168,23 @@ visibility protects is **the link between a drug and a person**, which is the se
 not the whole of it. Closing the other half means gating stock reads, which is
 [19](19-rbac.md)'s question 8 and not this plan's to answer.
 
+**One constraint from [ADR-0014](../adr/0014-administering-a-user-is-a-subset-question.md),
+which wave 2 landed as `User::MayAdminister()`.** That rule compares the target's *resolved
+permissions* against the caller's, so it can only see things that are permissions. Subject
+visibility here is deliberately not one — it is a row predicate over `subjects.user_id` — which
+means administering a user tells you nothing about whose medication data they can read, and the
+subset check cannot reason about it either. That is fine as long as visibility stays data.
+
+It stops being fine the moment this plan grows a *grant*: a table saying "user X may see
+subject Y" would be a permission wearing a different shape, invisible to
+`User::CheckMayGrant()`, and an account could hand out access its own administrator could not
+see it holding. That is precisely the failure ADR-0014 exists to close. So the rule for this
+plan is that per-subject access is either **derived from the `subjects.user_id` link and the
+`MEDICATIONS_ALL` permission, or it is a real permission in `permission_hierarchy`** — never a
+third grant mechanism beside them. Worth stating now, because the natural next feature request
+after this ships is "let my partner see my regimens too", and the obvious implementation is the
+one that must not be built.
+
 New permission constants alongside the existing 30 in
 [controllers/Users/User.php](../../controllers/Users/User.php): `MEDICATIONS`,
 `MEDICATIONS_ADMINISTER`, `MEDICATIONS_UNDO`, `MEDICATIONS_ALL`.
@@ -192,7 +209,7 @@ different people** is simply two regimens against one product and one stock pool
 that made a per-product schedule field unworkable in the first place.
 
 **Occurrence expansion lives in PHP**, in a new `MedicationService`, not in a view. That is
-[ADR-0015](../adr/0015-schedule-expansion-in-the-application.md)'s subject and the argument is
+[ADR-0016](../adr/0016-schedule-expansion-in-the-application.md)'s subject and the argument is
 there rather than here; the short form is that recursive date arithmetic is the surface where
 the two engines diverge most, and the dual-engine discipline is live regardless of
 [ADR-0008](../adr/0008-postgresql-only-runtime-engine.md)'s acceptance.
@@ -280,7 +297,7 @@ Collected because most of them are only visible from inside the existing code.
   within a pillbox is meaningless and lot attribution blurs once tablets are commingled; the
   plan accepts that for ambient products and forbids it for the rest.
 - **No interaction checking, dose validation or clinical advice, ever.**
-  [ADR-0014](../adr/0014-medication-records-never-advises.md) is the record; this line is here
+  [ADR-0015](../adr/0015-medication-records-never-advises.md) is the record; this line is here
   because a plan is where the temptation actually arrives.
 - **MCP exposure is decided now.** Medication entities are excluded from
   [02](02-mcp-endpoint.md) by default and administration is never a write tool. Cheap while
@@ -291,14 +308,15 @@ Collected because most of them are only visible from inside the existing code.
   [14](14-contract-and-regression-scaffolding.md) piece 2.
 - **Demo data must be transparently fictional.** Plausible-looking prescriptions attached to a
   demo household are a bad thing to have screenshotted.
-- **Migration numbering.** Two pairs, claiming **0263** (medication master data and subjects)
-  and **0264** (regimens, administrations, excursions), with rows added to
+- **Migration numbering.** Two pairs, claiming **0267** (medication master data and subjects)
+  and **0268** (regimens, administrations, excursions), with rows added to
   [RESERVATIONS.md](../../migrations/RESERVATIONS.md) before any file is written, per
-  [ADR-0004](../adr/0004-engine-specific-migrations.md). 0262 belongs to
-  [23](23-storage-classes.md), which lands first. These numbers moved once already — the
-  drafts claimed 0261 and 0262 until `master` landed 0261 on 2026-09-04, which is the
-  collision RESERVATIONS.md exists to prevent and a reason to claim before writing rather
-  than before merging.
+  [ADR-0004](../adr/0004-engine-specific-migrations.md). 0266 belongs to
+  [23](23-storage-classes.md), which lands first. **These numbers have moved twice** — claimed
+  as 0261–0262 until `master` landed 0261, then 0262–0264 until wave 2 landed 0262 through
+  0265 — so re-read that table at every resync rather than trusting a number this plan claimed
+  a week ago. Both corrections cost one table edit because nothing had been written under the
+  old numbers, which is the argument for claiming before writing rather than before merging.
 
 ## Open questions
 
@@ -308,7 +326,7 @@ Collected because most of them are only visible from inside the existing code.
    > every `/objects/locations` client can see for the sake of a wine cooler and a
    > cheese cave as much as a medication fridge, and a schema change justified only
    > inside a medication plan is one nobody reading `locations` would think to open.
-   > 23 takes migration 0262 and lands first.
+   > 23 takes migration 0266 and lands first.
 
 2. **Where do lot numbers live?** A column on `stock` and `stock_log`, or a side table keyed on
    `stock_id`.
@@ -394,7 +412,7 @@ Collected because most of them are only visible from inside the existing code.
 9. **Weight-based and age-based dosing.** Paediatric and veterinary dosing is often mg/kg,
    which would put a weight on `subjects` and a computed dose on the regimen. The arithmetic is
    trivial and the act is dose *calculation*, which
-   [ADR-0014](../adr/0014-medication-records-never-advises.md) puts outside the line: it
+   [ADR-0015](../adr/0015-medication-records-never-advises.md) puts outside the line: it
    asserts a dose the household did not enter. *Lean: out of scope, and 0014 is the reason
    rather than v1 sequencing — so this does not quietly return as a "small addition" later.*
 

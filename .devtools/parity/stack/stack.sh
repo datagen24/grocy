@@ -5,26 +5,51 @@
 # Sourced by ../bin/parity; not meant to be run directly, though every function here is
 # safe to call on its own if you are debugging one container.
 #
-# **Why plain `podman run` and not `podman kube play`.** deploy/podman/victual.yaml is a
-# Kubernetes Pod on purpose and that is the right shape for a *deployment*. It is the
-# wrong shape for this, for one concrete reason: Kubernetes runs every initContainer to
-# completion before any regular container starts, so a migrate initContainer in a pod that
-# also contains PostgreSQL waits for a database that has not been started yet and never
-# will be. Splitting infrastructure into a second pod would then need a shared network and
-# would be two manifests describing one thing. This file is a test fixture, not a
+# **The fork side is the shipping artifact.** Since ADR-0013 the production images are
+# the three Nix ones — `victual-migrate` runs and exits, then `victual-app` (php-fpm on
+# loopback) and `victual-web` (nginx) serve together. This suite boots exactly those,
+# with the same read-only root, the same dropped capabilities and the same in-container
+# probes deploy/podman/victual.yaml uses, because comparing upstream against an image the
+# fork does not ship is a worse question than comparing it against one the fork does.
+# Before 2026-09-04 this built the `Dockerfile`'s `production` target, which no longer
+# exists; issue #56 is the port.
+#
+# **Why a pod here but still not `podman kube play`.** php-fpm binds `127.0.0.1:9000`
+# (nix/runtime/fpm-conf.nix), so `victual-app` and `victual-web` must share a network
+# namespace for nginx's `fastcgi_pass` to mean anything — which is a pod, created here
+# with `podman pod create` and joined with `--pod`. What it is *not* is
+# deploy/podman/victual.yaml played through `podman kube play`, for the reason that has
+# always been in this file: Kubernetes runs every initContainer to completion before any
+# regular container starts, so a migrate initContainer in a pod that also contains
+# PostgreSQL waits for a database that has not been started yet and never will be.
+# Splitting infrastructure into a second pod would then need a shared network and would be
+# two manifests describing one thing. `migrate_victual()` below is that ordering point,
+# run as its own container once PostgreSQL is up. This file is a test fixture, not a
 # deployment artifact, and it says so by not pretending to be one.
 #
 # Everything runs on one podman network with DNS aliases, so `postgres`, `mosquitto` and
-# `influxdb` mean the same thing here as they would in a compose file.
+# `influxdb` mean the same thing here as they would in a compose file. The pod joins that
+# same network, which is what lets the app container resolve `postgres` at all.
 
 set -euo pipefail
 
 # --- Names and knobs -------------------------------------------------------------------
 
+STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd "$STACK_DIR/../../.." && pwd)}"
+
 PARITY_NETWORK="${PARITY_NETWORK:-victual-parity}"
 PARITY_PREFIX="${PARITY_PREFIX:-parity}"
 
-VICTUAL_IMAGE="${VICTUAL_IMAGE:-localhost/victual:parity}"
+# The image tag the Nix build produces is version.json's `Version`, from nix/overlay.nix —
+# the same string the application reports at /api/system/info. Reading it here rather than
+# hard-coding 4.6.0 means a version bump does not leave this suite pointing at a tag that
+# `nix run .#load` no longer writes.
+VICTUAL_VERSION="${VICTUAL_VERSION:-$(sed -n 's/.*"Version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$REPO_ROOT/version.json")}"
+
+VICTUAL_APP_IMAGE="${VICTUAL_APP_IMAGE:-localhost/victual-app:${VICTUAL_VERSION}}"
+VICTUAL_WEB_IMAGE="${VICTUAL_WEB_IMAGE:-localhost/victual-web:${VICTUAL_VERSION}}"
+VICTUAL_MIGRATE_IMAGE="${VICTUAL_MIGRATE_IMAGE:-localhost/victual-migrate:${VICTUAL_VERSION}}"
 
 # Pinned to the fork's base version rather than :latest, and that is the whole argument of
 # this suite. version.json says 4.6.0 / 2026-03-06 and so does the upstream image's own
@@ -59,9 +84,17 @@ ENGINE="${CONTAINER_ENGINE:-podman}"
 c_pg="${PARITY_PREFIX}-postgres"
 c_mqtt="${PARITY_PREFIX}-mosquitto"
 c_influx="${PARITY_PREFIX}-influxdb"
-c_victual="${PARITY_PREFIX}-victual"
 c_upstream="${PARITY_PREFIX}-upstream"
-v_victual_data="${PARITY_PREFIX}-victual-data"
+
+# The fork is a pod with two containers in it, so it is three names rather than one.
+p_victual="${PARITY_PREFIX}-victual"
+c_victual_app="${PARITY_PREFIX}-victual-app"
+c_victual_web="${PARITY_PREFIX}-victual-web"
+
+# There is no victual data volume. There was one, seeded with a stub config.php to satisfy
+# PrerequisiteChecker::checkForConfigFile(); the application no longer requires the file at
+# all (issue #49) and the images mount /data read-only and empty. Upstream still needs its
+# /config, because that is where its SQLite database lives.
 v_upstream_data="${PARITY_PREFIX}-upstream-config"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -147,19 +180,6 @@ start_influx() {
 
 # --- Victual ---------------------------------------------------------------------------
 
-# The image's /data is a mount point with nothing in it, and PrerequisiteChecker refuses to
-# start without a config.php inside it. The file it wants can be empty: app.php loads
-# config.php first and config-dist.php after it, so every setting still resolves — from the
-# VICTUAL_* environment, which is where a container's configuration belongs and where S25
-# says the credential has to come from. This seeds the same near-empty stub nix/config-seed.nix
-# ships, for the same reason.
-seed_victual_data() {
-	"$ENGINE" volume rm -f "$v_victual_data" >/dev/null 2>&1 || true
-	"$ENGINE" volume create "$v_victual_data" >/dev/null
-	"$ENGINE" run --rm -v "$v_victual_data:/data" --user root "$VICTUAL_IMAGE" \
-		sh -c 'printf "<?php\n" > /data/config.php && chown -R www-data:www-data /data' >/dev/null
-}
-
 victual_env_args() {
 	printf '%s\n' \
 		-e VICTUAL_MODE=production \
@@ -180,36 +200,84 @@ victual_env_args() {
 		-e VICTUAL_INFLUXDB_URL=http://influxdb:8086 \
 		-e "VICTUAL_INFLUXDB_TOKEN=$INFLUX_TOKEN" \
 		-e "VICTUAL_INFLUXDB_ORG=$INFLUX_ORG" \
-		-e "VICTUAL_INFLUXDB_BUCKET=$INFLUX_BUCKET"
+		-e "VICTUAL_INFLUXDB_BUCKET=$INFLUX_BUCKET" \
+		-e VICTUAL_FILE_STORAGE=database
+}
+
+# The security flags the manifest sets, said the way `podman run` says them. Not decoration:
+# these images are built to run this way, and deploy/README.md is explicit that turning
+# `readOnlyRootFilesystem` off to get a green container is a finding rather than a
+# workaround. A fixture that ran them with a writable root would not be testing what ships.
+#
+# `--tmpfs /tmp` is spelled out rather than left to podman's `--read-only-tmpfs` default,
+# because the manifest mounts one per container and this should not depend on which way
+# that default happens to be set.
+victual_hardening_args() {
+	printf '%s\n' \
+		--read-only \
+		--tmpfs /tmp \
+		--cap-drop ALL \
+		--security-opt no-new-privileges
 }
 
 # Migrations are a step, not a side effect of the first request — that is what plan 10
-# bought and what SchemaVersionMiddleware enforces. Running it here rather than as a pod
-# initContainer is the ordering point this whole file exists for: PostgreSQL is already up.
+# bought and what SchemaVersionMiddleware enforces. Running it here as its own container
+# rather than as the pod's initContainer is the ordering point this whole file exists for:
+# PostgreSQL is already up, which is exactly what an initContainer cannot arrange.
 migrate_victual() {
 	log "victual: migrate"
 	local args=()
 	while IFS= read -r a; do args+=("$a"); done < <(victual_env_args)
+	while IFS= read -r a; do args+=("$a"); done < <(victual_hardening_args)
+	# No command: the image's Cmd is already bin/victual-migrate.
 	"$ENGINE" run --rm --network "$PARITY_NETWORK" \
-		-v "$v_victual_data:/data" \
 		"${args[@]}" \
-		"$VICTUAL_IMAGE" php bin/victual-migrate \
+		"$VICTUAL_MIGRATE_IMAGE" \
 		|| die "victual migration failed"
 }
 
+# The pod exists for one reason: php-fpm binds 127.0.0.1:9000 and nginx's `fastcgi_pass`
+# names that address, so the two containers have to be in the same network namespace. It
+# joins the parity network so that the app container can still resolve `postgres`,
+# `mosquitto` and `influxdb`, and it is the pod — not either container — that publishes
+# 8080, because a pod's ports live on its infra container.
+create_victual_pod() {
+	"$ENGINE" pod rm -f "$p_victual" >/dev/null 2>&1 || true
+	"$ENGINE" pod create --name "$p_victual" \
+		--network "$PARITY_NETWORK" --network-alias victual \
+		-p "${VICTUAL_PORT}:8080" >/dev/null
+}
+
 start_victual() {
-	rm_container "$c_victual"
-	log "victual"
+	create_victual_pod
+	log "victual: app (php-fpm)"
 	local args=()
 	while IFS= read -r a; do args+=("$a"); done < <(victual_env_args)
-	"$ENGINE" run -d --name "$c_victual" \
-		--network "$PARITY_NETWORK" --network-alias victual \
-		-p "${VICTUAL_PORT}:8080" \
-		-v "$v_victual_data:/data" \
+	while IFS= read -r a; do args+=("$a"); done < <(victual_hardening_args)
+	"$ENGINE" run -d --name "$c_victual_app" --pod "$p_victual" \
 		"${args[@]}" \
-		"$VICTUAL_IMAGE" >/dev/null
+		"$VICTUAL_APP_IMAGE" >/dev/null
+
+	# The manifest's startupProbe, run the same way. /opt/victual/healthcheck is a PHP
+	# script with the interpreter in its shebang, so `podman exec` runs it with no shell
+	# involved — which is the only way to ask this container anything, since it has no
+	# shell to ask with. It is also the only probe that works: the pool listens on
+	# loopback, so nothing outside this pod's namespace can open the port at all.
+	wait_for "victual app" 120 "$ENGINE" exec "$c_victual_app" /opt/victual/healthcheck
+
+	log "victual: web (nginx)"
+	local web_args=()
+	while IFS= read -r a; do web_args+=("$a"); done < <(victual_hardening_args)
+	# No environment at all, and that is the split ADR-0010 asks for: the web tier holds
+	# the document root and no credential.
+	"$ENGINE" run -d --name "$c_victual_web" --pod "$p_victual" \
+		"${web_args[@]}" \
+		"$VICTUAL_WEB_IMAGE" >/dev/null
+
 	# /login rather than / — it renders through Blade, touches the database and passes the
 	# schema gate, so a 200 here means the whole stack answered, not that a socket is open.
+	# This is the manifest's readinessProbe asked from outside instead of inside, which is
+	# the stronger question here because it also proves the published port works.
 	wait_for victual 120 curl -fsS -o /dev/null "http://127.0.0.1:${VICTUAL_PORT}/login"
 
 	# The same assertive gate the upstream side has, for the same reason: the suite's first
@@ -218,6 +286,31 @@ start_victual() {
 		"test \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST \
 			-d 'username=admin&password=admin' \
 			'http://127.0.0.1:${VICTUAL_PORT}/login')\" = 302"
+}
+
+# Runs one of the application's `bin/` CLI entry points against this stack, from the
+# migrate image — the only one of the three that carries them and the only one with a plain
+# PHP CLI rather than php-fpm. That is also how a deployment would run one: a Job or a
+# CronJob from the CLI image, not `kubectl exec` into a request handler.
+#
+# The interpreter and the application root are read out of the image's own `Cmd`
+# (`<php> /app/bin/victual-migrate`) rather than hard-coded. These images have no `PATH` —
+# every entry point names an absolute store path — so `php bin/…` finds nothing, and a
+# store path is not something this file can know. Asking the image is the only answer that
+# survives a PHP version bump.
+victual_cli() {
+	local tool="$1"; shift
+	local php_bin app_bin
+	php_bin="$("$ENGINE" image inspect --format '{{index .Config.Cmd 0}}' "$VICTUAL_MIGRATE_IMAGE")" \
+		|| die "$VICTUAL_MIGRATE_IMAGE is not loaded"
+	app_bin="$(dirname "$("$ENGINE" image inspect --format '{{index .Config.Cmd 1}}' "$VICTUAL_MIGRATE_IMAGE")")"
+
+	local args=()
+	while IFS= read -r a; do args+=("$a"); done < <(victual_env_args)
+	while IFS= read -r a; do args+=("$a"); done < <(victual_hardening_args)
+	"$ENGINE" run --rm --network "$PARITY_NETWORK" \
+		"${args[@]}" \
+		"$VICTUAL_MIGRATE_IMAGE" "$php_bin" "$app_bin/$tool" "$@"
 }
 
 # --- Upstream grocy --------------------------------------------------------------------
@@ -271,7 +364,6 @@ stack_up() {
 	start_postgres
 	start_mosquitto
 	start_influx
-	seed_victual_data
 	migrate_victual
 	start_victual
 	start_upstream
@@ -280,16 +372,19 @@ stack_up() {
 
 stack_down() {
 	log "tearing down"
-	for c in "$c_victual" "$c_upstream" "$c_influx" "$c_mqtt" "$c_pg"; do
+	# The pod first: `pod rm -f` takes its containers and its infra container with it, and
+	# removing a member container on its own would leave the pod holding the published port.
+	"$ENGINE" pod rm -f "$p_victual" >/dev/null 2>&1 || true
+	for c in "$c_upstream" "$c_influx" "$c_mqtt" "$c_pg"; do
 		rm_container "$c"
 	done
-	"$ENGINE" volume rm -f "$v_victual_data" "$v_upstream_data" >/dev/null 2>&1 || true
+	"$ENGINE" volume rm -f "$v_upstream_data" >/dev/null 2>&1 || true
 	"$ENGINE" network rm -f "$PARITY_NETWORK" >/dev/null 2>&1 || true
 }
 
 stack_status() {
 	printf '%-22s %-10s %s\n' CONTAINER STATE IMAGE
-	for c in "$c_pg" "$c_mqtt" "$c_influx" "$c_victual" "$c_upstream"; do
+	for c in "$c_pg" "$c_mqtt" "$c_influx" "$c_victual_app" "$c_victual_web" "$c_upstream"; do
 		if exists "$c"; then
 			printf '%-22s %-10s %s\n' "$c" \
 				"$("$ENGINE" inspect -f '{{.State.Status}}' "$c")" \
@@ -304,10 +399,9 @@ stack_status() {
 # the first request after a scale-up, and the only way to test it is to have a first
 # request. This throws both databases away and rebuilds them from nothing.
 stack_reset() {
-	rm_container "$c_victual"
+	"$ENGINE" pod rm -f "$p_victual" >/dev/null 2>&1 || true
 	rm_container "$c_upstream"
 	start_postgres
-	seed_victual_data
 	migrate_victual
 	start_victual
 	start_upstream

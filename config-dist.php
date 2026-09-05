@@ -158,8 +158,14 @@ Setting('SESSION_STAY_LOGGED_IN_DAYS', 90);
 // A valid fully qualified class name of the authentication middlware to use:
 //  Victual\Middleware\Auth\DefaultAuthMiddleware: The default which uses the users you create in Victual
 //  Victual\Middleware\Auth\ReverseProxyAuthMiddleware: When your reverse proxy handles authentication (see options below)
-//  Victual\Middleware\Auth\LdapAuthMiddleware: When you want to use your existing LDAP server (see options below)
-// or any other class that implements Victual\Middleware\Auth\BaseAuthMiddleware
+// or any other class that extends Victual\Middleware\Auth\BaseAuthMiddleware, which is
+// checked at startup - a value naming a class that does not, or that does not exist, is
+// refused rather than fataling on the first request
+//
+// The LDAP backend was removed in this release. An LDAP directory reaches this
+// application through a reverse proxy that authenticates against it, which is the same
+// arrangement for every other identity provider and one this fork does not have to
+// maintain a second implementation of
 Setting('AUTH_CLASS', 'Victual\Middleware\Auth\DefaultAuthMiddleware');
 
 // Options when using ReverseProxyAuthMiddleware
@@ -173,18 +179,42 @@ Setting('REVERSE_PROXY_AUTH_USE_ENV', false); // Set to true if the username is 
 // Your proxy must also be configured to strip this header from inbound requests
 Setting('REVERSE_PROXY_AUTH_TRUSTED_PROXIES', '');
 
-// Options when using LdapAuthMiddleware
-Setting('LDAP_ADDRESS', ''); // Example value "ldap://vm-dc2019.local.berrnd.net"
-Setting('LDAP_BASE_DN', ''); // Example value "DC=local,DC=berrnd,DC=net"
-Setting('LDAP_BIND_DN', ''); // Example value "CN=victual_bind_account,OU=service_accounts,DC=local,DC=example,DC=net"
-Setting('LDAP_BIND_PW', ''); // Password for the above account
-Setting('LDAP_USER_FILTER', ''); // Example value "(OU=victual_users)"
-Setting('LDAP_UID_ATTR', ''); // Windows AD: "sAMAccountName", OpenLDAP: "uid", GLAuth: "cn"
+// How many failed logins are allowed against one username inside the window below.
+// Further attempts are refused - answered exactly like a wrong password, so that hitting
+// the limit tells a guesser nothing. A successful login clears that username's count.
+// Set MAX_ATTEMPTS to 0 to turn the throttle off entirely.
+//
+// The count lives in the database rather than in memory, because the deployment this fork
+// targets scales to zero: a counter held in the process is reset for free by anyone willing
+// to wait out an idle window, which is the same as having no throttle.
+//
+// This limit is per username and says nothing about where the request came from, which is
+// deliberate. Behind a reverse proxy every request arrives from the proxy, so a per-address
+// count here would be a whole-instance lockout wearing a per-address name. Rate limiting a
+// misbehaving client address needs the real address, which only your proxy knows - do it
+// there (fail2ban, nginx limit_req, an ingress middleware)
+Setting('LOGIN_THROTTLE_MAX_ATTEMPTS', 10);
+Setting('LOGIN_THROTTLE_WINDOW_MINUTES', 15);
 
 // Default permissions for new users
 // the array needs to contain the technical/constant names
 // See the file controllers/Users/User.php for possible values
-Setting('DEFAULT_PERMISSIONS', ['ADMIN']);
+//
+// Empty by default, and deliberately: this used to be ['ADMIN'], which made every user
+// created by the reverse proxy backend an administrator on first sight of their username,
+// and let an account holding only USERS_CREATE create an administrator and log in as it.
+// A new user is given what whoever created them chose to give them; nothing is granted by
+// merely existing
+Setting('DEFAULT_PERMISSIONS', []);
+
+// Which browser origins may call the API cross-origin, as a comma separated list of
+// exact origins, e.g. 'https://home.example.com, https://tablet.example.com'.
+// Empty (the default) means no CORS response headers are sent at all, which is what an
+// installation with no browser based third party client wants. This used to be an
+// unconditional 'Access-Control-Allow-Origin: *' on an API that authenticates with a key
+// (sweep finding S21); a preflight is still answered 204, it just carries no permission
+// for an origin that is not listed here
+Setting('CORS_ALLOWED_ORIGINS', '');
 
 // "1D" (=> Code128) or "2D" (=> DataMatrix)
 Setting('GROCYCODE_TYPE', '2D');

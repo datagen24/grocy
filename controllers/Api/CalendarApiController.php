@@ -29,7 +29,7 @@ class CalendarApiController extends BaseApiController
 	 */
 	public function Ical(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($response)
 		{
 			$events = CalendarService::GetInstance()->GetEvents();
 			$minDate = null;
@@ -94,11 +94,7 @@ class CalendarApiController extends BaseApiController
 			$response->write((new CalendarFactory())->createCalendar($vCalendar));
 			$response = $response->withHeader('Content-Type', 'text/calendar; charset=utf-8');
 			return $response->withHeader('Content-Disposition', 'attachment; filename="Victual.ics"');
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -108,15 +104,11 @@ class CalendarApiController extends BaseApiController
 	 */
 	public function IcalSharingLink(Request $request, Response $response, array $args)
 	{
-		try
+		return $this->HandleApiCall($response, function () use ($response)
 		{
 			return $this->ApiResponse($response, [
 				'url' => $this->AppContainer->get('UrlManager')->ConstructUrl('/api/calendar/ical?secret=' . ApiKeyService::GetInstance()->GetOrCreateApiKey(ApiKeyService::API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL))
 			]);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

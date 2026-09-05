@@ -279,6 +279,34 @@ async function checkHtmlRender(context, name, url, action)
 }
 
 /** Fresh page with `window.__xss` unset and every console message captured. */
+/**
+ * Creates an API key the way the manage-keys page does: by submitting the description as a
+ * form POST to /manageapikeys/new, and waiting for the page that response renders.
+ *
+ * Both halves of that shape are wave 2's. It was a GET with the description in the query
+ * string until sweep finding S8; and it redirected to /manageapikeys?key=N until the keys
+ * became hashes, after which the create response is the only place the plaintext can ever
+ * be shown and so has to be the page the browser lands on.
+ */
+async function createApiKey(page, description)
+{
+	await page.evaluate((args) =>
+	{
+		const form = document.createElement('form');
+		form.method = 'post';
+		form.action = args.action;
+		const input = document.createElement('input');
+		input.type = 'hidden';
+		input.name = 'description';
+		input.value = args.description;
+		form.appendChild(input);
+		document.body.appendChild(form);
+		form.submit();
+	}, { action: BASE + '/manageapikeys/new', description: description });
+
+	await page.waitForSelector('#new-api-key-value', { timeout: 15000 });
+}
+
 async function newProbePage(context)
 {
 	const page = await context.newPage();
@@ -499,13 +527,19 @@ let browser = null;
 		console.log('seed  recipepos -> ' + recipePos.status + ' id ' + ids.recipepos);
 	}
 
-	// The API key description is not written through the JSON body path (it is a query
-	// parameter on a GET), so the key is created the way the UI creates it and its id is
-	// read out of the redirect target.
-	await seed.goto(BASE + '/manageapikeys/new?description=' + encodeURIComponent(PAYLOAD_LIVE), { waitUntil: 'domcontentloaded' });
-	await seed.waitForTimeout(600);
-	const keyMatch = /[?&]key=(\d+)/.exec(seed.url());
-	ids.apikey = keyMatch ? keyMatch[1] : null;
+	// The API key description is not written through the JSON body path, so the key is
+	// created the way the UI creates it, and twice the shape of that has changed:
+	// sweep finding S8 made /manageapikeys/new a POST rather than a GET, so this submits a
+	// form; and the key is now stored as a hash (plan 11, question 4), so the response
+	// *renders* the page with the plaintext shown once instead of redirecting to it. There
+	// is therefore no "?key=" in the URL to read the id out of - it comes off the row the
+	// page highlights.
+	await createApiKey(seed, PAYLOAD_LIVE);
+	ids.apikey = await seed.evaluate(() =>
+	{
+		const button = document.querySelector('tr.table-info .apikey-delete-button');
+		return button ? button.getAttribute('data-apikey-id') : null;
+	});
 	console.log('seed  apikey -> id ' + ids.apikey);
 
 	// Read the stored values back, so the record proves the sanitiser really stored a live
@@ -558,7 +592,16 @@ let browser = null;
 		['products', '/products', clickDelete('.product-delete-button[data-product-id="' + ids.product + '"]'), 'dialog'],
 		['shoppinglist', '/shoppinglist?list=' + ids.shoppinglist, openMenuThen('.dropdown:has(#delete-selected-shopping-list) [data-toggle="dropdown"]', '#delete-selected-shopping-list'), 'dialog'],
 		['manageapikeys', '/manageapikeys', clickDelete('.apikey-delete-button[data-apikey-id="' + ids.apikey + '"]'), 'dialog'],
-		['manageapikeys-qr', '/manageapikeys', clickDelete('tr:has(.apikey-delete-button[data-apikey-id="' + ids.apikey + '"]) .apikey-show-qr-button'), 'dialog'],
+		// The QR dialog moved with the hashing: a stored key is a hash, so there is nothing
+		// to encode on a regular key's row and that button is gone. The sink itself is not -
+		// the description still reaches a bootbox message rendered as HTML - it is now on the
+		// one-time reveal the create response shows. So this probe creates a key rather than
+		// finding one, which is the only place that dialog exists.
+		['manageapikeys-qr', '/manageapikeys', async page =>
+		{
+			await createApiKey(page, PAYLOAD_LIVE);
+			await page.locator('.alert-success .apikey-show-qr-button').first().click();
+		}, 'dialog'],
 		['tasks-delete', '/tasks', clickDelete('.delete-task-button[data-task-id="' + ids.task + '"]'), 'dialog'],
 		['tasks-toast', '/tasks', clickDelete('.do-task-button[data-task-id="' + ids.task + '"]'), 'toast'],
 		['batteries', '/batteries', clickDelete('.battery-delete-button[data-battery-id="' + ids.battery + '"]'), 'dialog'],

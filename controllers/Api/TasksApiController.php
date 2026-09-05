@@ -33,7 +33,7 @@ class TasksApiController extends BaseApiController
 
 		$requestBody = $this->GetParsedAndFilteredRequestBody($request);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $requestBody, $response)
 		{
 			$doneTime = date('Y-m-d H:i:s');
 
@@ -44,11 +44,7 @@ class TasksApiController extends BaseApiController
 
 			TasksService::GetInstance()->MarkTaskAsCompleted($args['taskId'], $doneTime);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 
 	/**
@@ -60,14 +56,10 @@ class TasksApiController extends BaseApiController
 	{
 		User::CheckPermission($request, User::PERMISSION_TASKS_UNDO_EXECUTION);
 
-		try
+		return $this->HandleApiCall($response, function () use ($args, $response)
 		{
 			TasksService::GetInstance()->UndoTask($args['taskId']);
 			return $this->EmptyApiResponse($response);
-		}
-		catch (\Exception $ex)
-		{
-			return $this->GenericErrorResponse($response, $ex->getMessage());
-		}
+		});
 	}
 }

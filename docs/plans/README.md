@@ -25,8 +25,8 @@ tense it was written in — the Executed section, not the prose, is the record o
 | 18 | [MQTT state publication](18-mqtt-state-publication.md) | — | 13 (landed) | small | **landed** (`e794ea8`…`6a0d1fb`, 2026-09-02) — seven ambient sensors plus opt-in per-product entities on retained topics, published after commit and from `bin/victual-publish-state`; InfluxDB price and stock-value events per Q7, delivered through a transactional outbox. Built against the Q1–Q8 Responses of 2026-08-31. The Home Assistant-side verifications (2, 4, 8) are outstanding: they need the household's Home Assistant. Its PR is **held behind #34** by the migration numbering rule below — it owns 0257 and 0259 while 01 owns 0258 |
 
 | 19 | [Roles and data-visibility permissions](19-rbac.md) | — | wave 2's S5/S6; then 11, 12, 14 (per piece) | medium, **split across two waves** | draft — **blocked on its own Q8** |
-| 22 | [Vitamin and medication tracking](22-medication-tracking.md) | — | 23, 14 piece 2 | **large**, seven separable pieces | draft — governed by [ADR-0014](../adr/0014-medication-records-never-advises.md) and [ADR-0015](../adr/0015-schedule-expansion-in-the-application.md), both Proposed; Q1–Q3 and **Q5** answered inline. **No longer blocked on [19](19-rbac.md)**: Q5 ships narrow subject-scoped visibility itself, because the medication case is row filtering rather than field redaction, and 19 Q8 carries a note that it exists. Piece 7 consumes accepted [ADR-0011](../adr/0011-label-namespace.md) rather than proposing a code format and answers its open Q3, but **0011 is accepted and unbuilt** — Q6 asks whether this plan should own that machinery, and leans no. Claims migrations 0263–0264 |
-| 23 | [Storage classes for locations](23-storage-classes.md) | — | — (interacts with 08) | small | draft — extracted from 22 per its Q1; **Q1/Q2 answered**: `is_freezer` is derived, and the derivation lives in the application, not a trigger — Q2's lean was overturned because its trigger case was the importer, and an upstream grocy database carries no class to derive. Claims migration 0262 and lands before 22 |
+| 22 | [Vitamin and medication tracking](22-medication-tracking.md) | — | 23, 14 piece 2 | **large**, seven separable pieces | draft — governed by [ADR-0015](../adr/0015-medication-records-never-advises.md) and [ADR-0016](../adr/0016-schedule-expansion-in-the-application.md), both Proposed; Q1–Q3 and **Q5** answered inline. **No longer blocked on [19](19-rbac.md)**: Q5 ships narrow subject-scoped visibility itself, because the medication case is row filtering rather than field redaction, and 19 Q8 carries a note that it exists. Piece 7 consumes accepted [ADR-0011](../adr/0011-label-namespace.md) rather than proposing a code format and answers its open Q3, but **0011 is accepted and unbuilt** — Q6 asks whether this plan should own that machinery, and leans no. Claims migrations 0267–0268 |
+| 23 | [Storage classes for locations](23-storage-classes.md) | — | — (interacts with 08) | small | draft — extracted from 22 per its Q1; **Q1/Q2 answered**: `is_freezer` is derived, and the derivation lives in the application, not a trigger — Q2's lean was overturned because its trigger case was the importer, and an upstream grocy database carries no class to derive. Claims migration 0266 and lands before 22 |
 
 ## Hardening
 
@@ -58,11 +58,11 @@ them are routing sentences in *this file* that were never true.
 | # | Plan | From | Depends on | Size | Status |
 |---|---|---|---|---|---|
 | 10 | [Cold start and statelessness](10-cold-start-statelessness.md) | Review §Statelessness, order item 2 | — | medium | **landed** (`cced9e8`, `6b46fdf`, `258aadf`, `841c4f6`, `5ec3e72`, `5a3ab76`, 2026-09-02) — shortened in flight by ADR-0008's acceptance: Q7's `dialect` column dropped unbuilt, one lock implementation, Q3 moot; sweep **S25** closed with it |
-| 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | draft |
+| 11 | [API error handling, auth surface and error logging](11-api-error-handling.md) | Review §API surface, order item 3, deferred defect 9 | 14 (soft) | medium | **landed** (2026-09-04, wave 2) — the shared `HandleApiCall()` and 67 converted methods, the middleware ordering and `CORS_ALLOWED_ORIGINS`, the stderr logger, hashed API keys with `key_hint` (migrations 0263/0264), the mass-assignment blocklist and a populated `ExposedEntityEditRequiresAdmin`. The spec was edited with the code: the `500`/`Error500` response is gone from exactly the nine list operations that no longer return one. **Open:** API key expiry and rotation, and Q5's spec-derived allowlist, parked behind 14 piece 2 |
 | 12 | [Frontend shared core](12-frontend-shared-core.md) | Review §Frontend, order item 4, oddities list, **sweep S29** | — | medium | **landed** in three PRs, 2026-09-02 (`98a4c93`…`3cbf5c0`, `c7555fc`…`112a090`, `b88b5c9`…`cd487e1`): the `request()` core, `Victual.EntityList`/`EntityForm`, all 157 silent `console.error` handlers gone (six documented survivors), **S29 closed** and proved with a stored payload, `purchase.js` no longer a library by `@push`, `datetimepicker2` deleted. No longer gates 05, 06 or 08. **S29 needed a second pass, 2026-09-03**: review found one missed sink (`recipeform.js`'s ingredient note), two more of the same class in error-message sinks, and a payload probe that could not fail — all fixed. **The `frontend-security` job this row claimed runs the probe on every pull request had never been added** — found 2026-09-04, and written by [21](21-frontend-sink-discipline.md) along with the demo-mode 503 that had stopped the harness booting at all |
 | 13 | [Write-path transactions](13-write-path-transactions.md) | Review §Services, order item 5 | — | small | **landed** (`7abfd2fa`, `782289b8`, `96f9ec99`) |
 | 14 | [Contract and regression scaffolding](14-contract-and-regression-scaffolding.md) | Review §API surface, order item 6 | — | medium | **pieces 1, 3, 4 landed** (wave 0); piece 2 outstanding |
-| 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | draft |
+| 15 | [Deliberate cleanup batch](15-deliberate-cleanup.md) | Review §Backend, §Uniformity, parked 05-Q4, sweep S4–S6, S17–S19 | 11, 13, 14 (per item) | small + one large open question | **C1, C4, B1 and B2 landed**; the rest draft. B2 in the wave 0.5 hotfix, the other three in wave 2 — C1's authenticator extraction (which is what fixed sweep S17), C4 riding along with the `/logout` verb change, B1 deleting the LDAP backend. C3, C5, C7, C8, C9's four remaining sites, C10 and C11 are untouched: their files were not opened |
 | 21 | [Frontend sink discipline](21-frontend-sink-discipline.md) | CodeQL, 2026-09-04 (23 alerts); **S29's standing guard** | — | small | **landed** (`bdfa00c`…, 2026-09-04) — all 23 alerts closed and, more to the point, the reason they were not caught: the `frontend-security` job four documents claimed ran on every pull request had never been written, and the harness it would run could not boot (demo mode 503'd on its own `-1` marker). The job now exists, `.devtools/check-cited-jobs.php` in `lint` stops a job being documented into existence again, and the probe gains two families — local input, and an assertion that `HTML_RENDERED_COLUMNS` still holds. **Its step 4 was overturned by its own Q6**: alert #17 is a false positive, the boundary is the server-side purifier, and the plan says so — and **review then found the gap in that argument**: rows that predate the purifier survive an in-place upgrade or an import, so migration 0260 and `DatabaseImporter` both run `StoredHtmlPurifier`, proved by a ninth suite phase (`richtext`) on both engines |
 | — | [Security sweep hotfix](../security-sweep.md) (S1, S2, S3, **S4**, S7, S23, S28, R1) | [docs/security-sweep.md](../security-sweep.md) | — | small | **landed** — see the sweep's [What the hotfix changed](../security-sweep.md#what-the-hotfix-changed) |
 
@@ -92,7 +92,7 @@ The first run's findings are routed rather than parked:
 | `IFNULL` in PHP → `/locationcontentsheet` 500s, shopping-list "clear done" 400s | **fixed** — [#44](https://github.com/datagen24/victual/issues/44), plus a CI guard on request-time SQL strings |
 | `COUNT(*)` with `ORDER BY` → `/shoppinglist` and `/mealplan` 500 | **fixed** — [#45](https://github.com/datagen24/victual/issues/45) |
 | `products_average_price` / `products_last_purchased` disagree with upstream about which bookings count | **fixed** — [#46](https://github.com/datagen24/victual/issues/46), migration `0261`. Neither of the issue's two hypotheses was right: the SQL of both views is byte-identical to upstream, so nothing was ported differently and nothing was changed on purpose. They are two engine bugs. `products_last_purchased.price` orders by `purchased_date` alone and takes `LIMIT 1`, which is **not a total order** — bookings sharing a day are common — so the answer was whatever the plan reached first; the ledger row id is now the tie-break, and both engines return upstream's 2.50. `products_average_price` divides `SUM` by `SUM` over `DECIMAL(15,2)` columns, which is NUMERIC affinity on SQLite, so whole-number amounts and prices were **integer-divided** — 20/9 answered as 2. That one is an upstream bug the fork inherited, and the SQLite side of the pair fixes it. The worst of it was never the reporting: `StockService::InventoryProduct()` uses `last_price` as the default price of a new inventory booking, so the undefined answer had been writing itself into the ledger |
-| Two unrecorded wire-contract differences: chores `next_estimated_execution_time`, `created_object_id` on a rejected create | **recorded** — [#47](https://github.com/datagen24/victual/issues/47). Both are accepted, and in both the fork is the better-behaved side. `next_estimated_execution_time` is [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md)'s second exception seen downstream: upstream slices the time of day out of `start_date` positionally, so a date-only start date makes `DATETIME()` return `NULL` for the whole chore, and the ADR's bullet now says so. `created_object_id` is two PDO drivers answering differently about an insert that never happened — the real defect, a create that creates nothing answering 200, is shared with upstream and belongs to [11](11-api-error-handling.md) |
+| Two unrecorded wire-contract differences: chores `next_estimated_execution_time`, `created_object_id` on a rejected create | **recorded** — [#47](https://github.com/datagen24/victual/issues/47). Both are accepted, and in both the fork is the better-behaved side. `next_estimated_execution_time` is [ADR-0005](../adr/0005-wire-contract-is-the-invariant.md)'s second exception seen downstream: upstream slices the time of day out of `start_date` positionally, so a date-only start date makes `DATETIME()` return `NULL` for the whole chore, and the ADR's bullet now says so. `created_object_id` is two PDO drivers answering differently about an insert that never happened — the real defect, a create that creates nothing answering 200, is shared with upstream and belonged to [11](11-api-error-handling.md), **which fixed it on 2026-09-04**: a body that sets no column of the entity is now a 400, and the suite's accepted difference is `create-with-no-fields-refused` rather than the two ways of saying nothing happened |
 | A non-integer object id answers 500 **and quotes the SQL back** where upstream answers 404 | **fixed** — [#48](https://github.com/datagen24/victual/issues/48). `PathParameterMiddleware` refuses a non-integer id before any statement is built, reading which parameters are ids from the OpenAPI spec, with `.devtools/check-path-id-validation.php` in the `suite` job keeping the spec honest. Wider than the title: the leak was **not** confined to the six 500s — 45 endpoints answered 400 with the failing statement in the body, because `PDOException` is an `\Exception` and every `catch (\Exception)` handed its message to `GenericErrorResponse`, which now refuses driver text. The deliberate 400 (upstream 404) is recorded as `non-integer-object-id`. Landed early against [11](11-api-error-handling.md), which still owns the rest |
 
 The differences that are **accepted** rather than reported each cite the record that
@@ -426,9 +426,11 @@ Anything else that reasons about schema versions, including
 and `trigdifftest.php` (trigger behaviour). New views must return identical output on both
 engines unless the plan says otherwise and explains why.
 
-**Cite symbols, not line numbers.** `ApiKeyAuthMiddleware::IsValidApiKey` rather than
+**Cite symbols, not line numbers.** `ApiKeyService::IsValidApiKey` rather than
 `ApiKeyAuthMiddleware.php:50` — which the MCP spec cited, and which was already `:49` by
-the time anyone read it. Where a line is worth quoting, quote the code next to it so the
+the time anyone read it. **That example has since made a second point for itself**: wave 2
+deleted `ApiKeyAuthMiddleware` outright (15-C1), so the line number now names a file that
+does not exist while the symbol it was standing in for survived the refactor unchanged. Where a line is worth quoting, quote the code next to it so the
 reference survives the shift. The security sweep adopted this in its own preamble and the
 plans have not; the older bare line numbers are left alone rather than swept, because
 rewriting a hundred of them by hand is how a wrong one gets introduced. New citations
@@ -680,7 +682,52 @@ unscheduled, as this wave always said it would be. See 14's Executed section.
   the rest of 18's questions: no prices, on any topic; pricing history is InfluxDB's
   (18's Q7), not the broker's.
 
-### Wave 2 — API correctness
+### Wave 2 — API correctness — **done, 2026-09-04**
+
+Five pull-request-sized commits, each verified on a booted instance before the next
+started, and the last of them against **both engines** — the differential suite passes with
+migrations 0262, 0263 and 0264 in the tree, and reports the two freshly-migrated schemas
+identical. What landed, against what this section asked for:
+
+| Asked for | Landed |
+|---|---|
+| 11's error surface | `HandleApiCall()` and 67 converted methods; the middleware ordering, `CORS_ALLOWED_ORIGINS` and the stderr logger; the API-key hashing (Q4) and the mass-assignment blocklist (Q5); `ExposedEntityEditRequiresAdmin` populated (Q6); the spec edited with the code |
+| 15-C1 authenticator extraction | done, and it is what fixed **S17** — the cross-instance construction was not merely untidy, it made the iCal `secret` branch unreachable and every sharing link a 401 |
+| 15-B1 LDAP removal + `AUTH_CLASS` type check | done; **S18** is the type check, with a `class_exists` message that names the removal so an installation still configured for it is told at startup |
+| **S4**, **S5**, **S6**, **S19** | S4 was already in the hotfix; the other three done. S5's config half closes the residual the hotfix knowingly accepted |
+| **S27**, **`userpictures`**, the permissions-page mismatch | S27 and the picture residual done; the page mismatch's **read** half taken (`USERS_READ`), its **write** half left to 19 and recorded in that plan's question 9 |
+| **S8**, **S9**, **S12** | done, all three |
+| 15's one-liners "riding along" | **C4** rode along, because making `/logout` a `POST` turned its `GET` into a 500 and C4 is exactly that. **C9's `ApiKeyAuthMiddleware` site** rode along with C1, as C9 asked. The rest did not have their files opened |
+
+**Two things this section's plan did not anticipate**, both recorded where they belong
+rather than only here:
+
+- **`CorsMiddleware` has to be outside the *routing* middleware, not merely outside
+  authentication.** No route registers `OPTIONS`, so routing refuses a preflight before any
+  inner middleware runs — which is the real reason the `$app->any('/api/{routes:.+}')`
+  catch-all existed, and deleting it without moving CORS out would have swapped a 401
+  preflight for a 405 one.
+- **Special-purpose calendar keys are not hashed.** 11's Q4 was written before S17's fix
+  made the sharing link work at all; the application has to hand that URL back and cannot do
+  it from a hash. The exposure is bounded to one read-only route and the reasoning is in
+  migration 0264.
+
+**It left an ADR behind.** [0014](../adr/0014-administering-a-user-is-a-subset-question.md),
+**Proposed**: administering a user means holding everything they hold. S5 and S6 named the
+remediation for two endpoints; generalising it into a rule every future permission-touching
+change inherits is a decision, and 19 is written against the views it is computed from.
+It also *discharged* [0007](../adr/0007-auth-state-outlives-the-process.md), which decided
+in August how the login throttle had to be built and could not be built until now.
+
+**What is still open on this wave's plans**, so that nothing here reads as more finished
+than it is: API key **expiry and rotation** (S11's second half), and 11's Q5 spec-derived
+allowlist, which is deliberately parked behind 14 piece 2. 15's C3, C5, C7, C8, C10 and
+C11 are untouched — their files were not opened.
+
+#### Wave 2 as it was planned
+
+Kept as written, because the Executed table above is a record of divergence and reads as
+one only next to what it diverged from.
 
 - **11 API error handling**, presented as a before/after diff from 14's sweep. Then,
   while the auth files are open: **15-C1** (authenticator extraction, which also closes
@@ -872,12 +919,23 @@ unconditionally, and piece 2 is what makes them optional.
   parked on a plan that does not depend on it.** Where the plan and the parking each name
   the other as prerequisite, one of them is wrong, and it is worth checking which before
   the wave that would have fixed it goes past.
-- **Not scheduled, recorded**: sweep S20–S22 and S24 (Host-header redirects, wildcard
-  CORS, integer ids concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to
-  tags). Each is a one-liner that rides with whichever wave opens the file; S21 waits on
-  17 to say which browser clients exist. S23 (`Content-Disposition` quoting) is the rule
-  working as intended: the hotfix had that line open and took it.
+- **Not scheduled, recorded**: sweep S20, S22 and S24 (Host-header redirects, integer ids
+  concatenated into SQL behind `FILTER_VALIDATE_INT`, Actions pinned to tags). Each is a
+  one-liner that rides with whichever wave opens the file. S23
+  (`Content-Disposition` quoting) is the rule working as intended: the hotfix had that line
+  open and took it — and **S21** (wildcard CORS) is the same rule again: this list said it
+  waited on 17 to say which browser clients exist, and wave 2 had `CorsMiddleware` open
+  anyway. It landed there on 2026-09-04, and the answer 17 was being waited on for turned
+  out not to be needed: `CORS_ALLOWED_ORIGINS` defaults to empty, so an operator names the
+  clients rather than a plan enumerating them.
 
 Every wave ends mergeable: nothing in a later wave reworks what an earlier wave
 shipped, and each track lands through its own PR with its plan's Verification section
 executed on a booted instance.
+
+**Wave 2 is the first wave to be verified against both engines as it was written**, rather
+than reviewed and left for CI: the differential suite was run locally on PostgreSQL 16 and
+SQLite at the end of it, with all three of its new migrations in the tree. That is worth
+recording because wave 1 could not — plan 10's Executed section says the read-only
+filesystem check "could not run where it was built" — and because two of wave 2's three
+migrations are per-engine pairs, which is exactly the shape the suite exists to check.

@@ -697,6 +697,28 @@ topic, and has no Response yet. See Q5.
    this plan's rule, not a decision this plan has recorded, and it wants an answer here
    before anyone relies on it.
 
+   > **Response, from wave 2 (2026-09-04): the read half is taken, the write half is not.**
+   > `GET /api/users/{userId}/permissions` now requires `USERS_READ`, which is what the page
+   > has always required — the "tick boxes and get a 403 on save" case above was two
+   > *different* halves of one screen disagreeing, and the strict half was the one nothing
+   > rendered from. `POST` and `PUT /users/{userId}/permissions` stay on `ADMIN`.
+   >
+   > Loosening those to `USERS_EDIT` is a decision about who may *grant*, and this plan is
+   > where that is decided: it is the half roles genuinely sharpen, since a grant can then
+   > arrive through a bundle. Wave 2 declined it for the same reason the roadmap gave for
+   > unparking S5 and S6 — a rule computable from views that exist today is wave 2's, and a
+   > question about what the model should say is this plan's.
+   >
+   > What wave 2 *did* build that this plan inherits: `User::MayAdminister()` (the target's
+   > resolved permissions are a subset of the caller's) and `User::CheckMayGrant()` (every
+   > id is real, and the caller holds the closure of what granting it would confer). Both
+   > are written against `user_permissions_resolved` and `permission_tree`, whose shape this
+   > plan widens rather than changes, so both keep working verbatim once roles land — and
+   > `CheckMayGrant()` is what makes loosening the write half safe to consider at all.
+   > The shape question is untouched: the endpoint still returns raw unresolved rows.
+   > Also unchanged by wave 2: `permission_id` validation, which this plan's verification
+   > asserts on its own two id-taking endpoints, is now `CheckMayGrant()`'s first job.
+
 ## Effort
 
 Piece 1 (roles): small–medium **if Q8 answers (b) or (c)**. One dual-engine migration

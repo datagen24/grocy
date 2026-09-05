@@ -128,6 +128,75 @@ answered 500.
 > malformed id is a request that cannot be parsed, not a row that is absent — and is
 > recorded in the parity suite as `non-integer-object-id`.
 
+> **Landed — the middleware ordering, the CORS setting and the error log.** This is the
+> second of the three sessions the Effort section splits this plan into, taken first
+> because it is self-contained and because the logging half was what made every other
+> failure in this plan invisible in production. Landed 2026-09-04 in wave 2. The shared
+> `HandleApiCall()` helper and the API-key work are still unbuilt.
+>
+> - **`JsonMiddleware` and `CorsMiddleware` are application level**, added after the
+>   authentication middleware *and* after the error middleware, so they are outermost of
+>   everything. On the route group they could not be: authentication and routing both ran
+>   first. A 401 now carries `{"error_message": "Unauthorized"}` and
+>   `Content-Type: application/json`; a 404 and a 405 are typed too, which they were not.
+>   Both middlewares decide by path whether a request is theirs, so the rendered pages are
+>   untouched — and that predicate is now `IsApiRoutePath()`, which strips
+>   `VICTUAL_BASE_PATH` first. The bare `string_starts_with($path, '/api/')` it replaces
+>   answered **false for every API request on an installation mounted in a
+>   subdirectory**, in `ExceptionController` and `BaseAuthMiddleware` alike — an API error
+>   there was an HTML page.
+> - **`CorsMiddleware` has to be outside the routing middleware, not merely outside
+>   authentication.** The plan said "before authentication is attempted", which is
+>   necessary and not sufficient: no route registers `OPTIONS`, so routing raises
+>   `HttpMethodNotAllowedException` before any inner middleware runs. That is the real
+>   reason the `$app->any('/api/{routes:.+}', …)` catch-all existed, and deleting it
+>   without moving CORS outside routing would have replaced a 401 preflight with a 405 one.
+> - **The catch-all is deleted**, as the plan said to decide deliberately. An unmatched
+>   `/api/*` path answered 200 with an empty body and now answers 404 — a row for the
+>   change table below, added here rather than left implicit.
+> - **`VICTUAL_CORS_ALLOWED_ORIGINS`, empty by default**, per Q3. Exact-match against the
+>   request's `Origin`, `Vary: Origin` on every API response once the list is non-empty,
+>   and the entries are validated at startup by `ConfigurationValidator` — a value written
+>   with a trailing slash matches nothing a browser sends, so it is refused rather than
+>   silently behaving as if CORS were off. Sweep **S21** closes with it.
+> - **A preflight is answered 204 whether or not the origin is allowed.** It carries no
+>   credentials, so authenticating it could only ever refuse a request that was asking
+>   permission; a disallowed origin gets the 204 without CORS headers, which is what makes
+>   the browser refuse the real request.
+> - **Errors are logged**: `helpers/StderrLogger.php`, a PSR-3 logger writing one line per
+>   record to `php://stderr` (Q7), handed to `ExceptionController` through its constructor.
+>   Slim's `addErrorMiddleware()` only passes its logger to *its own* `ErrorHandler`, and
+>   this application replaces that handler — so the parameter the plan noted on
+>   `__invoke()` is not the socket, and the constructor is. The line carries method, path,
+>   status, exception class, message and — under `logErrorDetails` — file, line and trace.
+>   It carries no request body, deliberately: bodies here contain product notes, user names
+>   and passwords. A client error logs at `warning` and a server fault at `error`, so a
+>   malformed filter cannot drown a real fault.
+> - **Sweep S9 closes with it**, because it is the same surface: the 500 page's detail
+>   block — file, line, message, stack trace and `json_encode($systemInfo)` — is now
+>   rendered in `dev` mode only and every value in it is printed with `{{ }}` rather than
+>   `{!! !!}`. The `/` route is unauthenticated, so the old page showed all of it to
+>   anonymous visitors, and an exception message is the one string on that page that can
+>   carry request data.
+>
+> **One defect this move introduced, found by reading the code it now wraps rather than by
+> a failing test, and fixed the same day.** `JsonMiddleware` set `Content-Type` on every API
+> response and recognised the two that choose their own — a file download and the calendar
+> feed — by their `Content-Disposition`. Out here it also wraps `SchemaVersionMiddleware`,
+> whose schema-mismatch 503 is deliberately `text/plain`, and which has no
+> `Content-Disposition` to be recognised by. It now leaves any response that set a type
+> alone, which covers all three by the rule rather than two by the symptom. Stamping
+> `application/json` on a plain-text body would have been a lie in the one response an
+> operator reads when a deployment is misconfigured.
+>
+> Verified on a booted instance, both modes: unauthenticated `GET /api/system/info`
+> answers `401` with the JSON body and content type; `OPTIONS` answers `204`, with the
+> CORS headers for a configured origin and without them for any other; a UI page carries
+> no CORS header at all; an unmatched `/api/*` answers `404` as JSON while an unmatched UI
+> path still answers HTML; and a forced exception in production leaves the stderr line with
+> no `error_details` in the response, while in `dev` the same exception renders on the page
+> with `&lt;script&gt;` escaped.
+
 **A related divergence in the same method was *not* a status-code question, and has since
 been fixed** — noted here because it is the reason `FilterData` no longer spells its own
 operators. `FilterData`'s `~` and `!~` emitted `LIKE`, which is case-insensitive on SQLite
@@ -191,6 +260,80 @@ already cut: `ExceptionController::__invoke` takes a `?LoggerInterface $logger`
 parameter and nothing ever passes one. That was deliberately deferred out of the defects
 pass; this is where it lands.
 
+> **Landed — the shared helper, the controller conversion and the mass-assignment
+> blocklist.** The first and third of the three sessions the Effort section splits this
+> plan into, 2026-09-04, in wave 2. What is still unbuilt after this is the API-key work
+> (Q4's hashing, the query-parameter form) — everything else in this plan is in the tree.
+>
+> - **`BaseApiController::HandleApiCall()` exists and every API controller method uses
+>   it.** 67 methods carried the identical
+>   `catch (\Exception $ex) { return $this->GenericErrorResponse($response, $ex->getMessage()); }`,
+>   which answers 400 to everything; they are now closures handed to one classifier.
+>   `EInvalidApiQuery` and `EObjectNotFound` are the two new types the plan called for.
+> - **The table gained two rows the plan drafted as open.** `FileTooLargeException` moves
+>   into the helper from `FilesApiController`, which is the only place it was ever caught,
+>   and keeps its 413. `PDOException` **stays a 400** rather than becoming a 500: the plan
+>   noted it "needs its own row" because the drafted `\Exception` fallback would have
+>   re-opened issue #48's leak, and the answer is that the leak is closed by the *message*
+>   rather than by the status — `GenericErrorResponse()` already replaces driver text
+>   whatever route it arrives by — while the common cause of a `PDOException` here is a
+>   request body naming a column that does not exist, which is the caller's error. It
+>   therefore needs no clause and has none. `\Error` is deliberately not caught either: a
+>   `TypeError` is this application being wrong about its own types, and 400 would file a
+>   bug as a client mistake. (`POST /api/users` with an empty body is exactly that today —
+>   a 500 from a `TypeError` in `UsersService::CreateUser` — and it is fixed by validating
+>   the body in the S5/S6 work rather than by widening this catch.)
+> - **The seven permission checks that sat inside a `try` are above the wrapper**, except
+>   the one in `TrackChoreExecution` that cannot be: it fires only when `done_by` names
+>   another user, so it needs the parsed body. The helper answers it 403 anyway, which is
+>   the point of having a helper. `UsersApiController`'s three hand-written
+>   `catch (HttpSpecializedException)` blocks — the pattern this plan generalised — are
+>   deleted, since the helper is now that pattern.
+> - **`CalculateNextExecutionAssignments` gains `PERMISSION_CHORES`** (Q2). Proved on a
+>   booted instance with a user holding the `CHORE_TRACK_EXECUTION` leaf and not its
+>   parent — the one population Q2 predicted this excludes — and with the chore
+>   assignments hashed before and after the 403 to confirm nothing ran.
+> - **`PUT` and `DELETE` on a missing object answer 404**, including the api_keys
+>   ownership guard, which deliberately answers the same "not found" as a genuinely
+>   missing row so that ids cannot be enumerated. The guard therefore moved with it rather
+>   than being left behind as the one 400.
+> - **Mass assignment is closed** by the Q5 blocklist: `id` and `row_created_timestamp`
+>   are dropped from the body in `AddObject` and `EditObject` (sweep **S16**'s first half;
+>   the body-schema validation half stays with 14 piece 2, as Q5 says). Keys are dropped
+>   rather than refused, so a client that reads an object, edits a field and PUTs the whole
+>   thing back — which the fork's own forms do — keeps working.
+> - **`ExposedEntityEditRequiresAdmin` is populated** with `userfields` and `userentities`
+>   (Q6), so the gate that could never fire now does.
+> - **A create that creates nothing is a 400.** The plan said the body is a client error
+>   and wants one; it now gets one, and the parity suite's `no-insert-no-last-insert-id`
+>   entry is replaced by `create-with-no-fields-refused` recording the refusal instead of
+>   the two ways of saying nothing happened. Note the interaction with the blocklist: a
+>   body of `{"id": 5}` is empty after stripping, and so is refused rather than silently
+>   creating a row.
+> - **`FilesApiController` and `RecipesApiController::AddNotFulfilledProductsToShoppingList`
+>   are on the helper like everything else**, which is what the two named deviants needed.
+>   `ServeFile` used to re-throw *every* failure as a 404, so an invalid group and an
+>   invalid file name were indistinguishable from a file that is not there; those are 400
+>   now and "not found" stays 404.
+> - **The spec was edited with the code, not left for 14.** The `500`/`Error500` response
+>   is gone from exactly the nine list operations this plan names — that is the one
+>   response-shape narrowing here, and the changelog names them. Every operation gained a
+>   `401`, the 40 whose handler checks a permission gained a `403`, and the operations that
+>   can now say "not found" gained a `404`; all three point at a new `ApiError` schema,
+>   identical in shape to `Error400` under a name that does not claim a status code.
+>
+> Verified on booted instances rather than by reading the diff. A 63-call snapshot of the
+> API — every list endpoint, the filter and ordering failure paths, missing ids, and
+> fifteen writes — was taken before the conversion and again after it: **every status code
+> identical, and every body identical modulo timestamps, `uniqid()` handles and the demo
+> generator's random prices.** The intended changes were then made and the same snapshot
+> re-run, which moved exactly three rows (the empty create to 400, and `PUT`/`DELETE` on a
+> missing id to 404) and nothing else. The 403s were proved separately in production mode
+> against three real users — an admin, one holding `MASTER_DATA_EDIT` and the
+> `CHORE_TRACK_EXECUTION` leaf, and one holding nothing — and the mass-assignment fix by
+> reading `products.id` and `row_created_timestamp` back after a `PUT` that tried to set
+> both.
+
 ## Proposed change
 
 ### One error helper in `BaseApiController`
@@ -246,6 +389,48 @@ and `*` on an authenticated API was never a good one. Q3 covers whether the defa
 should instead preserve today's behaviour.
 
 ### API-key hygiene
+
+> **Landed, 2026-09-04, all three.**
+>
+> - **The query-parameter form is gone**, with 15-C1 rather than here, because that
+>   refactor rewrote the file that read it. The header and, on the calendar route only,
+>   `?secret=` are the two ways a key reaches the application.
+> - **Keys are stored as SHA-256**, per Q4: migration `0263` (a per-engine pair) adds
+>   `api_keys.key_hint`, and `0264` (PHP, portable) hashes each key in place and backfills
+>   the hint from its last four characters. A key issued before the migration keeps
+>   working — proved on a database migrated from 262 with a plaintext key in it.
+> - **`last_used` is stamped once a day, not once a request.** A read-only GET used to
+>   issue a write on the hot path of the endpoint clients poll most, to record a value the
+>   screen displays as a date.
+>
+> **One thing this plan did not anticipate, because it was written before the wave that
+> fixed it:** special-purpose calendar keys are deliberately *not* hashed. Sweep finding
+> S17's fix is what made the sharing link work at all, and the application has to be able
+> to hand that URL back to whoever asks for it — which it cannot do from a hash.
+> Regenerating the key on each request instead would break every calendar application
+> already subscribed. The exposure is bounded and is not the API: `ApiKeyAuthenticator`
+> accepts such a key on the `calendar-ical` route only, and `IsValidApiKey()` checks
+> `key_type`, so a leaked table yields the household's calendar rather than an account.
+> `ApiKeyService::StoredValueOf()` is the one place that distinction lives.
+>
+> **The manage-keys screen changed in the way Q4 said it would, and one way it did not
+> say.** It shows `••••` plus the hint instead of the key, and offers the QR code only for
+> a special-purpose key — for a regular one there is nothing left to encode. The way it
+> did not say: creating a key now *renders* the page rather than redirecting to it, because
+> the response to the create is the only moment the plaintext exists. Putting it in the
+> redirect URL was the obvious alternative and is exactly the query-string key path S11
+> exists to remove, in the place it would be most durable — browser history.
+>
+> **That moved a sweep S29 sink rather than removing one, and the payload probe follows
+> it.** The QR dialog interpolates a key's description into a `bootbox` message, which
+> renders as HTML; with no plaintext left on a regular key's row there is nothing to encode
+> there, so the dialog now exists only on the one-time reveal — which carries the
+> description just typed, both so a person can tell which key they are looking at and so the
+> sink stays a real one. `.devtools/frontend/s29-payload.js`'s `manageapikeys-qr` case
+> creates a key rather than finding one, for the same reason. **The `frontend-security` job
+> would have failed without that**, and not for the interesting reason: its seed read the new
+> key's id out of the redirect this change removed, so *both* API-key probes reported "the
+> sink was never reached". Found by running the probe locally rather than by watching CI.
 
 - **Drop the query-parameter form** of `VICTUAL-API-KEY`. The iCal `?secret=` path is
   separate, is scoped to `API_KEY_TYPE_SPECIAL_PURPOSE_CALENDAR_ICAL`, is the reason that
@@ -309,6 +494,9 @@ codes, and that needs to be explicit rather than slipped in:
 | Unauthenticated API call | bodyless 401 | 401 with JSON body |
 | `OPTIONS` on an API route | 401 | 204 with CORS headers |
 | Cross-origin `GET` | `Allow-Origin: *` | no CORS header unless configured |
+| Unmatched `/api/*` path | 200, empty body | 404 |
+| `POST /api/objects/{entity}` with a body that sets no column | 200, `created_object_id` that identifies nothing | 400 |
+| `GET /api/files/...` with an invalid group or file name | 404 | 400 |
 | API key in a query parameter | accepted | 401 |
 | `POST`/`PUT`/`DELETE` `/api/objects/{userfields\|userentities}` as a non-admin | 200 | 403 |
 | `?query[]=` or `?order=` naming a field the caller may not see | 200, filtered | 400 |

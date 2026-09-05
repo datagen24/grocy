@@ -83,7 +83,7 @@ plan, and the one most likely to surprise someone who has been ticking that box 
 
 ### Migration
 
-One pair, claiming **0262** in [RESERVATIONS.md](../../migrations/RESERVATIONS.md) before any
+One pair, claiming **0266** in [RESERVATIONS.md](../../migrations/RESERVATIONS.md) before any
 file is written, per [ADR-0004](../adr/0004-engine-specific-migrations.md). It is a table, a
 column and a seed — no views, and **no triggers**, since Q2 put derivation in the application
 — so the dual-engine tax here is the small kind, and stays that way.
@@ -130,7 +130,7 @@ capability, and the comparison is between two fields a human entered. That compa
    > [22](22-medication-tracking.md) warns on a mismatch between a product's required class
    > and its location's, so a guessed Ambient would make that check fire against data no
    > human entered — and a warning derived from a guess is the kind of thing
-   > [ADR-0014](../adr/0014-medication-records-never-advises.md) exists to keep out of a
+   > [ADR-0015](../adr/0015-medication-records-never-advises.md) exists to keep out of a
    > medication surface. The two modes are cheaper than that.
 
 2. **Where does derivation live — a trigger, or the application?** A trigger catches
@@ -179,7 +179,7 @@ capability, and the comparison is between two fields a human entered. That compa
 
 6. **Does a class carry an excursion tolerance** — how far out of range, for how long, before
    it matters? *Lean: no, and deliberately. That number is the beginning of a judgement about
-   whether a product is still usable, which [ADR-0014](../adr/0014-medication-records-never-advises.md)
+   whether a product is still usable, which [ADR-0015](../adr/0015-medication-records-never-advises.md)
    says this project does not make, and it should not be designed before there is real sensor
    data to look at. 22 Q8 owns the question.*
 

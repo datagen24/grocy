@@ -1,4 +1,4 @@
-# ADR-0015: Schedule expansion lives in the application, not the database
+# ADR-0016: Schedule expansion lives in the application, not the database
 
 - **Status: Proposed.** Written to be argued with.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
@@ -90,7 +90,7 @@ against it in at least one domain, not as an unrelated carve-out.
 
 **The medication module cannot be answered from the database alone.** An MQTT or MCP consumer
 needs the pod awake, or the snapshot table. Today that costs nothing, because plan 22
-deliberately closes both surfaces — [ADR-0014](0014-medication-records-never-advises.md) and
+deliberately closes both surfaces — [ADR-0015](0015-medication-records-never-advises.md) and
 plan 22's MCP exclusion mean no always-awake consumer wants this data yet. The cost is
 contingent and arrives with the first consumer that does.
 

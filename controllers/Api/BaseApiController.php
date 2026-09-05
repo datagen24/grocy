@@ -5,10 +5,12 @@ namespace Victual\Controllers\Api;
 use Victual\Controllers\BaseController;
 use Victual\Services\DatabaseService;
 use Victual\Services\Database\DatabaseDialect;
+use Victual\Services\Storage\FileTooLargeException;
 use LessQL\Result;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Exception\HttpException;
+use Slim\Exception\HttpSpecializedException;
 
 /**
  * Base class for all REST API controllers (everything below /api).
@@ -86,6 +88,74 @@ class BaseApiController extends BaseController
 		}
 
 		return $errorMessage;
+	}
+
+	/**
+	 * Runs a controller method's body and turns whatever it throws into the right status
+	 * code, so that no controller writes its own `try` again.
+	 *
+	 * Before this existed every method carried the same
+	 * `catch (\Exception $ex) { return $this->GenericErrorResponse(...); }`, which answers
+	 * 400 to everything. That is why a permission failure was a 403 or a 400 depending on
+	 * whether the check happened to sit above or below the `try` - the same failure, two
+	 * status codes, decided by indentation.
+	 *
+	 * | Caught | Answer |
+	 * |---|---|
+	 * | HttpSpecializedException (403, 404, 405, ...) | its own code - this is how PermissionMissingException becomes a 403 |
+	 * | HttpException | its own code, clamped to 4xx/5xx |
+	 * | EObjectNotFound | 404 |
+	 * | EInvalidApiQuery | 400 |
+	 * | FileTooLargeException | 413 |
+	 * | PDOException | 400, with the driver's own words replaced |
+	 * | \Exception | 400, exactly as before |
+	 *
+	 * The PDOException row is the one plan 11 left open when it noted that its drafted
+	 * `\Exception` fallback "would have re-opened the leak". It stays a 400 rather than
+	 * becoming a 500: the common cause is a request body naming a column that does not
+	 * exist, which is the caller's error and not the server's. What closes the leak is not
+	 * the status but the message, and GenericErrorResponse() replaces a driver message
+	 * whatever route it arrives by (see WithoutDriverText). It therefore needs no catch
+	 * clause of its own, and has none.
+	 *
+	 * \Error is deliberately not caught either, for the opposite reason. A TypeError is
+	 * this application being wrong about its own types, and answering 400 to it would file
+	 * a bug as a client mistake.
+	 */
+	protected function HandleApiCall(Response $response, callable $work): Response
+	{
+		try
+		{
+			return $work();
+		}
+		catch (HttpSpecializedException $ex)
+		{
+			return $this->GenericErrorResponse($response, $ex->getMessage(), $ex->getCode());
+		}
+		catch (HttpException $ex)
+		{
+			$status = $ex->getCode();
+
+			return $this->GenericErrorResponse($response, $ex->getMessage(), ($status >= 400 && $status <= 599) ? $status : 500);
+		}
+		catch (EObjectNotFound $ex)
+		{
+			return $this->GenericErrorResponse($response, $ex->getMessage(), 404);
+		}
+		catch (EInvalidApiQuery $ex)
+		{
+			return $this->GenericErrorResponse($response, $ex->getMessage(), 400);
+		}
+		catch (FileTooLargeException $ex)
+		{
+			// 413 rather than the 400 every other failure gets, because "this one was too
+			// big" is the one refusal a client can act on by sending less
+			return $this->GenericErrorResponse($response, $ex->getMessage(), 413);
+		}
+		catch (\Exception $ex)
+		{
+			return $this->GenericErrorResponse($response, $ex->getMessage());
+		}
 	}
 
 	/**

@@ -1,4 +1,4 @@
-# ADR-0014: Victual records medication; it never advises
+# ADR-0015: Victual records medication; it never advises
 
 - **Status: Proposed.** Written to be argued with.
 - **Decider:** datagen24 (maintainer). Acceptance is its own pull request — see the
@@ -7,7 +7,7 @@
   decision was made when the plan was drafted; this record is not a backfill.
 - **Relationship:** constrains [22](../plans/22-medication-tracking.md) throughout, and
   [23](../plans/23-storage-classes.md) Q6 defers to it. Pairs with
-  [ADR-0015](0015-schedule-expansion-in-the-application.md), written at the same time and
+  [ADR-0016](0016-schedule-expansion-in-the-application.md), written at the same time and
   deciding a different question about the same plan.
 - **Would affect:** [02](../plans/02-mcp-endpoint.md),
   [18](../plans/18-mqtt-state-publication.md), [17](../plans/17-ecosystem-clients.md).

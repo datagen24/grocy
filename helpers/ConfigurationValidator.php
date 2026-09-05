@@ -26,6 +26,7 @@ class ConfigurationValidator
 	public function validateConfig()
 	{
 		self::checkMode();
+		self::checkAuthClass();
 		self::checkDatabaseDriver();
 		self::checkFileStorage();
 		self::checkDefaultLocale();
@@ -34,6 +35,7 @@ class ConfigurationValidator
 		self::checkEntryPage();
 		self::checkMealplanFirstDayOfWeek();
 		self::checkAutoNightModeRange();
+		self::checkCorsAllowedOrigins();
 		self::checkMqttSettings();
 		self::checkInfluxDbSettings();
 	}
@@ -44,6 +46,35 @@ class ConfigurationValidator
 		if (!in_array(VICTUAL_MODE, $allowedModes))
 		{
 			throw new EInvalidConfig('Invalid mode "' . VICTUAL_MODE . '" set, only ' . implode(', ', $allowedModes) . ' allowed');
+		}
+	}
+
+	/**
+	 * AUTH_CLASS names a class that exists and is an authentication middleware.
+	 *
+	 * app.php does `new $authMiddlewareClass(...)` on this value, which arrives from
+	 * config.php, the environment or a settingoverrides file. Seven other settings were
+	 * validated here and this one was not, so a typo was a fatal on the first request
+	 * rather than a message at startup, and a value naming some other class was an object
+	 * with no __invoke() (sweep finding S18, plan 15-B1).
+	 *
+	 * The trust level is the same as writing config.php, which is why the finding is Low.
+	 * The check is worth having anyway: a fork that just removed an authentication backend
+	 * wants the installations still naming it to be told so in one line, not to discover
+	 * it as a stack trace.
+	 */
+	private function checkAuthClass()
+	{
+		$authClass = VICTUAL_AUTH_CLASS;
+
+		if (!class_exists($authClass))
+		{
+			throw new EInvalidConfig('AUTH_CLASS "' . $authClass . '" does not exist. The LDAP backend was removed - reverse proxy authentication (Victual\\Middleware\\Auth\\ReverseProxyAuthMiddleware) is how an external directory reaches Victual now');
+		}
+
+		if (!is_subclass_of($authClass, \Victual\Middleware\Auth\BaseAuthMiddleware::class))
+		{
+			throw new EInvalidConfig('AUTH_CLASS "' . $authClass . '" is not an authentication middleware - it has to extend Victual\\Middleware\\Auth\\BaseAuthMiddleware');
 		}
 	}
 
@@ -168,6 +199,27 @@ class ConfigurationValidator
 			(is_numeric(VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK) && VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK >= -1 && VICTUAL_MEAL_PLAN_FIRST_DAY_OF_WEEK <= 6)))
 		{
 			throw new EInvalidConfig('Invalid value for MEAL_PLAN_FIRST_DAY_OF_WEEK');
+		}
+	}
+
+	/**
+	 * Every entry of CORS_ALLOWED_ORIGINS has to be an origin, because that is what
+	 * CorsMiddleware compares the request's Origin header against - exactly, since a
+	 * prefix or substring match on an origin is how a rule meant for
+	 * "https://home.example.com" comes to admit "https://home.example.com.evil.test".
+	 *
+	 * The failure this refuses is a silent one: a browser sends `Origin` with no path and
+	 * no trailing slash, so an entry written as "https://home.example.com/" never matches
+	 * anything and the setting looks configured while behaving as if it were empty.
+	 */
+	private function checkCorsAllowedOrigins()
+	{
+		foreach (\Victual\Middleware\CorsMiddleware::AllowedOrigins() as $origin)
+		{
+			if (!preg_match('#^https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$#', $origin))
+			{
+				throw new EInvalidConfig('Invalid CORS_ALLOWED_ORIGINS entry "' . $origin . '" - each entry has to be a bare origin such as "https://home.example.com", with no path and no trailing slash');
+			}
 		}
 	}
 
