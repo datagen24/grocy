@@ -1,0 +1,24 @@
+name: Classify changes
+
+on:
+  workflow_call:
+    outputs:
+      run-tests:
+        description: Whether the change contains anything other than Markdown
+        value: ${{ jobs.changes.outputs.run-tests }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run-tests: ${{ steps.diff.outputs.run-tests }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify the complete change
+        id: diff
+        run: python3 .devtools/ci/changes.py

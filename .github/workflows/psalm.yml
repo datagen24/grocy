@@ -12,7 +12,12 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    uses: ./.github/workflows/changes.yml
+
   php-security:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run-tests == 'true')
     name: Psalm Static & Security Analysis
     runs-on: ubuntu-latest
 

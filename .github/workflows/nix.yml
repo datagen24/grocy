@@ -1,9 +1,7 @@
 # The Nix build, on every pull request that touches it.
 #
-# ADR-0013 proposes building the production images with Nix, and plan 20's piece 1 is the
-# first build — which is also the record's acceptance gate. This workflow is what keeps that
-# gate from rotting: a flake nobody builds is a flake that quietly stops building, which is
-# the same argument the `images` job in tests.yml makes about the Dockerfile.
+# ADR-0013 makes Nix the production image builder. This workflow builds and boots
+# the three images when the configured build inputs change.
 #
 # It runs on Linux, so it needs none of the podman-hosted builder that
 # `nix/build-in-podman.sh` exists for on a Mac. That script and this workflow build the
@@ -25,26 +23,38 @@ on:
       - 'flake.nix'
       - 'flake.lock'
       - 'nix/**'
+      - '!nix/**/*.md'
       - 'composer.json'
       - 'composer.lock'
       - 'package.json'
       - 'yarn.lock'
       - 'version.json'
       - '.github/workflows/nix.yml'
+      - '.github/workflows/changes.yml'
+      - '.devtools/ci/**'
   push:
     branches: [master]
     paths:
       - 'flake.nix'
       - 'flake.lock'
       - 'nix/**'
+      - '!nix/**/*.md'
       - 'composer.json'
       - 'composer.lock'
       - 'package.json'
       - 'yarn.lock'
       - 'version.json'
+      - '.github/workflows/nix.yml'
+      - '.github/workflows/changes.yml'
+      - '.devtools/ci/**'
 
 jobs:
+  changes:
+    uses: ./.github/workflows/changes.yml
+
   flake:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.run-tests == 'true')
     runs-on: ubuntu-latest
 
     steps:
