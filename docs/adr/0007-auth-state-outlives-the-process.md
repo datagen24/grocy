@@ -48,6 +48,17 @@ this ADR is its first concrete instance.
   available and was not chosen, for the reason the Consequences list already implies — a
   table costs one write per *failed* attempt and no second service, and a household
   instance has few of either.
+- **This record's argument caught a second thing, in a shape it did not anticipate.** The
+  throttle shipped with a per-client-address counter beside the per-username one, and the
+  maintainer's review of the implementing pull request pointed out that behind a reverse
+  proxy `REMOTE_ADDR` is the proxy for every request — so that counter was not per-address
+  at all. It was a whole-instance lockout wearing a per-address name: ten mistakes by
+  anyone would hold everyone for the window. That is this record's own objection with the
+  axis changed. The counter that resets itself on a schedule an attacker can predict and
+  the counter that counts something other than what its name says are the same mistake,
+  which is *believing a limit binds what it appears to bind*. The per-address counter was
+  removed rather than tuned, and rate limiting a misbehaving address is the proxy's job,
+  because the proxy is the only party that knows which address it is.
 - **The same reasoning generalised on the way through, and the fix is recorded here because
   the ADR is where a reader looks.** S12's second half — force a password change while the
   seeded `admin`/`admin` hash is in use — has the same shape and a different answer. The

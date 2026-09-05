@@ -36,6 +36,9 @@ have recorded it.
 | 0260 | [plan 21](../docs/plans/21-frontend-sink-discipline.md) — purify stored rich text that predates the API purifier | in this tree |
 | 0261 | [issue #46](https://github.com/datagen24/victual/issues/46) — a total order for `products_last_purchased.price`, and SQLite's integer division in `products_average_price` | in this tree |
 | 0262 | [security sweep S12](../docs/security-sweep.md) via wave 2 — `login_attempts`, the login throttle's out-of-process state | in this tree |
+
+The file under 0262 was edited in place during review rather than followed by a migration that drops a column, because it has never existed in `master`: the retirement rule above is about numbers that have, and a branch that has not merged is still deciding what its migration says. What changed is that `login_attempts` lost its `ip_address` column — see that file for why a per-address count is the proxy's job and not this application's.
+
 | 0263 | [plan 11](../docs/plans/11-api-error-handling.md) question 4 — `api_keys.key_hint` | in this tree |
 | 0264 | [plan 11](../docs/plans/11-api-error-handling.md) question 4 — hash the stored API keys, backfill the hint | in this tree |
 | 0265 | [security sweep S12](../docs/security-sweep.md) via wave 2 — `users.must_change_password`, moved out of `user_settings` in review | in this tree |

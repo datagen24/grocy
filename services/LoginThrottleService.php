@@ -3,25 +3,34 @@
 namespace Victual\Services;
 
 /**
- * Rate limits password guessing, by counting failed attempts per username and per client
- * address inside a rolling window.
+ * Rate limits password guessing, by counting failed attempts per username inside a rolling
+ * window.
  *
  * Sweep finding S12. The state is a table rather than anything held between requests,
  * which is the finding's own emphasis and not an implementation preference: the deployment
  * target is a pod that scales to zero and stays down for a night at a time, so a counter
  * in process memory or APCu is reset for free by an attacker who waits - the same as
- * having no throttle, while looking like having one. See migrations/0262.sqlite.sql.
+ * having no throttle, while looking like having one. ADR-0007 decided that shape before
+ * this was built.
  *
- * Two counters rather than one, because they answer different questions: per username
- * stops one account being ground down from many addresses, per address stops one client
- * working through a list of usernames. Either being at the limit refuses the attempt.
+ * **Per username, and only per username.** A first draft counted per client address too,
+ * and behind a reverse proxy - this fork's stated deployment - REMOTE_ADDR is the proxy for
+ * every request, so that counter would have held the entire instance for the window as soon
+ * as anybody made ten mistakes. It would have been a global limit wearing a per-address
+ * name, which is ADR-0007's own objection in a different disguise. Rate limiting a
+ * misbehaving address needs the real client address, which only the proxy has, so it
+ * belongs at the proxy layer and not here.
+ *
+ * What is left is the limit that binds wherever a request came from: one username, so many
+ * guesses, per window. An attacker spreading attempts thinly across many usernames is the
+ * proxy's to notice, and this class does not pretend otherwise.
  */
 class LoginThrottleService extends BaseService
 {
 	/**
-	 * Whether this username, from this address, may attempt a login at all right now.
+	 * Whether this username may be attempted at all right now.
 	 */
-	public function IsAttemptAllowed(string $username, string $ipAddress): bool
+	public function IsAttemptAllowed(string $username): bool
 	{
 		$limit = self::MaxAttempts();
 
@@ -30,14 +39,7 @@ class LoginThrottleService extends BaseService
 			return true;
 		}
 
-		$since = self::WindowStart();
-
-		if ($this->CountSince('username', $username, $since) >= $limit)
-		{
-			return false;
-		}
-
-		return $this->CountSince('ip_address', $ipAddress, $since) < $limit;
+		return $this->CountSince($username, self::WindowStart()) < $limit;
 	}
 
 	/**
@@ -48,15 +50,14 @@ class LoginThrottleService extends BaseService
 	 * second moving part: attempts against a username nobody ever succeeds as would
 	 * otherwise accumulate for ever, since the success path is what clears them.
 	 */
-	public function RecordFailedAttempt(string $username, string $ipAddress): void
+	public function RecordFailedAttempt(string $username): void
 	{
 		$dbModTime = DatabaseService::GetInstance()->GetDbChangedTime();
 
 		$this->DB->login_attempts()->where('row_created_timestamp <= :1', self::WindowStart())->delete();
 
 		$this->DB->login_attempts()->createRow([
-			'username' => $username,
-			'ip_address' => $ipAddress
+			'username' => $username
 		])->save();
 
 		// A refused login is not a data change, and clients poll on this value
@@ -64,42 +65,22 @@ class LoginThrottleService extends BaseService
 	}
 
 	/**
-	 * Clears the counter a successful login earns back: this username's, and only this
-	 * username's.
+	 * Clears the counter a successful login earns back: this username's.
 	 *
-	 * It used to clear the address's rows too, and that was a bypass rather than a
-	 * convenience. Those rows are failures against *other* usernames, and a success proves
-	 * nothing about them - so on a household behind one address, anybody could make nine
-	 * guesses at `admin`, log in to their own account to wipe the slate, and repeat
-	 * indefinitely. Found in review of PR #68.
-	 *
-	 * The cost of the narrower rule is real and is the right cost: ten fumbled attempts
-	 * from one address hold that address for the rest of the window even after somebody
-	 * else logs in successfully. That is what a per-address limit *is*, it self-heals in
-	 * LOGIN_THROTTLE_WINDOW_MINUTES, and behind a reverse proxy the address is the proxy
-	 * anyway - which is why the per-username limit is the one that carries the load there.
+	 * An earlier draft cleared the rows for the *address* too, which was a bypass rather
+	 * than a convenience - those are failures against other usernames, and a success proves
+	 * nothing about them, so anybody could make nine guesses at `admin`, log in to their own
+	 * account to wipe the slate, and repeat. Found in review of PR #68. The address counter
+	 * has since gone entirely; this is the only counter there is, and clearing it is what a
+	 * proof of the password earns.
 	 */
-	public function ClearAttempts(string $username, string $ipAddress): void
+	public function ClearAttempts(string $username): void
 	{
 		$dbModTime = DatabaseService::GetInstance()->GetDbChangedTime();
 
 		$this->DB->login_attempts()->where('username', $username)->delete();
 
 		DatabaseService::GetInstance()->SetDbChangedTime($dbModTime);
-	}
-
-	/**
-	 * The address the request came from.
-	 *
-	 * REMOTE_ADDR, which behind a reverse proxy is the proxy rather than the client. That
-	 * is deliberate: X-Forwarded-For is a header a client can set, so throttling on it is
-	 * a throttle a client can evade by varying it, and the per-username limit is what
-	 * carries the load in a proxied deployment. Trusting a forwarded address would need
-	 * the same trusted-proxy allowlist S4 built, and is worth doing only alongside it.
-	 */
-	public static function ClientAddress(): string
-	{
-		return (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 	}
 
 	private static function MaxAttempts(): int
@@ -112,8 +93,8 @@ class LoginThrottleService extends BaseService
 		return date('Y-m-d H:i:s', time() - ((int)VICTUAL_LOGIN_THROTTLE_WINDOW_MINUTES * 60));
 	}
 
-	private function CountSince(string $column, string $value, string $since): int
+	private function CountSince(string $username, string $since): int
 	{
-		return count($this->DB->login_attempts()->where($column . ' = :1 AND row_created_timestamp > :2', $value, $since)->fetchAll());
+		return count($this->DB->login_attempts()->where('username = :1 AND row_created_timestamp > :2', $username, $since)->fetchAll());
 	}
 }

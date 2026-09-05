@@ -48,9 +48,8 @@ class PasswordLogin
 		}
 
 		$throttle = LoginThrottleService::GetInstance();
-		$ipAddress = LoginThrottleService::ClientAddress();
 
-		if (!$throttle->IsAttemptAllowed($username, $ipAddress))
+		if (!$throttle->IsAttemptAllowed($username))
 		{
 			// Answered exactly like a wrong password, and deliberately: telling a guesser
 			// that they have hit the limit tells them the limit exists and roughly where
@@ -66,19 +65,19 @@ class PasswordLogin
 		{
 			// Deliberately does the work anyway - see DUMMY_PASSWORD_HASH
 			password_verify($inputPassword, self::DUMMY_PASSWORD_HASH);
-			$throttle->RecordFailedAttempt($username, $ipAddress);
+			$throttle->RecordFailedAttempt($username);
 
 			return false;
 		}
 
 		if (!password_verify($inputPassword, $user->password))
 		{
-			$throttle->RecordFailedAttempt($username, $ipAddress);
+			$throttle->RecordFailedAttempt($username);
 
 			return false;
 		}
 
-		$throttle->ClearAttempts($username, $ipAddress);
+		$throttle->ClearAttempts($username);
 		UsersService::GetInstance()->RecordPasswordUsedAtLogin((int)$user->id, $inputPassword);
 
 		// Every session this login supersedes and every expired one, cleared while there

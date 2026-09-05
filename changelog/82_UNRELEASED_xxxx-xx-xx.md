@@ -10,7 +10,7 @@
 
 > ⚠️ `/logout` and `/manageapikeys/new` are `POST` routes now, not `GET`. As `GET`s they fired from any page that could get a browser to load a URL - the second one creating an API key with a description of the requester's choosing. The links in the interface were updated; a bookmark or a script calling either as a `GET` gets a `405`
 
-> ⚠️ Failed logins are now rate limited, per username and per client address (`LOGIN_THROTTLE_MAX_ATTEMPTS`, default 10, inside `LOGIN_THROTTLE_WINDOW_MINUTES`, default 15). While the limit is reached, even the correct password is refused, and the refusal looks exactly like a wrong one
+> ⚠️ Failed logins against one username are now rate limited (`LOGIN_THROTTLE_MAX_ATTEMPTS`, default 10, inside `LOGIN_THROTTLE_WINDOW_MINUTES`, default 15). While the limit is reached, even the correct password is refused, and the refusal looks exactly like a wrong one. There is deliberately no per-address limit: behind a reverse proxy every request arrives from the proxy, so one here would lock out the whole installation rather than one client - rate limit a misbehaving address at your proxy instead
 
 > ⚠️ An installation still using the seeded `admin`/`admin` password is sent to the password change form on every page until it is changed
 
@@ -121,7 +121,7 @@
 
 ### Login
 
-- Failed logins are rate limited - see the note at the top. The counters live in the database rather than in the process, so they survive a restart. A successful login clears its own username's failures and nobody else's, so one account's success cannot wipe another's counter
+- Failed logins are rate limited per username - see the note at the top. The count lives in the database rather than in the process, so it survives a restart, and a successful login clears only its own username's failures
 - An account still using the seeded `admin`/`admin` password is redirected to its own password change form from every page until the password is changed. The API is not gated, because that form saves through it
 
 ### Server errors and logging
